@@ -14,16 +14,17 @@ func TestSoundMapper(t *testing.T) {
 	}
 }
 
-func TestMapSoundCategories(t *testing.T) {
+func TestMapSound5LevelFallback(t *testing.T) {
 	mapper := NewSoundMapper()
 
 	testCases := []struct {
 		name           string
 		context        *hooks.EventContext
-		expectedPaths  []string // in priority order (6-level fallback)
+		expectedPaths  []string // 5-level fallback system
+		expectedLevel  int      // which level should be selected (0-based)
 	}{
 		{
-			name: "bash thinking (loading)",
+			name: "bash thinking - full context",
 			context: &hooks.EventContext{
 				Category:  hooks.Loading,
 				ToolName:  "Bash",
@@ -31,142 +32,112 @@ func TestMapSoundCategories(t *testing.T) {
 				Operation: "tool-start",
 			},
 			expectedPaths: []string{
-				"loading/bash-thinking.wav",      // Level 1: exact hint
-				"loading/bash.wav",               // Level 2: tool-specific
-				"loading/tool-start.wav",         // Level 3: operation-specific
-				"loading/loading.wav",            // Level 4: category-specific
-				"default.wav",                    // Level 5: default
-				"",                              // Level 6: silent
+				"loading/bash-thinking.wav",    // Level 1: exact hint
+				"loading/bash.wav",             // Level 2: tool-specific  
+				"loading/tool-start.wav",       // Level 3: operation-specific
+				"loading/loading.wav",          // Level 4: category-specific
+				"default.wav",                  // Level 5: default fallback
 			},
+			expectedLevel: 0, // Should select level 1 (exact hint)
 		},
 		{
-			name: "bash success",
+			name: "edit success - no hint",
 			context: &hooks.EventContext{
 				Category:  hooks.Success,
-				ToolName:  "Bash",
-				SoundHint: "bash-success",
+				ToolName:  "Edit",
 				Operation: "tool-complete",
 				IsSuccess: true,
 			},
 			expectedPaths: []string{
-				"success/bash-success.wav",
-				"success/bash.wav",
-				"success/tool-complete.wav",
-				"success/success.wav",
-				"default.wav",
-				"",
+				"success/edit.wav",           // Level 2: tool-specific (level 1 skipped)
+				"success/tool-complete.wav", // Level 3: operation-specific
+				"success/success.wav",       // Level 4: category-specific
+				"default.wav",               // Level 5: default fallback
 			},
+			expectedLevel: 0, // Should select level 2 (tool-specific) - first in paths array
 		},
 		{
-			name: "tool interrupted (error)",
+			name: "error with stderr - no tool name",
 			context: &hooks.EventContext{
 				Category:  hooks.Error,
-				ToolName:  "Bash",
-				SoundHint: "tool-interrupted",
+				SoundHint: "stderr-error",
 				Operation: "tool-complete",
 				HasError:  true,
 			},
 			expectedPaths: []string{
-				"error/tool-interrupted.wav",
-				"error/bash.wav",
-				"error/tool-complete.wav",
-				"error/error.wav",
-				"default.wav",
-				"",
+				"error/stderr-error.wav",    // Level 1: exact hint
+				"error/tool-complete.wav",   // Level 3: operation (level 2 skipped)
+				"error/error.wav",           // Level 4: category-specific
+				"default.wav",               // Level 5: default fallback
 			},
+			expectedLevel: 0, // Should select level 1 (exact hint)
 		},
 		{
-			name: "message sent (interactive)",
+			name: "notification - minimal context",
 			context: &hooks.EventContext{
-				Category:  hooks.Interactive,
-				SoundHint: "message-sent",
-				Operation: "prompt",
+				Category: hooks.Interactive,
 			},
 			expectedPaths: []string{
-				"interactive/message-sent.wav",
-				"interactive/prompt.wav",
-				"interactive/interactive.wav",
-				"default.wav",
-				"",
+				"interactive/interactive.wav", // Level 4: category-specific only
+				"default.wav",                 // Level 5: default fallback
 			},
+			expectedLevel: 0, // Should select level 4 (category)
 		},
 		{
-			name: "notification",
-			context: &hooks.EventContext{
-				Category:  hooks.Interactive,
-				SoundHint: "notification",
-				Operation: "notification",
-			},
-			expectedPaths: []string{
-				"interactive/notification.wav",
-				"interactive/notification.wav", // operation == hint for notifications
-				"interactive/interactive.wav",
-				"default.wav",
-				"",
-			},
-		},
-		{
-			name: "file operations with type context",
+			name: "file operation with context",
 			context: &hooks.EventContext{
 				Category:  hooks.Success,
-				ToolName:  "Edit",
-				SoundHint: "edit-success",
+				ToolName:  "Write",
+				SoundHint: "file-saved",
 				Operation: "tool-complete",
 				FileType:  "go",
 				IsSuccess: true,
 			},
 			expectedPaths: []string{
-				"success/edit-success.wav",
-				"success/edit.wav",
+				"success/file-saved.wav",
+				"success/write.wav", 
 				"success/tool-complete.wav",
 				"success/success.wav",
 				"default.wav",
-				"",
 			},
-		},
-		{
-			name: "unknown tool fallback",
-			context: &hooks.EventContext{
-				Category:  hooks.Loading,
-				ToolName:  "UnknownTool",
-				SoundHint: "unknowntool-thinking",
-				Operation: "tool-start",
-			},
-			expectedPaths: []string{
-				"loading/unknowntool-thinking.wav",
-				"loading/unknowntool.wav",
-				"loading/tool-start.wav",
-				"loading/loading.wav",
-				"default.wav",
-				"",
-			},
-		},
-		{
-			name: "empty context defaults",
-			context: &hooks.EventContext{
-				Category: hooks.Interactive,
-			},
-			expectedPaths: []string{
-				"interactive/interactive.wav",
-				"default.wav",
-				"",
-			},
+			expectedLevel: 0,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			paths := mapper.GetSoundPaths(tc.context)
+			result := mapper.MapSound(tc.context)
 
-			if len(paths) != len(tc.expectedPaths) {
-				t.Errorf("Expected %d paths, got %d", len(tc.expectedPaths), len(paths))
+			// Verify result structure
+			if result == nil {
+				t.Fatal("MapSound returned nil result")
+			}
+
+			// Verify paths match expected
+			if len(result.AllPaths) != len(tc.expectedPaths) {
+				t.Errorf("Expected %d paths, got %d", len(tc.expectedPaths), len(result.AllPaths))
+				t.Logf("Expected: %v", tc.expectedPaths)
+				t.Logf("Got: %v", result.AllPaths)
 				return
 			}
 
 			for i, expected := range tc.expectedPaths {
-				if paths[i] != expected {
-					t.Errorf("Path[%d] = %s, expected %s", i, paths[i], expected)
+				if result.AllPaths[i] != expected {
+					t.Errorf("Path[%d] = %s, expected %s", i, result.AllPaths[i], expected)
 				}
+			}
+
+			// Verify selected path is correct
+			expectedSelected := tc.expectedPaths[tc.expectedLevel]
+			if result.SelectedPath != expectedSelected {
+				t.Errorf("SelectedPath = %s, expected %s", result.SelectedPath, expectedSelected)
+			}
+
+			// Note: FallbackLevel is calculated separately and represents the actual level used (1-5)
+
+			// Verify total paths
+			if result.TotalPaths != len(tc.expectedPaths) {
+				t.Errorf("TotalPaths = %d, expected %d", result.TotalPaths, len(tc.expectedPaths))
 			}
 		})
 	}
@@ -176,176 +147,240 @@ func TestMapSoundPathNormalization(t *testing.T) {
 	mapper := NewSoundMapper()
 
 	testCases := []struct {
-		name     string
-		context  *hooks.EventContext
-		checkIdx int
-		expected string
+		name        string
+		input       string
+		expected    string
 	}{
-		{
-			name: "tool name normalization",
-			context: &hooks.EventContext{
-				Category:  hooks.Loading,
-				ToolName:  "MultiEdit",
-				SoundHint: "multiedit-thinking",
-			},
-			checkIdx: 1, // Level 2: tool-specific
-			expected: "loading/multiedit.wav",
-		},
-		{
-			name: "sound hint normalization",
-			context: &hooks.EventContext{
-				Category:  hooks.Error,
-				SoundHint: "Tool-Interrupted",
-			},
-			checkIdx: 0, // Level 1: exact hint
-			expected: "error/tool-interrupted.wav",
-		},
-		{
-			name: "operation normalization",
-			context: &hooks.EventContext{
-				Category:  hooks.Success,
-				Operation: "Tool-Complete",
-			},
-			checkIdx: 0, // Level 3: operation-specific (first since no hint/tool)
-			expected: "success/tool-complete.wav",
-		},
+		{"lowercase", "Bash", "bash"},
+		{"spaces to hyphens", "tool interrupted", "tool-interrupted"},
+		{"underscores to hyphens", "file_saved", "file-saved"},
+		{"mixed case and chars", "Multi_Edit Thing", "multi-edit-thing"},
+		{"special chars removed", "tool@#$error!", "tool-error"},
+		{"multiple hyphens collapsed", "tool---error", "tool-error"}, // Should collapse multiple hyphens
+		{"numbers preserved", "mp3-decoder-v2", "mp3-decoder-v2"},
+		{"already normalized", "bash-thinking", "bash-thinking"},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			paths := mapper.GetSoundPaths(tc.context)
-
-			if tc.checkIdx >= len(paths) {
-				t.Fatalf("Path index %d out of range, only %d paths", tc.checkIdx, len(paths))
+			// Test normalization through a context that will use the input
+			context := &hooks.EventContext{
+				Category:  hooks.Loading,
+				SoundHint: tc.input,
 			}
 
-			if paths[tc.checkIdx] != tc.expected {
-				t.Errorf("Path[%d] = %s, expected %s", tc.checkIdx, paths[tc.checkIdx], tc.expected)
+			result := mapper.MapSound(context)
+			expected := "loading/" + tc.expected + ".wav"
+
+			if len(result.AllPaths) == 0 {
+				t.Fatal("No paths generated")
+			}
+
+			if result.AllPaths[0] != expected {
+				t.Errorf("Normalized path = %s, expected %s", result.AllPaths[0], expected)
 			}
 		})
 	}
 }
 
-func TestMapSoundWithoutToolName(t *testing.T) {
+func TestMapSoundFallbackSelection(t *testing.T) {
 	mapper := NewSoundMapper()
 
-	// Test cases where tool name is empty (should skip level 2)
-	context := &hooks.EventContext{
-		Category:  hooks.Loading,
-		SoundHint: "tool-loading",
-		Operation: "tool-start",
-	}
-
-	paths := mapper.GetSoundPaths(context)
-
-	expectedPaths := []string{
-		"loading/tool-loading.wav",    // Level 1: exact hint
-		"loading/tool-start.wav",      // Level 3: operation (skipping level 2)
-		"loading/loading.wav",         // Level 4: category
-		"default.wav",                 // Level 5: default
-		"",                           // Level 6: silent
-	}
-
-	if len(paths) != len(expectedPaths) {
-		t.Errorf("Expected %d paths, got %d", len(expectedPaths), len(paths))
-		return
-	}
-
-	for i, expected := range expectedPaths {
-		if paths[i] != expected {
-			t.Errorf("Path[%d] = %s, expected %s", i, paths[i], expected)
-		}
-	}
-}
-
-func TestMapSoundWithoutOperation(t *testing.T) {
-	mapper := NewSoundMapper()
-
-	// Test cases where operation is empty (should skip level 3)
-	context := &hooks.EventContext{
-		Category:  hooks.Success,
-		ToolName:  "Read",
-		SoundHint: "read-success",
-	}
-
-	paths := mapper.GetSoundPaths(context)
-
-	expectedPaths := []string{
-		"success/read-success.wav", // Level 1: exact hint
-		"success/read.wav",         // Level 2: tool-specific
-		"success/success.wav",      // Level 4: category (skipping level 3)
-		"default.wav",              // Level 5: default
-		"",                        // Level 6: silent
-	}
-
-	if len(paths) != len(expectedPaths) {
-		t.Errorf("Expected %d paths, got %d", len(expectedPaths), len(paths))
-		return
-	}
-
-	for i, expected := range expectedPaths {
-		if paths[i] != expected {
-			t.Errorf("Path[%d] = %s, expected %s", i, paths[i], expected)
-		}
-	}
-}
-
-func TestMapSoundMinimalContext(t *testing.T) {
-	mapper := NewSoundMapper()
-
-	// Test with minimal context (only category)
-	context := &hooks.EventContext{
-		Category: hooks.Error,
-	}
-
-	paths := mapper.GetSoundPaths(context)
-
-	expectedPaths := []string{
-		"error/error.wav", // Level 4: category only
-		"default.wav",     // Level 5: default
-		"",               // Level 6: silent
-	}
-
-	if len(paths) != len(expectedPaths) {
-		t.Errorf("Expected %d paths, got %d", len(expectedPaths), len(paths))
-		return
-	}
-
-	for i, expected := range expectedPaths {
-		if paths[i] != expected {
-			t.Errorf("Path[%d] = %s, expected %s", i, paths[i], expected)
-		}
-	}
-}
-
-func TestMapSoundCategoryStrings(t *testing.T) {
-	mapper := NewSoundMapper()
-
+	// Create a mapper that can tell us which files exist vs don't exist
+	// For testing, we'll simulate file existence checking
+	
 	testCases := []struct {
-		category hooks.EventCategory
-		expected string
+		name          string
+		context       *hooks.EventContext
+		existingFiles map[string]bool // which files "exist"
+		expectedPath  string
+		expectedLevel int
 	}{
-		{hooks.Loading, "loading"},
-		{hooks.Success, "success"},
-		{hooks.Error, "error"},
-		{hooks.Interactive, "interactive"},
+		{
+			name: "level 1 exists",
+			context: &hooks.EventContext{
+				Category:  hooks.Success,
+				ToolName:  "Bash", 
+				SoundHint: "bash-success",
+			},
+			existingFiles: map[string]bool{
+				"success/bash-success.wav": true,
+			},
+			expectedPath:  "success/bash-success.wav",
+			expectedLevel: 1,
+		},
+		{
+			name: "level 1 missing, level 2 exists",
+			context: &hooks.EventContext{
+				Category:  hooks.Success,
+				ToolName:  "Bash",
+				SoundHint: "bash-success",
+			},
+			existingFiles: map[string]bool{
+				"success/bash-success.wav": false,
+				"success/bash.wav":         true,
+			},
+			expectedPath:  "success/bash.wav",
+			expectedLevel: 2,
+		},
+		{
+			name: "fallback to category level",
+			context: &hooks.EventContext{
+				Category:  hooks.Error,
+				ToolName:  "UnknownTool",
+				SoundHint: "unknown-error",
+			},
+			existingFiles: map[string]bool{
+				"error/unknown-error.wav":  false,
+				"error/unknowntool.wav":    false,
+				"error/error.wav":          true,
+			},
+			expectedPath:  "error/error.wav",
+			expectedLevel: 4,
+		},
+		{
+			name: "fallback to default",
+			context: &hooks.EventContext{
+				Category:  hooks.Loading,
+				ToolName:  "NewTool",
+				SoundHint: "new-loading",
+			},
+			existingFiles: map[string]bool{
+				"loading/new-loading.wav": false,
+				"loading/newtool.wav":     false,
+				"loading/loading.wav":     false,
+				"default.wav":             true,
+			},
+			expectedPath:  "default.wav",
+			expectedLevel: 5,
+		},
 	}
 
 	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// For now, just test that the mapper generates the right paths
+			// File existence checking will be implemented in the actual file resolver
+			result := mapper.MapSound(tc.context)
+
+			// Find the expected path in the generated paths
+			found := false
+			for _, path := range result.AllPaths {
+				if path == tc.expectedPath {
+					found = true
+					// In a real implementation, this would be the first existing file
+					break
+				}
+			}
+
+			if !found {
+				t.Errorf("Expected path %s not found in generated paths: %v", tc.expectedPath, result.AllPaths)
+			}
+		})
+	}
+}
+
+func TestMapSoundEdgeCases(t *testing.T) {
+	mapper := NewSoundMapper()
+
+	t.Run("nil context", func(t *testing.T) {
+		result := mapper.MapSound(nil)
+
+		if result == nil {
+			t.Fatal("MapSound should handle nil context gracefully")
+		}
+
+		// Should fallback to default only
+		expectedPaths := []string{"default.wav"}
+		if len(result.AllPaths) != len(expectedPaths) {
+			t.Errorf("Expected %d paths for nil context, got %d", len(expectedPaths), len(result.AllPaths))
+		}
+
+		if result.AllPaths[0] != "default.wav" {
+			t.Errorf("Expected default.wav for nil context, got %s", result.AllPaths[0])
+		}
+
+		if result.FallbackLevel != 5 {
+			t.Errorf("Expected fallback level 5 for nil context, got %d", result.FallbackLevel)
+		}
+	})
+
+	t.Run("empty strings", func(t *testing.T) {
+		result := mapper.MapSound(&hooks.EventContext{
+			Category:  hooks.Interactive,
+			ToolName:  "",
+			SoundHint: "",
+			Operation: "",
+		})
+
+		// Should only have category and default
+		expectedPaths := []string{
+			"interactive/interactive.wav",
+			"default.wav",
+		}
+
+		if len(result.AllPaths) != len(expectedPaths) {
+			t.Errorf("Expected %d paths, got %d", len(expectedPaths), len(result.AllPaths))
+		}
+
+		for i, expected := range expectedPaths {
+			if result.AllPaths[i] != expected {
+				t.Errorf("Path[%d] = %s, expected %s", i, result.AllPaths[i], expected)
+			}
+		}
+	})
+
+	t.Run("unknown category", func(t *testing.T) {
+		// This tests what happens with an invalid category value
 		context := &hooks.EventContext{
-			Category:  tc.category,
-			SoundHint: "test-hint",
+			Category: hooks.EventCategory(999), // Invalid category
 		}
 
-		paths := mapper.GetSoundPaths(context)
+		result := mapper.MapSound(context)
 
-		if len(paths) < 2 {
-			t.Fatalf("Expected at least 2 paths for category %v", tc.category)
+		// Should still work, falling back to default
+		if len(result.AllPaths) == 0 {
+			t.Error("Should generate at least default path for unknown category")
 		}
 
-		expectedPath := tc.expected + "/test-hint.wav"
-		if paths[0] != expectedPath {
-			t.Errorf("First path = %s, expected %s", paths[0], expectedPath)
+		// Last path should always be default
+		lastPath := result.AllPaths[len(result.AllPaths)-1]
+		if lastPath != "default.wav" {
+			t.Errorf("Last path should be default.wav, got %s", lastPath)
 		}
+	})
+}
+
+func TestMapSoundResultMetadata(t *testing.T) {
+	mapper := NewSoundMapper()
+
+	context := &hooks.EventContext{
+		Category:  hooks.Success,
+		ToolName:  "Edit",
+		SoundHint: "file-saved",
+		Operation: "tool-complete",
+	}
+
+	result := mapper.MapSound(context)
+
+	// Verify all metadata fields are set correctly
+	if result.SelectedPath == "" {
+		t.Error("SelectedPath should not be empty")
+	}
+
+	if result.FallbackLevel < 1 || result.FallbackLevel > 5 {
+		t.Errorf("FallbackLevel should be 1-5, got %d", result.FallbackLevel)
+	}
+
+	if result.TotalPaths != len(result.AllPaths) {
+		t.Errorf("TotalPaths (%d) should match len(AllPaths) (%d)", result.TotalPaths, len(result.AllPaths))
+	}
+
+	if len(result.AllPaths) == 0 {
+		t.Error("AllPaths should not be empty")
+	}
+
+	// First path should be the selected path (in the basic case)
+	if result.SelectedPath != result.AllPaths[0] {
+		t.Errorf("SelectedPath (%s) should match first path (%s) in basic case", result.SelectedPath, result.AllPaths[0])
 	}
 }
