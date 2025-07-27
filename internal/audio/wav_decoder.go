@@ -109,16 +109,24 @@ func (d *WavDecoder) Decode(reader io.Reader) (*AudioData, error) {
 	var rawBytes []byte
 	
 	for _, sample := range allSamples {
-		switch format.BitsPerSample {
-		case 16:
-			val := int16(sample.Values[0]) // Use first channel for now
-			rawBytes = append(rawBytes, byte(val), byte(val>>8))
-		case 24:
-			val := int32(sample.Values[0])
-			rawBytes = append(rawBytes, byte(val), byte(val>>8), byte(val>>16))
-		case 32:
-			val := int32(sample.Values[0])
-			rawBytes = append(rawBytes, byte(val), byte(val>>8), byte(val>>16), byte(val>>24))
+		// Process all channels in the sample (interleaved)
+		for ch := 0; ch < int(format.NumChannels); ch++ {
+			var val int
+			if ch < len(sample.Values) {
+				val = sample.Values[ch]
+			} else {
+				// If channel data is missing, use silence
+				val = 0
+			}
+			
+			switch format.BitsPerSample {
+			case 16:
+				rawBytes = append(rawBytes, byte(val), byte(val>>8))
+			case 24:
+				rawBytes = append(rawBytes, byte(val), byte(val>>8), byte(val>>16))
+			case 32:
+				rawBytes = append(rawBytes, byte(val), byte(val>>8), byte(val>>16), byte(val>>24))
+			}
 		}
 	}
 	
