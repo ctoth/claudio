@@ -238,3 +238,66 @@ func LoadJSONSoundpack(filePath string) (PathMapper, error) {
 	// Create and return JSONMapper
 	return NewJSONMapper(soundpack.Name, soundpack.Mappings), nil
 }
+
+// CreateSoundpackMapper auto-detects soundpack type and creates appropriate mapper
+func CreateSoundpackMapper(name, path string) (PathMapper, error) {
+	slog.Debug("creating soundpack mapper", "name", name, "path", path)
+
+	// Check if path exists
+	info, err := os.Stat(path)
+	if err != nil {
+		slog.Error("soundpack path does not exist", "path", path, "error", err)
+		return nil, fmt.Errorf("soundpack path does not exist: %w", err)
+	}
+
+	// Auto-detect based on file extension and type
+	if !info.IsDir() && strings.HasSuffix(strings.ToLower(path), ".json") {
+		slog.Debug("detected JSON soundpack", "path", path)
+		return LoadJSONSoundpack(path)
+	}
+
+	// Assume directory soundpack for directories or other file types
+	if info.IsDir() {
+		slog.Debug("detected directory soundpack", "path", path)
+		return NewDirectoryMapper(name, []string{path}), nil
+	}
+
+	// For non-JSON files, treat as an error for now
+	slog.Error("unsupported soundpack type", "path", path, "is_dir", info.IsDir())
+	return nil, fmt.Errorf("unsupported soundpack type: %s (must be directory or .json file)", path)
+}
+
+// CreateSoundpackMapperWithBasePaths creates a mapper with fallback to base paths
+// This is used when the exact soundpack path doesn't exist but we have base directories to search
+func CreateSoundpackMapperWithBasePaths(name, primaryPath string, basePaths []string) (PathMapper, error) {
+	slog.Debug("creating soundpack mapper with base paths", 
+		"name", name, 
+		"primary_path", primaryPath,
+		"base_paths", basePaths)
+
+	// First try to create mapper with primary path
+	mapper, err := CreateSoundpackMapper(name, primaryPath)
+	if err == nil {
+		slog.Debug("primary path succeeded", "primary_path", primaryPath)
+		return mapper, nil
+	}
+
+	slog.Debug("primary path failed, falling back to base paths", 
+		"primary_path", primaryPath, 
+		"primary_error", err,
+		"base_paths_count", len(basePaths))
+
+	// If primary path fails, create directory mapper with base paths
+	// This allows searching for soundpack in multiple directories
+	if len(basePaths) == 0 {
+		slog.Error("no base paths provided for fallback", "primary_path", primaryPath)
+		return nil, fmt.Errorf("primary path failed and no base paths provided: %w", err)
+	}
+
+	// Create directory mapper with base paths for fallback
+	slog.Info("creating directory mapper with base paths", 
+		"name", name,
+		"base_paths", basePaths)
+	
+	return NewDirectoryMapper(name, basePaths), nil
+}

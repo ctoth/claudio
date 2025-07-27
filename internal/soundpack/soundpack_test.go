@@ -424,3 +424,168 @@ func TestJSONSoundpackLoading(t *testing.T) {
 		}
 	})
 }
+
+func TestSoundpackFactory(t *testing.T) {
+	// TDD Test: Auto-detect soundpack type and create appropriate mapper
+
+	t.Run("creates directory mapper for directory soundpack", func(t *testing.T) {
+		// Create temporary soundpack directory
+		tempDir := t.TempDir()
+		soundpackDir := filepath.Join(tempDir, "test-soundpack")
+		err := os.MkdirAll(soundpackDir, 0755)
+		if err != nil {
+			t.Fatalf("Failed to create soundpack dir: %v", err)
+		}
+
+		// Create test sound file to make it a valid directory soundpack
+		successDir := filepath.Join(soundpackDir, "success")
+		err = os.MkdirAll(successDir, 0755)
+		if err != nil {
+			t.Fatalf("Failed to create success dir: %v", err)
+		}
+
+		soundFile := filepath.Join(successDir, "bash.wav")
+		err = os.WriteFile(soundFile, []byte("fake wav data"), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create test sound file: %v", err)
+		}
+
+		// Factory should detect directory soundpack and create DirectoryMapper
+		mapper, err := CreateSoundpackMapper("test-soundpack", soundpackDir)
+		if err != nil {
+			t.Errorf("Expected to create directory mapper, got error: %v", err)
+		}
+
+		if mapper.GetType() != "directory" {
+			t.Errorf("Expected directory mapper, got '%s'", mapper.GetType())
+		}
+
+		if mapper.GetName() != "test-soundpack" {
+			t.Errorf("Expected name 'test-soundpack', got '%s'", mapper.GetName())
+		}
+	})
+
+	t.Run("creates JSON mapper for JSON file soundpack", func(t *testing.T) {
+		// Create temporary JSON soundpack file
+		tempDir := t.TempDir()
+		jsonFile := filepath.Join(tempDir, "test-soundpack.json")
+		
+		// Create actual sound file that the JSON will reference
+		soundFile := filepath.Join(tempDir, "test-sound.wav")
+		err := os.WriteFile(soundFile, []byte("fake wav data"), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create test sound file: %v", err)
+		}
+
+		// Create JSON soundpack content
+		jsonContent := fmt.Sprintf(`{
+			"name": "json-test-soundpack",
+			"mappings": {
+				"success/bash.wav": "%s"
+			}
+		}`, soundFile)
+
+		err = os.WriteFile(jsonFile, []byte(jsonContent), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create JSON file: %v", err)
+		}
+
+		// Factory should detect JSON soundpack and create JSONMapper
+		mapper, err := CreateSoundpackMapper("test-soundpack", jsonFile)
+		if err != nil {
+			t.Errorf("Expected to create JSON mapper, got error: %v", err)
+		}
+
+		if mapper.GetType() != "json" {
+			t.Errorf("Expected json mapper, got '%s'", mapper.GetType())
+		}
+
+		if mapper.GetName() != "json-test-soundpack" {
+			t.Errorf("Expected name 'json-test-soundpack', got '%s'", mapper.GetName())
+		}
+	})
+
+	t.Run("handles non-existent paths gracefully", func(t *testing.T) {
+		// Factory should fail gracefully for non-existent paths
+		_, err := CreateSoundpackMapper("test", "/nonexistent/path")
+		if err == nil {
+			t.Error("Expected error for non-existent path")
+		}
+	})
+
+	t.Run("auto-detects based on file extension", func(t *testing.T) {
+		// Create temporary files
+		tempDir := t.TempDir()
+		
+		// Test .json extension
+		jsonFile := filepath.Join(tempDir, "soundpack.json")
+		soundFile := filepath.Join(tempDir, "sound.wav")
+		err := os.WriteFile(soundFile, []byte("fake wav data"), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create sound file: %v", err)
+		}
+
+		jsonContent := fmt.Sprintf(`{
+			"name": "extension-test",
+			"mappings": {
+				"default.wav": "%s"
+			}
+		}`, soundFile)
+
+		err = os.WriteFile(jsonFile, []byte(jsonContent), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create JSON file: %v", err)
+		}
+
+		mapper, err := CreateSoundpackMapper("test", jsonFile)
+		if err != nil {
+			t.Errorf("Expected to create mapper, got error: %v", err)
+		}
+
+		if mapper.GetType() != "json" {
+			t.Errorf("Expected json type for .json file, got '%s'", mapper.GetType())
+		}
+	})
+
+	t.Run("fallback to directory base paths when exact path not found", func(t *testing.T) {
+		// Test factory behavior when given soundpack name instead of exact path
+		// This should create directory mapper with base paths
+		
+		// Create temporary soundpack directory structure  
+		tempDir := t.TempDir()
+		soundpackDir := filepath.Join(tempDir, "fallback-test")
+		err := os.MkdirAll(soundpackDir, 0755)
+		if err != nil {
+			t.Fatalf("Failed to create soundpack dir: %v", err)
+		}
+
+		// Create test sound file
+		soundFile := filepath.Join(soundpackDir, "default.wav")
+		err = os.WriteFile(soundFile, []byte("fake wav data"), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create test sound file: %v", err)
+		}
+
+		// Factory should create directory mapper with base paths when exact path doesn't exist
+		mapper, err := CreateSoundpackMapperWithBasePaths("fallback-test", "nonexistent-path", []string{tempDir})
+		if err != nil {
+			t.Errorf("Expected to create directory mapper with base paths, got error: %v", err)
+		}
+
+		if mapper.GetType() != "directory" {
+			t.Errorf("Expected directory mapper for fallback, got '%s'", mapper.GetType())
+		}
+
+		// Test that it can resolve sounds from the base paths
+		resolver := NewSoundpackResolver(mapper)
+		resolved, err := resolver.ResolveSound("fallback-test/default.wav")
+		if err != nil {
+			t.Errorf("Expected to resolve sound through base paths: %v", err)
+		}
+
+		expectedPath := filepath.Join(tempDir, "fallback-test", "default.wav")
+		if resolved != expectedPath {
+			t.Errorf("Expected resolved path %s, got %s", expectedPath, resolved)
+		}
+	})
+}
