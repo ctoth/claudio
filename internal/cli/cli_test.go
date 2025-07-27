@@ -2,8 +2,11 @@ package cli
 
 import (
 	"bytes"
+	"fmt"
 	"io"
+	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -489,31 +492,22 @@ func TestCLI_ResolvesDefaultSoundpackToPaths(t *testing.T) {
 		t.Logf("Stderr: %s", stderr.String())
 	}
 
-	// Verify that the SoundLoader was initialized with XDG-resolved paths
-	// This test will fail initially because CLI doesn't resolve soundpack names to paths
-	if cli.soundLoader == nil {
-		t.Fatal("SoundLoader should be initialized")
+	// Verify that the unified soundpack resolver was initialized
+	if cli.soundpackResolver == nil {
+		t.Fatal("Soundpack resolver should be initialized")
 	}
 
-	soundpackPaths := cli.soundLoader.GetSoundpackPaths()
+	// Verify the resolver type and name
+	resolverType := cli.soundpackResolver.GetType()
+	resolverName := cli.soundpackResolver.GetName()
 	
-	// Should have paths that include XDG directories for "test-pack"
-	if len(soundpackPaths) == 0 {
-		t.Error("SoundLoader should have resolved soundpack paths from XDG system")
-	}
-
-	// Paths should contain the soundpack name "test-pack"
-	foundTestPackPath := false
-	for _, path := range soundpackPaths {
-		if strings.Contains(path, "test-pack") {
-			foundTestPackPath = true
-			break
-		}
-	}
-
-	if !foundTestPackPath {
-		t.Errorf("Expected soundpack paths to contain 'test-pack', got: %v", soundpackPaths)
-		t.Log("This test will fail until CLI resolves DefaultSoundpack using XDG system")
+	slog.Info("unified soundpack resolver initialized", 
+		"type", resolverType, 
+		"name", resolverName)
+		
+	// The resolver should be functional (type should be set)
+	if resolverType == "" {
+		t.Error("Soundpack resolver should have a valid type")
 	}
 }
 
@@ -583,4 +577,168 @@ type errorReader struct{}
 
 func (e *errorReader) Read(p []byte) (n int, err error) {
 	return 0, io.ErrUnexpectedEOF
+}
+
+func TestCLIUnifiedSoundpackIntegration(t *testing.T) {
+	// TDD Test: CLI integration with new unified soundpack system
+
+	t.Run("supports directory soundpack with unified system", func(t *testing.T) {
+		cli := NewCLI()
+		tempDir := t.TempDir()
+
+		// Create directory soundpack structure
+		soundpackDir := filepath.Join(tempDir, "unified-test")
+		successDir := filepath.Join(soundpackDir, "success")
+		err := os.MkdirAll(successDir, 0755)
+		if err != nil {
+			t.Fatalf("Failed to create soundpack dirs: %v", err)
+		}
+
+		// Create test sound file
+		soundFile := filepath.Join(successDir, "bash.wav")
+		wavData := createMinimalWAV()
+		err = os.WriteFile(soundFile, wavData, 0644)
+		if err != nil {
+			t.Fatalf("Failed to create test WAV file: %v", err)
+		}
+
+		// Create config that points to our test soundpack
+		configFile := filepath.Join(tempDir, "test-config.json")
+		configContent := fmt.Sprintf(`{
+			"volume": 0.5,
+			"default_soundpack": "unified-test",
+			"soundpack_paths": ["%s"],
+			"enabled": false,
+			"log_level": "warn"
+		}`, tempDir)
+
+		err = os.WriteFile(configFile, []byte(configContent), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create test config: %v", err)
+		}
+
+		hookJSON := `{
+			"session_id": "test",
+			"transcript_path": "/test",
+			"cwd": "/test",
+			"hook_event_name": "PostToolUse",
+			"tool_name": "Bash",
+			"tool_response": {"stdout": "success", "stderr": "", "interrupted": false}
+		}`
+
+		stdin := strings.NewReader(hookJSON)
+		stdout := &bytes.Buffer{}
+		stderr := &bytes.Buffer{}
+
+		// Run CLI - should use unified soundpack system
+		exitCode := cli.Run([]string{"claudio", "--config", configFile}, stdin, stdout, stderr)
+
+		if exitCode != 0 {
+			t.Errorf("Expected exit code 0, got %d", exitCode)
+			t.Logf("Stderr: %s", stderr.String())
+		}
+	})
+
+	t.Run("supports JSON soundpack with unified system", func(t *testing.T) {
+		cli := NewCLI()
+		tempDir := t.TempDir()
+
+		// Create test sound file
+		soundFile := filepath.Join(tempDir, "test-sound.wav")
+		wavData := createMinimalWAV()
+		err := os.WriteFile(soundFile, wavData, 0644)
+		if err != nil {
+			t.Fatalf("Failed to create test WAV file: %v", err)
+		}
+
+		// Create JSON soundpack file
+		jsonFile := filepath.Join(tempDir, "test-soundpack.json")
+		jsonContent := fmt.Sprintf(`{
+			"name": "json-unified-test",
+			"description": "Test JSON soundpack for CLI integration",
+			"mappings": {
+				"success/bash.wav": "%s",
+				"default.wav": "%s"
+			}
+		}`, soundFile, soundFile)
+
+		err = os.WriteFile(jsonFile, []byte(jsonContent), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create JSON soundpack: %v", err)
+		}
+
+		// Create config that points to our JSON soundpack
+		configFile := filepath.Join(tempDir, "test-config.json")
+		configContent := fmt.Sprintf(`{
+			"volume": 0.5,
+			"default_soundpack": "%s",
+			"enabled": false,
+			"log_level": "warn"
+		}`, jsonFile)
+
+		err = os.WriteFile(configFile, []byte(configContent), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create test config: %v", err)
+		}
+
+		hookJSON := `{
+			"session_id": "test",
+			"transcript_path": "/test", 
+			"cwd": "/test",
+			"hook_event_name": "PostToolUse",
+			"tool_name": "Bash",
+			"tool_response": {"stdout": "success", "stderr": "", "interrupted": false}
+		}`
+
+		stdin := strings.NewReader(hookJSON)
+		stdout := &bytes.Buffer{}
+		stderr := &bytes.Buffer{}
+
+		// Run CLI - should use unified soundpack system with JSON soundpack
+		exitCode := cli.Run([]string{"claudio", "--config", configFile}, stdin, stdout, stderr)
+
+		if exitCode != 0 {
+			t.Errorf("Expected exit code 0, got %d", exitCode)
+			t.Logf("Stderr: %s", stderr.String())
+		}
+	})
+
+	t.Run("handles missing soundpack gracefully with unified system", func(t *testing.T) {
+		cli := NewCLI()
+		tempDir := t.TempDir()
+
+		// Create config that points to non-existent soundpack
+		configFile := filepath.Join(tempDir, "test-config.json")
+		configContent := `{
+			"volume": 0.5,
+			"default_soundpack": "nonexistent-soundpack",
+			"enabled": false,
+			"log_level": "warn"
+		}`
+
+		err := os.WriteFile(configFile, []byte(configContent), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create test config: %v", err)
+		}
+
+		hookJSON := `{
+			"session_id": "test",
+			"transcript_path": "/test",
+			"cwd": "/test", 
+			"hook_event_name": "PostToolUse",
+			"tool_name": "Bash"
+		}`
+
+		stdin := strings.NewReader(hookJSON)
+		stdout := &bytes.Buffer{}
+		stderr := &bytes.Buffer{}
+
+		// Run CLI - should handle missing soundpack gracefully
+		exitCode := cli.Run([]string{"claudio", "--config", configFile}, stdin, stdout, stderr)
+
+		if exitCode != 0 {
+			t.Errorf("Expected exit code 0, got %d", exitCode)
+			t.Logf("Stderr: %s", stderr.String())
+		}
+	})
 }

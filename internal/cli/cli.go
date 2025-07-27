@@ -13,24 +13,25 @@ import (
 	"claudio/internal/config"
 	"claudio/internal/hooks"
 	"claudio/internal/sounds"
+	"claudio/internal/soundpack"
 )
 
 // CLI represents the command-line interface
 type CLI struct {
-	configManager *config.ConfigManager
-	soundMapper   *sounds.SoundMapper
-	soundLoader   *SoundLoader
-	audioPlayer   *audio.AudioPlayer
+	configManager    *config.ConfigManager
+	soundMapper      *sounds.SoundMapper
+	soundpackResolver soundpack.SoundpackResolver
+	audioPlayer      *audio.AudioPlayer
 }
 
 // NewCLI creates a new CLI instance
 func NewCLI() *CLI {
 	slog.Debug("creating new CLI instance")
 	return &CLI{
-		configManager: config.NewConfigManager(),
-		soundMapper:   sounds.NewSoundMapper(),
-		soundLoader:   nil, // Will be initialized when soundpack paths are known
-		audioPlayer:   audio.NewAudioPlayer(),
+		configManager:    config.NewConfigManager(),
+		soundMapper:      sounds.NewSoundMapper(),
+		soundpackResolver: nil, // Will be initialized when soundpack is configured
+		audioPlayer:      audio.NewAudioPlayer(),
 	}
 }
 
@@ -57,7 +58,7 @@ func (c *CLI) Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 		showVersion  = fs.Bool("version", false, "Show version information")
 		configFile   = fs.String("config", "", "Path to config file")
 		volume       = fs.String("volume", "", "Set volume (0.0 to 1.0)")
-		soundpack    = fs.String("soundpack", "", "Set soundpack to use")
+		soundpackFlag = fs.String("soundpack", "", "Set soundpack to use")
 		silent       = fs.Bool("silent", false, "Silent mode - no audio playback")
 	)
 
@@ -124,9 +125,9 @@ func (c *CLI) Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 		slog.Debug("volume override applied", "value", vol)
 	}
 
-	if *soundpack != "" {
-		cfg.DefaultSoundpack = *soundpack
-		slog.Debug("soundpack override applied", "value", *soundpack)
+	if *soundpackFlag != "" {
+		cfg.DefaultSoundpack = *soundpackFlag
+		slog.Debug("soundpack override applied", "value", *soundpackFlag)
 	}
 
 	if *silent {
@@ -147,13 +148,33 @@ func (c *CLI) Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 		"soundpack", cfg.DefaultSoundpack,
 		"enabled", cfg.Enabled)
 
-	// Initialize sound loader with soundpack paths
-	// Resolve soundpack name to actual directory paths using XDG system
+	// Initialize unified soundpack resolver with auto-detection
+	// Try exact path first (for JSON soundpacks or exact directory paths)
+	// Then fallback to XDG directory search for directory soundpacks
 	xdgDirs := config.NewXDGDirs()
 	soundpackPaths := xdgDirs.GetSoundpackPaths(cfg.DefaultSoundpack)
-	// Append any additional custom paths from config
 	soundpackPaths = append(soundpackPaths, cfg.SoundpackPaths...)
-	c.soundLoader = NewSoundLoader(soundpackPaths)
+	
+	// Use factory to create appropriate mapper with fallback to base paths
+	mapper, err := soundpack.CreateSoundpackMapperWithBasePaths(
+		cfg.DefaultSoundpack, 
+		cfg.DefaultSoundpack, // Try exact path first
+		soundpackPaths,       // Fallback to base directory search
+	)
+	if err != nil {
+		slog.Warn("failed to create soundpack mapper, using default empty mapper", 
+			"soundpack", cfg.DefaultSoundpack, 
+			"error", err)
+		// Create empty directory mapper as fallback to prevent crashes
+		mapper = soundpack.NewDirectoryMapper("fallback", []string{})
+	}
+	
+	c.soundpackResolver = soundpack.NewSoundpackResolver(mapper)
+	
+	slog.Info("soundpack resolver initialized",
+		"soundpack_name", cfg.DefaultSoundpack,
+		"resolver_type", c.soundpackResolver.GetType(),
+		"resolver_name", c.soundpackResolver.GetName())
 	
 	// Set audio player volume
 	err = c.audioPlayer.SetVolume(float32(cfg.Volume))
@@ -266,10 +287,10 @@ func (c *CLI) processHookEvent(hookEvent *hooks.HookEvent, cfg *config.Config, a
 func (c *CLI) playSound(audioCtx *audio.Context, soundPath string, volume float64) error {
 	slog.Debug("loading and playing sound", "path", soundPath, "volume", volume)
 
-	// Use SoundLoader to resolve sound file path (eliminates duplicate file resolution)
-	fullPath, err := c.soundLoader.ResolveSoundPath(soundPath)
+	// Use unified soundpack resolver to resolve sound file path
+	fullPath, err := c.soundpackResolver.ResolveSound(soundPath)
 	if err != nil {
-		if IsFileNotFoundError(err) {
+		if soundpack.IsFileNotFoundError(err) {
 			slog.Warn("sound file not found, skipping playback", "path", soundPath)
 			return nil // Don't treat missing sound files as errors
 		}
