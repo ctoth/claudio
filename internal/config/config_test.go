@@ -39,6 +39,133 @@ func TestLoadDefaultConfig(t *testing.T) {
 	t.Logf("Default config: %+v", config)
 }
 
+func TestLoadConfigAutoDiscovery(t *testing.T) {
+	mgr := NewConfigManager()
+
+	// Create a temporary directory to simulate XDG config directory
+	tempDir := t.TempDir()
+	configDir := filepath.Join(tempDir, "claudio")
+	err := os.MkdirAll(configDir, 0755)
+	if err != nil {
+		t.Fatalf("Failed to create config directory: %v", err)
+	}
+
+	// Create a test config file
+	configFile := filepath.Join(configDir, "config.json")
+	testConfig := &Config{
+		Volume:          0.8,
+		DefaultSoundpack: "test-pack",
+		SoundpackPaths:  []string{"/test/path"},
+		Enabled:         true,
+		LogLevel:        "debug",
+	}
+
+	// Write the config file
+	configData, err := json.MarshalIndent(testConfig, "", "  ")
+	if err != nil {
+		t.Fatalf("Failed to marshal test config: %v", err)
+	}
+
+	err = os.WriteFile(configFile, configData, 0644)
+	if err != nil {
+		t.Fatalf("Failed to write test config file: %v", err)
+	}
+
+	// Mock the XDG config paths to point to our temp directory
+	originalXDG := mgr.xdg
+	mockXDG := &MockXDGDirs{
+		configPaths: []string{configFile},
+	}
+	mgr.xdg = mockXDG
+
+	// Test auto-discovery - should find and load our config
+	loadedConfig, err := mgr.LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig() failed: %v", err)
+	}
+
+	// Verify the config was loaded correctly
+	if loadedConfig.Volume != testConfig.Volume {
+		t.Errorf("Expected volume %f, got %f", testConfig.Volume, loadedConfig.Volume)
+	}
+
+	if loadedConfig.DefaultSoundpack != testConfig.DefaultSoundpack {
+		t.Errorf("Expected soundpack %s, got %s", testConfig.DefaultSoundpack, loadedConfig.DefaultSoundpack)
+	}
+
+	if len(loadedConfig.SoundpackPaths) != len(testConfig.SoundpackPaths) {
+		t.Errorf("Expected %d soundpack paths, got %d", len(testConfig.SoundpackPaths), len(loadedConfig.SoundpackPaths))
+	}
+
+	// Restore original XDG
+	mgr.xdg = originalXDG
+
+	t.Logf("Auto-discovery test passed: loaded config %+v", loadedConfig)
+}
+
+func TestLoadConfigRealXDGPaths(t *testing.T) {
+	mgr := NewConfigManager()
+
+	// Test with real XDG paths to see what happens
+	configPaths := mgr.xdg.GetConfigPaths("config.json")
+	
+	t.Logf("Real XDG config paths: %v", configPaths)
+	
+	// Our config should be in a proper XDG config directory, not data directory
+	properConfigPath := "/etc/xdg/claudio/config.json"
+	
+	// Check if the proper config path is in XDG config paths
+	found := false
+	for _, path := range configPaths {
+		if path == properConfigPath {
+			found = true
+			break
+		}
+	}
+	
+	if !found {
+		t.Errorf("Expected XDG config path %s not found in config paths: %v", properConfigPath, configPaths)
+	}
+	
+	// Test actual LoadConfig behavior - should find config when placed correctly
+	config, err := mgr.LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig() failed: %v", err)
+	}
+	
+	t.Logf("Loaded config: %+v", config)
+	
+	// This test should FAIL until we move the config file to the correct location
+	if len(config.SoundpackPaths) == 0 {
+		t.Error("LoadConfig() returned default config - config file should be moved to proper XDG config directory")
+	}
+}
+
+// MockXDGDirs is a mock implementation for testing
+type MockXDGDirs struct {
+	configPaths []string
+}
+
+func (m *MockXDGDirs) GetConfigPaths(filename string) []string {
+	return m.configPaths
+}
+
+func (m *MockXDGDirs) GetSoundpackPaths(soundpackID string) []string {
+	return []string{}
+}
+
+func (m *MockXDGDirs) GetCachePath(purpose string) string {
+	return "/tmp/test-cache"
+}
+
+func (m *MockXDGDirs) CreateCacheDir(purpose string) error {
+	return nil
+}
+
+func (m *MockXDGDirs) FindSoundFile(soundpackID, relativePath string) string {
+	return ""
+}
+
 func TestLoadConfigFromFile(t *testing.T) {
 	mgr := NewConfigManager()
 

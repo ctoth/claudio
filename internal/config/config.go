@@ -19,9 +19,18 @@ type Config struct {
 	LogLevel        string   `json:"log_level"`        // Log level (debug, info, warn, error)
 }
 
+// XDGInterface defines the interface for XDG directory operations
+type XDGInterface interface {
+	GetConfigPaths(filename string) []string
+	GetSoundpackPaths(soundpackID string) []string
+	GetCachePath(purpose string) string
+	CreateCacheDir(purpose string) error
+	FindSoundFile(soundpackID, relativePath string) string
+}
+
 // ConfigManager handles loading, saving, and validating configuration
 type ConfigManager struct {
-	xdg *XDGDirs
+	xdg XDGInterface
 }
 
 // NewConfigManager creates a new configuration manager
