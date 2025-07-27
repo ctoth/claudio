@@ -1,7 +1,9 @@
 package soundpack
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"strings"
@@ -157,4 +159,82 @@ func (e *FileNotFoundError) Error() string {
 func IsFileNotFoundError(err error) bool {
 	_, ok := err.(*FileNotFoundError)
 	return ok
+}
+
+// JSONSoundpackFile represents the structure of a JSON soundpack file
+type JSONSoundpackFile struct {
+	Name        string            `json:"name"`
+	Description string            `json:"description,omitempty"`
+	Version     string            `json:"version,omitempty"`
+	Mappings    map[string]string `json:"mappings"`
+}
+
+// LoadJSONSoundpack loads a JSON soundpack file and creates a JSONMapper
+func LoadJSONSoundpack(filePath string) (PathMapper, error) {
+	slog.Debug("loading JSON soundpack", "file_path", filePath)
+
+	// Open and read the JSON file
+	file, err := os.Open(filePath)
+	if err != nil {
+		slog.Error("failed to open JSON soundpack file", "file_path", filePath, "error", err)
+		return nil, fmt.Errorf("failed to open JSON soundpack file: %w", err)
+	}
+	defer file.Close()
+
+	// Read file contents
+	fileData, err := io.ReadAll(file)
+	if err != nil {
+		slog.Error("failed to read JSON soundpack file", "file_path", filePath, "error", err)
+		return nil, fmt.Errorf("failed to read JSON soundpack file: %w", err)
+	}
+
+	// Parse JSON
+	var soundpack JSONSoundpackFile
+	err = json.Unmarshal(fileData, &soundpack)
+	if err != nil {
+		slog.Error("failed to parse JSON soundpack", "file_path", filePath, "error", err)
+		return nil, fmt.Errorf("failed to parse JSON soundpack: %w", err)
+	}
+
+	// Validate required fields
+	if soundpack.Name == "" {
+		err := fmt.Errorf("JSON soundpack missing required 'name' field")
+		slog.Error("JSON soundpack validation failed", "file_path", filePath, "error", err)
+		return nil, err
+	}
+
+	if soundpack.Mappings == nil || len(soundpack.Mappings) == 0 {
+		err := fmt.Errorf("JSON soundpack missing or empty 'mappings' field")
+		slog.Error("JSON soundpack validation failed", "file_path", filePath, "error", err)
+		return nil, err
+	}
+
+	slog.Debug("JSON soundpack parsed successfully", 
+		"file_path", filePath,
+		"name", soundpack.Name,
+		"mappings_count", len(soundpack.Mappings))
+
+	// Validate that all referenced sound files exist
+	for relativePath, absolutePath := range soundpack.Mappings {
+		if _, err := os.Stat(absolutePath); err != nil {
+			slog.Error("sound file not found", 
+				"relative_path", relativePath,
+				"absolute_path", absolutePath,
+				"error", err)
+			return nil, fmt.Errorf("sound file not found for mapping '%s' -> '%s': %w", 
+				relativePath, absolutePath, err)
+		}
+		
+		slog.Debug("sound file validation passed", 
+			"relative_path", relativePath,
+			"absolute_path", absolutePath)
+	}
+
+	slog.Info("JSON soundpack loaded successfully",
+		"file_path", filePath,
+		"name", soundpack.Name,
+		"valid_mappings", len(soundpack.Mappings))
+
+	// Create and return JSONMapper
+	return NewJSONMapper(soundpack.Name, soundpack.Mappings), nil
 }

@@ -1,6 +1,7 @@
 package soundpack
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -246,6 +247,180 @@ func TestJSONMapper(t *testing.T) {
 
 		if mapper.GetType() != "json" {
 			t.Errorf("Expected type 'json', got '%s'", mapper.GetType())
+		}
+	})
+}
+
+func TestJSONSoundpackLoading(t *testing.T) {
+	// TDD Test: Load JSON soundpack files from disk with validation
+
+	t.Run("loads valid JSON soundpack", func(t *testing.T) {
+		// Create temporary JSON soundpack file
+		tempDir := t.TempDir()
+		jsonFile := filepath.Join(tempDir, "test-soundpack.json")
+		
+		// Create actual sound files that the JSON will reference
+		soundFile1 := filepath.Join(tempDir, "success-sound.wav")
+		soundFile2 := filepath.Join(tempDir, "error-sound.wav")
+		err := os.WriteFile(soundFile1, []byte("fake wav data"), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create test sound file: %v", err)
+		}
+		err = os.WriteFile(soundFile2, []byte("fake wav data"), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create test sound file: %v", err)
+		}
+
+		// Create JSON soundpack content
+		jsonContent := fmt.Sprintf(`{
+			"name": "test-soundpack",
+			"description": "Test soundpack for unit tests",
+			"mappings": {
+				"success/bash.wav": "%s",
+				"error/error.wav": "%s",
+				"default.wav": "%s"
+			}
+		}`, soundFile1, soundFile2, soundFile1)
+
+		err = os.WriteFile(jsonFile, []byte(jsonContent), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create JSON file: %v", err)
+		}
+
+		// Load the JSON soundpack (function to be implemented)
+		mapper, err := LoadJSONSoundpack(jsonFile)
+		if err != nil {
+			t.Errorf("Expected to load JSON soundpack, got error: %v", err)
+		}
+
+		// Verify mapper properties
+		if mapper.GetName() != "test-soundpack" {
+			t.Errorf("Expected name 'test-soundpack', got '%s'", mapper.GetName())
+		}
+
+		if mapper.GetType() != "json" {
+			t.Errorf("Expected type 'json', got '%s'", mapper.GetType())
+		}
+
+		// Test sound resolution
+		candidates, err := mapper.MapPath("success/bash.wav")
+		if err != nil {
+			t.Errorf("MapPath should not error: %v", err)
+		}
+
+		if len(candidates) != 1 || candidates[0] != soundFile1 {
+			t.Errorf("Expected [%s], got %v", soundFile1, candidates)
+		}
+	})
+
+	t.Run("validates sound file existence during load", func(t *testing.T) {
+		tempDir := t.TempDir()
+		jsonFile := filepath.Join(tempDir, "invalid-soundpack.json")
+
+		// Create JSON with reference to non-existent sound file
+		jsonContent := `{
+			"name": "invalid-soundpack",
+			"mappings": {
+				"success/bash.wav": "/nonexistent/path/sound.wav"
+			}
+		}`
+
+		err := os.WriteFile(jsonFile, []byte(jsonContent), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create JSON file: %v", err)
+		}
+
+		// Loading should fail due to missing sound file
+		_, err = LoadJSONSoundpack(jsonFile)
+		if err == nil {
+			t.Error("Expected error when loading soundpack with missing sound files")
+		}
+	})
+
+	t.Run("handles malformed JSON gracefully", func(t *testing.T) {
+		tempDir := t.TempDir()
+		jsonFile := filepath.Join(tempDir, "malformed.json")
+
+		// Create malformed JSON
+		jsonContent := `{
+			"name": "test",
+			"mappings": {
+				"success/bash.wav": "/path/sound.wav"
+			// Missing closing brace
+		}`
+
+		err := os.WriteFile(jsonFile, []byte(jsonContent), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create JSON file: %v", err)
+		}
+
+		// Loading should fail due to malformed JSON
+		_, err = LoadJSONSoundpack(jsonFile)
+		if err == nil {
+			t.Error("Expected error when loading malformed JSON")
+		}
+	})
+
+	t.Run("supports 5-level fallback system", func(t *testing.T) {
+		tempDir := t.TempDir()
+		jsonFile := filepath.Join(tempDir, "fallback-test.json")
+		
+		// Create sound files for different fallback levels
+		bashSpecific := filepath.Join(tempDir, "bash-specific.wav")
+		bashGeneral := filepath.Join(tempDir, "bash-general.wav")
+		successCategory := filepath.Join(tempDir, "success-category.wav")
+		defaultSound := filepath.Join(tempDir, "default.wav")
+		
+		for _, file := range []string{bashSpecific, bashGeneral, successCategory, defaultSound} {
+			err := os.WriteFile(file, []byte("fake wav data"), 0644)
+			if err != nil {
+				t.Fatalf("Failed to create sound file %s: %v", file, err)
+			}
+		}
+
+		// Create JSON with 5-level mappings
+		jsonContent := fmt.Sprintf(`{
+			"name": "fallback-test",
+			"mappings": {
+				"success/bash-specific.wav": "%s",
+				"success/bash.wav": "%s",
+				"success/tool-complete.wav": "%s",
+				"success/success.wav": "%s",
+				"default.wav": "%s"
+			}
+		}`, bashSpecific, bashGeneral, successCategory, successCategory, defaultSound)
+
+		err := os.WriteFile(jsonFile, []byte(jsonContent), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create JSON file: %v", err)
+		}
+
+		mapper, err := LoadJSONSoundpack(jsonFile)
+		if err != nil {
+			t.Fatalf("Failed to load JSON soundpack: %v", err)
+		}
+
+		// Test that all fallback levels are mapped correctly
+		testCases := []struct {
+			path     string
+			expected string
+		}{
+			{"success/bash-specific.wav", bashSpecific},
+			{"success/bash.wav", bashGeneral},
+			{"success/tool-complete.wav", successCategory},
+			{"success/success.wav", successCategory},
+			{"default.wav", defaultSound},
+		}
+
+		for _, tc := range testCases {
+			candidates, err := mapper.MapPath(tc.path)
+			if err != nil {
+				t.Errorf("MapPath('%s') should not error: %v", tc.path, err)
+			}
+
+			if len(candidates) != 1 || candidates[0] != tc.expected {
+				t.Errorf("MapPath('%s') = %v, expected [%s]", tc.path, candidates, tc.expected)
+			}
 		}
 	})
 }
