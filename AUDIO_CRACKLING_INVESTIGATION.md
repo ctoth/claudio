@@ -93,3 +93,47 @@ Completely rewrote to use io.Reader directly like malgo example:
 - Each fix made the problem the same or worse
 - The real issue is still unknown
 - Audio crackles as badly as when we started
+
+## NEW CRITICAL INSIGHT
+
+### Why Both Approaches Failed Identically
+
+The key question: Why would two completely different approaches (pre-loaded memory vs streaming) fail the SAME way?
+
+**Answer: They both share a fundamental flaw that differs from the malgo example!**
+
+### The Device Creation Problem
+
+**Malgo Example (WORKS):**
+- Creates ONE device at program start
+- Keeps it running continuously
+- Streams data through the same device
+- Device stays initialized with proper buffer state
+
+**Our Code (BOTH approaches - CRACKLING):**
+- Creates a NEW device for EVERY sound playback
+- InitDevice() -> Play sound -> Uninit()
+- Constant device creation/destruction
+- Found in both playback.go and streaming_player.go
+
+### Evidence
+```
+playback.go:307:     device, err := malgo.InitDevice(...)
+playback.go:352:     device.Uninit()
+
+streaming_player.go:108: device, err := malgo.InitDevice(...)  
+streaming_player.go:112: defer device.Uninit()
+```
+
+### Hypothesis
+The crackling is caused by:
+1. Device initialization/teardown overhead
+2. Buffer state not properly established before playback
+3. Audio subsystem thrashing from rapid device creation
+4. Timing issues from constant device lifecycle changes
+
+### Next Steps (TODO)
+- Create a single persistent device at startup
+- Reuse the same device for all playback
+- Implement proper queueing if needed for multiple sounds
+- Test if this finally fixes the crackling

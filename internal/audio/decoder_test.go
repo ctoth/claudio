@@ -49,12 +49,6 @@ func (m *MockDecoder) FormatName() string {
 	return m.formatName
 }
 
-// Common error types
-var (
-	ErrUnsupportedFormat = NewDecoderError("unsupported audio format")
-	ErrInvalidData       = NewDecoderError("invalid audio data")
-	ErrReadFailure       = NewDecoderError("failed to read audio data")
-)
 
 // DecoderError represents decoder-specific errors
 type DecoderError struct {
