@@ -115,12 +115,48 @@ The codebase is prepared for subcommands structure:
 - `claudio analyze soundpack [name]` - analyze coverage
 - `claudio soundpack report` - generate reports
 
-## Testing Guidelines
+## Development Practices - CRITICAL
 
-1. Always write tests first (TDD)
-2. Use atomic commits with descriptive messages
-3. Run the full test suite before committing
-4. Test real audio playback with different events
+### Test-Driven Development (TDD)
+This project follows STRICT TDD practices:
+1. **Write failing tests FIRST** - Never implement features before tests
+2. **See tests fail** - Run tests to ensure they fail for the right reason
+3. **Implement minimal code** - Write just enough to make tests pass
+4. **Refactor** - Clean up while keeping tests green
+5. **Comprehensive slog logging** - Add extensive logging in all implementations
+
+Example TDD workflow:
+```bash
+# 1. Write failing test
+vim internal/feature/feature_test.go
+go test ./internal/feature -v  # See it fail
+
+# 2. Implement feature
+vim internal/feature/feature.go
+go test ./internal/feature -v  # See it pass
+
+# 3. Commit atomically
+git add internal/feature/feature_test.go
+git add internal/feature/feature.go
+git commit -m "TDD: Implement feature X with comprehensive tests"
+```
+
+### Atomic Commits
+Every commit should be:
+1. **Self-contained** - One logical change per commit
+2. **Tested** - Never commit without tests passing
+3. **Specific** - Stage individual files, never use `git add .`
+4. **Descriptive** - Clear commit messages explaining what and why
+
+Commit message format:
+```
+TDD: Short description of what was implemented
+
+- Bullet points for details
+- What tests were added
+- What functionality was implemented
+- Any important design decisions
+```
 
 ## Important File Locations
 
