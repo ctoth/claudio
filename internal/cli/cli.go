@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"strconv"
-	"time"
 
 	"claudio/internal/audio"
 	"claudio/internal/config"
@@ -261,41 +262,31 @@ func (c *CLI) processHookEvent(hookEvent *hooks.HookEvent, cfg *config.Config, a
 func (c *CLI) playSound(audioCtx *audio.Context, soundPath string, volume float64) error {
 	slog.Debug("loading and playing sound", "path", soundPath, "volume", volume)
 
-	// Load the sound file
-	audioData, err := c.soundLoader.LoadSound(soundPath)
-	if err != nil {
-		if IsFileNotFoundError(err) {
-			slog.Warn("sound file not found, skipping playback", "path", soundPath, "error", err)
-			return nil // Don't treat missing sound files as errors
+	// Find the full path to the sound file
+	var fullPath string
+	for _, basePath := range c.soundLoader.GetSoundpackPaths() {
+		testPath := filepath.Join(basePath, soundPath)
+		if _, err := os.Stat(testPath); err == nil {
+			fullPath = testPath
+			break
 		}
-		return fmt.Errorf("failed to load sound: %w", err)
-	}
-
-	// Generate a unique sound ID for this playback
-	soundID := fmt.Sprintf("claudio-%d", len(soundPath)+int(volume*1000))
-	
-	// Preload the sound into the audio player
-	err = c.audioPlayer.PreloadSound(soundID, audioData)
-	if err != nil {
-		return fmt.Errorf("failed to preload sound: %w", err)
 	}
 	
-	// Play the sound
-	err = c.audioPlayer.PlaySound(soundID)
+	if fullPath == "" {
+		slog.Warn("sound file not found, skipping playback", "path", soundPath)
+		return nil // Don't treat missing sound files as errors
+	}
+	
+	// Use simple player to play the file
+	simplePlayer := audio.NewSimplePlayer()
+	defer simplePlayer.Close()
+	
+	err := simplePlayer.PlayFile(fullPath, float32(volume))
 	if err != nil {
-		// Clean up preloaded sound on error
-		c.audioPlayer.UnloadSound(soundID)
 		return fmt.Errorf("failed to play sound: %w", err)
 	}
 	
-	slog.Info("sound playback started successfully", "path", soundPath, "sound_id", soundID)
-	
-	// Calculate duration and wait for sound to complete
-	duration := time.Duration(len(audioData.Samples)/int(audioData.Channels)/2) * time.Second / time.Duration(audioData.SampleRate)
-	slog.Debug("waiting for sound completion", "duration_ms", duration.Milliseconds())
-	time.Sleep(duration + 50*time.Millisecond) // Add small buffer
-	
-	slog.Debug("sound playback completed", "path", soundPath, "sound_id", soundID)
+	slog.Info("sound playback completed", "path", soundPath)
 	return nil
 }
 
