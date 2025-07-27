@@ -1,0 +1,251 @@
+package soundpack
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestUnifiedSoundpackResolver(t *testing.T) {
+	// TDD Test: Verify unified soundpack resolver with different mappers
+	
+	t.Run("directory mapper integration", func(t *testing.T) {
+		// Create temporary soundpack directory
+		tempDir := t.TempDir()
+		soundpackDir := filepath.Join(tempDir, "success")
+		err := os.MkdirAll(soundpackDir, 0755)
+		if err != nil {
+			t.Fatalf("Failed to create soundpack dir: %v", err)
+		}
+
+		// Create test sound file
+		soundFile := filepath.Join(soundpackDir, "bash.wav")
+		err = os.WriteFile(soundFile, []byte("fake wav data"), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create test sound file: %v", err)
+		}
+
+		// Create directory mapper and resolver
+		mapper := NewDirectoryMapper("test", []string{tempDir})
+		resolver := NewSoundpackResolver(mapper)
+
+		// Verify interface compliance
+		var _ SoundpackResolver = resolver
+
+		// Test basic interface methods
+		if resolver.GetName() == "" {
+			t.Error("GetName() should return non-empty name")
+		}
+
+		if resolver.GetType() == "" {
+			t.Error("GetType() should return non-empty type")
+		}
+
+		// Test sound resolution
+		path, err := resolver.ResolveSound("success/bash.wav")
+		if err != nil {
+			t.Errorf("Expected to resolve sound, got error: %v", err)
+		}
+
+		expectedPath := filepath.Join(tempDir, "success", "bash.wav")
+		if path != expectedPath {
+			t.Errorf("Expected path %s, got %s", expectedPath, path)
+		}
+	})
+
+	t.Run("json mapper integration", func(t *testing.T) {
+		// Create temporary sound file
+		tempDir := t.TempDir()
+		soundFile := filepath.Join(tempDir, "my-sound.wav")
+		err := os.WriteFile(soundFile, []byte("fake wav data"), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create test sound file: %v", err)
+		}
+
+		// Create JSON mapping
+		mapping := map[string]string{
+			"success/bash.wav": soundFile,
+			"default.wav":      soundFile,
+		}
+
+		// Create JSON mapper and resolver
+		mapper := NewJSONMapper("test-json", mapping)
+		resolver := NewSoundpackResolver(mapper)
+
+		// Test sound resolution
+		path, err := resolver.ResolveSound("success/bash.wav")
+		if err != nil {
+			t.Errorf("Expected to resolve sound, got error: %v", err)
+		}
+
+		if path != soundFile {
+			t.Errorf("Expected path %s, got %s", soundFile, path)
+		}
+
+		// Test type identification
+		if resolver.GetType() != "json" {
+			t.Errorf("Expected type 'json', got '%s'", resolver.GetType())
+		}
+	})
+
+	t.Run("supports fallback resolution", func(t *testing.T) {
+		// Create temporary soundpack directory
+		tempDir := t.TempDir()
+		soundpackDir := filepath.Join(tempDir, "success")
+		err := os.MkdirAll(soundpackDir, 0755)
+		if err != nil {
+			t.Fatalf("Failed to create soundpack dir: %v", err)
+		}
+
+		// Create only the fallback sound file (not the specific one)
+		soundFile := filepath.Join(soundpackDir, "success.wav")
+		err = os.WriteFile(soundFile, []byte("fake wav data"), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create test sound file: %v", err)
+		}
+
+		mapper := NewDirectoryMapper("test", []string{tempDir})
+		resolver := NewSoundpackResolver(mapper)
+
+		// Test fallback resolution
+		fallbackPaths := []string{
+			"success/bash-specific.wav", // Won't exist
+			"success/bash.wav",          // Won't exist  
+			"success/success.wav",       // This exists
+			"default.wav",               // Fallback
+		}
+
+		path, err := resolver.ResolveSoundWithFallback(fallbackPaths)
+		if err != nil {
+			t.Errorf("Expected to resolve fallback sound, got error: %v", err)
+		}
+
+		expectedPath := filepath.Join(tempDir, "success", "success.wav")
+		if path != expectedPath {
+			t.Errorf("Expected fallback path %s, got %s", expectedPath, path)
+		}
+	})
+
+	t.Run("handles missing sounds gracefully", func(t *testing.T) {
+		tempDir := t.TempDir()
+		
+		mapper := NewDirectoryMapper("test", []string{tempDir})
+		resolver := NewSoundpackResolver(mapper)
+
+		// Test missing sound
+		_, err := resolver.ResolveSound("nonexistent/sound.wav")
+		if err == nil {
+			t.Error("Expected error for nonexistent sound")
+		}
+
+		// Should be a FileNotFoundError
+		if !IsFileNotFoundError(err) {
+			t.Errorf("Expected FileNotFoundError, got: %v", err)
+		}
+
+		// Test fallback with all missing
+		fallbackPaths := []string{
+			"missing1.wav",
+			"missing2.wav",
+		}
+
+		_, err = resolver.ResolveSoundWithFallback(fallbackPaths)
+		if err == nil {
+			t.Error("Expected error when all fallback paths missing")
+		}
+	})
+}
+
+func TestDirectoryMapper(t *testing.T) {
+	// TDD Test: Verify DirectoryMapper specific functionality
+	
+	t.Run("maps paths correctly", func(t *testing.T) {
+		mapper := NewDirectoryMapper("test", []string{"/path1", "/path2"})
+
+		candidates, err := mapper.MapPath("success/bash.wav")
+		if err != nil {
+			t.Errorf("MapPath should not error: %v", err)
+		}
+
+		expected := []string{
+			"/path1/success/bash.wav",
+			"/path2/success/bash.wav",
+		}
+
+		if len(candidates) != len(expected) {
+			t.Errorf("Expected %d candidates, got %d", len(expected), len(candidates))
+		}
+
+		for i, exp := range expected {
+			if candidates[i] != exp {
+				t.Errorf("Candidate[%d] = %s, expected %s", i, candidates[i], exp)
+			}
+		}
+	})
+
+	t.Run("returns correct metadata", func(t *testing.T) {
+		mapper := NewDirectoryMapper("my-soundpack", []string{"/test"})
+
+		if mapper.GetName() != "my-soundpack" {
+			t.Errorf("Expected name 'my-soundpack', got '%s'", mapper.GetName())
+		}
+
+		if mapper.GetType() != "directory" {
+			t.Errorf("Expected type 'directory', got '%s'", mapper.GetType())
+		}
+	})
+}
+
+func TestJSONMapper(t *testing.T) {
+	// TDD Test: Verify JSONMapper specific functionality
+	
+	t.Run("maps paths correctly", func(t *testing.T) {
+		mapping := map[string]string{
+			"success/bash.wav": "/absolute/path/to/sound1.wav",
+			"error/error.wav":  "/absolute/path/to/sound2.wav",
+		}
+
+		mapper := NewJSONMapper("test-json", mapping)
+
+		// Test existing mapping
+		candidates, err := mapper.MapPath("success/bash.wav")
+		if err != nil {
+			t.Errorf("MapPath should not error: %v", err)
+		}
+
+		expected := []string{"/absolute/path/to/sound1.wav"}
+		if len(candidates) != 1 || candidates[0] != expected[0] {
+			t.Errorf("Expected %v, got %v", expected, candidates)
+		}
+	})
+
+	t.Run("handles missing keys", func(t *testing.T) {
+		mapping := map[string]string{
+			"success/bash.wav": "/absolute/path/to/sound1.wav",
+		}
+
+		mapper := NewJSONMapper("test-json", mapping)
+
+		// Test missing key
+		candidates, err := mapper.MapPath("missing/sound.wav")
+		if err != nil {
+			t.Errorf("MapPath should not error for missing key: %v", err)
+		}
+
+		if len(candidates) != 0 {
+			t.Errorf("Expected empty candidates for missing key, got %v", candidates)
+		}
+	})
+
+	t.Run("returns correct metadata", func(t *testing.T) {
+		mapper := NewJSONMapper("my-json-pack", map[string]string{})
+
+		if mapper.GetName() != "my-json-pack" {
+			t.Errorf("Expected name 'my-json-pack', got '%s'", mapper.GetName())
+		}
+
+		if mapper.GetType() != "json" {
+			t.Errorf("Expected type 'json', got '%s'", mapper.GetType())
+		}
+	})
+}
