@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"strconv"
+	"time"
 
 	"claudio/internal/audio"
 	"claudio/internal/config"
@@ -288,6 +289,13 @@ func (c *CLI) playSound(audioCtx *audio.Context, soundPath string, volume float6
 	}
 	
 	slog.Info("sound playback started successfully", "path", soundPath, "sound_id", soundID)
+	
+	// Calculate duration and wait for sound to complete
+	duration := time.Duration(len(audioData.Samples)/int(audioData.Channels)/2) * time.Second / time.Duration(audioData.SampleRate)
+	slog.Debug("waiting for sound completion", "duration_ms", duration.Milliseconds())
+	time.Sleep(duration + 50*time.Millisecond) // Add small buffer
+	
+	slog.Debug("sound playback completed", "path", soundPath, "sound_id", soundID)
 	return nil
 }
 
