@@ -231,8 +231,8 @@ func (p *AudioPlayer) PlaySoundWithContext(ctx context.Context, soundID string) 
 		"sample_rate", audioData.SampleRate)
 	
 	// Track playback position for this sound instance
-	var sampleOffset uint32
-	totalSamples := uint32(len(audioData.Samples) / int(audioData.Channels) / 2) // Assuming 16-bit samples
+	var frameOffset uint32
+	totalFrames := uint32(len(audioData.Samples) / int(audioData.Channels) / 2) // Assuming 16-bit samples
 	
 	// Audio callback function
 	onSamples := func(pOutputSample, pInputSamples []byte, framecount uint32) {
@@ -244,55 +244,58 @@ func (p *AudioPlayer) PlaySoundWithContext(ctx context.Context, soundID string) 
 		default:
 		}
 		
+		// Calculate byte offset in our audio data
 		bytesPerFrame := int(audioData.Channels * 2) // 2 bytes per 16-bit sample
-		bytesToCopy := int(framecount) * bytesPerFrame
+		startByte := int(frameOffset) * bytesPerFrame
+		requestedBytes := int(framecount) * bytesPerFrame
 		
-		if len(pOutputSample) < bytesToCopy {
-			bytesToCopy = len(pOutputSample)
-		}
-		
-		startByte := int(sampleOffset * audioData.Channels * 2)
-		endByte := startByte + bytesToCopy
-		
+		// Check if we've reached the end
 		if startByte >= len(audioData.Samples) {
-			// End of audio data reached
+			// Fill with silence
 			for i := range pOutputSample {
 				pOutputSample[i] = 0
 			}
 			return
 		}
 		
-		if endByte > len(audioData.Samples) {
-			endByte = len(audioData.Samples)
+		// Calculate how many bytes we can actually copy
+		availableBytes := len(audioData.Samples) - startByte
+		bytesToCopy := requestedBytes
+		if bytesToCopy > availableBytes {
+			bytesToCopy = availableBytes
 		}
 		
-		// Apply volume control
-		volume := p.GetVolume()
+		// Copy audio data
+		copy(pOutputSample[:bytesToCopy], audioData.Samples[startByte:startByte+bytesToCopy])
 		
-		// Copy and apply volume
-		for i := 0; i < endByte-startByte; i += 2 {
-			if startByte+i+1 < len(audioData.Samples) && i+1 < len(pOutputSample) {
-				// Read 16-bit sample (little endian)
-				sample := int16(audioData.Samples[startByte+i]) | int16(audioData.Samples[startByte+i+1])<<8
-				
-				// Apply volume
-				sample = int16(float32(sample) * volume)
-				
-				// Write back (little endian)
-				pOutputSample[i] = byte(sample)
-				pOutputSample[i+1] = byte(sample >> 8)
-			}
-		}
-		
-		// Clear remaining output buffer
-		for i := endByte - startByte; i < len(pOutputSample); i++ {
+		// CRITICAL: Fill any remaining space with silence
+		// We MUST fill the entire buffer or we'll get garbage/crackling
+		for i := bytesToCopy; i < len(pOutputSample); i++ {
 			pOutputSample[i] = 0
 		}
 		
-		sampleOffset += framecount
+		// Apply volume if needed
+		volume := p.GetVolume()
+		if volume != 1.0 {
+			for i := 0; i < bytesToCopy; i += 2 {
+				if i+1 < bytesToCopy {
+					// Read 16-bit sample (little endian)
+					sample := int16(pOutputSample[i]) | int16(pOutputSample[i+1])<<8
+					
+					// Apply volume
+					sample = int16(float32(sample) * volume)
+					
+					// Write back (little endian)
+					pOutputSample[i] = byte(sample)
+					pOutputSample[i+1] = byte(sample >> 8)
+				}
+			}
+		}
 		
-		if sampleOffset >= totalSamples {
-			slog.Debug("sound playback completed", "sound_id", soundID, "samples_played", sampleOffset)
+		frameOffset += framecount
+		
+		if frameOffset >= totalFrames {
+			slog.Debug("sound playback completed", "sound_id", soundID, "frames_played", frameOffset)
 		}
 	}
 	
@@ -334,7 +337,7 @@ func (p *AudioPlayer) PlaySoundWithContext(ctx context.Context, soundID string) 
 	// Wait for playback to complete or context cancellation
 	go func() {
 		// Estimate playback duration
-		duration := time.Duration(totalSamples) * time.Second / time.Duration(audioData.SampleRate)
+		duration := time.Duration(totalFrames) * time.Second / time.Duration(audioData.SampleRate)
 		timer := time.NewTimer(duration + 100*time.Millisecond) // Add small buffer
 		
 		select {
