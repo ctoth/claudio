@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 
@@ -149,7 +150,12 @@ func (c *CLI) Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 		"enabled", cfg.Enabled)
 
 	// Initialize sound loader with soundpack paths
-	c.soundLoader = NewSoundLoader(cfg.SoundpackPaths)
+	// Resolve soundpack name to actual directory paths using XDG system
+	xdgDirs := config.NewXDGDirs()
+	soundpackPaths := xdgDirs.GetSoundpackPaths(cfg.DefaultSoundpack)
+	// Append any additional custom paths from config
+	soundpackPaths = append(soundpackPaths, cfg.SoundpackPaths...)
+	c.soundLoader = NewSoundLoader(soundpackPaths)
 	
 	// Set audio player volume
 	err = c.audioPlayer.SetVolume(float32(cfg.Volume))
@@ -277,13 +283,13 @@ func (c *CLI) playSound(audioCtx *audio.Context, soundPath string, volume float6
 		return nil // Don't treat missing sound files as errors
 	}
 	
-	// Use simple player to play the file
-	simplePlayer := audio.NewSimplePlayer()
-	defer simplePlayer.Close()
+	// TEMPORARY TEST: Use paplay directly to avoid crackling
+	cmd := exec.Command("paplay", fullPath)
+	slog.Debug("running paplay command", "command", cmd.String())
 	
-	err := simplePlayer.PlayFile(fullPath, float32(volume))
+	err := cmd.Run()
 	if err != nil {
-		return fmt.Errorf("failed to play sound: %w", err)
+		return fmt.Errorf("failed to play sound with paplay: %w", err)
 	}
 	
 	slog.Info("sound playback completed", "path", soundPath)
