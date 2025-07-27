@@ -6,9 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 
 	"claudio/internal/audio"
@@ -268,26 +266,21 @@ func (c *CLI) processHookEvent(hookEvent *hooks.HookEvent, cfg *config.Config, a
 func (c *CLI) playSound(audioCtx *audio.Context, soundPath string, volume float64) error {
 	slog.Debug("loading and playing sound", "path", soundPath, "volume", volume)
 
-	// Find the full path to the sound file
-	var fullPath string
-	for _, basePath := range c.soundLoader.GetSoundpackPaths() {
-		testPath := filepath.Join(basePath, soundPath)
-		if _, err := os.Stat(testPath); err == nil {
-			fullPath = testPath
-			break
+	// Use SoundLoader to resolve sound file path (eliminates duplicate file resolution)
+	fullPath, err := c.soundLoader.ResolveSoundPath(soundPath)
+	if err != nil {
+		if IsFileNotFoundError(err) {
+			slog.Warn("sound file not found, skipping playback", "path", soundPath)
+			return nil // Don't treat missing sound files as errors
 		}
-	}
-	
-	if fullPath == "" {
-		slog.Warn("sound file not found, skipping playback", "path", soundPath)
-		return nil // Don't treat missing sound files as errors
+		return fmt.Errorf("failed to resolve sound path: %w", err)
 	}
 	
 	// TEMPORARY TEST: Use paplay directly to avoid crackling
 	cmd := exec.Command("paplay", fullPath)
 	slog.Debug("running paplay command", "command", cmd.String())
 	
-	err := cmd.Run()
+	err = cmd.Run()
 	if err != nil {
 		return fmt.Errorf("failed to play sound with paplay: %w", err)
 	}

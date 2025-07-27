@@ -185,3 +185,55 @@ func createMinimalWAV() []byte {
 	}
 	return wav
 }
+
+func TestSoundLoader_ResolveSoundPath(t *testing.T) {
+	// Create temporary test directory
+	tempDir := t.TempDir()
+	
+	// Create a simple soundpack directory structure
+	successDir := filepath.Join(tempDir, "test-pack", "success")
+	err := os.MkdirAll(successDir, 0755)
+	if err != nil {
+		t.Fatalf("Failed to create test soundpack dir: %v", err)
+	}
+
+	// Create a simple WAV file for testing
+	wavFile := filepath.Join(successDir, "bash-success.wav")
+	wavData := createMinimalWAV()
+	err = os.WriteFile(wavFile, wavData, 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test WAV file: %v", err)
+	}
+
+	loader := NewSoundLoader([]string{filepath.Join(tempDir, "test-pack")})
+
+	t.Run("resolve existing sound path", func(t *testing.T) {
+		fullPath, err := loader.ResolveSoundPath("success/bash-success.wav")
+		if err != nil {
+			t.Errorf("Expected to resolve sound path, got error: %v", err)
+		}
+		
+		expectedPath := filepath.Join(tempDir, "test-pack", "success", "bash-success.wav")
+		if fullPath != expectedPath {
+			t.Errorf("Expected path %s, got %s", expectedPath, fullPath)
+		}
+	})
+
+	t.Run("path not found error", func(t *testing.T) {
+		_, err := loader.ResolveSoundPath("success/nonexistent.wav")
+		if err == nil {
+			t.Error("Expected error for nonexistent file")
+		}
+		
+		if !IsFileNotFoundError(err) {
+			t.Errorf("Expected file not found error, got: %v", err)
+		}
+	})
+
+	t.Run("empty path error", func(t *testing.T) {
+		_, err := loader.ResolveSoundPath("")
+		if err == nil {
+			t.Error("Expected error for empty path")
+		}
+	})
+}

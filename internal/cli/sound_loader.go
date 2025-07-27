@@ -155,3 +155,52 @@ func (sl *SoundLoader) AddSoundpackPath(path string) {
 	sl.soundpackPaths = append(sl.soundpackPaths, path)
 	slog.Info("soundpack path added", "path", path, "total_paths", len(sl.soundpackPaths))
 }
+
+// ResolveSoundPath resolves a sound path to its full file path without loading the audio data
+func (sl *SoundLoader) ResolveSoundPath(soundPath string) (string, error) {
+	if soundPath == "" {
+		err := fmt.Errorf("sound path cannot be empty")
+		slog.Error("resolve sound path failed", "error", err)
+		return "", err
+	}
+
+	slog.Debug("attempting to resolve sound path", "sound_path", soundPath, "search_paths", len(sl.soundpackPaths))
+
+	var searchedPaths []string
+	
+	// Try each soundpack path in order
+	for i, basePath := range sl.soundpackPaths {
+		fullPath := filepath.Join(basePath, soundPath)
+		searchedPaths = append(searchedPaths, fullPath)
+		
+		slog.Debug("checking sound file", "attempt", i+1, "full_path", fullPath)
+		
+		// Check if file exists
+		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+			slog.Debug("sound file not found", "path", fullPath)
+			continue
+		} else if err != nil {
+			slog.Error("error checking sound file", "path", fullPath, "error", err)
+			continue
+		}
+		
+		// File exists
+		slog.Info("sound path resolved successfully", 
+			"sound_path", soundPath,
+			"full_path", fullPath)
+		
+		return fullPath, nil
+	}
+	
+	// File not found in any path
+	err := &FileNotFoundError{
+		SoundPath: soundPath,
+		Paths:     searchedPaths,
+	}
+	
+	slog.Warn("sound file not found in any soundpack path", 
+		"sound_path", soundPath,
+		"searched_paths", searchedPaths)
+	
+	return "", err
+}
