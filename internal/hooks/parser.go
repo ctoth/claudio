@@ -409,7 +409,7 @@ func (e *HookEvent) extractCommandInfo() CommandInfo {
 		if !strings.HasPrefix(word, "-") {
 			if cmd == "" {
 				cmd = word
-			} else if subCmd == "" {
+			} else if subCmd == "" && isValidSubcommand(cmd, word) {
 				subCmd = word
 				break
 			}
@@ -429,6 +429,50 @@ func (e *HookEvent) extractCommandInfo() CommandInfo {
 		"has_subcommand", result.HasSubcommand)
 
 	return result
+}
+
+// isValidSubcommand determines if a word is likely a subcommand rather than an argument
+func isValidSubcommand(command, word string) bool {
+	// Paths and file names are not subcommands
+	if strings.Contains(word, "/") || strings.Contains(word, ".") {
+		return false
+	}
+	
+	// URLs are not subcommands
+	if strings.Contains(word, "://") {
+		return false
+	}
+	
+	// Known command patterns that have subcommands
+	knownSubcommands := map[string][]string{
+		"git":    {"add", "commit", "push", "pull", "clone", "checkout", "branch", "merge", "rebase", "status", "log", "diff", "fetch", "remote", "tag", "stash", "reset", "revert"},
+		"npm":    {"install", "uninstall", "update", "start", "stop", "restart", "test", "run", "build", "publish", "pack", "init", "config", "cache", "audit", "fund", "outdated"},
+		"docker": {"build", "run", "pull", "push", "start", "stop", "restart", "kill", "rm", "rmi", "ps", "images", "logs", "exec", "compose", "volume", "network"},
+		"cargo":  {"build", "run", "test", "doc", "new", "init", "add", "install", "update", "search", "publish", "bench", "clean", "check", "fmt", "clippy"},
+		"go":     {"build", "run", "test", "install", "get", "mod", "fmt", "vet", "generate", "clean", "env", "bug", "version", "doc"},
+		"pip":    {"install", "uninstall", "list", "show", "freeze", "search", "download", "wheel", "hash", "completion", "debug", "help"},
+		"yarn":   {"add", "install", "remove", "upgrade", "start", "build", "test", "run", "init", "cache", "config", "info", "why"},
+		"kubectl": {"get", "describe", "create", "apply", "delete", "patch", "replace", "expose", "scale", "autoscale", "rollout", "logs", "exec", "port-forward", "proxy", "cp", "auth", "config"},
+	}
+	
+	if subcommands, exists := knownSubcommands[command]; exists {
+		for _, subCmd := range subcommands {
+			if word == subCmd {
+				return true
+			}
+		}
+		return false
+	}
+	
+	// For unknown commands, be conservative - only allow alphanumeric subcommands
+	// This catches cases like "systemctl start" but rejects "ls /path/to/file"
+	for _, r := range word {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_') {
+			return false
+		}
+	}
+	
+	return true
 }
 
 // Helper functions
