@@ -515,6 +515,101 @@ func TestEventContext(t *testing.T) {
 	})
 }
 
+func TestEventCategorization_All7Events(t *testing.T) {
+	parser := NewHookEventParser()
+
+	tests := []struct {
+		name        string
+		eventName   string
+		expected    EventCategory
+		description string
+	}{
+		{"PreToolUse maps to Loading", "PreToolUse", Loading, "Tools about to start should use loading category"},
+		{"PostToolUse success maps to Success", "PostToolUse", Success, "Successful tool completions should use success category"},
+		{"UserPromptSubmit maps to Interactive", "UserPromptSubmit", Interactive, "User messages should use interactive category"},
+		{"Notification maps to Interactive", "Notification", Interactive, "System notifications should use interactive category"},
+		{"Stop maps to Completion", "Stop", Completion, "Claude finishing should use completion category (currently fails)"},
+		{"SubagentStop maps to Completion", "SubagentStop", Completion, "Subagent finishing should use completion category (currently fails)"},
+		{"PreCompact maps to System", "PreCompact", System, "Context compacting should use system category (currently fails)"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create minimal valid JSON for each event type
+			var testJSON string
+			switch tt.eventName {
+			case "PreToolUse":
+				testJSON = `{
+					"session_id": "test",
+					"transcript_path": "/test",
+					"cwd": "/test",
+					"hook_event_name": "PreToolUse",
+					"tool_name": "Bash",
+					"tool_input": {"command": "ls"}
+				}`
+			case "PostToolUse":
+				testJSON = `{
+					"session_id": "test",
+					"transcript_path": "/test",
+					"cwd": "/test",
+					"hook_event_name": "PostToolUse",
+					"tool_name": "Bash",
+					"tool_input": {"command": "ls"},
+					"tool_response": {"stdout": "success", "stderr": "", "interrupted": false}
+				}`
+			case "UserPromptSubmit":
+				testJSON = `{
+					"session_id": "test",
+					"transcript_path": "/test",
+					"cwd": "/test",
+					"hook_event_name": "UserPromptSubmit",
+					"prompt": "Hello"
+				}`
+			case "Notification":
+				testJSON = `{
+					"session_id": "test", 
+					"transcript_path": "/test",
+					"cwd": "/test",
+					"hook_event_name": "Notification",
+					"message": "Test notification"
+				}`
+			case "Stop":
+				testJSON = `{
+					"session_id": "test",
+					"transcript_path": "/test", 
+					"cwd": "/test",
+					"hook_event_name": "Stop"
+				}`
+			case "SubagentStop":
+				testJSON = `{
+					"session_id": "test",
+					"transcript_path": "/test",
+					"cwd": "/test", 
+					"hook_event_name": "SubagentStop"
+				}`
+			case "PreCompact":
+				testJSON = `{
+					"session_id": "test",
+					"transcript_path": "/test",
+					"cwd": "/test",
+					"hook_event_name": "PreCompact"
+				}`
+			}
+
+			event, err := parser.Parse([]byte(testJSON))
+			if err != nil {
+				t.Fatalf("Parse failed for %s: %v", tt.eventName, err)
+			}
+
+			context := event.GetContext()
+			if context.Category != tt.expected {
+				t.Errorf("%s: expected category %s, got %s. %s", 
+					tt.eventName, tt.expected.String(), context.Category.String(), tt.description)
+			}
+		})
+	}
+}
+
 func TestExtractCommandInfo(t *testing.T) {
 	parser := NewHookEventParser()
 

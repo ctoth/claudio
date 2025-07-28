@@ -259,12 +259,14 @@ func (e *HookEvent) GetContext() *EventContext {
 		context.Operation = "tool-complete"
 
 	case "Stop", "SubagentStop":
-		context.Category = Success
+		context.Category = Completion
+		slog.Debug("categorizing Stop/SubagentStop event as Completion")
 		context.SoundHint = "completion"
 		context.Operation = "stop"
 
 	case "PreCompact":
-		context.Category = Loading
+		context.Category = System
+		slog.Debug("categorizing PreCompact event as System")
 		context.SoundHint = "organizing"
 		context.Operation = "compact"
 
