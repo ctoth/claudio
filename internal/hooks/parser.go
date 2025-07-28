@@ -50,13 +50,14 @@ type HookEvent struct {
 
 // EventContext provides processed context for sound mapping
 type EventContext struct {
-	Category    EventCategory
-	ToolName    string
-	IsSuccess   bool
-	HasError    bool
-	SoundHint   string
-	FileType    string
-	Operation   string
+	Category     EventCategory
+	ToolName     string
+	OriginalTool string // Original tool before command extraction (for fallback)
+	IsSuccess    bool
+	HasError     bool
+	SoundHint    string
+	FileType     string
+	Operation    string
 }
 
 // CommandInfo represents parsed command information from Bash tool input
