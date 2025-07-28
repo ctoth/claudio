@@ -82,29 +82,17 @@ Default config location: `/etc/xdg/claudio/config.json`
 
 ## Soundpack Structure
 
-Soundpacks follow this directory structure:
-```
-soundpack-name/
-├── default.wav
-├── loading/
-│   ├── loading.wav
-│   ├── bash-thinking.wav
-│   └── file-editing.wav
-├── success/
-│   ├── success.wav
-│   ├── bash-success.wav
-│   └── file-saved.wav
-├── error/
-│   ├── error.wav
-│   └── tool-error.wav
-└── interactive/
-    ├── interactive.wav
-    └── message-sent.wav
-```
+Soundpacks use a category-based directory structure with 4 main categories:
+- `loading/` - PreToolUse events and thinking sounds
+- `success/` - PostToolUse success events  
+- `error/` - PostToolUse error events and failures
+- `interactive/` - UserPromptSubmit, Notification events
+
+Each category can contain tool-specific sounds (e.g., `bash-thinking.wav`, `read-success.wav`) that follow the 5-level fallback system. Use `ls /usr/local/share/claudio/default/` to see current available sounds.
 
 ## Current Issues and Workarounds
 
-1. **Audio Crackling**: The current memory-based implementation has some crackling. Volume is pre-processed during sound loading to minimize this.
+1. **Audio Crackling**: The current memory-based implementation has some crackling.
 
 2. **Config Auto-discovery**: Fixed by moving config from `/usr/local/share/claudio/` to `/etc/xdg/claudio/`
 
