@@ -299,8 +299,8 @@ func TestMapSoundEdgeCases(t *testing.T) {
 			t.Errorf("Expected default.wav for nil context, got %s", result.AllPaths[0])
 		}
 
-		if result.FallbackLevel != 5 {
-			t.Errorf("Expected fallback level 5 for nil context, got %d", result.FallbackLevel)
+		if result.FallbackLevel != 6 {
+			t.Errorf("Expected fallback level 6 for nil context, got %d", result.FallbackLevel)
 		}
 	})
 

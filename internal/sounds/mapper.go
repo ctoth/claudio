@@ -7,13 +7,13 @@ import (
 	"claudio/internal/hooks"
 )
 
-// SoundMapper maps hook events to sound file paths using a 5-level fallback system
+// SoundMapper maps hook events to sound file paths using a 6-level fallback system
 type SoundMapper struct{}
 
 // SoundMappingResult contains the mapping result and metadata
 type SoundMappingResult struct {
 	SelectedPath  string   // The first path in the fallback chain (to be used)
-	FallbackLevel int      // Which level was selected (1-5, 1-based)
+	FallbackLevel int      // Which level was selected (1-6, 1-based)
 	TotalPaths    int      // Total number of paths generated
 	AllPaths      []string // All paths in fallback order
 }
@@ -24,18 +24,19 @@ func NewSoundMapper() *SoundMapper {
 	return &SoundMapper{}
 }
 
-// MapSound maps a hook event context to sound file paths using a 5-level fallback system:
+// MapSound maps a hook event context to sound file paths using enhanced fallback:
 // 1. Exact hint match: "category/hint.wav"
-// 2. Tool-specific: "category/tool.wav" 
-// 3. Operation-specific: "category/operation.wav"
-// 4. Category-specific: "category/category.wav"
-// 5. Default: "default.wav"
+// 2. Tool-specific: "category/tool.wav"
+// 3. Original tool (if different): "category/originaltool.wav"
+// 4. Operation-specific: "category/operation.wav"
+// 5. Category-specific: "category/category.wav"
+// 6. Default: "default.wav"
 func (m *SoundMapper) MapSound(context *hooks.EventContext) *SoundMappingResult {
 	if context == nil {
 		slog.Warn("nil context provided to sound mapper")
 		return &SoundMappingResult{
 			SelectedPath:  "default.wav",
-			FallbackLevel: 5,
+			FallbackLevel: 6,
 			TotalPaths:    1,
 			AllPaths:      []string{"default.wav"},
 		}
@@ -44,6 +45,7 @@ func (m *SoundMapper) MapSound(context *hooks.EventContext) *SoundMappingResult 
 	slog.Debug("mapping sound for hook event",
 		"category", context.Category.String(),
 		"tool_name", context.ToolName,
+		"original_tool", context.OriginalTool,
 		"sound_hint", context.SoundHint,
 		"operation", context.Operation,
 		"file_type", context.FileType,
@@ -60,55 +62,63 @@ func (m *SoundMapper) MapSound(context *hooks.EventContext) *SoundMappingResult 
 		slog.Debug("added level 1 path (exact hint)", "path", hintPath)
 	}
 
-	// Level 2: Tool-specific (only if tool name exists)
+	// Level 2: Tool-specific (extracted tool)
 	if context.ToolName != "" {
 		toolPath := categoryStr + "/" + normalizeName(context.ToolName) + ".wav"
 		paths = append(paths, toolPath)
 		slog.Debug("added level 2 path (tool-specific)", "path", toolPath)
 	}
 
-	// Level 3: Operation-specific (only if operation exists)
+	// Level 3: Original tool fallback (if different from current tool)
+	if context.OriginalTool != "" && context.OriginalTool != context.ToolName {
+		originalPath := categoryStr + "/" + normalizeName(context.OriginalTool) + ".wav"
+		paths = append(paths, originalPath)
+		slog.Debug("added level 3 path (original tool fallback)", "path", originalPath)
+	}
+
+	// Level 4: Operation-specific
 	if context.Operation != "" {
 		opPath := categoryStr + "/" + normalizeName(context.Operation) + ".wav"
 		paths = append(paths, opPath)
-		slog.Debug("added level 3 path (operation-specific)", "path", opPath)
+		slog.Debug("added level 4 path (operation-specific)", "path", opPath)
 	}
 
-	// Level 4: Category-specific
+	// Level 5: Category-specific
 	if categoryStr != "" && categoryStr != "unknown" {
 		categoryPath := categoryStr + "/" + categoryStr + ".wav"
 		paths = append(paths, categoryPath)
-		slog.Debug("added level 4 path (category-specific)", "path", categoryPath)
+		slog.Debug("added level 5 path (category-specific)", "path", categoryPath)
 	}
 
-	// Level 5: Default (always present)
+	// Level 6: Default
 	paths = append(paths, "default.wav")
-	slog.Debug("added level 5 path (default)", "path", "default.wav")
+	slog.Debug("added level 6 path (default)", "path", "default.wav")
 
 	if len(paths) == 0 {
-		// Fallback if somehow no paths were generated
 		slog.Warn("no paths generated, using default fallback")
 		paths = []string{"default.wav"}
 	}
 
 	result := &SoundMappingResult{
 		SelectedPath:  paths[0],
-		FallbackLevel: 1, // Will be the first level that was actually added
+		FallbackLevel: 1,
 		TotalPaths:    len(paths),
 		AllPaths:      paths,
 	}
 
-	// Calculate the actual fallback level based on what was included
+	// Calculate actual fallback level
 	if context.SoundHint != "" {
 		result.FallbackLevel = 1
 	} else if context.ToolName != "" {
 		result.FallbackLevel = 2
-	} else if context.Operation != "" {
+	} else if context.OriginalTool != "" && context.OriginalTool != context.ToolName {
 		result.FallbackLevel = 3
-	} else if categoryStr != "" && categoryStr != "unknown" {
+	} else if context.Operation != "" {
 		result.FallbackLevel = 4
-	} else {
+	} else if categoryStr != "" && categoryStr != "unknown" {
 		result.FallbackLevel = 5
+	} else {
+		result.FallbackLevel = 6
 	}
 
 	slog.Info("sound mapping completed",
@@ -118,6 +128,7 @@ func (m *SoundMapper) MapSound(context *hooks.EventContext) *SoundMappingResult 
 		"all_paths", result.AllPaths,
 		"context_category", context.Category.String(),
 		"context_tool", context.ToolName,
+		"context_original_tool", context.OriginalTool,
 		"context_hint", context.SoundHint)
 
 	return result
