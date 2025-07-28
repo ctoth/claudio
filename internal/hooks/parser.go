@@ -151,36 +151,99 @@ func (e *HookEvent) GetContext() *EventContext {
 	case "PreToolUse":
 		context.Category = Loading
 		context.Operation = "tool-start"
-		
-		if context.ToolName != "" {
+
+		// Enhanced logic for Bash tools
+		if context.ToolName == "Bash" {
+			commandInfo := e.extractCommandInfo()
+			if commandInfo.Command != "" {
+				context.OriginalTool = "Bash"
+				context.ToolName = commandInfo.Command
+
+				if commandInfo.HasSubcommand {
+					context.SoundHint = strings.ToLower(commandInfo.Command) + "-" + 
+						strings.ToLower(commandInfo.Subcommand) + "-thinking"
+				} else {
+					context.SoundHint = strings.ToLower(commandInfo.Command) + "-thinking"
+				}
+			} else {
+				// Fallback to original behavior
+				context.SoundHint = strings.ToLower(context.ToolName) + "-thinking"
+			}
+		} else if context.ToolName != "" {
 			context.SoundHint = strings.ToLower(context.ToolName) + "-thinking"
 		} else {
 			context.SoundHint = "tool-loading"
 		}
 
 	case "PostToolUse":
-		// Analyze tool response to determine success/error and specific error type
+		// Analyze tool response for success/error
 		success, hasError, errorType := e.analyzeToolResponse()
 		context.IsSuccess = success
 		context.HasError = hasError
 
 		if hasError {
 			context.Category = Error
-			
-			// Use specific error type if available
-			if errorType != "" {
-				context.SoundHint = errorType
-			} else if context.ToolName != "" {
-				context.SoundHint = strings.ToLower(context.ToolName) + "-error"
+
+			// Enhanced logic for Bash tools
+			if context.ToolName == "Bash" {
+				commandInfo := e.extractCommandInfo()
+				if commandInfo.Command != "" {
+					context.OriginalTool = "Bash"
+					context.ToolName = commandInfo.Command
+
+					if errorType != "" {
+						context.SoundHint = errorType
+					} else if commandInfo.HasSubcommand {
+						context.SoundHint = strings.ToLower(commandInfo.Command) + "-" + 
+							strings.ToLower(commandInfo.Subcommand) + "-error"
+					} else {
+						context.SoundHint = strings.ToLower(commandInfo.Command) + "-error"
+					}
+				} else {
+					// Fallback to original behavior
+					if errorType != "" {
+						context.SoundHint = errorType
+					} else {
+						context.SoundHint = strings.ToLower(context.ToolName) + "-error"
+					}
+				}
 			} else {
-				context.SoundHint = "tool-error"
+				// Original logic for non-Bash tools
+				if errorType != "" {
+					context.SoundHint = errorType
+				} else if context.ToolName != "" {
+					context.SoundHint = strings.ToLower(context.ToolName) + "-error"
+				} else {
+					context.SoundHint = "tool-error"
+				}
 			}
 		} else {
 			context.Category = Success
-			if context.ToolName != "" {
-				context.SoundHint = strings.ToLower(context.ToolName) + "-success"
+
+			// Enhanced logic for Bash tools
+			if context.ToolName == "Bash" {
+				commandInfo := e.extractCommandInfo()
+				if commandInfo.Command != "" {
+					context.OriginalTool = "Bash"
+					context.ToolName = commandInfo.Command
+
+					if commandInfo.HasSubcommand {
+						context.SoundHint = strings.ToLower(commandInfo.Command) + "-" + 
+							strings.ToLower(commandInfo.Subcommand) + "-success"
+					} else {
+						context.SoundHint = strings.ToLower(commandInfo.Command) + "-success"
+					}
+				} else {
+					// Fallback to original behavior
+					context.SoundHint = strings.ToLower(context.ToolName) + "-success"
+				}
 			} else {
-				context.SoundHint = "tool-success"
+				// Original logic for non-Bash tools
+				if context.ToolName != "" {
+					context.SoundHint = strings.ToLower(context.ToolName) + "-success"
+				} else {
+					context.SoundHint = "tool-success"
+				}
 			}
 		}
 
@@ -204,7 +267,7 @@ func (e *HookEvent) GetContext() *EventContext {
 	}
 
 	// Extract file type context for file operations
-	if context.ToolName != "" {
+	if context.ToolName != "" && context.OriginalTool == "" {
 		context.FileType = e.extractFileType()
 	}
 
@@ -213,6 +276,7 @@ func (e *HookEvent) GetContext() *EventContext {
 		"category", context.Category.String(),
 		"sound_hint", context.SoundHint,
 		"tool_name", context.ToolName,
+		"original_tool", context.OriginalTool,
 		"is_success", context.IsSuccess,
 		"has_error", context.HasError,
 		"file_type", context.FileType,
