@@ -154,7 +154,7 @@ func (e *HookEvent) GetContext() *EventContext {
 
 	case "Notification":
 		context.Category = Interactive
-		context.SoundHint = "notification"
+		context.SoundHint = e.detectNotificationType()
 		context.Operation = "notification"
 
 	case "PreToolUse":
@@ -518,6 +518,43 @@ func extractFileExtension(path string) string {
 	default:
 		return ext
 	}
+}
+
+// Notification type detection keywords
+var (
+	permissionKeywords = []string{"permission", "needs permission", "needs your permission"}
+	idleKeywords       = []string{"idle", "been idle", "idle for"}
+)
+
+// detectNotificationType analyzes notification message content to generate specific sound hints
+func (e *HookEvent) detectNotificationType() string {
+	if e.Message == nil {
+		slog.Debug("detectNotificationType: no message field, using generic notification")
+		return "notification"
+	}
+
+	message := strings.ToLower(*e.Message)
+	slog.Debug("detectNotificationType: analyzing message", "message", *e.Message)
+
+	// Check for permission-related notifications
+	for _, keyword := range permissionKeywords {
+		if strings.Contains(message, keyword) {
+			slog.Debug("detectNotificationType: detected permission notification", "keyword", keyword)
+			return "notification-permission"
+		}
+	}
+
+	// Check for idle-related notifications
+	for _, keyword := range idleKeywords {
+		if strings.Contains(message, keyword) {
+			slog.Debug("detectNotificationType: detected idle notification", "keyword", keyword)
+			return "notification-idle"
+		}
+	}
+
+	// Default fallback for generic notifications
+	slog.Debug("detectNotificationType: using generic notification fallback")
+	return "notification"
 }
 
 func min(a, b int) int {

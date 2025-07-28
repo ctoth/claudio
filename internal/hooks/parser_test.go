@@ -410,8 +410,9 @@ func TestEventContext(t *testing.T) {
 			t.Errorf("Expected Interactive category, got %v", context.Category)
 		}
 
-		if context.SoundHint != "notification" {
-			t.Errorf("Expected 'notification' sound hint, got %s", context.SoundHint)
+		// Real notification JSON contains "permission" so should now generate specific hint
+		if context.SoundHint != "notification-permission" {
+			t.Errorf("Expected 'notification-permission' sound hint, got %s", context.SoundHint)
 		}
 	})
 
@@ -690,6 +691,81 @@ func TestExtractCommandInfoVariants(t *testing.T) {
 			}
 			if commandInfo.HasSubcommand != tc.expectedHas {
 				t.Errorf("HasSubcommand = %v, expected %v", commandInfo.HasSubcommand, tc.expectedHas)
+			}
+		})
+	}
+}
+
+func TestNotificationTypeDetection(t *testing.T) {
+	parser := NewHookEventParser()
+
+	tests := []struct {
+		name         string
+		message      string
+		expectedHint string
+		description  string
+	}{
+		{
+			"Permission notification detected",
+			"Claude needs your permission to use Read",
+			"notification-permission",
+			"Should detect permission requests and generate specific hint",
+		},
+		{
+			"Permission notification alternative phrasing",
+			"Claude needs permission to run bash command",
+			"notification-permission", 
+			"Should detect permission with alternative phrasing",
+		},
+		{
+			"Idle notification detected",
+			"Prompt has been idle for 60+ seconds",
+			"notification-idle",
+			"Should detect idle notifications and generate specific hint",
+		},
+		{
+			"Generic notification fallback",
+			"Some other notification message",
+			"notification",
+			"Should fallback to generic notification hint for unknown messages",
+		},
+		{
+			"Empty message fallback",
+			"",
+			"notification",
+			"Should handle empty messages gracefully",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testJSON := fmt.Sprintf(`{
+				"session_id": "test",
+				"transcript_path": "/test",
+				"cwd": "/test",
+				"hook_event_name": "Notification",
+				"message": "%s"
+			}`, tt.message)
+
+			event, err := parser.Parse([]byte(testJSON))
+			if err != nil {
+				t.Fatalf("Parse failed: %v", err)
+			}
+
+			context := event.GetContext()
+			if context.SoundHint != tt.expectedHint {
+				t.Errorf("%s: expected hint '%s', got '%s'. %s", 
+					tt.name, tt.expectedHint, context.SoundHint, tt.description)
+			}
+
+			// Verify category is still Interactive
+			if context.Category != Interactive {
+				t.Errorf("%s: expected Interactive category, got %s", tt.name, context.Category.String())
+			}
+
+			// Verify operation is still notification
+			if context.Operation != "notification" {
+				t.Errorf("%s: expected 'notification' operation, got '%s'", tt.name, context.Operation)
 			}
 		})
 	}
