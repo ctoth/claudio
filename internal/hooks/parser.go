@@ -15,6 +15,8 @@ const (
 	Success
 	Error
 	Interactive
+	Completion
+	System
 )
 
 func (c EventCategory) String() string {
@@ -27,7 +29,14 @@ func (c EventCategory) String() string {
 		return "error"
 	case Interactive:
 		return "interactive"
+	case Completion:
+		slog.Debug("EventCategory.String() returning completion")
+		return "completion"
+	case System:
+		slog.Debug("EventCategory.String() returning system")
+		return "system"
 	default:
+		slog.Warn("EventCategory.String() received unknown category", "category", int(c))
 		return "unknown"
 	}
 }

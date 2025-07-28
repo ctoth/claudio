@@ -84,6 +84,30 @@ func TestHookEventParser(t *testing.T) {
 	}
 }
 
+func TestEventCategory_String_NewCategories(t *testing.T) {
+	tests := []struct {
+		name     string
+		category EventCategory
+		expected string
+	}{
+		{"Loading category", Loading, "loading"},
+		{"Success category", Success, "success"},
+		{"Error category", Error, "error"},
+		{"Interactive category", Interactive, "interactive"},
+		{"Completion category", Completion, "completion"},
+		{"System category", System, "system"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.category.String()
+			if result != tt.expected {
+				t.Errorf("EventCategory.String() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
 func TestParseUserPromptSubmit(t *testing.T) {
 	parser := NewHookEventParser()
 
