@@ -376,6 +376,105 @@ func TestEventContext(t *testing.T) {
 			t.Errorf("Expected 'notification' sound hint, got %s", context.SoundHint)
 		}
 	})
+
+	t.Run("Enhanced Bash git commit success context", func(t *testing.T) {
+		gitCommitJSON := `{
+			"session_id": "test",
+			"transcript_path": "/test",
+			"cwd": "/test",
+			"hook_event_name": "PostToolUse",
+			"tool_name": "Bash",
+			"tool_input": {"command": "git commit -m 'fix'"},
+			"tool_response": {"stdout": "committed", "stderr": "", "interrupted": false}
+		}`
+
+		event, _ := parser.Parse([]byte(gitCommitJSON))
+		context := event.GetContext()
+
+		if context.ToolName != "git" {
+			t.Errorf("Expected ToolName 'git', got '%s'", context.ToolName)
+		}
+
+		if context.SoundHint != "git-commit-success" {
+			t.Errorf("Expected SoundHint 'git-commit-success', got '%s'", context.SoundHint)
+		}
+
+		if context.Category != Success {
+			t.Errorf("Expected Success category, got %v", context.Category)
+		}
+	})
+
+	t.Run("Enhanced Bash npm install thinking context", func(t *testing.T) {
+		npmJSON := `{
+			"session_id": "test",
+			"transcript_path": "/test",
+			"cwd": "/test",
+			"hook_event_name": "PreToolUse",
+			"tool_name": "Bash",
+			"tool_input": {"command": "npm install express"}
+		}`
+
+		event, _ := parser.Parse([]byte(npmJSON))
+		context := event.GetContext()
+
+		if context.ToolName != "npm" {
+			t.Errorf("Expected ToolName 'npm', got '%s'", context.ToolName)
+		}
+
+		if context.SoundHint != "npm-install-thinking" {
+			t.Errorf("Expected SoundHint 'npm-install-thinking', got '%s'", context.SoundHint)
+		}
+
+		if context.Category != Loading {
+			t.Errorf("Expected Loading category, got %v", context.Category)
+		}
+	})
+
+	t.Run("Enhanced Bash single command context", func(t *testing.T) {
+		lsJSON := `{
+			"session_id": "test",
+			"transcript_path": "/test",
+			"cwd": "/test",
+			"hook_event_name": "PostToolUse",
+			"tool_name": "Bash",
+			"tool_input": {"command": "ls -la"},
+			"tool_response": {"stdout": "files", "stderr": "", "interrupted": false}
+		}`
+
+		event, _ := parser.Parse([]byte(lsJSON))
+		context := event.GetContext()
+
+		if context.ToolName != "ls" {
+			t.Errorf("Expected ToolName 'ls', got '%s'", context.ToolName)
+		}
+
+		if context.SoundHint != "ls-success" {
+			t.Errorf("Expected SoundHint 'ls-success', got '%s'", context.SoundHint)
+		}
+	})
+
+	t.Run("Bash fallback when command extraction fails", func(t *testing.T) {
+		emptyJSON := `{
+			"session_id": "test",
+			"transcript_path": "/test",
+			"cwd": "/test",
+			"hook_event_name": "PostToolUse",
+			"tool_name": "Bash",
+			"tool_input": {"command": ""},
+			"tool_response": {"stdout": "", "stderr": "", "interrupted": false}
+		}`
+
+		event, _ := parser.Parse([]byte(emptyJSON))
+		context := event.GetContext()
+
+		if context.ToolName != "Bash" {
+			t.Errorf("Expected ToolName 'Bash' for fallback, got '%s'", context.ToolName)
+		}
+
+		if context.SoundHint != "bash-success" {
+			t.Errorf("Expected SoundHint 'bash-success' for fallback, got '%s'", context.SoundHint)
+		}
+	})
 }
 
 func TestExtractCommandInfo(t *testing.T) {
