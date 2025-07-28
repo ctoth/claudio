@@ -258,17 +258,23 @@ func (e *HookEvent) GetContext() *EventContext {
 
 		context.Operation = "tool-complete"
 
-	case "Stop", "SubagentStop":
+	case "Stop":
 		context.Category = Completion
-		slog.Debug("categorizing Stop/SubagentStop event as Completion")
-		context.SoundHint = "completion"
+		context.SoundHint = "agent-complete" 
 		context.Operation = "stop"
+		slog.Debug("categorizing Stop event as Completion", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "SubagentStop":
+		context.Category = Completion
+		context.SoundHint = "subagent-complete"
+		context.Operation = "subagent-stop"
+		slog.Debug("categorizing SubagentStop event as Completion", "hint", context.SoundHint, "operation", context.Operation)
 
 	case "PreCompact":
 		context.Category = System
-		slog.Debug("categorizing PreCompact event as System")
-		context.SoundHint = "organizing"
+		context.SoundHint = "compacting"
 		context.Operation = "compact"
+		slog.Debug("categorizing PreCompact event as System", "hint", context.SoundHint, "operation", context.Operation)
 
 	default:
 		slog.Warn("unknown hook event type", "event_name", e.EventName)

@@ -771,6 +771,77 @@ func TestNotificationTypeDetection(t *testing.T) {
 	}
 }
 
+func TestEnhancedEventContextExtraction(t *testing.T) {
+	parser := NewHookEventParser()
+
+	tests := []struct {
+		name             string
+		eventName        string
+		expectedHint     string
+		expectedCategory EventCategory
+		expectedOp       string
+		description      string
+	}{
+		{
+			"Stop event context",
+			"Stop",
+			"agent-complete",
+			Completion,
+			"stop",
+			"Stop events should generate agent-complete hint for Claude finishing",
+		},
+		{
+			"SubagentStop event context", 
+			"SubagentStop",
+			"subagent-complete",
+			Completion,
+			"subagent-stop",
+			"SubagentStop events should generate subagent-complete hint for Task tool finishing",
+		},
+		{
+			"PreCompact event context",
+			"PreCompact", 
+			"compacting",
+			System,
+			"compact",
+			"PreCompact events should generate compacting hint for context organization",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testJSON := fmt.Sprintf(`{
+				"session_id": "test",
+				"transcript_path": "/test",
+				"cwd": "/test",
+				"hook_event_name": "%s"
+			}`, tt.eventName)
+
+			event, err := parser.Parse([]byte(testJSON))
+			if err != nil {
+				t.Fatalf("Parse failed for %s: %v", tt.eventName, err)
+			}
+
+			context := event.GetContext()
+
+			if context.Category != tt.expectedCategory {
+				t.Errorf("%s: expected category %s, got %s", 
+					tt.name, tt.expectedCategory.String(), context.Category.String())
+			}
+
+			if context.SoundHint != tt.expectedHint {
+				t.Errorf("%s: expected hint '%s', got '%s'. %s", 
+					tt.name, tt.expectedHint, context.SoundHint, tt.description)
+			}
+
+			if context.Operation != tt.expectedOp {
+				t.Errorf("%s: expected operation '%s', got '%s'", 
+					tt.name, tt.expectedOp, context.Operation)
+			}
+		})
+	}
+}
+
 func TestParseEdgeCases(t *testing.T) {
 	parser := NewHookEventParser()
 
