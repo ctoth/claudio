@@ -1,4 +1,4 @@
-module claudio
+module github.com/ctoth/claudio
 
 go 1.23.4
 

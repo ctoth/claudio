@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"claudio/internal/cli"
+	"github.com/ctoth/claudio/internal/cli"
 )
 
 func main() {
