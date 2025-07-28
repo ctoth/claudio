@@ -338,12 +338,17 @@ func TestEventContext(t *testing.T) {
 			t.Errorf("Expected Loading category, got %v", context.Category)
 		}
 
-		if context.ToolName != "Bash" {
-			t.Errorf("Expected Bash tool name, got %s", context.ToolName)
+		// Enhanced behavior: extract "ls" from "ls -la /tmp/claudio-hook-logs/"
+		if context.ToolName != "ls" {
+			t.Errorf("Expected ls tool name (extracted from Bash), got %s", context.ToolName)
 		}
 
-		if context.SoundHint != "bash-thinking" {
-			t.Errorf("Expected 'bash-thinking' sound hint, got %s", context.SoundHint)
+		if context.OriginalTool != "Bash" {
+			t.Errorf("Expected Bash original tool, got %s", context.OriginalTool)
+		}
+
+		if context.SoundHint != "ls-thinking" {
+			t.Errorf("Expected 'ls-thinking' sound hint, got %s", context.SoundHint)
 		}
 	})
 
@@ -355,8 +360,17 @@ func TestEventContext(t *testing.T) {
 			t.Errorf("Expected Success category, got %v", context.Category)
 		}
 
-		if context.ToolName != "Bash" {
-			t.Errorf("Expected Bash tool name, got %s", context.ToolName)
+		// Enhanced behavior: extract "ls" from "ls -la /tmp/claudio-hook-logs/"
+		if context.ToolName != "ls" {
+			t.Errorf("Expected ls tool name (extracted from Bash), got %s", context.ToolName)
+		}
+
+		if context.OriginalTool != "Bash" {
+			t.Errorf("Expected Bash original tool, got %s", context.OriginalTool)
+		}
+
+		if context.SoundHint != "ls-success" {
+			t.Errorf("Expected 'ls-success' sound hint, got %s", context.SoundHint)
 		}
 
 		if !context.IsSuccess {
