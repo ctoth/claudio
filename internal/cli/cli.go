@@ -207,7 +207,7 @@ func (c *CLI) Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 
 	// If no input and we're just testing flags/config, return success
 	if len(inputData) == 0 {
-		slog.Debug("no input data received - configuration test mode")
+		slog.Info("no input data received - configuration test mode")
 		return 0
 	}
 
