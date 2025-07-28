@@ -7,8 +7,16 @@ import (
 	"github.com/ctoth/claudio/internal/hooks"
 )
 
-// SoundMapper maps hook events to sound file paths using a 6-level fallback system
+// SoundMapper maps hook events to sound file paths using event-specific fallback chains
 type SoundMapper struct{}
+
+// Chain type constants for sound mapping strategy
+const (
+	ChainTypeEnhanced = "enhanced" // PreToolUse: 9-level with command-only sounds
+	ChainTypePostTool = "posttool" // PostToolUse: 6-level, skip command-only sounds
+	ChainTypeSimple   = "simple"   // Simple events: 4-level event-specific fallback
+	ChainTypeLegacy   = "legacy"   // Legacy fallback for compatibility
+)
 
 // SoundMappingResult contains the mapping result and metadata
 type SoundMappingResult struct {
@@ -16,6 +24,7 @@ type SoundMappingResult struct {
 	FallbackLevel int      // Which level was selected (1-6, 1-based)
 	TotalPaths    int      // Total number of paths generated
 	AllPaths      []string // All paths in fallback order
+	ChainType     string   // Type of fallback chain used: "enhanced", "posttool", "simple"
 }
 
 // NewSoundMapper creates a new sound mapper
@@ -24,13 +33,10 @@ func NewSoundMapper() *SoundMapper {
 	return &SoundMapper{}
 }
 
-// MapSound maps a hook event context to sound file paths using enhanced fallback:
-// 1. Exact hint match: "category/hint.wav"
-// 2. Tool-specific: "category/tool.wav"
-// 3. Original tool (if different): "category/originaltool.wav"
-// 4. Operation-specific: "category/operation.wav"
-// 5. Category-specific: "category/category.wav"
-// 6. Default: "default.wav"
+// MapSound maps a hook event context to sound file paths using event-specific fallback chains:
+// - PreToolUse: 9-level enhanced fallback with command-only sounds
+// - PostToolUse: 6-level fallback (skip command-only sounds for semantic accuracy)  
+// - Simple events: 4-level fallback (UserPromptSubmit, Notification, Stop, SubagentStop, PreCompact)
 func (m *SoundMapper) MapSound(context *hooks.EventContext) *SoundMappingResult {
 	if context == nil {
 		slog.Warn("nil context provided to sound mapper")
@@ -39,10 +45,82 @@ func (m *SoundMapper) MapSound(context *hooks.EventContext) *SoundMappingResult 
 			FallbackLevel: 6,
 			TotalPaths:    1,
 			AllPaths:      []string{"default.wav"},
+			ChainType:     ChainTypeSimple,
 		}
 	}
 
-	slog.Debug("mapping sound for hook event",
+	// Determine chain type based on event context 
+	chainType := m.determineChainType(context)
+	slog.Debug("determined fallback chain type", "chain_type", chainType, "category", context.Category.String())
+
+	// Route to appropriate mapping method based on chain type
+	switch chainType {
+	case ChainTypeEnhanced:
+		return m.mapEnhancedSound(context)
+	case ChainTypePostTool:
+		return m.mapPostToolSound(context)  
+	case ChainTypeSimple:
+		return m.mapSimpleSound(context)
+	default:
+		slog.Warn("unknown chain type, falling back to legacy mapper", "chain_type", chainType)
+		return m.mapLegacySound(context)
+	}
+}
+
+// determineChainType analyzes event context to determine which fallback chain type to use
+func (m *SoundMapper) determineChainType(context *hooks.EventContext) string {
+	// Strategy pattern: determine chain type based on event characteristics
+	if m.isEnhancedChainEvent(context) {
+		return ChainTypeEnhanced
+	}
+	
+	if m.isPostToolChainEvent(context) {
+		return ChainTypePostTool
+	}
+	
+	// Default to simple chain for all other events
+	return ChainTypeSimple
+}
+
+// isEnhancedChainEvent determines if event should use enhanced 9-level fallback
+func (m *SoundMapper) isEnhancedChainEvent(context *hooks.EventContext) bool {
+	// PreToolUse events with tool names use enhanced fallback including command-only sounds
+	return context.Category == hooks.Loading && context.ToolName != ""
+}
+
+// isPostToolChainEvent determines if event should use PostToolUse 6-level fallback  
+func (m *SoundMapper) isPostToolChainEvent(context *hooks.EventContext) bool {
+	// PostToolUse events with tool names use 6-level fallback (skip command-only sounds for semantic accuracy)
+	return (context.Category == hooks.Success || context.Category == hooks.Error) && context.ToolName != ""
+}
+
+// mapEnhancedSound handles PreToolUse events with 9-level enhanced fallback chain
+func (m *SoundMapper) mapEnhancedSound(context *hooks.EventContext) *SoundMappingResult {
+	// TODO: Phase 2.2 - implement PreToolUse 9-level enhanced fallback
+	// For now, fall back to legacy behavior
+	slog.Debug("mapEnhancedSound not yet implemented, using legacy fallback")
+	return m.mapLegacySound(context)
+}
+
+// mapPostToolSound handles PostToolUse events with 6-level fallback (skip command-only sounds)
+func (m *SoundMapper) mapPostToolSound(context *hooks.EventContext) *SoundMappingResult {
+	// TODO: Phase 2.3 - implement PostToolUse 6-level fallback
+	// For now, fall back to legacy behavior
+	slog.Debug("mapPostToolSound not yet implemented, using legacy fallback")
+	return m.mapLegacySound(context)
+}
+
+// mapSimpleSound handles simple events with 4-level fallback chain
+func (m *SoundMapper) mapSimpleSound(context *hooks.EventContext) *SoundMappingResult {
+	// TODO: Phase 2.4 - implement simple event 4-level fallback
+	// For now, fall back to legacy behavior  
+	slog.Debug("mapSimpleSound not yet implemented, using legacy fallback")
+	return m.mapLegacySound(context)
+}
+
+// mapLegacySound implements the original 6-level fallback system for backwards compatibility
+func (m *SoundMapper) mapLegacySound(context *hooks.EventContext) *SoundMappingResult {
+	slog.Debug("mapping sound using legacy 6-level fallback",
 		"category", context.Category.String(),
 		"tool_name", context.ToolName,
 		"original_tool", context.OriginalTool,
@@ -99,11 +177,22 @@ func (m *SoundMapper) MapSound(context *hooks.EventContext) *SoundMappingResult 
 		paths = []string{"default.wav"}
 	}
 
+	// Determine chain type for result metadata using same logic as main mapper
+	chainType := ChainTypeLegacy
+	if m.isEnhancedChainEvent(context) {
+		chainType = ChainTypeEnhanced // Will be properly implemented in Phase 2.2
+	} else if m.isPostToolChainEvent(context) {
+		chainType = ChainTypePostTool // Will be properly implemented in Phase 2.3
+	} else {
+		chainType = ChainTypeSimple // Will be properly implemented in Phase 2.4
+	}
+
 	result := &SoundMappingResult{
 		SelectedPath:  paths[0],
 		FallbackLevel: 1,
 		TotalPaths:    len(paths),
 		AllPaths:      paths,
+		ChainType:     chainType,
 	}
 
 	// Calculate actual fallback level
@@ -121,10 +210,11 @@ func (m *SoundMapper) MapSound(context *hooks.EventContext) *SoundMappingResult 
 		result.FallbackLevel = 6
 	}
 
-	slog.Info("sound mapping completed",
+	slog.Info("legacy sound mapping completed",
 		"selected_path", result.SelectedPath,
 		"fallback_level", result.FallbackLevel,
 		"total_paths", result.TotalPaths,
+		"chain_type", result.ChainType,
 		"all_paths", result.AllPaths,
 		"context_category", context.Category.String(),
 		"context_tool", context.ToolName,
