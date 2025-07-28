@@ -384,3 +384,41 @@ func TestMapSoundResultMetadata(t *testing.T) {
 		t.Errorf("SelectedPath (%s) should match first path (%s) in basic case", result.SelectedPath, result.AllPaths[0])
 	}
 }
+
+func TestMapSoundWithOriginalToolFallback(t *testing.T) {
+	mapper := NewSoundMapper()
+
+	// Test context with extracted command but original tool for fallback
+	context := &hooks.EventContext{
+		Category:     hooks.Success,
+		ToolName:     "git", // Extracted from Bash
+		OriginalTool: "Bash", // Original tool for fallback
+		SoundHint:    "git-commit-success",
+		Operation:    "tool-complete",
+	}
+
+	result := mapper.MapSound(context)
+
+	// Should have proper fallback including original tool
+	expectedPaths := []string{
+		"success/git-commit-success.wav",
+		"success/git.wav",
+		"success/bash.wav", // Original tool fallback
+		"success/tool-complete.wav",
+		"success/success.wav",
+		"default.wav",
+	}
+
+	if len(result.AllPaths) != len(expectedPaths) {
+		t.Errorf("Expected %d paths, got %d", len(expectedPaths), len(result.AllPaths))
+		t.Logf("Expected: %v", expectedPaths)
+		t.Logf("Got: %v", result.AllPaths)
+		return
+	}
+
+	for i, expected := range expectedPaths {
+		if result.AllPaths[i] != expected {
+			t.Errorf("Path[%d] = %s, expected %s", i, result.AllPaths[i], expected)
+		}
+	}
+}
