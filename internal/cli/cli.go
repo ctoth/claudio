@@ -9,11 +9,11 @@ import (
 	"os/exec"
 	"strconv"
 
-	"claudio/internal/audio"
-	"claudio/internal/config"
-	"claudio/internal/hooks"
-	"claudio/internal/sounds"
-	"claudio/internal/soundpack"
+	"github.com/ctoth/claudio/internal/audio"
+	"github.com/ctoth/claudio/internal/config"
+	"github.com/ctoth/claudio/internal/hooks"
+	"github.com/ctoth/claudio/internal/sounds"
+	"github.com/ctoth/claudio/internal/soundpack"
 )
 
 // CLI represents the command-line interface

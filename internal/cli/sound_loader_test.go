@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"claudio/internal/audio"
+	"github.com/ctoth/claudio/internal/audio"
 )
 
 func TestSoundLoader(t *testing.T) {

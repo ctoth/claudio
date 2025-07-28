@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"strings"
 
-	"claudio/internal/hooks"
+	"github.com/ctoth/claudio/internal/hooks"
 )
 
 // SoundMapper maps hook events to sound file paths using a 6-level fallback system
