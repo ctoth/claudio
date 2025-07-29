@@ -170,16 +170,16 @@ func (e *HookEvent) GetContext() *EventContext {
 
 				if commandInfo.HasSubcommand {
 					context.SoundHint = strings.ToLower(commandInfo.Command) + "-" + 
-						strings.ToLower(commandInfo.Subcommand) + "-thinking"
+						strings.ToLower(commandInfo.Subcommand) + "-start"
 				} else {
-					context.SoundHint = strings.ToLower(commandInfo.Command) + "-thinking"
+					context.SoundHint = strings.ToLower(commandInfo.Command) + "-start"
 				}
 			} else {
 				// Fallback to original behavior
-				context.SoundHint = strings.ToLower(context.ToolName) + "-thinking"
+				context.SoundHint = strings.ToLower(context.ToolName) + "-start"
 			}
 		} else if context.ToolName != "" {
-			context.SoundHint = strings.ToLower(context.ToolName) + "-thinking"
+			context.SoundHint = strings.ToLower(context.ToolName) + "-start"
 		} else {
 			context.SoundHint = "tool-loading"
 		}

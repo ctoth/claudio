@@ -371,8 +371,8 @@ func TestEventContext(t *testing.T) {
 			t.Errorf("Expected Bash original tool, got %s", context.OriginalTool)
 		}
 
-		if context.SoundHint != "ls-thinking" {
-			t.Errorf("Expected 'ls-thinking' sound hint, got %s", context.SoundHint)
+		if context.SoundHint != "ls-start" {
+			t.Errorf("Expected 'ls-start' sound hint, got %s", context.SoundHint)
 		}
 	})
 
@@ -460,8 +460,8 @@ func TestEventContext(t *testing.T) {
 			t.Errorf("Expected ToolName 'npm', got '%s'", context.ToolName)
 		}
 
-		if context.SoundHint != "npm-install-thinking" {
-			t.Errorf("Expected SoundHint 'npm-install-thinking', got '%s'", context.SoundHint)
+		if context.SoundHint != "npm-install-start" {
+			t.Errorf("Expected SoundHint 'npm-install-start', got '%s'", context.SoundHint)
 		}
 
 		if context.Category != Loading {
@@ -906,4 +906,181 @@ func TestParseEdgeCases(t *testing.T) {
 			t.Errorf("Expected 'tool-interrupted' sound hint, got %s", context.SoundHint)
 		}
 	})
+}
+
+// TDD Phase 2.5 RED: Test PreToolUse suffix change from '-thinking' to '-start'  
+func TestPreToolUseStartSuffixInsteadOfThinking(t *testing.T) {
+	parser := NewHookEventParser()
+
+	tests := []struct {
+		name         string
+		command      string
+		expectedHint string
+		description  string
+	}{
+		{
+			name:         "Simple command should use -start suffix",
+			command:      "ls -la",
+			expectedHint: "ls-start",
+			description:  "Single commands should generate tool-start hints for semantic accuracy",
+		},
+		{
+			name:         "Git status should use -start suffix",
+			command:      "git status",
+			expectedHint: "git-status-start",
+			description:  "Git commands with subcommands should generate command-subcommand-start hints",
+		},
+		{
+			name:         "Git commit should use -start suffix",
+			command:      "git commit -m 'test'",
+			expectedHint: "git-commit-start",
+			description:  "Git commands with subcommands should generate command-subcommand-start hints",
+		},
+		{
+			name:         "NPM install should use -start suffix",
+			command:      "npm install express",
+			expectedHint: "npm-install-start",
+			description:  "NPM commands with subcommands should generate npm-subcommand-start hints",
+		},
+		{
+			name:         "Docker compose should use -start suffix",
+			command:      "docker compose up -d",
+			expectedHint: "docker-compose-start",
+			description:  "Docker compose commands should generate docker-compose-start hints",
+		},
+		{
+			name:         "Bash fallback should use -start suffix",
+			command:      "",
+			expectedHint: "bash-start",
+			description:  "Empty commands should fallback to bash-start for Bash tool",
+		},
+		{
+			name:         "Non-Bash tool should use -start suffix",
+			command:      "",
+			expectedHint: "read-start",
+			description:  "Non-Bash tools should generate tool-start hints",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var testJSON string
+			if tt.name == "Non-Bash tool should use -start suffix" {
+				// Test with Read tool instead of Bash
+				testJSON = fmt.Sprintf(`{
+					"session_id": "test",
+					"transcript_path": "/test",
+					"cwd": "/test",
+					"hook_event_name": "PreToolUse",
+					"tool_name": "Read",
+					"tool_input": {"file_path": "/test/file.txt"}
+				}`)
+			} else {
+				// Test with Bash tool
+				testJSON = fmt.Sprintf(`{
+					"session_id": "test",
+					"transcript_path": "/test",
+					"cwd": "/test",
+					"hook_event_name": "PreToolUse",
+					"tool_name": "Bash",
+					"tool_input": {"command": "%s"}
+				}`, tt.command)
+			}
+
+			event, err := parser.Parse([]byte(testJSON))
+			if err != nil {
+				t.Fatalf("Parse failed: %v", err)
+			}
+
+			context := event.GetContext()
+
+			// Test will fail initially - parser still generates '-thinking' suffix
+			if context.SoundHint != tt.expectedHint {
+				t.Errorf("%s: expected hint '%s', got '%s'. %s", 
+					tt.name, tt.expectedHint, context.SoundHint, tt.description)
+			}
+
+			// Verify still in Loading category
+			if context.Category != Loading {
+				t.Errorf("%s: expected Loading category, got %s", tt.name, context.Category.String())
+			}
+
+			// Verify still has tool-start operation
+			if context.Operation != "tool-start" {
+				t.Errorf("%s: expected 'tool-start' operation, got '%s'", tt.name, context.Operation)
+			}
+		})
+	}
+}
+
+// TDD Phase 2.5 RED: Test that existing PostToolUse events still work correctly
+func TestPostToolUseSuffixesUnchanged(t *testing.T) {
+	parser := NewHookEventParser()
+
+	tests := []struct {
+		name         string
+		command      string
+		stderr       string
+		expectedHint string
+		description  string
+	}{
+		{
+			name:         "Git commit success should use -success suffix",
+			command:      "git commit -m 'test'",
+			stderr:       "",
+			expectedHint: "git-commit-success",
+			description:  "PostToolUse success events should continue using -success suffix",
+		},
+		{
+			name:         "Git commit error should use -error suffix",
+			command:      "git commit -m 'test'",
+			stderr:       "nothing to commit",
+			expectedHint: "git-commit-error",
+			description:  "PostToolUse error events should continue using -error suffix",
+		},
+		{
+			name:         "NPM install success should use -success suffix",
+			command:      "npm install express",
+			stderr:       "",
+			expectedHint: "npm-install-success",
+			description:  "NPM PostToolUse success should continue using -success suffix",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testJSON := fmt.Sprintf(`{
+				"session_id": "test",
+				"transcript_path": "/test",
+				"cwd": "/test",
+				"hook_event_name": "PostToolUse",
+				"tool_name": "Bash",
+				"tool_input": {"command": "%s"},
+				"tool_response": {"stdout": "output", "stderr": "%s", "interrupted": false}
+			}`, tt.command, tt.stderr)
+
+			event, err := parser.Parse([]byte(testJSON))
+			if err != nil {
+				t.Fatalf("Parse failed: %v", err)
+			}
+
+			context := event.GetContext()
+
+			// These should continue working correctly
+			if context.SoundHint != tt.expectedHint {
+				t.Errorf("%s: expected hint '%s', got '%s'. %s", 
+					tt.name, tt.expectedHint, context.SoundHint, tt.description)
+			}
+
+			// Verify correct category based on stderr
+			expectedCategory := Success
+			if tt.stderr != "" {
+				expectedCategory = Error
+			}
+			if context.Category != expectedCategory {
+				t.Errorf("%s: expected %s category, got %s", 
+					tt.name, expectedCategory.String(), context.Category.String())
+			}
+		})
+	}
 }
