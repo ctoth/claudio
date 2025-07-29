@@ -94,8 +94,19 @@ func runInstallCommandE(cmd *cobra.Command, args []string) error {
 
 	slog.Info("install command executing", "scope", scope, "dry_run", dryRun, "force", force, "quiet", quiet, "print", print)
 
-	// TODO: Implement actual installation logic in later commits
-	// For now, just validate the flags and return success
+	// Find Claude Code settings paths for the specified scope
+	settingsPaths, err := install.FindClaudeSettingsPaths(scope.String())
+	if err != nil {
+		return fmt.Errorf("failed to find Claude Code settings paths: %w", err)
+	}
+	
+	if len(settingsPaths) == 0 {
+		return fmt.Errorf("no Claude Code settings paths found for scope: %s", scope)
+	}
+	
+	// Use the first available path
+	settingsPath := settingsPaths[0]
+	slog.Debug("using settings path", "path", settingsPath, "scope", scope)
 
 	// Handle print flag - shows configuration details
 	if print {
@@ -121,45 +132,43 @@ func runInstallCommandE(cmd *cobra.Command, args []string) error {
 			cmd.Printf("  Output: Quiet mode (minimal messages)\n")
 		}
 		cmd.Printf("  Scope: %s\n", scope.String())
+		cmd.Printf("  Settings Path: %s\n", settingsPath)
 		return nil
 	}
 
-	// Handle quiet mode - minimal output
-	if quiet {
-		// Only show essential information in quiet mode
-		if dryRun {
-			cmd.Printf("DRY-RUN: %s\n", scope.String())
-		} else if force {
-			cmd.Printf("FORCE: %s\n", scope.String())
+	// Handle dry-run mode - show what would be done without making changes
+	if dryRun {
+		if !quiet {
+			cmd.Printf("DRY-RUN: Claudio installation simulation for %s scope\n", scope.String())
+			cmd.Printf("Settings path: %s\n", settingsPath)
+			cmd.Printf("Would install hooks: PreToolUse, PostToolUse, UserPromptSubmit\n")
+			cmd.Printf("No changes will be made.\n")
 		} else {
-			cmd.Printf("Install: %s\n", scope.String())
+			cmd.Printf("DRY-RUN: %s -> %s\n", scope.String(), settingsPath)
 		}
 		return nil
 	}
 
-	// Normal verbose output mode
-	var prefix string
-	if dryRun && force {
-		prefix = "DRY-RUN + FORCE:"
-	} else if dryRun {
-		prefix = "DRY-RUN:"
-	} else if force {
-		prefix = "FORCE:"
-	} else {
-		prefix = ""
+	// Run the actual installation workflow
+	if !quiet {
+		cmd.Printf("Installing Claudio hooks for %s scope...\n", scope.String())
+		cmd.Printf("Settings path: %s\n", settingsPath)
 	}
 
-	if prefix != "" {
-		cmd.Printf("%s Install command would run with scope: %s", prefix, scope)
-		if dryRun {
-			cmd.Printf(" (no changes will be made)")
-		}
+	err = runInstallWorkflow(scope.String(), settingsPath)
+	if err != nil {
+		return fmt.Errorf("installation failed: %w", err)
+	}
+
+	// Success message
+	if !quiet {
+		cmd.Printf("✅ Claudio installation completed successfully!\n")
+		cmd.Printf("Audio hooks have been added to Claude Code settings.\n")
 		if force {
-			cmd.Printf(" (will overwrite without prompting)")
+			cmd.Printf("Force mode was used - existing hooks were overwritten.\n")
 		}
-		cmd.Printf("\n")
 	} else {
-		cmd.Printf("Install command would run with scope: %s\n", scope)
+		cmd.Printf("Install: %s ✅\n", scope.String())
 	}
 
 	return nil
