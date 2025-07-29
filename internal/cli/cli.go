@@ -83,7 +83,7 @@ func cliFromContext(ctx context.Context) *CLI {
 func handleVersionFlag(cmd *cobra.Command) (bool, error) {
 	version, _ := cmd.Flags().GetBool("version")
 	if version {
-		cmd.Print(`claudio version 1.1.0 (Version 1.1.0)
+		cmd.Print(`claudio version 1.2.0 (Version 1.2.0)
 Claude Code Audio Plugin - Hook-based sound system
 `)
 		return true, nil
@@ -441,7 +441,7 @@ Examples:
 
 // printVersion prints version information
 func (c *CLI) printVersion(w io.Writer) {
-	version := `claudio version 1.1.0 (Version 1.1.0)
+	version := `claudio version 1.2.0 (Version 1.2.0)
 Claude Code Audio Plugin - Hook-based sound system
 `
 	fmt.Fprint(w, version)
