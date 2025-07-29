@@ -39,6 +39,9 @@ func newInstallCommand() *cobra.Command {
 	
 	// Add --dry-run flag
 	cmd.Flags().BoolP("dry-run", "d", false, "Show what would be done without making changes (simulation mode)")
+	
+	// Add --force flag
+	cmd.Flags().BoolP("force", "f", false, "Overwrite existing hooks without prompting")
 
 	return cmd
 }
@@ -64,12 +67,36 @@ func runInstallCommandE(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to get dry-run flag: %w", err)
 	}
 
-	slog.Info("install command executing", "scope", scope, "dry_run", dryRun)
+	// Get force flag
+	force, err := cmd.Flags().GetBool("force")
+	if err != nil {
+		return fmt.Errorf("failed to get force flag: %w", err)
+	}
+
+	slog.Info("install command executing", "scope", scope, "dry_run", dryRun, "force", force)
 
 	// TODO: Implement actual installation logic in later commits
 	// For now, just validate the flags and return success
-	if dryRun {
-		cmd.Printf("DRY-RUN: Install command would run with scope: %s (no changes will be made)\n", scope)
+	var prefix string
+	if dryRun && force {
+		prefix = "DRY-RUN + FORCE:"
+	} else if dryRun {
+		prefix = "DRY-RUN:"
+	} else if force {
+		prefix = "FORCE:"
+	} else {
+		prefix = ""
+	}
+
+	if prefix != "" {
+		cmd.Printf("%s Install command would run with scope: %s", prefix, scope)
+		if dryRun {
+			cmd.Printf(" (no changes will be made)")
+		}
+		if force {
+			cmd.Printf(" (will overwrite without prompting)")
+		}
+		cmd.Printf("\n")
 	} else {
 		cmd.Printf("Install command would run with scope: %s\n", scope)
 	}
