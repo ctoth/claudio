@@ -17,6 +17,15 @@ func TestCLI(t *testing.T) {
 	if cli == nil {
 		t.Fatal("NewCLI returned nil")
 	}
+	
+	// COMMIT 4 RED: Expect CLI to have cobra root command
+	if cli.rootCmd == nil {
+		t.Fatal("CLI.rootCmd is nil - expected *cobra.Command")
+	}
+	
+	if cli.rootCmd.Use != "claudio" {
+		t.Errorf("Expected rootCmd.Use to be 'claudio', got %q", cli.rootCmd.Use)
+	}
 }
 
 func TestCLIBasicUsage(t *testing.T) {
