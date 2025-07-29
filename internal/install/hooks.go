@@ -1,6 +1,8 @@
 package install
 
 import (
+	"encoding/json"
+	"fmt"
 	"log/slog"
 )
 
@@ -40,4 +42,117 @@ func getHookNamesList(hooks HooksMap) []string {
 		names = append(names, name)
 	}
 	return names
+}
+
+// MergeHooksIntoSettings merges Claudio hooks into existing Claude Code settings
+// Creates a deep copy of existing settings and safely merges hooks without modifying originals
+// Preserves existing non-Claudio hooks and all other settings
+func MergeHooksIntoSettings(existingSettings *SettingsMap, claudiaHooks interface{}) (*SettingsMap, error) {
+	slog.Debug("starting hook merge operation")
+	
+	// Validate inputs
+	if existingSettings == nil {
+		return nil, fmt.Errorf("settings cannot be nil")
+	}
+	
+	if claudiaHooks == nil {
+		return nil, fmt.Errorf("hooks cannot be nil")
+	}
+	
+	// Validate Claudio hooks type
+	claudiaHooksMap, ok := claudiaHooks.(HooksMap)
+	if !ok {
+		// Try to convert from map[string]interface{}
+		if genericMap, isGeneric := claudiaHooks.(map[string]interface{}); isGeneric {
+			claudiaHooksMap = HooksMap(genericMap)
+		} else {
+			return nil, fmt.Errorf("invalid hooks type: expected map[string]interface{}, got %T", claudiaHooks)
+		}
+	}
+	
+	slog.Debug("validated inputs", "claudio_hooks_count", len(claudiaHooksMap))
+	
+	// Create deep copy of existing settings using JSON round-trip
+	settingsCopy, err := deepCopySettings(existingSettings)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create deep copy of settings: %w", err)
+	}
+	
+	// Get or create hooks section in the copy
+	var existingHooks HooksMap
+	if hooksInterface, exists := (*settingsCopy)["hooks"]; exists {
+		// Validate existing hooks type
+		if hooksMap, ok := hooksInterface.(map[string]interface{}); ok {
+			existingHooks = HooksMap(hooksMap)
+			slog.Debug("found existing hooks", "existing_hooks_count", len(existingHooks))
+		} else {
+			return nil, fmt.Errorf("existing hooks invalid: expected map[string]interface{}, got %T", hooksInterface)
+		}
+	} else {
+		// Create new hooks section
+		existingHooks = make(HooksMap)
+		slog.Debug("created new hooks section")
+	}
+	
+	// Merge Claudio hooks into existing hooks
+	// This preserves existing hooks while adding/updating Claudio hooks
+	mergedHooks := make(HooksMap)
+	
+	// First, copy all existing hooks
+	for hookName, hookValue := range existingHooks {
+		mergedHooks[hookName] = hookValue
+		slog.Debug("preserved existing hook", "hook_name", hookName, "hook_value", hookValue)
+	}
+	
+	// Then, add/update Claudio hooks
+	for hookName, hookValue := range claudiaHooksMap {
+		if existingValue, exists := mergedHooks[hookName]; exists {
+			// Hook already exists - apply merge strategy
+			if existingValue != hookValue {
+				slog.Info("updating existing hook", 
+					"hook_name", hookName, 
+					"old_value", existingValue, 
+					"new_value", hookValue)
+			} else {
+				slog.Debug("hook already has correct value", 
+					"hook_name", hookName, 
+					"value", hookValue)
+			}
+		} else {
+			slog.Debug("adding new Claudio hook", 
+				"hook_name", hookName, 
+				"hook_value", hookValue)
+		}
+		
+		// Update/add the Claudio hook
+		mergedHooks[hookName] = hookValue
+	}
+	
+	// Update the hooks section in the settings copy
+	(*settingsCopy)["hooks"] = map[string]interface{}(mergedHooks)
+	
+	slog.Info("completed hook merge", 
+		"total_hooks", len(mergedHooks),
+		"claudio_hooks_merged", len(claudiaHooksMap))
+	
+	return settingsCopy, nil
+}
+
+// deepCopySettings creates a deep copy of settings using JSON round-trip
+// This ensures that modifications to the copy don't affect the original
+func deepCopySettings(original *SettingsMap) (*SettingsMap, error) {
+	// Marshal to JSON
+	jsonData, err := json.Marshal(original)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal original settings: %w", err)
+	}
+	
+	// Unmarshal to new copy
+	var copy SettingsMap
+	err = json.Unmarshal(jsonData, &copy)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal settings copy: %w", err)
+	}
+	
+	return &copy, nil
 }
