@@ -195,6 +195,38 @@ func (m *SoundMapper) mapEnhancedSound(context *hooks.EventContext) *SoundMappin
 	return result
 }
 
+// buildPath creates a standardized sound path with proper normalization
+func (m *SoundMapper) buildPath(category, name string) string {
+	if category == "" {
+		return "default.wav"
+	}
+	if name == "" {
+		return category + "/" + category + ".wav"
+	}
+	return category + "/" + normalizeName(name) + ".wav"
+}
+
+// determineCategorySuffix determines the appropriate suffix based on event category and context
+func (m *SoundMapper) determineCategorySuffix(category hooks.EventCategory, operation string) string {
+	switch category {
+	case hooks.Success:
+		return "success"
+	case hooks.Error:
+		return "error"
+	case hooks.Loading:
+		return "start"
+	case hooks.Interactive:
+		return "submit"
+	case hooks.Completion:
+		return "complete"
+	case hooks.System:
+		return "" // System events typically don't have suffixes
+	default:
+		// Fallback to operation-based suffix
+		return m.extractSuffixFromOperation(operation)
+	}
+}
+
 // extractCommandFromHint extracts command and subcommand from sound hint and tool name
 func (m *SoundMapper) extractCommandFromHint(hint, toolName string) (command, subcommand string) {
 	if hint == "" || toolName == "" {
@@ -284,10 +316,86 @@ func (m *SoundMapper) calculateFallbackLevel(context *hooks.EventContext, paths 
 
 // mapPostToolSound handles PostToolUse events with 6-level fallback (skip command-only sounds)
 func (m *SoundMapper) mapPostToolSound(context *hooks.EventContext) *SoundMappingResult {
-	// TODO: Phase 2.3 - implement PostToolUse 6-level fallback
-	// For now, fall back to legacy behavior
-	slog.Debug("mapPostToolSound not yet implemented, using legacy fallback")
-	return m.mapLegacySound(context)
+	slog.Debug("mapping sound using PostToolUse 6-level fallback (skip command-only)",
+		"category", context.Category.String(),
+		"tool_name", context.ToolName,
+		"original_tool", context.OriginalTool,
+		"sound_hint", context.SoundHint,
+		"operation", context.Operation,
+		"is_success", context.IsSuccess,
+		"has_error", context.HasError)
+
+	// Pre-allocate slice with estimated capacity to reduce memory allocations
+	paths := make([]string, 0, 6)
+	categoryStr := context.Category.String()
+
+	// Extract command once for reuse (skip subcommand since we don't use command-subcommand level)
+	command, _ := m.extractCommandFromHint(context.SoundHint, context.ToolName)
+	
+	// Determine suffix based on category (success/error context)
+	suffix := m.determineCategorySuffix(context.Category, context.Operation)
+
+	// Level 1: Exact hint match
+	if context.SoundHint != "" {
+		hintPath := m.buildPath(categoryStr, context.SoundHint)
+		paths = append(paths, hintPath)
+		slog.Debug("added level 1 path (exact hint)", "path", hintPath)
+	}
+
+	// Level 2: Command with suffix (e.g., "git-success.wav") - skip command-only for semantic accuracy
+	if command != "" && suffix != "" {
+		cmdSuffixPath := m.buildPath(categoryStr, command+"-"+suffix)
+		paths = append(paths, cmdSuffixPath)
+		slog.Debug("added level 2 path (command with suffix, skip command-only)", "path", cmdSuffixPath)
+	}
+
+	// Level 3: Original tool with suffix (e.g., "bash-success.wav")
+	if context.OriginalTool != "" && suffix != "" {
+		origSuffixPath := m.buildPath(categoryStr, context.OriginalTool+"-"+suffix)
+		paths = append(paths, origSuffixPath)
+		slog.Debug("added level 3 path (original tool with suffix)", "path", origSuffixPath)
+	}
+
+	// Level 4: Operation-specific (e.g., "tool-complete.wav")
+	if context.Operation != "" {
+		opPath := m.buildPath(categoryStr, context.Operation)
+		paths = append(paths, opPath)
+		slog.Debug("added level 4 path (operation-specific)", "path", opPath)
+	}
+
+	// Level 5: Category-specific (e.g., "success.wav", "error.wav")
+	if categoryStr != "" && categoryStr != "unknown" {
+		categoryPath := m.buildPath(categoryStr, "")
+		paths = append(paths, categoryPath)
+		slog.Debug("added level 5 path (category-specific)", "path", categoryPath)
+	}
+
+	// Level 6: Default fallback
+	paths = append(paths, "default.wav")
+	slog.Debug("added level 6 path (default)", "path", "default.wav")
+
+	// Ensure we have at least the default path
+	if len(paths) == 0 {
+		slog.Warn("no paths generated in PostToolUse fallback, using default")
+		paths = []string{"default.wav"}
+	}
+
+	result := &SoundMappingResult{
+		SelectedPath:  paths[0],
+		FallbackLevel: m.calculateFallbackLevel(context, paths),
+		TotalPaths:    len(paths),
+		AllPaths:      paths,
+		ChainType:     ChainTypePostTool,
+	}
+
+	slog.Info("PostToolUse sound mapping completed",
+		"selected_path", result.SelectedPath,
+		"fallback_level", result.FallbackLevel,
+		"total_paths", result.TotalPaths,
+		"chain_type", result.ChainType,
+		"all_paths", result.AllPaths)
+
+	return result
 }
 
 // mapSimpleSound handles simple events with 4-level fallback chain
