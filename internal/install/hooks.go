@@ -9,10 +9,15 @@ import (
 // HooksMap represents the hooks section of Claude Code settings
 type HooksMap map[string]interface{}
 
-// GenerateClaudiaHooks creates the hook configuration for Claudio installation
+// GenerateClaudioHooks creates the hook configuration for Claudio installation
+// Uses the central hook registry to generate all enabled hooks dynamically
 // Returns a hooks map that can be integrated into Claude Code settings.json
-func GenerateClaudiaHooks() (interface{}, error) {
-	slog.Debug("generating Claudio hooks configuration")
+func GenerateClaudioHooks() (interface{}, error) {
+	slog.Debug("generating Claudio hooks configuration using registry")
+	
+	// Get enabled hooks from registry
+	enabledHooks := GetEnabledHooks()
+	slog.Debug("retrieved enabled hooks from registry", "count", len(enabledHooks))
 	
 	hooks := make(HooksMap)
 	
@@ -30,19 +35,16 @@ func GenerateClaudiaHooks() (interface{}, error) {
 		}
 	}
 	
-	// PreToolUse: Play loading/thinking sounds before tool execution
-	hooks["PreToolUse"] = createHookConfig()
-	slog.Debug("added PreToolUse hook", "command", "claudio")
+	// Generate hooks for all enabled hooks in registry
+	for _, hookDef := range enabledHooks {
+		hooks[hookDef.Name] = createHookConfig()
+		slog.Debug("added hook from registry", 
+			"hook_name", hookDef.Name, 
+			"category", hookDef.Category, 
+			"description", hookDef.Description)
+	}
 	
-	// PostToolUse: Play success/error sounds after tool execution  
-	hooks["PostToolUse"] = createHookConfig()
-	slog.Debug("added PostToolUse hook", "command", "claudio")
-	
-	// UserPromptSubmit: Play interaction sounds when user submits prompts
-	hooks["UserPromptSubmit"] = createHookConfig()
-	slog.Debug("added UserPromptSubmit hook", "command", "claudio")
-	
-	slog.Info("generated Claudio hooks configuration", 
+	slog.Info("generated Claudio hooks configuration from registry", 
 		"hook_count", len(hooks),
 		"hooks", getHookNamesList(hooks))
 	
@@ -61,7 +63,7 @@ func getHookNamesList(hooks HooksMap) []string {
 // MergeHooksIntoSettings merges Claudio hooks into existing Claude Code settings
 // Creates a deep copy of existing settings and safely merges hooks without modifying originals
 // Preserves existing non-Claudio hooks and all other settings
-func MergeHooksIntoSettings(existingSettings *SettingsMap, claudiaHooks interface{}) (*SettingsMap, error) {
+func MergeHooksIntoSettings(existingSettings *SettingsMap, claudioHooks interface{}) (*SettingsMap, error) {
 	slog.Debug("starting hook merge operation")
 	
 	// Validate inputs
@@ -69,22 +71,22 @@ func MergeHooksIntoSettings(existingSettings *SettingsMap, claudiaHooks interfac
 		return nil, fmt.Errorf("settings cannot be nil")
 	}
 	
-	if claudiaHooks == nil {
+	if claudioHooks == nil {
 		return nil, fmt.Errorf("hooks cannot be nil")
 	}
 	
 	// Validate Claudio hooks type
-	claudiaHooksMap, ok := claudiaHooks.(HooksMap)
+	claudioHooksMap, ok := claudioHooks.(HooksMap)
 	if !ok {
 		// Try to convert from map[string]interface{}
-		if genericMap, isGeneric := claudiaHooks.(map[string]interface{}); isGeneric {
-			claudiaHooksMap = HooksMap(genericMap)
+		if genericMap, isGeneric := claudioHooks.(map[string]interface{}); isGeneric {
+			claudioHooksMap = HooksMap(genericMap)
 		} else {
-			return nil, fmt.Errorf("invalid hooks type: expected map[string]interface{}, got %T", claudiaHooks)
+			return nil, fmt.Errorf("invalid hooks type: expected map[string]interface{}, got %T", claudioHooks)
 		}
 	}
 	
-	slog.Debug("validated inputs", "claudio_hooks_count", len(claudiaHooksMap))
+	slog.Debug("validated inputs", "claudio_hooks_count", len(claudioHooksMap))
 	
 	// Create deep copy of existing settings using JSON round-trip
 	settingsCopy, err := deepCopySettings(existingSettings)
@@ -119,7 +121,7 @@ func MergeHooksIntoSettings(existingSettings *SettingsMap, claudiaHooks interfac
 	}
 	
 	// Then, add/update Claudio hooks
-	for hookName, hookValue := range claudiaHooksMap {
+	for hookName, hookValue := range claudioHooksMap {
 		if _, exists := mergedHooks[hookName]; exists {
 			// Hook already exists - for arrays/objects we can't directly compare
 			// so we'll just log and update
@@ -140,7 +142,7 @@ func MergeHooksIntoSettings(existingSettings *SettingsMap, claudiaHooks interfac
 	
 	slog.Info("completed hook merge", 
 		"total_hooks", len(mergedHooks),
-		"claudio_hooks_merged", len(claudiaHooksMap))
+		"claudio_hooks_merged", len(claudioHooksMap))
 	
 	return settingsCopy, nil
 }

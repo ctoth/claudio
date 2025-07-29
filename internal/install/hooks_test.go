@@ -5,24 +5,24 @@ import (
 	"testing"
 )
 
-func TestGenerateClaudiaHooks(t *testing.T) {
-	// TDD RED: Test hook configuration generation for Claudio installation
+func TestGenerateClaudioHooks(t *testing.T) {
+	// TDD RED: Test hook configuration generation for Claudio installation using registry
 	testCases := []struct {
 		name           string
 		expectHooks    []string
 		expectCommands []string
 	}{
 		{
-			name:           "basic hook generation",
-			expectHooks:    []string{"PreToolUse", "PostToolUse", "UserPromptSubmit"},
-			expectCommands: []string{"claudio", "claudio", "claudio"},
+			name:           "registry-based hook generation",
+			expectHooks:    GetHookNames(), // Should use registry instead of hardcoded
+			expectCommands: []string{"claudio", "claudio", "claudio", "claudio", "claudio", "claudio", "claudio", "claudio"}, // 8 hooks now
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Test the GenerateClaudiaHooks function
-			hooks, err := GenerateClaudiaHooks()
+			// Test the GenerateClaudioHooks function
+			hooks, err := GenerateClaudioHooks()
 			
 			if err != nil {
 				t.Errorf("Unexpected error generating hooks: %v", err)
@@ -52,7 +52,12 @@ func TestGenerateClaudiaHooks(t *testing.T) {
 			}
 			
 			// Verify hooks exist and have correct structure
-			// (detailed structure testing is in TestGenerateClaudiaHooksCorrectFormat)
+			// (detailed structure testing is in TestGenerateClaudioHooksCorrectFormat)
+			expectedCount := len(GetEnabledHooks()) // Should be 8 hooks from registry
+			if len(parsedHooks) != expectedCount {
+				t.Errorf("Expected %d hooks from registry, got %d", expectedCount, len(parsedHooks))
+			}
+			
 			for _, hookName := range tc.expectHooks {
 				hookValue, exists := parsedHooks[hookName]
 				if !exists {
@@ -70,9 +75,9 @@ func TestGenerateClaudiaHooks(t *testing.T) {
 	}
 }
 
-func TestGenerateClaudiaHooksStructure(t *testing.T) {
+func TestGenerateClaudioHooksStructure(t *testing.T) {
 	// TDD RED: Test that generated hooks have correct JSON structure for Claude Code
-	hooks, err := GenerateClaudiaHooks()
+	hooks, err := GenerateClaudioHooks()
 	if err != nil {
 		t.Fatalf("Failed to generate hooks: %v", err)
 	}
@@ -123,14 +128,14 @@ func TestGenerateClaudiaHooksStructure(t *testing.T) {
 	t.Logf("Hook structure validation passed with %d hooks", len(hooksMap))
 }
 
-func TestGenerateClaudiaHooksConsistency(t *testing.T) {
+func TestGenerateClaudioHooksConsistency(t *testing.T) {
 	// TDD RED: Test that hook generation is consistent across multiple calls
-	hooks1, err1 := GenerateClaudiaHooks()
+	hooks1, err1 := GenerateClaudioHooks()
 	if err1 != nil {
 		t.Fatalf("First hook generation failed: %v", err1)
 	}
 	
-	hooks2, err2 := GenerateClaudiaHooks()
+	hooks2, err2 := GenerateClaudioHooks()
 	if err2 != nil {
 		t.Fatalf("Second hook generation failed: %v", err2)
 	}
@@ -155,9 +160,9 @@ func TestGenerateClaudiaHooksConsistency(t *testing.T) {
 	t.Logf("Hook generation consistency verified")
 }
 
-func TestGenerateClaudiaHooksValidJSON(t *testing.T) {
+func TestGenerateClaudioHooksValidJSON(t *testing.T) {
 	// TDD RED: Test that generated hooks produce valid JSON that Claude Code can parse
-	hooks, err := GenerateClaudiaHooks()
+	hooks, err := GenerateClaudioHooks()
 	if err != nil {
 		t.Fatalf("Failed to generate hooks: %v", err)
 	}
@@ -194,9 +199,9 @@ func TestGenerateClaudiaHooksValidJSON(t *testing.T) {
 	t.Logf("Generated valid JSON with %d hooks: %s", len(testUnmarshal), jsonStr)
 }
 
-func TestGenerateClaudiaHooksIntegration(t *testing.T) {
+func TestGenerateClaudioHooksIntegration(t *testing.T) {
 	// TDD RED: Test that generated hooks can be integrated into settings structure
-	hooks, err := GenerateClaudiaHooks()
+	hooks, err := GenerateClaudioHooks()
 	if err != nil {
 		t.Fatalf("Failed to generate hooks: %v", err)
 	}
@@ -246,11 +251,11 @@ func getHookNames(hooks map[string]interface{}) []string {
 }
 
 // Functions that will need to be implemented (currently undefined):
-// - GenerateClaudiaHooks() (interface{}, error)
+// - GenerateClaudioHooks() (interface{}, error)
 
-func TestGenerateClaudiaHooksCorrectFormat(t *testing.T) {
+func TestGenerateClaudioHooksCorrectFormat(t *testing.T) {
 	// TDD RED: Test that generated hooks follow Claude Code's required format
-	hooks, err := GenerateClaudiaHooks()
+	hooks, err := GenerateClaudioHooks()
 	if err != nil {
 		t.Fatalf("Failed to generate hooks: %v", err)
 	}
