@@ -51,30 +51,17 @@ func TestGenerateClaudiaHooks(t *testing.T) {
 				}
 			}
 			
-			// Verify hooks have correct command structure
+			// Verify hooks exist and have correct structure
+			// (detailed structure testing is in TestGenerateClaudiaHooksCorrectFormat)
 			for _, hookName := range tc.expectHooks {
 				hookValue, exists := parsedHooks[hookName]
 				if !exists {
 					continue // Already reported above
 				}
 				
-				hookStr, ok := hookValue.(string)
-				if !ok {
-					t.Errorf("Hook '%s' should be a string command, got: %T", hookName, hookValue)
-					continue
-				}
-				
-				// Should contain "claudio" command
-				found := false
-				for _, expectedCmd := range tc.expectCommands {
-					if hookStr == expectedCmd {
-						found = true
-						break
-					}
-				}
-				if !found {
-					t.Errorf("Hook '%s' command '%s' doesn't match expected commands %v", 
-						hookName, hookStr, tc.expectCommands)
+				// Just verify it's not nil
+				if hookValue == nil {
+					t.Errorf("Hook '%s' should not be nil", hookName)
 				}
 			}
 			
@@ -108,11 +95,8 @@ func TestGenerateClaudiaHooksStructure(t *testing.T) {
 	
 	// Test PreToolUse hook
 	if preToolUse, exists := hooksMap["PreToolUse"]; exists {
-		preToolUseStr, ok := preToolUse.(string)
-		if !ok {
-			t.Errorf("PreToolUse should be a string, got: %T", preToolUse)
-		} else if preToolUseStr == "" {
-			t.Error("PreToolUse should not be empty")
+		if preToolUse == nil {
+			t.Error("PreToolUse should not be nil")
 		}
 	} else {
 		t.Error("PreToolUse hook should be present")
@@ -120,11 +104,8 @@ func TestGenerateClaudiaHooksStructure(t *testing.T) {
 	
 	// Test PostToolUse hook
 	if postToolUse, exists := hooksMap["PostToolUse"]; exists {
-		postToolUseStr, ok := postToolUse.(string)
-		if !ok {
-			t.Errorf("PostToolUse should be a string, got: %T", postToolUse)
-		} else if postToolUseStr == "" {
-			t.Error("PostToolUse should not be empty")
+		if postToolUse == nil {
+			t.Error("PostToolUse should not be nil")
 		}
 	} else {
 		t.Error("PostToolUse hook should be present")
@@ -132,11 +113,8 @@ func TestGenerateClaudiaHooksStructure(t *testing.T) {
 	
 	// Test UserPromptSubmit hook
 	if userPromptSubmit, exists := hooksMap["UserPromptSubmit"]; exists {
-		userPromptSubmitStr, ok := userPromptSubmit.(string)
-		if !ok {
-			t.Errorf("UserPromptSubmit should be a string, got: %T", userPromptSubmit)
-		} else if userPromptSubmitStr == "" {
-			t.Error("UserPromptSubmit should not be empty")
+		if userPromptSubmit == nil {
+			t.Error("UserPromptSubmit should not be nil")
 		}
 	} else {
 		t.Error("UserPromptSubmit hook should be present")
@@ -269,3 +247,100 @@ func getHookNames(hooks map[string]interface{}) []string {
 
 // Functions that will need to be implemented (currently undefined):
 // - GenerateClaudiaHooks() (interface{}, error)
+
+func TestGenerateClaudiaHooksCorrectFormat(t *testing.T) {
+	// TDD RED: Test that generated hooks follow Claude Code's required format
+	hooks, err := GenerateClaudiaHooks()
+	if err != nil {
+		t.Fatalf("Failed to generate hooks: %v", err)
+	}
+	
+	// Handle both HooksMap and map[string]interface{} types
+	var hooksMap map[string]interface{}
+	switch h := hooks.(type) {
+	case HooksMap:
+		hooksMap = map[string]interface{}(h)
+	case map[string]interface{}:
+		hooksMap = h
+	default:
+		t.Fatalf("Expected hooks to be HooksMap or map[string]interface{}, got %T", hooks)
+	}
+	
+	// Check each hook has the correct array/object structure
+	for _, hookName := range []string{"PreToolUse", "PostToolUse", "UserPromptSubmit"} {
+		t.Run(hookName, func(t *testing.T) {
+			hookValue, exists := hooksMap[hookName]
+			if !exists {
+				t.Errorf("Hook %s should exist", hookName)
+				return
+			}
+			
+			// Hook should be an array
+			hookArray, ok := hookValue.([]interface{})
+			if !ok {
+				t.Errorf("Hook %s should be an array, got %T", hookName, hookValue)
+				return
+			}
+			
+			// Array should have exactly one element
+			if len(hookArray) != 1 {
+				t.Errorf("Hook %s array should have 1 element, got %d", hookName, len(hookArray))
+				return
+			}
+			
+			// Element should be a map with hooks array
+			hookConfig, ok := hookArray[0].(map[string]interface{})
+			if !ok {
+				t.Errorf("Hook %s array element should be a map, got %T", hookName, hookArray[0])
+				return
+			}
+			
+			// Should have a hooks array
+			hooksField, exists := hookConfig["hooks"]
+			if !exists {
+				t.Errorf("Hook %s config should have 'hooks' field", hookName)
+				return
+			}
+			
+			// hooks field should be an array
+			commandArray, ok := hooksField.([]interface{})
+			if !ok {
+				t.Errorf("Hook %s 'hooks' field should be an array, got %T", hookName, hooksField)
+				return
+			}
+			
+			// Should have exactly one command
+			if len(commandArray) != 1 {
+				t.Errorf("Hook %s command array should have 1 command, got %d", hookName, len(commandArray))
+				return
+			}
+			
+			// Command should be a map with type and command fields
+			cmdMap, ok := commandArray[0].(map[string]interface{})
+			if !ok {
+				t.Errorf("Hook %s command should be a map, got %T", hookName, commandArray[0])
+				return
+			}
+			
+			// Check type field
+			typeField, exists := cmdMap["type"]
+			if !exists {
+				t.Errorf("Hook %s command should have 'type' field", hookName)
+				return
+			}
+			if typeField != "command" {
+				t.Errorf("Hook %s type should be 'command', got %v", hookName, typeField)
+			}
+			
+			// Check command field
+			commandField, exists := cmdMap["command"]
+			if !exists {
+				t.Errorf("Hook %s command should have 'command' field", hookName)
+				return
+			}
+			if commandField != "claudio" {
+				t.Errorf("Hook %s command should be 'claudio', got %v", hookName, commandField)
+			}
+		})
+	}
+}

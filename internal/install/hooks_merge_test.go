@@ -5,6 +5,30 @@ import (
 	"testing"
 )
 
+// isClaudioHook checks if a hook value represents a claudio hook,
+// supporting both the old string format and new array format
+func isClaudioHook(hookValue interface{}) bool {
+	// Check old string format
+	if str, ok := hookValue.(string); ok {
+		return str == "claudio"
+	}
+	
+	// Check new array format
+	if arr, ok := hookValue.([]interface{}); ok && len(arr) > 0 {
+		if config, ok := arr[0].(map[string]interface{}); ok {
+			if hooks, ok := config["hooks"].([]interface{}); ok && len(hooks) > 0 {
+				if cmd, ok := hooks[0].(map[string]interface{}); ok {
+					if cmdStr, ok := cmd["command"].(string); ok {
+						return cmdStr == "claudio"
+					}
+				}
+			}
+		}
+	}
+	
+	return false
+}
+
 func TestMergeHooksIdempotent(t *testing.T) {
 	// TDD RED: Test that merging hooks multiple times produces the same result
 	testCases := []struct {
@@ -41,6 +65,7 @@ func TestMergeHooksIdempotent(t *testing.T) {
 			name: "settings with existing Claudio hooks (idempotent case)",
 			existingSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
+					// Using old string format to test backward compatibility
 					"PreToolUse": "claudio",
 					"PostToolUse": "claudio", 
 					"UserPromptSubmit": "claudio",
@@ -108,8 +133,8 @@ func TestMergeHooksIdempotent(t *testing.T) {
 					for _, expectedHook := range expectedHooks {
 						if val, exists := hooksMap[expectedHook]; !exists {
 							t.Errorf("Expected hook '%s' missing after merge", expectedHook)
-						} else if val != "claudio" {
-							t.Errorf("Expected hook '%s' to be 'claudio', got: %v", expectedHook, val)
+						} else if !isClaudioHook(val) {
+							t.Errorf("Expected hook '%s' to be a claudio hook, got: %v", expectedHook, val)
 						}
 					}
 				}
@@ -243,7 +268,7 @@ func TestMergeHooksPreservesExisting(t *testing.T) {
 					for _, hookName := range claudiaHookNames {
 						if val, exists := hooksMap[hookName]; !exists {
 							t.Errorf("Claudio hook '%s' missing after merge", hookName)
-						} else if val != "claudio" {
+						} else if !isClaudioHook(val) {
 							// For conflicting hooks, check the merge strategy
 							t.Logf("Hook '%s' has value '%v' (merge strategy applied)", hookName, val)
 						}

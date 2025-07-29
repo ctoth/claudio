@@ -241,8 +241,8 @@ func runInstallWorkflow(scope string, settingsPath string) error {
 			for _, hookName := range expectedHooks {
 				if val, exists := hooksMap[hookName]; !exists {
 					return fmt.Errorf("verification failed: Claudio hook '%s' missing after installation", hookName)
-				} else if val != "claudio" {
-					return fmt.Errorf("verification failed: Claudio hook '%s' has wrong value '%v', expected 'claudio'", hookName, val)
+				} else if !install.IsClaudioHook(val) {
+					return fmt.Errorf("verification failed: Claudio hook '%s' has wrong value '%v', expected a claudio hook", hookName, val)
 				}
 			}
 			

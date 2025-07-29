@@ -504,3 +504,123 @@ func deepValueEqual(a, b interface{}) bool {
 		return a == b
 	}
 }
+
+func TestRemoveNewFormatClaudioHooks(t *testing.T) {
+	// TDD: Test removal of Claude Code's new array/object format hooks
+	testCases := []struct {
+		name             string
+		initialSettings  *install.SettingsMap
+		hookNames        []string
+		expectedSettings *install.SettingsMap
+	}{
+		{
+			name: "remove new format claudio hook",
+			initialSettings: &install.SettingsMap{
+				"hooks": map[string]interface{}{
+					"PreToolUse": []interface{}{
+						map[string]interface{}{
+							"hooks": []interface{}{
+								map[string]interface{}{
+									"type":    "command",
+									"command": "claudio",
+								},
+							},
+						},
+					},
+					"PostToolUse": "other-command", // Keep non-claudio hook
+				},
+			},
+			hookNames: []string{"PreToolUse"},
+			expectedSettings: &install.SettingsMap{
+				"hooks": map[string]interface{}{
+					"PostToolUse": "other-command",
+				},
+			},
+		},
+		{
+			name: "remove multiple new format hooks",
+			initialSettings: &install.SettingsMap{
+				"hooks": map[string]interface{}{
+					"PreToolUse": []interface{}{
+						map[string]interface{}{
+							"hooks": []interface{}{
+								map[string]interface{}{
+									"type":    "command",
+									"command": "claudio",
+								},
+							},
+						},
+					},
+					"PostToolUse": []interface{}{
+						map[string]interface{}{
+							"hooks": []interface{}{
+								map[string]interface{}{
+									"type":    "command",
+									"command": "claudio",
+								},
+							},
+						},
+					},
+					"UserPromptSubmit": []interface{}{
+						map[string]interface{}{
+							"hooks": []interface{}{
+								map[string]interface{}{
+									"type":    "command",
+									"command": "claudio",
+								},
+							},
+						},
+					},
+				},
+				"version": "1.0",
+			},
+			hookNames: []string{"PreToolUse", "PostToolUse", "UserPromptSubmit"},
+			expectedSettings: &install.SettingsMap{
+				"version": "1.0",
+			},
+		},
+		{
+			name: "handle mixed old and new format hooks",
+			initialSettings: &install.SettingsMap{
+				"hooks": map[string]interface{}{
+					"PreToolUse": "claudio", // Old string format
+					"PostToolUse": []interface{}{ // New array format
+						map[string]interface{}{
+							"hooks": []interface{}{
+								map[string]interface{}{
+									"type":    "command",
+									"command": "claudio",
+								},
+							},
+						},
+					},
+					"UserPromptSubmit": "other-command",
+				},
+			},
+			hookNames: []string{"PreToolUse", "PostToolUse"},
+			expectedSettings: &install.SettingsMap{
+				"hooks": map[string]interface{}{
+					"UserPromptSubmit": "other-command",
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Make a copy to avoid modifying the original
+			settingsCopy := deepCopySettings(tc.initialSettings)
+
+			// The current implementation should handle both formats
+			removeSimpleClaudioHooks(settingsCopy, tc.hookNames)
+
+			// Verify the result
+			if !settingsEqual(settingsCopy, tc.expectedSettings) {
+				t.Errorf("Settings mismatch.\nExpected: %+v\nActual:   %+v",
+					tc.expectedSettings, settingsCopy)
+			}
+
+			t.Logf("New format hook removal test passed for %s", tc.name)
+		})
+	}
+}

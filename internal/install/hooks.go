@@ -16,16 +16,30 @@ func GenerateClaudiaHooks() (interface{}, error) {
 	
 	hooks := make(HooksMap)
 	
+	// Helper function to create hook config structure
+	createHookConfig := func() interface{} {
+		return []interface{}{
+			map[string]interface{}{
+				"hooks": []interface{}{
+					map[string]interface{}{
+						"type":    "command",
+						"command": "claudio",
+					},
+				},
+			},
+		}
+	}
+	
 	// PreToolUse: Play loading/thinking sounds before tool execution
-	hooks["PreToolUse"] = "claudio"
+	hooks["PreToolUse"] = createHookConfig()
 	slog.Debug("added PreToolUse hook", "command", "claudio")
 	
 	// PostToolUse: Play success/error sounds after tool execution  
-	hooks["PostToolUse"] = "claudio"
+	hooks["PostToolUse"] = createHookConfig()
 	slog.Debug("added PostToolUse hook", "command", "claudio")
 	
 	// UserPromptSubmit: Play interaction sounds when user submits prompts
-	hooks["UserPromptSubmit"] = "claudio"
+	hooks["UserPromptSubmit"] = createHookConfig()
 	slog.Debug("added UserPromptSubmit hook", "command", "claudio")
 	
 	slog.Info("generated Claudio hooks configuration", 
@@ -106,22 +120,15 @@ func MergeHooksIntoSettings(existingSettings *SettingsMap, claudiaHooks interfac
 	
 	// Then, add/update Claudio hooks
 	for hookName, hookValue := range claudiaHooksMap {
-		if existingValue, exists := mergedHooks[hookName]; exists {
-			// Hook already exists - apply merge strategy
-			if existingValue != hookValue {
-				slog.Info("updating existing hook", 
-					"hook_name", hookName, 
-					"old_value", existingValue, 
-					"new_value", hookValue)
-			} else {
-				slog.Debug("hook already has correct value", 
-					"hook_name", hookName, 
-					"value", hookValue)
-			}
+		if _, exists := mergedHooks[hookName]; exists {
+			// Hook already exists - for arrays/objects we can't directly compare
+			// so we'll just log and update
+			slog.Info("updating existing hook", 
+				"hook_name", hookName, 
+				"action", "replacing")
 		} else {
 			slog.Debug("adding new Claudio hook", 
-				"hook_name", hookName, 
-				"hook_value", hookValue)
+				"hook_name", hookName)
 		}
 		
 		// Update/add the Claudio hook
@@ -155,4 +162,28 @@ func deepCopySettings(original *SettingsMap) (*SettingsMap, error) {
 	}
 	
 	return &copy, nil
+}
+
+// IsClaudioHook checks if a hook value represents a claudio hook,
+// supporting both the old string format and new array format
+func IsClaudioHook(hookValue interface{}) bool {
+	// Check old string format
+	if str, ok := hookValue.(string); ok {
+		return str == "claudio"
+	}
+	
+	// Check new array format
+	if arr, ok := hookValue.([]interface{}); ok && len(arr) > 0 {
+		if config, ok := arr[0].(map[string]interface{}); ok {
+			if hooks, ok := config["hooks"].([]interface{}); ok && len(hooks) > 0 {
+				if cmd, ok := hooks[0].(map[string]interface{}); ok {
+					if cmdStr, ok := cmd["command"].(string); ok {
+						return cmdStr == "claudio"
+					}
+				}
+			}
+		}
+	}
+	
+	return false
 }

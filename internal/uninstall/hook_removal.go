@@ -6,6 +6,26 @@ import (
 	"github.com/ctoth/claudio/internal/install"
 )
 
+
+// isSimpleClaudioArrayHook checks if an array hook contains only a single claudio command
+func isSimpleClaudioArrayHook(arr []interface{}) bool {
+	if len(arr) != 1 {
+		return false
+	}
+	
+	if config, ok := arr[0].(map[string]interface{}); ok {
+		if hooks, ok := config["hooks"].([]interface{}); ok && len(hooks) == 1 {
+			if cmd, ok := hooks[0].(map[string]interface{}); ok {
+				if cmdStr, ok := cmd["command"].(string); ok && cmdStr == "claudio" {
+					return true
+				}
+			}
+		}
+	}
+	
+	return false
+}
+
 // removeSimpleClaudioHooks removes simple string claudio hooks from settings
 func removeSimpleClaudioHooks(settings *install.SettingsMap, hookNames []string) {
 	slog.Debug("removing simple claudio hooks", "hook_names", hookNames)
@@ -32,11 +52,21 @@ func removeSimpleClaudioHooks(settings *install.SettingsMap, hookNames []string)
 		slog.Debug("checking hook for removal", "name", hookName)
 		
 		if hookValue, exists := hooksMap[hookName]; exists {
-			// Only remove if the value is exactly "claudio"
+			// Handle claudio hooks (both string and simple array format)
 			if stringValue, ok := hookValue.(string); ok && stringValue == "claudio" {
 				slog.Debug("removing simple claudio hook", "name", hookName)
 				delete(hooksMap, hookName)
 				removedCount++
+			} else if arr, ok := hookValue.([]interface{}); ok {
+				// Handle new array format claudio hooks (only if they're single-command claudio hooks)
+				if isSimpleClaudioArrayHook(arr) {
+					slog.Debug("removing new format claudio hook", "name", hookName)
+					delete(hooksMap, hookName)
+					removedCount++
+				} else {
+					slog.Debug("array hook exists but is not simple claudio hook", 
+						"name", hookName, "value", hookValue)
+				}
 			} else {
 				slog.Debug("hook exists but is not simple claudio hook", 
 					"name", hookName, "value", hookValue)
