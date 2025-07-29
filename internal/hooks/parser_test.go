@@ -532,6 +532,7 @@ func TestEventCategorization_All7Events(t *testing.T) {
 		{"Stop maps to Completion", "Stop", Completion, "Claude finishing should use completion category (currently fails)"},
 		{"SubagentStop maps to Completion", "SubagentStop", Completion, "Subagent finishing should use completion category (currently fails)"},
 		{"PreCompact maps to System", "PreCompact", System, "Context compacting should use system category (currently fails)"},
+		{"SessionStart maps to System", "SessionStart", System, "Session start should use system category (currently fails)"},
 	}
 
 	for _, tt := range tests {
@@ -594,6 +595,13 @@ func TestEventCategorization_All7Events(t *testing.T) {
 					"transcript_path": "/test",
 					"cwd": "/test",
 					"hook_event_name": "PreCompact"
+				}`
+			case "SessionStart":
+				testJSON = `{
+					"session_id": "test",
+					"transcript_path": "/test",
+					"cwd": "/test",
+					"hook_event_name": "SessionStart"
 				}`
 			}
 

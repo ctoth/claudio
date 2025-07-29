@@ -276,6 +276,12 @@ func (e *HookEvent) GetContext() *EventContext {
 		context.Operation = "compact"
 		slog.Debug("categorizing PreCompact event as System", "hint", context.SoundHint, "operation", context.Operation)
 
+	case "SessionStart":
+		context.Category = System
+		context.SoundHint = "session-start"
+		context.Operation = "session-start"
+		slog.Debug("categorizing SessionStart event as System", "hint", context.SoundHint, "operation", context.Operation)
+
 	default:
 		slog.Warn("unknown hook event type", "event_name", e.EventName)
 		context.Category = Interactive
