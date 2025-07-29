@@ -43,6 +43,12 @@ func newInstallCommand() *cobra.Command {
 	// Add --force flag
 	cmd.Flags().BoolP("force", "f", false, "Overwrite existing hooks without prompting")
 
+	// Add --quiet flag
+	cmd.Flags().BoolP("quiet", "q", false, "Suppress output (no progress messages)")
+	
+	// Add --print flag
+	cmd.Flags().BoolP("print", "p", false, "Print configuration that would be written")
+
 	return cmd
 }
 
@@ -73,10 +79,64 @@ func runInstallCommandE(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to get force flag: %w", err)
 	}
 
-	slog.Info("install command executing", "scope", scope, "dry_run", dryRun, "force", force)
+	// Get quiet flag
+	quiet, err := cmd.Flags().GetBool("quiet")
+	if err != nil {
+		return fmt.Errorf("failed to get quiet flag: %w", err)
+	}
+
+	// Get print flag
+	print, err := cmd.Flags().GetBool("print")
+	if err != nil {
+		return fmt.Errorf("failed to get print flag: %w", err)
+	}
+
+	slog.Info("install command executing", "scope", scope, "dry_run", dryRun, "force", force, "quiet", quiet, "print", print)
 
 	// TODO: Implement actual installation logic in later commits
 	// For now, just validate the flags and return success
+
+	// Handle print flag - shows configuration details
+	if print {
+		var configDetails string
+		if dryRun && force {
+			configDetails = "PRINT: DRY-RUN + FORCE configuration for scope: " + scope.String()
+		} else if dryRun {
+			configDetails = "PRINT: DRY-RUN configuration for scope: " + scope.String()
+		} else if force {
+			configDetails = "PRINT: FORCE configuration for scope: " + scope.String()
+		} else {
+			configDetails = "PRINT: Install configuration for scope: " + scope.String()
+		}
+		
+		cmd.Printf("%s\n", configDetails)
+		if dryRun {
+			cmd.Printf("  Mode: Simulation (no changes will be made)\n")
+		}
+		if force {
+			cmd.Printf("  Mode: Force (will overwrite without prompting)\n")
+		}
+		if quiet {
+			cmd.Printf("  Output: Quiet mode (minimal messages)\n")
+		}
+		cmd.Printf("  Scope: %s\n", scope.String())
+		return nil
+	}
+
+	// Handle quiet mode - minimal output
+	if quiet {
+		// Only show essential information in quiet mode
+		if dryRun {
+			cmd.Printf("DRY-RUN: %s\n", scope.String())
+		} else if force {
+			cmd.Printf("FORCE: %s\n", scope.String())
+		} else {
+			cmd.Printf("Install: %s\n", scope.String())
+		}
+		return nil
+	}
+
+	// Normal verbose output mode
 	var prefix string
 	if dryRun && force {
 		prefix = "DRY-RUN + FORCE:"
