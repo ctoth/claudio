@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // SettingsMap represents a Claude Code settings JSON object
@@ -114,4 +115,100 @@ func getJSONType(data []byte) string {
 	}
 	// Likely a number or unrecognized
 	return "non-object value"
+}
+
+// SettingsLock interface for settings file locking with automatic cleanup
+type SettingsLock interface {
+	Release() error
+}
+
+// settingsLockWrapper wraps FileLockInterface to implement SettingsLock interface
+type settingsLockWrapper struct {
+	lock FileLockInterface
+}
+
+func (s *settingsLockWrapper) Release() error {
+	if s.lock == nil {
+		return nil // Already released or never acquired
+	}
+	
+	err := s.lock.Unlock()
+	s.lock = nil // Mark as released
+	return err
+}
+
+// AcquireFileLock acquires an exclusive file lock with retry logic and timeout
+func AcquireFileLock(lockFile string) (SettingsLock, error) {
+	return AcquireFileLockWithTimeout(lockFile, 5*time.Second)
+}
+
+// AcquireFileLockWithTimeout acquires an exclusive file lock with timeout
+func AcquireFileLockWithTimeout(lockFile string, timeout time.Duration) (SettingsLock, error) {
+	fileLock := NewFileLock(lockFile)
+	
+	// Use context for timeout handling
+	deadline := time.Now().Add(timeout)
+	retryDelay := 10 * time.Millisecond
+	
+	for time.Now().Before(deadline) {
+		locked, err := fileLock.TryLock()
+		if err != nil {
+			return nil, fmt.Errorf("failed to try lock %s: %w", lockFile, err)
+		}
+		
+		if locked {
+			return &settingsLockWrapper{lock: fileLock}, nil
+		}
+		
+		// Wait before retrying, but don't exceed deadline
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			break
+		}
+		
+		sleepTime := retryDelay
+		if sleepTime > remaining {
+			sleepTime = remaining
+		}
+		
+		time.Sleep(sleepTime)
+		
+		// Exponential backoff, but cap at 100ms
+		retryDelay *= 2
+		if retryDelay > 100*time.Millisecond {
+			retryDelay = 100 * time.Millisecond
+		}
+	}
+	
+	return nil, fmt.Errorf("timeout acquiring file lock %s after %v", lockFile, timeout)
+}
+
+// ReadSettingsFileWithLock reads settings file with file locking for concurrent safety
+func ReadSettingsFileWithLock(filePath string) (*SettingsMap, error) {
+	lockFile := filePath + ".lock"
+	
+	// Acquire file lock
+	lock, err := AcquireFileLock(lockFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to acquire read lock: %w", err)
+	}
+	defer lock.Release()
+	
+	// Read settings with the lock held
+	return ReadSettingsFile(filePath)
+}
+
+// WriteSettingsFileWithLock writes settings file with file locking for concurrent safety
+func WriteSettingsFileWithLock(filePath string, settings *SettingsMap) error {
+	lockFile := filePath + ".lock"
+	
+	// Acquire file lock
+	lock, err := AcquireFileLock(lockFile)
+	if err != nil {
+		return fmt.Errorf("failed to acquire write lock: %w", err)
+	}
+	defer lock.Release()
+	
+	// Write settings with the lock held
+	return WriteSettingsFile(filePath, settings)
 }
