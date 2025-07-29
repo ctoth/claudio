@@ -38,6 +38,15 @@ func NewCLI() *CLI {
 		Run:   runStdinMode, // Default behavior when no subcommand is provided
 	}
 	
+	// Add install subcommand
+	installCmd := &cobra.Command{
+		Use:   "install",
+		Short: "Install claudio hooks into Claude Code settings",
+		Long:  "Install claudio hooks into Claude Code settings to enable audio feedback for tool usage and events.",
+		Run:   runInstallCommand,
+	}
+	rootCmd.AddCommand(installCmd)
+	
 	return &CLI{
 		rootCmd:           rootCmd,
 		configManager:     config.NewConfigManager(),
@@ -51,6 +60,12 @@ func NewCLI() *CLI {
 // runStdinMode handles the default behavior of reading hook JSON from stdin
 func runStdinMode(cmd *cobra.Command, args []string) {
 	// This is a placeholder - will be implemented when we migrate the Run method
+	// For now, this allows the test to pass
+}
+
+// runInstallCommand handles the install subcommand
+func runInstallCommand(cmd *cobra.Command, args []string) {
+	// This is a placeholder - will be implemented in later commits
 	// For now, this allows the test to pass
 }
 
