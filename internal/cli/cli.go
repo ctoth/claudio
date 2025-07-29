@@ -39,12 +39,7 @@ func NewCLI() *CLI {
 	}
 	
 	// Add install subcommand
-	installCmd := &cobra.Command{
-		Use:   "install",
-		Short: "Install claudio hooks into Claude Code settings",
-		Long:  "Install claudio hooks into Claude Code settings to enable audio feedback for tool usage and events.",
-		Run:   runInstallCommand,
-	}
+	installCmd := newInstallCommand()
 	rootCmd.AddCommand(installCmd)
 	
 	// Add persistent flags to root command for backward compatibility
@@ -308,11 +303,6 @@ func runStdinModeE(cmd *cobra.Command, args []string) error {
 	return processHookInput(cmd, cli, cfg, audioCtx)
 }
 
-// runInstallCommand handles the install subcommand
-func runInstallCommand(cmd *cobra.Command, args []string) {
-	// This is a placeholder - will be implemented in later commits
-	// For now, this allows the test to pass
-}
 
 // Run executes the CLI with the given arguments and I/O streams
 func (c *CLI) Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
