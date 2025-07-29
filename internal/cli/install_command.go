@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/ctoth/claudio/internal/install"
@@ -141,7 +142,11 @@ func runInstallCommandE(cmd *cobra.Command, args []string) error {
 		if !quiet {
 			cmd.Printf("DRY-RUN: Claudio installation simulation for %s scope\n", scope.String())
 			cmd.Printf("Settings path: %s\n", settingsPath)
-			cmd.Printf("Would install hooks: PreToolUse, PostToolUse, UserPromptSubmit\n")
+			
+			// Use registry to show hook names instead of hardcoded list
+			hookNames := install.GetHookNames()
+			hookList := strings.Join(hookNames, ", ")
+			cmd.Printf("Would install hooks: %s\n", hookList)
 			cmd.Printf("No changes will be made.\n")
 		} else {
 			cmd.Printf("DRY-RUN: %s -> %s\n", scope.String(), settingsPath)
@@ -201,16 +206,16 @@ func runInstallWorkflow(scope string, settingsPath string) error {
 	
 	// Step 3: Generate Claudio hooks configuration
 	slog.Debug("generating Claudio hooks configuration")
-	claudiaHooks, err := install.GenerateClaudiaHooks()
+	claudioHooks, err := install.GenerateClaudioHooks()
 	if err != nil {
 		return fmt.Errorf("failed to generate Claudio hooks: %w", err)
 	}
 	
-	slog.Info("generated Claudio hooks", "hooks", claudiaHooks)
+	slog.Info("generated Claudio hooks", "hooks", claudioHooks)
 	
 	// Step 4: Merge Claudio hooks into existing settings
 	slog.Debug("merging Claudio hooks into existing settings")
-	mergedSettings, err := install.MergeHooksIntoSettings(existingSettings, claudiaHooks)
+	mergedSettings, err := install.MergeHooksIntoSettings(existingSettings, claudioHooks)
 	if err != nil {
 		return fmt.Errorf("failed to merge Claudio hooks into settings: %w", err)
 	}
@@ -237,7 +242,7 @@ func runInstallWorkflow(scope string, settingsPath string) error {
 	// Check that all Claudio hooks are present
 	if hooks, exists := (*verifySettings)["hooks"]; exists {
 		if hooksMap, ok := hooks.(map[string]interface{}); ok {
-			expectedHooks := []string{"PreToolUse", "PostToolUse", "UserPromptSubmit"}
+			expectedHooks := install.GetHookNames() // Use registry instead of hardcoded list
 			for _, hookName := range expectedHooks {
 				if val, exists := hooksMap[hookName]; !exists {
 					return fmt.Errorf("verification failed: Claudio hook '%s' missing after installation", hookName)

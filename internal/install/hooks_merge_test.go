@@ -79,13 +79,13 @@ func TestMergeHooksIdempotent(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Generate fresh Claudio hooks
-			claudiaHooks, err := GenerateClaudiaHooks()
+			claudioHooks, err := GenerateClaudioHooks()
 			if err != nil {
 				t.Fatalf("Failed to generate Claudio hooks: %v", err)
 			}
 			
 			// First merge
-			result1, err := MergeHooksIntoSettings(tc.existingSettings, claudiaHooks)
+			result1, err := MergeHooksIntoSettings(tc.existingSettings, claudioHooks)
 			if tc.expectError && err == nil {
 				t.Errorf("Expected error but got none")
 			}
@@ -97,13 +97,13 @@ func TestMergeHooksIdempotent(t *testing.T) {
 			}
 			
 			// Second merge (idempotent test)
-			result2, err := MergeHooksIntoSettings(result1, claudiaHooks)
+			result2, err := MergeHooksIntoSettings(result1, claudioHooks)
 			if err != nil {
 				t.Errorf("Second merge failed: %v", err)
 			}
 			
 			// Third merge (triple idempotent test)
-			result3, err := MergeHooksIntoSettings(result2, claudiaHooks)
+			result3, err := MergeHooksIntoSettings(result2, claudioHooks)
 			if err != nil {
 				t.Errorf("Third merge failed: %v", err)
 			}
@@ -129,7 +129,7 @@ func TestMergeHooksIdempotent(t *testing.T) {
 				if !ok {
 					t.Errorf("Hooks should be a map, got: %T", hooks)
 				} else {
-					expectedHooks := []string{"PreToolUse", "PostToolUse", "UserPromptSubmit"}
+					expectedHooks := GetHookNames() // Use registry instead of hardcoded list
 					for _, expectedHook := range expectedHooks {
 						if val, exists := hooksMap[expectedHook]; !exists {
 							t.Errorf("Expected hook '%s' missing after merge", expectedHook)
@@ -213,13 +213,13 @@ func TestMergeHooksPreservesExisting(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Generate Claudio hooks
-			claudiaHooks, err := GenerateClaudiaHooks()
+			claudioHooks, err := GenerateClaudioHooks()
 			if err != nil {
 				t.Fatalf("Failed to generate Claudio hooks: %v", err)
 			}
 			
 			// Perform merge
-			result, err := MergeHooksIntoSettings(tc.existingSettings, claudiaHooks)
+			result, err := MergeHooksIntoSettings(tc.existingSettings, claudioHooks)
 			if err != nil {
 				t.Errorf("Merge failed: %v", err)
 			}
@@ -264,8 +264,8 @@ func TestMergeHooksPreservesExisting(t *testing.T) {
 			if hooks, exists := (*result)["hooks"]; exists {
 				hooksMap, ok := hooks.(map[string]interface{})
 				if ok {
-					claudiaHookNames := []string{"PreToolUse", "PostToolUse", "UserPromptSubmit"}
-					for _, hookName := range claudiaHookNames {
+					claudioHookNames := GetHookNames() // Use registry instead of hardcoded list
+					for _, hookName := range claudioHookNames {
 						if val, exists := hooksMap[hookName]; !exists {
 							t.Errorf("Claudio hook '%s' missing after merge", hookName)
 						} else if !isClaudioHook(val) {
@@ -286,28 +286,28 @@ func TestMergeHooksErrorHandling(t *testing.T) {
 	testCases := []struct {
 		name             string
 		existingSettings *SettingsMap
-		claudiaHooks     interface{}
+		claudioHooks     interface{}
 		expectError      bool
 		errorMsg         string
 	}{
 		{
 			name:             "nil existing settings",
 			existingSettings: nil,
-			claudiaHooks:     map[string]interface{}{"PreToolUse": "claudio"},
+			claudioHooks:     map[string]interface{}{"PreToolUse": "claudio"},
 			expectError:      true,
 			errorMsg:         "settings cannot be nil",
 		},
 		{
 			name:             "nil Claudio hooks",
 			existingSettings: &SettingsMap{},
-			claudiaHooks:     nil,
+			claudioHooks:     nil,
 			expectError:      true,
 			errorMsg:         "hooks cannot be nil",
 		},
 		{
 			name:             "invalid hooks type",
 			existingSettings: &SettingsMap{},
-			claudiaHooks:     "not a map",
+			claudioHooks:     "not a map",
 			expectError:      true,
 			errorMsg:         "invalid hooks type",
 		},
@@ -316,7 +316,7 @@ func TestMergeHooksErrorHandling(t *testing.T) {
 			existingSettings: &SettingsMap{
 				"hooks": "not a map",
 			},
-			claudiaHooks: map[string]interface{}{"PreToolUse": "claudio"},
+			claudioHooks: map[string]interface{}{"PreToolUse": "claudio"},
 			expectError:  true,
 			errorMsg:     "existing hooks invalid",
 		},
@@ -324,7 +324,7 @@ func TestMergeHooksErrorHandling(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := MergeHooksIntoSettings(tc.existingSettings, tc.claudiaHooks)
+			result, err := MergeHooksIntoSettings(tc.existingSettings, tc.claudioHooks)
 			
 			if tc.expectError {
 				if err == nil {
@@ -369,13 +369,13 @@ func TestMergeHooksDeepCopy(t *testing.T) {
 	}
 	
 	// Generate Claudio hooks
-	claudiaHooks, err := GenerateClaudiaHooks()
+	claudioHooks, err := GenerateClaudioHooks()
 	if err != nil {
 		t.Fatalf("Failed to generate Claudio hooks: %v", err)
 	}
 	
 	// Perform merge
-	result, err := MergeHooksIntoSettings(original, claudiaHooks)
+	result, err := MergeHooksIntoSettings(original, claudioHooks)
 	if err != nil {
 		t.Errorf("Merge failed: %v", err)
 	}
@@ -441,4 +441,4 @@ func findSubstring(s, substr string) bool {
 }
 
 // Functions that will need to be implemented (currently undefined):
-// - MergeHooksIntoSettings(existing *SettingsMap, claudiaHooks interface{}) (*SettingsMap, error)
+// - MergeHooksIntoSettings(existing *SettingsMap, claudioHooks interface{}) (*SettingsMap, error)

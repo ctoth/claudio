@@ -23,7 +23,7 @@ func TestInstallWorkflowUser(t *testing.T) {
 			existingSettings:     nil,
 			existingSettingsFile: false,
 			expectError:          false,
-			expectHooksCount:     3, // PreToolUse, PostToolUse, UserPromptSubmit
+			expectHooksCount:     len(install.GetEnabledHooks()), // All enabled hooks from registry
 		},
 		{
 			name: "user installation with existing settings",
@@ -36,7 +36,7 @@ func TestInstallWorkflowUser(t *testing.T) {
 			},
 			existingSettingsFile: true,
 			expectError:          false,
-			expectHooksCount:     3,
+			expectHooksCount:     len(install.GetEnabledHooks()), // All enabled hooks from registry
 		},
 		{
 			name: "user installation with existing hooks",
@@ -49,7 +49,7 @@ func TestInstallWorkflowUser(t *testing.T) {
 			},
 			existingSettingsFile: true,
 			expectError:          false,
-			expectHooksCount:     5, // 2 existing + 3 Claudio
+			expectHooksCount:     2 + len(install.GetEnabledHooks()), // 2 existing + Claudio hooks from registry
 		},
 		{
 			name: "user installation idempotent - Claudio already installed",
@@ -63,7 +63,7 @@ func TestInstallWorkflowUser(t *testing.T) {
 			},
 			existingSettingsFile: true,
 			expectError:          false,
-			expectHooksCount:     3, // Should remain the same
+			expectHooksCount:     len(install.GetEnabledHooks()), // Should remain the same, from registry
 		},
 	}
 
@@ -130,12 +130,12 @@ func TestInstallWorkflowUser(t *testing.T) {
 					}
 					
 					// 4. Claudio hooks should be present
-					expectedClaudiaHooks := []string{"PreToolUse", "PostToolUse", "UserPromptSubmit"}
-					for _, hookName := range expectedClaudiaHooks {
+					expectedClaudioHooks := install.GetHookNames() // Use registry instead of hardcoded list
+					for _, hookName := range expectedClaudioHooks {
 						if val, exists := hooksMap[hookName]; !exists {
 							t.Errorf("Claudio hook '%s' missing after installation", hookName)
-						} else if val != "claudio" {
-							t.Errorf("Claudio hook '%s' should be 'claudio', got: %v", hookName, val)
+						} else if !install.IsClaudioHook(val) {
+							t.Errorf("Claudio hook '%s' should be a claudio hook, got: %v", hookName, val)
 						}
 					}
 				}
@@ -183,7 +183,7 @@ func TestInstallWorkflowProject(t *testing.T) {
 			existingSettings:     nil,
 			existingSettingsFile: false,
 			expectError:          false,
-			expectHooksCount:     3,
+			expectHooksCount:     len(install.GetEnabledHooks()), // All enabled hooks from registry
 		},
 		{
 			name: "project installation with team settings",
@@ -200,7 +200,7 @@ func TestInstallWorkflowProject(t *testing.T) {
 			},
 			existingSettingsFile: true,
 			expectError:          false,
-			expectHooksCount:     6, // 3 existing + 3 Claudio
+			expectHooksCount:     3 + len(install.GetEnabledHooks()), // 3 existing + Claudio hooks from registry
 		},
 	}
 
@@ -396,7 +396,7 @@ func TestInstallWorkflowConcurrency(t *testing.T) {
 		if !ok {
 			t.Errorf("Hooks should be a map, got: %T", hooks)
 		} else {
-			expectedHooks := 4 // PreCommit + 3 Claudio hooks
+			expectedHooks := 1 + len(install.GetEnabledHooks()) // PreCommit + Claudio hooks from registry
 			if len(hooksMap) != expectedHooks {
 				t.Errorf("Expected %d hooks after concurrent installation, got %d", 
 					expectedHooks, len(hooksMap))
