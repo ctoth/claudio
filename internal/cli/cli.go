@@ -14,10 +14,12 @@ import (
 	"github.com/ctoth/claudio/internal/hooks"
 	"github.com/ctoth/claudio/internal/sounds"
 	"github.com/ctoth/claudio/internal/soundpack"
+	"github.com/spf13/cobra"
 )
 
 // CLI represents the command-line interface
 type CLI struct {
+	rootCmd          *cobra.Command
 	configManager    *config.ConfigManager
 	soundMapper      *sounds.SoundMapper
 	soundpackResolver soundpack.SoundpackResolver
@@ -27,12 +29,27 @@ type CLI struct {
 // NewCLI creates a new CLI instance
 func NewCLI() *CLI {
 	slog.Debug("creating new CLI instance")
+	
+	rootCmd := &cobra.Command{
+		Use:   "claudio",
+		Short: "Claude Code Audio Plugin",
+		Long:  "Claudio is a hook-based audio plugin for Claude Code that plays contextual sounds based on tool usage and events.",
+		Run:   runStdinMode, // Default behavior when no subcommand is provided
+	}
+	
 	return &CLI{
+		rootCmd:          rootCmd,
 		configManager:    config.NewConfigManager(),
 		soundMapper:      sounds.NewSoundMapper(),
 		soundpackResolver: nil, // Will be initialized when soundpack is configured
 		audioPlayer:      audio.NewAudioPlayer(),
 	}
+}
+
+// runStdinMode handles the default behavior of reading hook JSON from stdin
+func runStdinMode(cmd *cobra.Command, args []string) {
+	// This is a placeholder - will be implemented when we migrate the Run method
+	// For now, this allows the test to pass
 }
 
 // Run executes the CLI with the given arguments and I/O streams
