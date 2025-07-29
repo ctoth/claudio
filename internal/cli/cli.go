@@ -42,6 +42,10 @@ func NewCLI() *CLI {
 	installCmd := newInstallCommand()
 	rootCmd.AddCommand(installCmd)
 	
+	// Add uninstall subcommand
+	uninstallCmd := newUninstallCommand()
+	rootCmd.AddCommand(uninstallCmd)
+	
 	// Add persistent flags to root command for backward compatibility
 	rootCmd.PersistentFlags().String("config", "", "Path to config file")
 	rootCmd.PersistentFlags().String("volume", "", "Set volume (0.0 to 1.0)")

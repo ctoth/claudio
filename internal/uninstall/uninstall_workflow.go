@@ -7,6 +7,12 @@ import (
 	"github.com/ctoth/claudio/internal/install"
 )
 
+// RunUninstallWorkflow orchestrates the complete Claudio uninstall process (public interface)
+// Workflow: Validate scope → Read settings → Detect hooks → Remove hooks → Write → Verify
+func RunUninstallWorkflow(scope string, settingsPath string) error {
+	return runUninstallWorkflow(scope, settingsPath)
+}
+
 // runUninstallWorkflow orchestrates the complete Claudio uninstall process
 // Workflow: Validate scope → Read settings → Detect hooks → Remove hooks → Write → Verify
 func runUninstallWorkflow(scope string, settingsPath string) error {
