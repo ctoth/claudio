@@ -10,7 +10,7 @@ Claudio is a hook-based audio plugin for Claude Code that plays contextual sound
 
 ```bash
 # Build the main binary
-go build -o claudio ./cmd/claudio
+go build .
 
 # Install to system PATH
 sudo cp claudio /usr/local/bin/

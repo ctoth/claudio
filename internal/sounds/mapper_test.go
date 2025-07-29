@@ -14,34 +14,38 @@ func TestSoundMapper(t *testing.T) {
 	}
 }
 
-func TestMapSound5LevelFallback(t *testing.T) {
+func TestMapSoundEventSpecificFallback(t *testing.T) {
 	mapper := NewSoundMapper()
 
 	testCases := []struct {
 		name           string
 		context        *hooks.EventContext
-		expectedPaths  []string // 5-level fallback system
+		expectedPaths  []string // Event-specific fallback system
 		expectedLevel  int      // which level should be selected (0-based)
+		chainType      string   // expected chain type
 	}{
 		{
-			name: "bash thinking - full context",
+			name: "bash thinking - enhanced 9-level fallback",
 			context: &hooks.EventContext{
-				Category:  hooks.Loading,
-				ToolName:  "Bash",
-				SoundHint: "bash-thinking",
-				Operation: "tool-start",
+				Category:     hooks.Loading,
+				ToolName:     "Bash",
+				OriginalTool: "",  // Not extracted from another tool
+				SoundHint:    "bash-thinking",
+				Operation:    "tool-start",
 			},
 			expectedPaths: []string{
 				"loading/bash-thinking.wav",    // Level 1: exact hint
-				"loading/bash.wav",             // Level 2: tool-specific  
-				"loading/tool-start.wav",       // Level 3: operation-specific
-				"loading/loading.wav",          // Level 4: category-specific
-				"default.wav",                  // Level 5: default fallback
+				"loading/bash-start.wav",       // Level 2: command with suffix (bash becomes "bash")
+				"loading/bash.wav",             // Level 3: command-only (bash tool)
+				"loading/tool-start.wav",       // Level 4: operation-specific
+				"loading/loading.wav",          // Level 5: category-specific
+				"default.wav",                  // Level 6: default fallback
 			},
 			expectedLevel: 0, // Should select level 1 (exact hint)
+			chainType: "enhanced",
 		},
 		{
-			name: "edit success - no hint",
+			name: "edit success - PostTool 6-level fallback",
 			context: &hooks.EventContext{
 				Category:  hooks.Success,
 				ToolName:  "Edit",
@@ -49,15 +53,16 @@ func TestMapSound5LevelFallback(t *testing.T) {
 				IsSuccess: true,
 			},
 			expectedPaths: []string{
-				"success/edit.wav",           // Level 2: tool-specific (level 1 skipped)
-				"success/tool-complete.wav", // Level 3: operation-specific
-				"success/success.wav",       // Level 4: category-specific
-				"default.wav",               // Level 5: default fallback
+				"success/edit-success.wav",      // Level 1: command with suffix
+				"success/tool-complete.wav",     // Level 2: operation-specific
+				"success/success.wav",           // Level 3: category-specific
+				"default.wav",                   // Level 4: default fallback
 			},
-			expectedLevel: 0, // Should select level 2 (tool-specific) - first in paths array
+			expectedLevel: 0, // Should select level 1 (command with suffix)
+			chainType: "posttool",
 		},
 		{
-			name: "error with stderr - no tool name",
+			name: "error with stderr - simple 4-level fallback",
 			context: &hooks.EventContext{
 				Category:  hooks.Error,
 				SoundHint: "stderr-error",
@@ -66,25 +71,27 @@ func TestMapSound5LevelFallback(t *testing.T) {
 			},
 			expectedPaths: []string{
 				"error/stderr-error.wav",    // Level 1: exact hint
-				"error/tool-complete.wav",   // Level 3: operation (level 2 skipped)
-				"error/error.wav",           // Level 4: category-specific
-				"default.wav",               // Level 5: default fallback
+				"error/tool-complete.wav",   // Level 2: event-specific
+				"error/error.wav",           // Level 3: category-specific
+				"default.wav",               // Level 4: default fallback
 			},
 			expectedLevel: 0, // Should select level 1 (exact hint)
+			chainType: "simple",
 		},
 		{
-			name: "notification - minimal context",
+			name: "notification - simple 4-level fallback",
 			context: &hooks.EventContext{
 				Category: hooks.Interactive,
 			},
 			expectedPaths: []string{
-				"interactive/interactive.wav", // Level 4: category-specific only
-				"default.wav",                 // Level 5: default fallback
+				"interactive/interactive.wav", // Level 1: category-specific only
+				"default.wav",                 // Level 2: default fallback
 			},
-			expectedLevel: 0, // Should select level 4 (category)
+			expectedLevel: 0, // Should select level 1 (category)
+			chainType: "simple",
 		},
 		{
-			name: "file operation with context",
+			name: "file operation with context - PostTool 6-level fallback",
 			context: &hooks.EventContext{
 				Category:  hooks.Success,
 				ToolName:  "Write",
@@ -94,13 +101,14 @@ func TestMapSound5LevelFallback(t *testing.T) {
 				IsSuccess: true,
 			},
 			expectedPaths: []string{
-				"success/file-saved.wav",
-				"success/write.wav", 
-				"success/tool-complete.wav",
-				"success/success.wav",
-				"default.wav",
+				"success/file-saved.wav",      // Level 1: exact hint
+				"success/write-success.wav",   // Level 2: command with suffix
+				"success/tool-complete.wav",   // Level 3: operation-specific
+				"success/success.wav",         // Level 4: category-specific
+				"default.wav",                 // Level 5: default fallback
 			},
 			expectedLevel: 0,
+			chainType: "posttool",
 		},
 	}
 
@@ -111,6 +119,11 @@ func TestMapSound5LevelFallback(t *testing.T) {
 			// Verify result structure
 			if result == nil {
 				t.Fatal("MapSound returned nil result")
+			}
+
+			// Verify chain type is correct
+			if result.ChainType != tc.chainType {
+				t.Errorf("ChainType = %s, expected %s", result.ChainType, tc.chainType)
 			}
 
 			// Verify paths match expected
@@ -132,8 +145,6 @@ func TestMapSound5LevelFallback(t *testing.T) {
 			if result.SelectedPath != expectedSelected {
 				t.Errorf("SelectedPath = %s, expected %s", result.SelectedPath, expectedSelected)
 			}
-
-			// Note: FallbackLevel is calculated separately and represents the actual level used (1-5)
 
 			// Verify total paths
 			if result.TotalPaths != len(tc.expectedPaths) {
@@ -186,94 +197,83 @@ func TestMapSoundPathNormalization(t *testing.T) {
 func TestMapSoundFallbackSelection(t *testing.T) {
 	mapper := NewSoundMapper()
 
-	// Create a mapper that can tell us which files exist vs don't exist
-	// For testing, we'll simulate file existence checking
+	// Test fallback path generation - updated for event-specific architecture
 	
 	testCases := []struct {
 		name          string
 		context       *hooks.EventContext
-		existingFiles map[string]bool // which files "exist"
-		expectedPath  string
-		expectedLevel int
+		expectedPaths   []string // paths that should be generated
+		description   string
 	}{
 		{
-			name: "level 1 exists",
+			name: "PostToolUse success generates correct fallback paths",
 			context: &hooks.EventContext{
 				Category:  hooks.Success,
 				ToolName:  "Bash", 
 				SoundHint: "bash-success",
+				Operation: "tool-complete",
 			},
-			existingFiles: map[string]bool{
-				"success/bash-success.wav": true,
+			expectedPaths: []string{
+				"success/bash-success.wav",    // Level 1: exact hint
+				"success/bash-success.wav",    // Level 2: command with suffix (bash-success)
+				"success/tool-complete.wav",   // Level 3: operation-specific  
+				"success/success.wav",         // Level 4: category-specific
+				"default.wav",                 // Level 5: default fallback
 			},
-			expectedPath:  "success/bash-success.wav",
-			expectedLevel: 1,
+			description: "PostToolUse should use 6-level fallback (skips bare command-only sounds like bash.wav)",
 		},
 		{
-			name: "level 1 missing, level 2 exists",
-			context: &hooks.EventContext{
-				Category:  hooks.Success,
-				ToolName:  "Bash",
-				SoundHint: "bash-success",
-			},
-			existingFiles: map[string]bool{
-				"success/bash-success.wav": false,
-				"success/bash.wav":         true,
-			},
-			expectedPath:  "success/bash.wav",
-			expectedLevel: 2,
-		},
-		{
-			name: "fallback to category level",
+			name: "Error event generates simple fallback paths",
 			context: &hooks.EventContext{
 				Category:  hooks.Error,
-				ToolName:  "UnknownTool",
 				SoundHint: "unknown-error",
 			},
-			existingFiles: map[string]bool{
-				"error/unknown-error.wav":  false,
-				"error/unknowntool.wav":    false,
-				"error/error.wav":          true,
+			expectedPaths: []string{
+				"error/unknown-error.wav",    // Level 1: exact hint
+				"error/error.wav",            // Level 2: category-specific
+				"default.wav",                // Level 3: default fallback
 			},
-			expectedPath:  "error/error.wav",
-			expectedLevel: 4,
+			description: "Error without tool should use simple 4-level fallback",
 		},
 		{
-			name: "fallback to default",
+			name: "Loading event generates enhanced fallback paths",
 			context: &hooks.EventContext{
 				Category:  hooks.Loading,
 				ToolName:  "NewTool",
 				SoundHint: "new-loading",
+				Operation: "tool-start",
 			},
-			existingFiles: map[string]bool{
-				"loading/new-loading.wav": false,
-				"loading/newtool.wav":     false,
-				"loading/loading.wav":     false,
-				"default.wav":             true,
+			expectedPaths: []string{
+				"loading/new-loading.wav",     // Level 1: exact hint
+				"loading/newtool-start.wav",   // Level 2: command with suffix
+				"loading/newtool.wav",         // Level 3: command-only
+				"loading/tool-start.wav",      // Level 4: operation-specific
+				"loading/loading.wav",         // Level 5: category-specific
+				"default.wav",                 // Level 6: default fallback
 			},
-			expectedPath:  "default.wav",
-			expectedLevel: 5,
+			description: "Loading with tool should use enhanced 9-level fallback including command-only",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// For now, just test that the mapper generates the right paths
-			// File existence checking will be implemented in the actual file resolver
 			result := mapper.MapSound(tc.context)
 
-			// Find the expected path in the generated paths
-			found := false
-			for _, path := range result.AllPaths {
-				if path == tc.expectedPath {
-					found = true
-					// In a real implementation, this would be the first existing file
-					break
+			// Test that the expected paths are generated
+			t.Logf("%s: Generated paths: %v", tc.description, result.AllPaths)
+			
+			// Check that important expected paths are present
+			for _, expectedPath := range tc.expectedPaths {
+				found := false
+				for _, actualPath := range result.AllPaths {
+					if actualPath == expectedPath {
+						found = true
+						break
+					}
 				}
-			}
-
-			if !found {
-				t.Errorf("Expected path %s not found in generated paths: %v", tc.expectedPath, result.AllPaths)
+				if !found {
+					t.Errorf("Expected path %s not found in generated paths: %v", expectedPath, result.AllPaths)
+				}
 			}
 		})
 	}
@@ -399,14 +399,14 @@ func TestMapSoundWithOriginalToolFallback(t *testing.T) {
 
 	result := mapper.MapSound(context)
 
-	// Should have proper fallback including original tool
+	// PostToolUse 6-level fallback (skips command-only sounds)
 	expectedPaths := []string{
-		"success/git-commit-success.wav",
-		"success/git.wav",
-		"success/bash.wav", // Original tool fallback
-		"success/tool-complete.wav",
-		"success/success.wav",
-		"default.wav",
+		"success/git-commit-success.wav",  // Level 1: exact hint
+		"success/git-success.wav",         // Level 2: command with suffix  
+		"success/bash-success.wav",        // Level 3: original tool with suffix
+		"success/tool-complete.wav",       // Level 4: operation-specific
+		"success/success.wav",             // Level 5: category-specific
+		"default.wav",                     // Level 6: default fallback
 	}
 
 	if len(result.AllPaths) != len(expectedPaths) {
@@ -420,6 +420,11 @@ func TestMapSoundWithOriginalToolFallback(t *testing.T) {
 		if result.AllPaths[i] != expected {
 			t.Errorf("Path[%d] = %s, expected %s", i, result.AllPaths[i], expected)
 		}
+	}
+
+	// Verify this uses PostToolUse chain type
+	if result.ChainType != "posttool" {
+		t.Errorf("Expected chain type 'posttool', got %s", result.ChainType)
 	}
 }
 

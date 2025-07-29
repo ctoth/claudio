@@ -206,6 +206,33 @@ func (m *SoundMapper) buildPath(category, name string) string {
 	return category + "/" + normalizeName(name) + ".wav"
 }
 
+// getEventSpecificPath maps operations to event-specific sound paths for simple events
+func (m *SoundMapper) getEventSpecificPath(category, operation string) string {
+	if category == "" || operation == "" {
+		return ""
+	}
+
+	// Map operation to event-specific sound name
+	var eventName string
+	switch operation {
+	case "prompt":
+		eventName = "prompt-submit"
+	case "notification":
+		eventName = "notification"
+	case "stop":
+		eventName = "stop"
+	case "subagent-stop":
+		eventName = "subagent-stop"
+	case "compact":
+		eventName = "pre-compact"
+	default:
+		// For unknown operations, use the operation name directly
+		eventName = operation
+	}
+
+	return m.buildPath(category, eventName)
+}
+
 // determineCategorySuffix determines the appropriate suffix based on event category and context
 func (m *SoundMapper) determineCategorySuffix(category hooks.EventCategory, operation string) string {
 	switch category {
@@ -400,10 +427,64 @@ func (m *SoundMapper) mapPostToolSound(context *hooks.EventContext) *SoundMappin
 
 // mapSimpleSound handles simple events with 4-level fallback chain
 func (m *SoundMapper) mapSimpleSound(context *hooks.EventContext) *SoundMappingResult {
-	// TODO: Phase 2.4 - implement simple event 4-level fallback
-	// For now, fall back to legacy behavior  
-	slog.Debug("mapSimpleSound not yet implemented, using legacy fallback")
-	return m.mapLegacySound(context)
+	slog.Debug("mapping sound using simple 4-level fallback for simple events",
+		"category", context.Category.String(),
+		"sound_hint", context.SoundHint,
+		"operation", context.Operation)
+
+	// Pre-allocate slice with exact capacity for 4-level fallback
+	paths := make([]string, 0, 4)
+	categoryStr := context.Category.String()
+
+	// Level 1: Specific hint match
+	if context.SoundHint != "" {
+		hintPath := m.buildPath(categoryStr, context.SoundHint)
+		paths = append(paths, hintPath)
+		slog.Debug("added level 1 path (specific hint)", "path", hintPath)
+	}
+
+	// Level 2: Event-specific based on operation (not tool-based)
+	if context.Operation != "" {
+		eventPath := m.getEventSpecificPath(categoryStr, context.Operation)
+		if eventPath != "" {
+			paths = append(paths, eventPath)
+			slog.Debug("added level 2 path (event-specific)", "path", eventPath)
+		}
+	}
+
+	// Level 3: Category-specific
+	if categoryStr != "" && categoryStr != "unknown" {
+		categoryPath := m.buildPath(categoryStr, "")
+		paths = append(paths, categoryPath)
+		slog.Debug("added level 3 path (category-specific)", "path", categoryPath)
+	}
+
+	// Level 4: Default fallback
+	paths = append(paths, "default.wav")
+	slog.Debug("added level 4 path (default)", "path", "default.wav")
+
+	// Ensure we have at least the default path
+	if len(paths) == 0 {
+		slog.Warn("no paths generated in simple fallback, using default")
+		paths = []string{"default.wav"}
+	}
+
+	result := &SoundMappingResult{
+		SelectedPath:  paths[0],
+		FallbackLevel: m.calculateFallbackLevel(context, paths),
+		TotalPaths:    len(paths),
+		AllPaths:      paths,
+		ChainType:     ChainTypeSimple,
+	}
+
+	slog.Info("simple sound mapping completed",
+		"selected_path", result.SelectedPath,
+		"fallback_level", result.FallbackLevel,
+		"total_paths", result.TotalPaths,
+		"chain_type", result.ChainType,
+		"all_paths", result.AllPaths)
+
+	return result
 }
 
 // mapLegacySound implements the original 6-level fallback system for backwards compatibility
