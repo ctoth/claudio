@@ -5,6 +5,7 @@ import (
 	"log/slog"
 
 	"github.com/spf13/cobra"
+	"github.com/ctoth/claudio/internal/install"
 )
 
 // InstallScope represents the scope of installation
@@ -162,4 +163,106 @@ func runInstallCommandE(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+// runInstallWorkflow orchestrates the complete Claudio installation process
+// Workflow: Detect paths → Read settings → Generate hooks → Merge → Write → Verify
+func runInstallWorkflow(scope string, settingsPath string) error {
+	slog.Info("starting Claudio installation workflow", 
+		"scope", scope, 
+		"settings_path", settingsPath)
+	
+	// Step 1: Validate scope
+	if scope != "user" && scope != "project" {
+		return fmt.Errorf("invalid scope '%s': must be 'user' or 'project'", scope)
+	}
+	
+	slog.Debug("validated installation scope", "scope", scope)
+	
+	// Step 2: Read existing settings (uses file locking for safety)
+	slog.Debug("reading existing settings", "path", settingsPath)
+	existingSettings, err := install.ReadSettingsFileWithLock(settingsPath)
+	if err != nil {
+		return fmt.Errorf("failed to read existing settings from %s: %w", settingsPath, err)
+	}
+	
+	slog.Info("loaded existing settings", 
+		"path", settingsPath,
+		"settings_keys", getSettingsKeys(existingSettings))
+	
+	// Step 3: Generate Claudio hooks configuration
+	slog.Debug("generating Claudio hooks configuration")
+	claudiaHooks, err := install.GenerateClaudiaHooks()
+	if err != nil {
+		return fmt.Errorf("failed to generate Claudio hooks: %w", err)
+	}
+	
+	slog.Info("generated Claudio hooks", "hooks", claudiaHooks)
+	
+	// Step 4: Merge Claudio hooks into existing settings
+	slog.Debug("merging Claudio hooks into existing settings")
+	mergedSettings, err := install.MergeHooksIntoSettings(existingSettings, claudiaHooks)
+	if err != nil {
+		return fmt.Errorf("failed to merge Claudio hooks into settings: %w", err)
+	}
+	
+	slog.Info("merged Claudio hooks into settings", 
+		"merged_settings_keys", getSettingsKeys(mergedSettings))
+	
+	// Step 5: Write merged settings back to file (uses file locking for safety)
+	slog.Debug("writing merged settings to file", "path", settingsPath)
+	err = install.WriteSettingsFileWithLock(settingsPath, mergedSettings)
+	if err != nil {
+		return fmt.Errorf("failed to write merged settings to %s: %w", settingsPath, err)
+	}
+	
+	slog.Info("wrote merged settings to file", "path", settingsPath)
+	
+	// Step 6: Verify installation by reading back and checking hooks
+	slog.Debug("verifying installation by reading back settings")
+	verifySettings, err := install.ReadSettingsFileWithLock(settingsPath)
+	if err != nil {
+		return fmt.Errorf("failed to verify installation by reading %s: %w", settingsPath, err)
+	}
+	
+	// Check that all Claudio hooks are present
+	if hooks, exists := (*verifySettings)["hooks"]; exists {
+		if hooksMap, ok := hooks.(map[string]interface{}); ok {
+			expectedHooks := []string{"PreToolUse", "PostToolUse", "UserPromptSubmit"}
+			for _, hookName := range expectedHooks {
+				if val, exists := hooksMap[hookName]; !exists {
+					return fmt.Errorf("verification failed: Claudio hook '%s' missing after installation", hookName)
+				} else if val != "claudio" {
+					return fmt.Errorf("verification failed: Claudio hook '%s' has wrong value '%v', expected 'claudio'", hookName, val)
+				}
+			}
+			
+			slog.Info("installation verification successful", 
+				"total_hooks", len(hooksMap),
+				"claudio_hooks_verified", len(expectedHooks))
+		} else {
+			return fmt.Errorf("verification failed: hooks section is not a valid map type: %T", hooks)
+		}
+	} else {
+		return fmt.Errorf("verification failed: no hooks section found after installation")
+	}
+	
+	slog.Info("Claudio installation workflow completed successfully", 
+		"scope", scope, 
+		"settings_path", settingsPath)
+	
+	return nil
+}
+
+// getSettingsKeys returns a list of top-level keys in settings for logging
+func getSettingsKeys(settings *install.SettingsMap) []string {
+	if settings == nil {
+		return []string{}
+	}
+	
+	keys := make([]string, 0, len(*settings))
+	for key := range *settings {
+		keys = append(keys, key)
+	}
+	return keys
 }
