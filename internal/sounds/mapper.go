@@ -96,10 +96,190 @@ func (m *SoundMapper) isPostToolChainEvent(context *hooks.EventContext) bool {
 
 // mapEnhancedSound handles PreToolUse events with 9-level enhanced fallback chain
 func (m *SoundMapper) mapEnhancedSound(context *hooks.EventContext) *SoundMappingResult {
-	// TODO: Phase 2.2 - implement PreToolUse 9-level enhanced fallback
-	// For now, fall back to legacy behavior
-	slog.Debug("mapEnhancedSound not yet implemented, using legacy fallback")
-	return m.mapLegacySound(context)
+	slog.Debug("mapping sound using enhanced 9-level fallback for PreToolUse",
+		"category", context.Category.String(),
+		"tool_name", context.ToolName,
+		"original_tool", context.OriginalTool,
+		"sound_hint", context.SoundHint,
+		"operation", context.Operation)
+
+	// Pre-allocate slice with estimated capacity to reduce memory allocations
+	paths := make([]string, 0, 9)
+	categoryStr := context.Category.String()
+
+	// Extract command and subcommand once for reuse
+	command, subcommand := m.extractCommandFromHint(context.SoundHint, context.ToolName)
+	suffix := m.extractSuffixFromOperation(context.Operation)
+
+	// Level 1: Exact hint match
+	if context.SoundHint != "" {
+		hintPath := categoryStr + "/" + normalizeName(context.SoundHint) + ".wav"
+		paths = append(paths, hintPath)
+		slog.Debug("added level 1 path (exact hint)", "path", hintPath)
+	}
+
+	// Level 2: Command-subcommand without suffix (e.g., "git-commit.wav")
+	if command != "" && subcommand != "" {
+		cmdSubPath := categoryStr + "/" + normalizeName(command) + "-" + normalizeName(subcommand) + ".wav"
+		paths = append(paths, cmdSubPath)
+		slog.Debug("added level 2 path (command-subcommand)", "path", cmdSubPath)
+	}
+
+	// Level 3: Command with suffix (e.g., "git-start.wav")
+	if command != "" && suffix != "" {
+		cmdSuffixPath := categoryStr + "/" + normalizeName(command) + "-" + suffix + ".wav"
+		paths = append(paths, cmdSuffixPath)
+		slog.Debug("added level 3 path (command with suffix)", "path", cmdSuffixPath)
+	}
+
+	// Level 4: Command-only (e.g., "git.wav") - included for PreToolUse semantic appropriateness
+	if command != "" {
+		commandPath := categoryStr + "/" + normalizeName(command) + ".wav"
+		paths = append(paths, commandPath)
+		slog.Debug("added level 4 path (command-only)", "path", commandPath)
+	}
+
+	// Level 5: Original tool with suffix (e.g., "bash-start.wav")
+	if context.OriginalTool != "" && suffix != "" {
+		origSuffixPath := categoryStr + "/" + normalizeName(context.OriginalTool) + "-" + suffix + ".wav"
+		paths = append(paths, origSuffixPath)
+		slog.Debug("added level 5 path (original tool with suffix)", "path", origSuffixPath)
+	}
+
+	// Level 6: Original tool fallback (e.g., "bash.wav") - avoid duplicates
+	if context.OriginalTool != "" && context.OriginalTool != command {
+		originalPath := categoryStr + "/" + normalizeName(context.OriginalTool) + ".wav"
+		paths = append(paths, originalPath)
+		slog.Debug("added level 6 path (original tool)", "path", originalPath)
+	}
+
+	// Level 7: Operation-specific (e.g., "tool-start.wav")
+	if context.Operation != "" {
+		opPath := categoryStr + "/" + normalizeName(context.Operation) + ".wav"
+		paths = append(paths, opPath)
+		slog.Debug("added level 7 path (operation-specific)", "path", opPath)
+	}
+
+	// Level 8: Category-specific (e.g., "loading.wav")
+	if categoryStr != "" && categoryStr != "unknown" {
+		categoryPath := categoryStr + "/" + categoryStr + ".wav"
+		paths = append(paths, categoryPath)
+		slog.Debug("added level 8 path (category-specific)", "path", categoryPath)
+	}
+
+	// Level 9: Default fallback
+	paths = append(paths, "default.wav")
+	slog.Debug("added level 9 path (default)", "path", "default.wav")
+
+	// Ensure we have at least the default path
+	if len(paths) == 0 {
+		slog.Warn("no paths generated in enhanced fallback, using default")
+		paths = []string{"default.wav"}
+	}
+
+	result := &SoundMappingResult{
+		SelectedPath:  paths[0],
+		FallbackLevel: m.calculateFallbackLevel(context, paths),
+		TotalPaths:    len(paths),
+		AllPaths:      paths,
+		ChainType:     ChainTypeEnhanced,
+	}
+
+	slog.Info("enhanced sound mapping completed",
+		"selected_path", result.SelectedPath,
+		"fallback_level", result.FallbackLevel,
+		"total_paths", result.TotalPaths,
+		"chain_type", result.ChainType,
+		"all_paths", result.AllPaths)
+
+	return result
+}
+
+// extractCommandFromHint extracts command and subcommand from sound hint and tool name
+func (m *SoundMapper) extractCommandFromHint(hint, toolName string) (command, subcommand string) {
+	if hint == "" || toolName == "" {
+		return toolName, ""
+	}
+
+	// Parse hint like "git-commit-start" to extract "git" and "commit"
+	parts := strings.Split(hint, "-")
+	if len(parts) >= 2 {
+		// First part should match the tool name
+		if strings.EqualFold(parts[0], toolName) {
+			command = parts[0]
+			// Check if second part is a known suffix, if not it's likely a subcommand
+			suffixes := []string{"start", "thinking", "success", "error", "complete"}
+			secondPart := parts[1]
+			
+			// If second part is not a suffix, it's a subcommand
+			isSuffix := false
+			for _, suffix := range suffixes {
+				if strings.EqualFold(secondPart, suffix) {
+					isSuffix = true
+					break
+				}
+			}
+			
+			if !isSuffix && len(parts) >= 3 {
+				// Pattern: git-commit-start -> command="git", subcommand="commit"
+				subcommand = secondPart
+			}
+		}
+	}
+
+	// Fallback: use toolName as command if extraction failed
+	if command == "" {
+		command = toolName
+	}
+
+	slog.Debug("extracted command from hint", 
+		"hint", hint, 
+		"tool_name", toolName, 
+		"command", command, 
+		"subcommand", subcommand)
+
+	return command, subcommand
+}
+
+// extractSuffixFromOperation extracts the appropriate suffix from operation context
+func (m *SoundMapper) extractSuffixFromOperation(operation string) string {
+	if operation == "" {
+		return ""
+	}
+
+	// Map operation to appropriate suffix
+	switch operation {
+	case "tool-start":
+		return "start"
+	case "tool-complete":
+		return "complete" 
+	case "prompt":
+		return "submit"
+	case "notification":
+		return ""  // No suffix for notifications
+	case "stop":
+		return "complete"
+	case "subagent-stop":
+		return "complete"
+	case "compact":
+		return ""  // No suffix for compact operations
+	default:
+		// For unknown operations, try to extract meaningful suffix
+		if strings.HasSuffix(operation, "-start") {
+			return "start"
+		}
+		if strings.HasSuffix(operation, "-complete") {
+			return "complete"
+		}
+		return operation  // Use as-is if no known pattern
+	}
+}
+
+// calculateFallbackLevel determines which level in the fallback chain would be selected
+func (m *SoundMapper) calculateFallbackLevel(context *hooks.EventContext, paths []string) int {
+	// For now, always return 1 since we always put the most specific path first
+	// In a real implementation, this would check file existence and return the level of the first existing file
+	return 1
 }
 
 // mapPostToolSound handles PostToolUse events with 6-level fallback (skip command-only sounds)
