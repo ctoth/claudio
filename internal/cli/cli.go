@@ -19,11 +19,12 @@ import (
 
 // CLI represents the command-line interface
 type CLI struct {
-	rootCmd          *cobra.Command
-	configManager    *config.ConfigManager
-	soundMapper      *sounds.SoundMapper
+	rootCmd           *cobra.Command
+	configManager     *config.ConfigManager
+	soundMapper       *sounds.SoundMapper
 	soundpackResolver soundpack.SoundpackResolver
-	audioPlayer      *audio.AudioPlayer
+	audioPlayer       *audio.AudioPlayer
+	terminalDetector  TerminalDetector
 }
 
 // NewCLI creates a new CLI instance
@@ -38,11 +39,12 @@ func NewCLI() *CLI {
 	}
 	
 	return &CLI{
-		rootCmd:          rootCmd,
-		configManager:    config.NewConfigManager(),
-		soundMapper:      sounds.NewSoundMapper(),
+		rootCmd:           rootCmd,
+		configManager:     config.NewConfigManager(),
+		soundMapper:       sounds.NewSoundMapper(),
 		soundpackResolver: nil, // Will be initialized when soundpack is configured
-		audioPlayer:      audio.NewAudioPlayer(),
+		audioPlayer:       audio.NewAudioPlayer(),
+		terminalDetector:  &DefaultTerminalDetector{},
 	}
 }
 
