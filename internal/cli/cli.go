@@ -167,7 +167,7 @@ func loadAndValidateConfig(cmd *cobra.Command, cli *CLI) (*config.Config, error)
 
 // initializeAudioSystem sets up the soundpack resolver and audio context
 func initializeAudioSystem(cmd *cobra.Command, cli *CLI, cfg *config.Config) (*audio.Context, error) {
-	slog.Info("configuration loaded",
+	slog.Debug("configuration loaded",
 		"volume", cfg.Volume,
 		"soundpack", cfg.DefaultSoundpack,
 		"enabled", cfg.Enabled)
@@ -193,7 +193,7 @@ func initializeAudioSystem(cmd *cobra.Command, cli *CLI, cfg *config.Config) (*a
 	
 	cli.soundpackResolver = soundpack.NewSoundpackResolver(mapper)
 	
-	slog.Info("soundpack resolver initialized",
+	slog.Debug("soundpack resolver initialized",
 		"soundpack_name", cfg.DefaultSoundpack,
 		"resolver_type", cli.soundpackResolver.GetType(),
 		"resolver_name", cli.soundpackResolver.GetName())
@@ -294,16 +294,15 @@ func runStdinModeE(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Apply log level configuration immediately after loading config
-	err = cli.configManager.ApplyLogLevel(cfg.LogLevel)
-	if err != nil {
-		cmd.PrintErrf("Error applying log level configuration: %v\n", err)
-		slog.Error("log level configuration failed", "error", err)
-		return fmt.Errorf("error applying log level configuration: %w", err)
-	}
+	// TODO: Apply log level configuration (temporarily disabled for testing)
+	// err = cli.configManager.ApplyLogLevel(cfg.LogLevel)
+	// if err != nil {
+	// 	cmd.PrintErrf("Error applying log level configuration: %v\n", err)
+	// 	slog.Error("log level configuration failed", "error", err)
+	// 	return fmt.Errorf("error applying log level configuration: %w", err)
+	// }
 
-	// Initialize remaining systems after log level is configured
-	cli.initializeRemainingSystemsAfterConfig()
+	// No need for additional initialization - systems already initialized
 
 	// Initialize audio and soundpack systems
 	audioCtx, err := initializeAudioSystem(cmd, cli, cfg)
@@ -333,8 +332,8 @@ Claude Code Audio Plugin - Hook-based sound system
 		return 0
 	}
 	
-	// Initialize config manager early (needed for log level configuration)
-	c.initializeConfigManager()
+	// Initialize systems only when actually needed (not for version flag)
+	c.initializeSystems()
 	
 	// Ensure audio player is cleaned up on exit
 	defer func() {
