@@ -32,7 +32,7 @@ func detectClaudioHooks(settings *install.SettingsMap) []string {
 		return []string{}
 	}
 	
-	var claudiaHooks []string
+	var claudioHooks []string
 	
 	for hookName, hookValue := range hooksMap {
 		slog.Debug("checking hook", "name", hookName, "value", hookValue)
@@ -41,7 +41,7 @@ func detectClaudioHooks(settings *install.SettingsMap) []string {
 		if stringValue, ok := hookValue.(string); ok {
 			if stringValue == "claudio" {
 				slog.Debug("found simple claudio hook", "name", hookName)
-				claudiaHooks = append(claudiaHooks, hookName)
+				claudioHooks = append(claudioHooks, hookName)
 			}
 			continue
 		}
@@ -50,7 +50,7 @@ func detectClaudioHooks(settings *install.SettingsMap) []string {
 		if arrayValue, ok := hookValue.([]interface{}); ok {
 			if containsClaudioCommand(arrayValue) {
 				slog.Debug("found complex claudio hook", "name", hookName)
-				claudiaHooks = append(claudiaHooks, hookName)
+				claudioHooks = append(claudioHooks, hookName)
 			}
 			continue
 		}
@@ -58,8 +58,8 @@ func detectClaudioHooks(settings *install.SettingsMap) []string {
 		slog.Debug("hook is neither string nor array", "name", hookName, "type", typeof(hookValue))
 	}
 	
-	slog.Info("claudio hook detection completed", "found_hooks", claudiaHooks)
-	return claudiaHooks
+	slog.Info("claudio hook detection completed", "found_hooks", claudioHooks)
+	return claudioHooks
 }
 
 // containsClaudioCommand checks if an array contains a claudio command

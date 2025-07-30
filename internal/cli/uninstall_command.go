@@ -159,11 +159,11 @@ func handlePrintUninstall(cmd *cobra.Command, scope InstallScope, settingsPath s
 		return nil
 	}
 
-	claudiaHooks := uninstall.DetectClaudioHooks(settings)
-	if len(claudiaHooks) == 0 {
+	claudioHooks := uninstall.DetectClaudioHooks(settings)
+	if len(claudioHooks) == 0 {
 		cmd.Printf("  Hooks to remove: None (no claudio hooks found)\n")
 	} else {
-		cmd.Printf("  Hooks to remove: %v\n", claudiaHooks)
+		cmd.Printf("  Hooks to remove: %v\n", claudioHooks)
 	}
 
 	return nil
@@ -188,8 +188,8 @@ func handleDryRunUninstall(cmd *cobra.Command, scope InstallScope, settingsPath 
 		return nil
 	}
 
-	claudiaHooks := uninstall.DetectClaudioHooks(settings)
-	if len(claudiaHooks) == 0 {
+	claudioHooks := uninstall.DetectClaudioHooks(settings)
+	if len(claudioHooks) == 0 {
 		if !quiet {
 			cmd.Printf("No claudio hooks found to remove.\n")
 			cmd.Printf("No changes will be made.\n")
@@ -198,10 +198,10 @@ func handleDryRunUninstall(cmd *cobra.Command, scope InstallScope, settingsPath 
 		}
 	} else {
 		if !quiet {
-			cmd.Printf("Would remove hooks: %v\n", claudiaHooks)
+			cmd.Printf("Would remove hooks: %v\n", claudioHooks)
 			cmd.Printf("No changes will be made.\n")
 		} else {
-			cmd.Printf("DRY-RUN: %s -> Would remove: %v\n", scope.String(), claudiaHooks)
+			cmd.Printf("DRY-RUN: %s -> Would remove: %v\n", scope.String(), claudioHooks)
 		}
 	}
 

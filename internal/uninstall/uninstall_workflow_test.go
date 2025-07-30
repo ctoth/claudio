@@ -220,9 +220,9 @@ func TestRunUninstallWorkflow(t *testing.T) {
 						}
 						
 						// 4. Verify no claudio hooks remain
-						claudiaHooks := detectClaudioHooks(settings)
-						if len(claudiaHooks) > 0 {
-							t.Errorf("Claudio hooks still present after uninstall: %v", claudiaHooks)
+						claudioHooks := detectClaudioHooks(settings)
+						if len(claudioHooks) > 0 {
+							t.Errorf("Claudio hooks still present after uninstall: %v", claudioHooks)
 						}
 					}
 				} else if tc.expectedHooksCount > 0 {

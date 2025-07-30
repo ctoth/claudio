@@ -40,23 +40,23 @@ func runUninstallWorkflow(scope string, settingsPath string) error {
 	
 	// Step 3: Detect Claudio hooks in settings
 	slog.Debug("detecting claudio hooks in settings")
-	claudiaHooks := detectClaudioHooks(existingSettings)
+	claudioHooks := detectClaudioHooks(existingSettings)
 	
-	if len(claudiaHooks) == 0 {
+	if len(claudioHooks) == 0 {
 		slog.Info("no claudio hooks found, uninstall is idempotent", 
 			"settings_path", settingsPath)
 		return nil // Idempotent operation - no error if nothing to remove
 	}
 	
-	slog.Info("detected claudio hooks for removal", "hooks", claudiaHooks)
+	slog.Info("detected claudio hooks for removal", "hooks", claudioHooks)
 	
 	// Step 4: Remove simple claudio hooks (string format)
 	slog.Debug("removing simple claudio hooks")
-	removeSimpleClaudioHooks(existingSettings, claudiaHooks)
+	removeSimpleClaudioHooks(existingSettings, claudioHooks)
 	
 	// Step 5: Remove complex claudio hooks (array format)
 	slog.Debug("removing complex claudio hooks")
-	removeComplexClaudioHooks(existingSettings, claudiaHooks)
+	removeComplexClaudioHooks(existingSettings, claudioHooks)
 	
 	// Step 6: Write updated settings back to file (uses file locking for safety)
 	slog.Debug("writing updated settings to file", "path", settingsPath)
@@ -87,7 +87,7 @@ func runUninstallWorkflow(scope string, settingsPath string) error {
 	slog.Info("Claudio uninstall workflow completed successfully", 
 		"scope", scope, 
 		"settings_path", settingsPath,
-		"removed_hooks", claudiaHooks)
+		"removed_hooks", claudioHooks)
 	
 	return nil
 }
