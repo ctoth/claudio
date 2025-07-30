@@ -27,13 +27,13 @@ That's it! Claudio will now play sounds for your Claude Code tool usage.
 
 The cool part is how smart it gets. When Claude runs `git commit -m "fix bug"`, Claudio doesn't just play a generic "bash command" sound. It knows Claude is doing git stuff, specifically a commit, and picks sounds accordingly.
 
-**5-Level Fallback System:**
-1. Look for: `success/git-commit-success.wav`
-2. Not found? Try: `success/git-success.wav`  
-3. Still nothing? Try: `success/bash-success.wav`
-4. Nope? Try: `success/tool-complete.wav`
-5. Come on: `success/success.wav`
-6. Fine: `default.wav`
+**Smart Fallback System:**
+1. Look for: `success/git-commit-success.wav` (exact match)
+2. Not found? Try: `success/git-success.wav` (tool-specific)  
+3. Still nothing? Try: `success/bash-success.wav` (original tool)
+4. Nope? Try: `success/tool-complete.wav` (operation-specific)
+5. Come on: `success/success.wav` (category-specific)
+6. Fine: `default.wav` (ultimate fallback)
 
 This means you can be as specific or as lazy as you want with your sound pack. Got a sound for every git subcommand? Great. Just want success/error/loading sounds? That works too.
 
@@ -47,21 +47,21 @@ This means you can be as specific or as lazy as you want with your sound pack. G
 
 ## What Gets Sounds?
 
-**Before a tool runs** - "thinking" sounds:
-- `git-commit-thinking.wav` when committing
-- `bash-thinking.wav` for general bash  
-- `loading.wav` if nothing else matches
+**Before a tool runs** - loading sounds:
+- `loading/git-commit-start.wav` when committing starts
+- `loading/bash-start.wav` for general bash operations
+- `loading/loading.wav` if nothing else matches
 
 **After success** - success sounds:
-- `git-commit-success.wav` → `git-success.wav` → `bash-success.wav` → etc.
+- `success/git-commit-success.wav` → `success/git-success.wav` → `success/bash-success.wav` → etc.
 
 **After errors** - error sounds:  
-- `git-error.wav` when git fails
-- `bash-error.wav` for general bash failures
-- `error.wav` when all else fails
+- `error/git-error.wav` when git fails
+- `error/bash-error.wav` for general bash failures
+- `error/error.wav` when all else fails
 
 **When you send Claude a message** - interaction sounds:
-- `message-sent.wav` → `interactive.wav`
+- `interactive/message-sent.wav` → `interactive/interactive.wav`
 
 ## Next Steps
 

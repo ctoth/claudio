@@ -19,11 +19,11 @@ git push origin main
 ```
 
 **What You Hear:**
-1. `loading/git-thinking.wav` - Git add starting
+1. `loading/git-start.wav` - Git add starting
 2. `success/git-success.wav` - Git add succeeded
-3. `loading/git-commit-thinking.wav` - Git commit starting  
+3. `loading/git-commit-start.wav` - Git commit starting  
 4. `success/git-commit-success.wav` - Git commit succeeded
-5. `loading/git-push-thinking.wav` - Git push starting
+5. `loading/git-push-start.wav` - Git push starting
 6. `success/git-push-success.wav` - Git push succeeded
 
 ### Scenario 2: Merge Conflict Resolution
@@ -38,11 +38,11 @@ git commit -m "Resolve merge conflicts"
 ```
 
 **What You Hear:**
-1. `loading/git-thinking.wav` - Git pull starting
+1. `loading/git-start.wav` - Git pull starting
 2. `error/git-error.wav` - Git pull failed (merge conflicts)
-3. `loading/git-thinking.wav` - Git add starting (after conflict resolution)
+3. `loading/git-start.wav` - Git add starting (after conflict resolution)
 4. `success/git-success.wav` - Git add succeeded
-5. `loading/git-commit-thinking.wav` - Git commit starting
+5. `loading/git-commit-start.wav` - Git commit starting
 6. `success/git-commit-success.wav` - Merge conflicts resolved
 
 ## Development Workflow Scenarios
@@ -58,13 +58,13 @@ npm publish
 ```
 
 **What You Hear:**
-1. `loading/npm-install-thinking.wav` - NPM install starting
+1. `loading/npm-install-start.wav` - NPM install starting
 2. `success/npm-install-success.wav` - Dependencies installed
-3. `loading/npm-test-thinking.wav` - Test suite starting
+3. `loading/npm-test-start.wav` - Test suite starting
 4. `success/npm-test-success.wav` - All tests passed
-5. `loading/npm-build-thinking.wav` - Build process starting
+5. `loading/npm-build-start.wav` - Build process starting
 6. `success/npm-build-success.wav` - Build completed
-7. `loading/npm-thinking.wav` - NPM publish starting
+7. `loading/npm-start.wav` - NPM publish starting
 8. `success/npm-success.wav` - Package published
 
 ### Scenario 4: Docker Development
@@ -77,11 +77,11 @@ docker ps
 ```
 
 **What You Hear:**
-1. `loading/docker-build-thinking.wav` - Docker build starting
+1. `loading/docker-build-start.wav` - Docker build starting
 2. `success/docker-build-success.wav` - Image built successfully
-3. `loading/docker-thinking.wav` - Docker run starting
+3. `loading/docker-start.wav` - Docker run starting
 4. `success/docker-success.wav` - Container started
-5. `loading/docker-thinking.wav` - Docker ps starting
+5. `loading/docker-start.wav` - Docker ps starting
 6. `success/docker-success.wav` - Container status displayed
 
 ## Error Handling Scenarios
@@ -99,11 +99,11 @@ npm test
 ```
 
 **What You Hear:**
-1. `loading/npm-test-thinking.wav` - Test suite starting
+1. `loading/npm-test-start.wav` - Test suite starting
 2. `error/npm-test-error.wav` - Tests failed
-3. `loading/bash-thinking.wav` - File read starting
+3. `loading/bash-start.wav` - File read starting
 4. `success/bash-success.wav` - File read completed
-5. `loading/npm-test-thinking.wav` - Test suite starting again
+5. `loading/npm-test-start.wav` - Test suite starting again
 6. `success/npm-test-success.wav` - Tests now pass
 
 ### Scenario 6: Build System Errors
@@ -118,11 +118,11 @@ make build
 ```
 
 **What You Hear:**
-1. `loading/bash-thinking.wav` - Make build starting
+1. `loading/bash-start.wav` - Make build starting
 2. `error/build-error.wav` - Compilation failed
-3. `loading/bash-thinking.wav` - Make clean starting
+3. `loading/bash-start.wav` - Make clean starting
 4. `success/bash-success.wav` - Clean completed
-5. `loading/bash-thinking.wav` - Make build starting again
+5. `loading/bash-start.wav` - Make build starting again
 6. `success/build-success.wav` - Build succeeded
 
 ## Interactive Development Scenarios
@@ -139,7 +139,7 @@ make build
 go test ./internal/auth
 go vet ./internal/auth
 ```
-- **Sounds:** `loading/go-test-thinking.wav` → `success/go-test-success.wav`
+- **Sounds:** `loading/go-test-start.wav` → `success/go-test-success.wav`
 
 **You:** "Fix the race condition you found"
 - **Sound:** `interactive/message-sent.wav`
@@ -148,7 +148,7 @@ go vet ./internal/auth
 ```bash
 go test -race ./internal/auth
 ```
-- **Sounds:** `loading/go-test-thinking.wav` → `success/go-test-success.wav`
+- **Sounds:** `loading/go-test-start.wav` → `success/go-test-success.wav`
 
 ### Scenario 8: Feature Development Session
 
@@ -170,7 +170,7 @@ go test ./internal/auth
 ```bash
 curl -X POST localhost:8080/auth/login
 ```
-- **Sounds:** `loading/bash-thinking.wav` → `success/bash-success.wav`
+- **Sounds:** `loading/bash-start.wav` → `success/bash-success.wav`
 
 ## Multitasking Benefits
 
@@ -188,7 +188,7 @@ While Claude works on complex tasks, audio feedback lets you:
 # Claude starts a complex build
 npm run build:production
 ```
-- You hear `loading/npm-build-thinking.wav` and can switch to other tasks
+- You hear `loading/npm-build-start.wav` and can switch to other tasks
 - 5 minutes later, `success/npm-build-success.wav` tells you it's done
 - No need to check terminal constantly
 
@@ -204,10 +204,10 @@ npm run test:integration
 ```
 
 **Audio Timeline:**
-1. `loading/npm-thinking.wav` → `success/npm-success.wav` (backup)
-2. `loading/npm-thinking.wav` → `success/npm-success.wav` (migrate) 
-3. `loading/npm-thinking.wav` → `success/npm-success.wav` (verify)
-4. `loading/npm-test-thinking.wav` → `success/npm-test-success.wav` (tests)
+1. `loading/npm-start.wav` → `success/npm-success.wav` (backup)
+2. `loading/npm-start.wav` → `success/npm-success.wav` (migrate) 
+3. `loading/npm-start.wav` → `success/npm-success.wav` (verify)
+4. `loading/npm-test-start.wav` → `success/npm-test-success.wav` (tests)
 
 You know each step completed successfully without monitoring the screen.
 
@@ -276,9 +276,9 @@ Create sounds that match your most common tools:
 **Python Development:**
 ```
 loading/
-├── pytest-thinking.wav
-├── pip-install-thinking.wav
-└── python-thinking.wav
+├── pytest-start.wav
+├── pip-install-start.wav
+└── python-start.wav
 
 success/
 ├── pytest-success.wav
@@ -289,9 +289,9 @@ success/
 **Frontend Development:**
 ```
 loading/
-├── webpack-thinking.wav
-├── jest-thinking.wav
-└── yarn-thinking.wav
+├── webpack-start.wav
+├── jest-start.wav
+└── yarn-start.wav
 
 success/
 ├── webpack-success.wav

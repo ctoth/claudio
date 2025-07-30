@@ -13,11 +13,12 @@ A soundpack is a directory containing organized sound files. Here's the standard
 
 ```
 default/                    # Soundpack directory
-├── loading/               # PreToolUse event sounds
-│   ├── git-thinking.wav      # Git operations starting
-│   ├── npm-thinking.wav      # NPM operations starting
-│   ├── bash-thinking.wav     # General bash operations
-│   └── loading.wav           # Generic loading sound
+├── loading/               # PreToolUse event sounds  
+│   ├── git-commit-start.wav     # Git commit operations starting
+│   ├── git-start.wav            # Git operations starting
+│   ├── npm-start.wav            # NPM operations starting
+│   ├── bash-start.wav           # General bash operations
+│   └── loading.wav              # Generic loading sound
 ├── success/               # PostToolUse success sounds
 │   ├── git-commit-success.wav  # Specific: git commit succeeded
 │   ├── git-success.wav         # Tool: any git operation succeeded
@@ -34,11 +35,11 @@ default/                    # Soundpack directory
 └── default.wav            # Ultimate fallback sound
 ```
 
-## The 5-Level Fallback System
+## The Multi-Level Fallback System
 
-When Claude Code triggers an event, Claudio searches for the most specific sound available using this hierarchy:
+Claudio uses different fallback chains depending on the event type. Each chain searches for the most specific sound available:
 
-### Example: Git Commit Success
+### PostToolUse Success Events (6-Level Fallback)
 
 When Claude runs `git commit -m "fix bug"` and it succeeds:
 
@@ -48,59 +49,117 @@ When Claude runs `git commit -m "fix bug"` and it succeeds:
    ```
    Most specific: exact tool + subcommand + result
 
-2. **Level 2 - Tool-Specific**
+2. **Level 2 - Command with Suffix**
    ```
    success/git-success.wav
    ```
-   Tool-specific: any git operation that succeeded
+   Tool-specific: git + success suffix
 
-3. **Level 3 - Operation-Specific**
+3. **Level 3 - Original Tool with Suffix**
    ```
    success/bash-success.wav
    ```
-   Operation type: any bash command that succeeded
+   Original tool: bash + success suffix
 
-4. **Level 4 - Category-Specific**
+4. **Level 4 - Operation-Specific**
+   ```
+   success/tool-complete.wav
+   ```
+   Operation type: tool completion
+
+5. **Level 5 - Category-Specific**
    ```
    success/success.wav
    ```
-   Result category: any operation that succeeded
+   Result category: any successful operation
 
-5. **Level 5 - Default**
+6. **Level 6 - Default**
    ```
    default.wav
    ```
    Ultimate fallback: always present
 
-### Example: NPM Install Thinking
+### PreToolUse Loading Events (9-Level Enhanced Fallback)
 
 When Claude is about to run `npm install express`:
 
 1. **Level 1 - Exact Hint Match**
    ```
-   loading/npm-install-thinking.wav
+   loading/npm-install-start.wav
    ```
    Most specific: npm install starting
 
-2. **Level 2 - Tool-Specific**
+2. **Level 2 - Command-Subcommand**
    ```
-   loading/npm-thinking.wav
+   loading/npm-install.wav
    ```
-   Tool-specific: any npm operation starting
+   Tool + subcommand: npm install
 
-3. **Level 3 - Operation-Specific**
+3. **Level 3 - Command with Suffix**
    ```
-   loading/bash-thinking.wav
+   loading/npm-start.wav
    ```
-   Operation type: any bash command starting
+   Tool + start suffix: npm starting
 
-4. **Level 4 - Category-Specific**
+4. **Level 4 - Command-Only**
+   ```
+   loading/npm.wav
+   ```
+   Tool-specific: any npm operation
+
+5. **Level 5 - Original Tool with Suffix**
+   ```
+   loading/bash-start.wav
+   ```
+   Original tool + suffix: bash starting
+
+6. **Level 6 - Original Tool**
+   ```
+   loading/bash.wav
+   ```
+   Original tool: bash operations
+
+7. **Level 7 - Operation-Specific**
+   ```
+   loading/tool-start.wav
+   ```
+   Operation type: tool starting
+
+8. **Level 8 - Category-Specific**
    ```
    loading/loading.wav
    ```
    Event category: any operation starting
 
-5. **Level 5 - Default**
+9. **Level 9 - Default**
+   ```
+   default.wav
+   ```
+   Ultimate fallback
+
+### Simple Events (4-Level Fallback)
+
+For UserPromptSubmit and other simple events:
+
+1. **Level 1 - Specific Hint**
+   ```
+   interactive/message-sent.wav
+   ```
+   Event-specific sound
+
+2. **Level 2 - Event-Specific**
+   ```
+   interactive/prompt-submit.wav
+   ```
+   Operation-based sound
+
+3. **Level 3 - Category-Specific**
+   ```
+   interactive/interactive.wav
+   ```
+   Category fallback
+
+4. **Level 4 - Default**
    ```
    default.wav
    ```
@@ -110,13 +169,16 @@ When Claude is about to run `npm install express`:
 
 ### loading/ - PreToolUse Events
 
-Played when Claude Code is about to run a tool. These are "thinking" or "working" sounds.
+Played when Claude Code is about to run a tool. These are "start" or "loading" sounds.
 
 **Common Files:**
-- `git-thinking.wav` - Git operations starting
-- `npm-thinking.wav` - NPM operations starting  
-- `docker-thinking.wav` - Docker operations starting
-- `bash-thinking.wav` - General bash commands starting
+- `git-commit-start.wav` - Git commit operations starting
+- `git-start.wav` - Git operations starting
+- `npm-install-start.wav` - NPM install operations starting
+- `npm-start.wav` - NPM operations starting  
+- `docker-start.wav` - Docker operations starting
+- `bash-start.wav` - General bash commands starting
+- `tool-start.wav` - Generic tool starting
 - `loading.wav` - Generic loading sound
 
 ### success/ - PostToolUse Success
