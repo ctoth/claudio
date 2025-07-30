@@ -1,0 +1,44 @@
+# Site settings
+title: "Claudio"
+description: "Your Claude Code sessions, now with sound effects"
+baseurl: ""
+url: "https://claudio.click"
+
+# Repository
+github_username: ctoth
+repository: ctoth/claudio
+
+# Build settings
+markdown: kramdown
+highlighter: rouge
+theme: minima
+
+# Custom domain
+domain: claudio.click
+
+# Collections
+collections:
+  pages:
+    output: true
+    permalink: /:name/
+
+# Navigation
+header_pages:
+  - installation.md
+  - cli-reference.md
+  - soundpacks.md
+  - configuration.md
+  - examples.md
+  - troubleshooting.md
+
+# Plugins
+plugins:
+  - jekyll-feed
+  - jekyll-sitemap
+  - jekyll-seo-tag
+
+# Exclude files
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - vendor/
