@@ -588,6 +588,59 @@ func (e *errorReader) Read(p []byte) (n int, err error) {
 	return 0, io.ErrUnexpectedEOF
 }
 
+func TestVersionFlagEarlyExit(t *testing.T) {
+	// TDD RED: This test should FAIL because version flag currently initializes audio systems
+	// We expect version flag to show version info without any system initialization logging
+	
+	cli := NewCLI()
+	
+	// Capture all log output to verify no system initialization occurs
+	var logBuffer bytes.Buffer
+	originalHandler := slog.Default().Handler()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logBuffer, &slog.HandlerOptions{
+		Level: slog.LevelDebug, // Capture all logs
+	})))
+	defer slog.SetDefault(slog.New(originalHandler))
+	
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	
+	exitCode := cli.Run([]string{"claudio", "--version"}, strings.NewReader(""), stdout, stderr)
+	
+	// Version flag should exit successfully 
+	if exitCode != 0 {
+		t.Errorf("Expected exit code 0, got %d", exitCode)
+	}
+	
+	// Should show version info
+	output := stdout.String()
+	if !strings.Contains(output, "claudio version") {
+		t.Errorf("Expected version output, got: %s", output)
+	}
+	
+	// CRITICAL: Should NOT initialize any audio systems
+	logOutput := logBuffer.String()
+	prohibitedLogs := []string{
+		"audio player created",
+		"config loaded",
+		"soundpack resolver initialized", 
+		"configuration loaded",
+		"audio context initialized",
+	}
+	
+	for _, prohibited := range prohibitedLogs {
+		if strings.Contains(logOutput, prohibited) {
+			t.Errorf("Version flag should not initialize systems, but found log: %s", prohibited)
+			t.Logf("Full log output: %s", logOutput)
+		}
+	}
+	
+	// Version flag should be fast - no heavy initialization
+	if len(logOutput) > 100 {
+		t.Errorf("Version flag should produce minimal logging, got %d chars: %s", len(logOutput), logOutput)
+	}
+}
+
 func TestCLIUnifiedSoundpackIntegration(t *testing.T) {
 	// TDD Test: CLI integration with new unified soundpack system
 

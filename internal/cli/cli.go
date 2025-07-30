@@ -57,11 +57,11 @@ func NewCLI() *CLI {
 	
 	return &CLI{
 		rootCmd:           rootCmd,
-		configManager:     config.NewConfigManager(),
-		soundMapper:       sounds.NewSoundMapper(),
-		soundpackResolver: nil, // Will be initialized when soundpack is configured
-		audioPlayer:       audio.NewAudioPlayer(),
-		terminalDetector:  &DefaultTerminalDetector{},
+		configManager:     nil, // Lazy initialization - only create when needed
+		soundMapper:       nil, // Lazy initialization - only create when needed
+		soundpackResolver: nil, // Lazy initialization - only create when needed
+		audioPlayer:       nil, // Lazy initialization - only create when needed
+		terminalDetector:  nil, // Lazy initialization - only create when needed
 	}
 }
 
@@ -312,6 +312,19 @@ func runStdinModeE(cmd *cobra.Command, args []string) error {
 func (c *CLI) Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	slog.Debug("CLI run started", "args", args)
 	
+	// CRITICAL: Check for version flag BEFORE any system initialization
+	// This prevents unnecessary audio player creation for simple version requests
+	if len(args) > 1 && (args[1] == "--version" || args[1] == "-v") {
+		// Show version immediately without initializing any systems
+		fmt.Fprint(stdout, `claudio version 1.2.0 (Version 1.2.0)
+Claude Code Audio Plugin - Hook-based sound system
+`)
+		return 0
+	}
+	
+	// Initialize systems only when actually needed (not for version flag)
+	c.initializeSystems()
+	
 	// Ensure audio player is cleaned up on exit
 	defer func() {
 		if c.audioPlayer != nil {
@@ -338,6 +351,23 @@ func (c *CLI) Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 	}
 	
 	return 0
+}
+
+// initializeSystems lazily initializes all CLI components when actually needed
+func (c *CLI) initializeSystems() {
+	if c.configManager == nil {
+		c.configManager = config.NewConfigManager()
+	}
+	if c.soundMapper == nil {
+		c.soundMapper = sounds.NewSoundMapper()
+	}
+	if c.audioPlayer == nil {
+		c.audioPlayer = audio.NewAudioPlayer()
+	}
+	if c.terminalDetector == nil {
+		c.terminalDetector = &DefaultTerminalDetector{}
+	}
+	// soundpackResolver is initialized in initializeAudioSystem when needed
 }
 
 // processHookEvent processes the parsed hook event
