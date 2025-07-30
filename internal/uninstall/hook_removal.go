@@ -16,7 +16,7 @@ func isSimpleClaudioArrayHook(arr []interface{}) bool {
 	if config, ok := arr[0].(map[string]interface{}); ok {
 		if hooks, ok := config["hooks"].([]interface{}); ok && len(hooks) == 1 {
 			if cmd, ok := hooks[0].(map[string]interface{}); ok {
-				if cmdStr, ok := cmd["command"].(string); ok && cmdStr == "claudio" {
+				if cmdStr, ok := cmd["command"].(string); ok && isClaudioCommand(cmdStr) {
 					return true
 				}
 			}
@@ -53,8 +53,8 @@ func removeSimpleClaudioHooks(settings *install.SettingsMap, hookNames []string)
 		
 		if hookValue, exists := hooksMap[hookName]; exists {
 			// Handle claudio hooks (both string and simple array format)
-			if stringValue, ok := hookValue.(string); ok && stringValue == "claudio" {
-				slog.Debug("removing simple claudio hook", "name", hookName)
+			if stringValue, ok := hookValue.(string); ok && isClaudioCommand(stringValue) {
+				slog.Debug("removing simple claudio hook", "name", hookName, "command", stringValue)
 				delete(hooksMap, hookName)
 				removedCount++
 			} else if arr, ok := hookValue.([]interface{}); ok {
@@ -204,14 +204,14 @@ func removeClaudioFromArray(array []interface{}) ([]interface{}, int) {
 			}
 			
 			commandStr, ok := command.(string)
-			if !ok || commandStr != "claudio" {
+			if !ok || !isClaudioCommand(commandStr) {
 				// Keep non-string commands or non-claudio commands
 				filteredHooks = append(filteredHooks, hookItem)
 				continue
 			}
 			
 			// This is a claudio command - remove it
-			slog.Debug("removing claudio command from hooks array")
+			slog.Debug("removing claudio command from hooks array", "command", commandStr)
 			commandsRemoved++
 		}
 		

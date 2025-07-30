@@ -6,6 +6,216 @@ import (
 	"github.com/ctoth/claudio/internal/install"
 )
 
+func TestRemoveClaudioHooksWithFullPaths(t *testing.T) {
+	// TDD RED: Test removal of claudio hooks with full executable paths instead of just "claudio"
+	testCases := []struct {
+		name             string
+		initialSettings  *install.SettingsMap
+		hookNames        []string
+		expectedSettings *install.SettingsMap
+	}{
+		{
+			name: "remove simple string hook - full system path",
+			initialSettings: &install.SettingsMap{
+				"hooks": map[string]interface{}{
+					"PreToolUse":  "/usr/local/bin/claudio",
+					"PostCommit": "git push",
+				},
+				"version": "1.0",
+			},
+			hookNames: []string{"PreToolUse"},
+			expectedSettings: &install.SettingsMap{
+				"hooks": map[string]interface{}{
+					"PostCommit": "git push",
+				},
+				"version": "1.0",
+			},
+		},
+		{
+			name: "remove simple string hook - dev directory path",
+			initialSettings: &install.SettingsMap{
+				"hooks": map[string]interface{}{
+					"PostToolUse": "/home/user/dev/claudio/claudio",
+					"Other":       "keep-this",
+				},
+			},
+			hookNames: []string{"PostToolUse"},
+			expectedSettings: &install.SettingsMap{
+				"hooks": map[string]interface{}{
+					"Other": "keep-this",
+				},
+			},
+		},
+		{
+			name: "remove simple string hook - relative path",
+			initialSettings: &install.SettingsMap{
+				"hooks": map[string]interface{}{
+					"UserPromptSubmit": "./claudio",
+					"Other":            "keep",
+				},
+			},
+			hookNames: []string{"UserPromptSubmit"},
+			expectedSettings: &install.SettingsMap{
+				"hooks": map[string]interface{}{
+					"Other": "keep",
+				},
+			},
+		},
+		{
+			name: "remove test executable path (install.test)",
+			initialSettings: &install.SettingsMap{
+				"hooks": map[string]interface{}{
+					"PreToolUse": "/tmp/install.test",
+					"Other":      "keep",
+				},
+			},
+			hookNames: []string{"PreToolUse"},
+			expectedSettings: &install.SettingsMap{
+				"hooks": map[string]interface{}{
+					"Other": "keep",
+				},
+			},
+		},
+		{
+			name: "remove complex array hook - full system path",
+			initialSettings: &install.SettingsMap{
+				"hooks": map[string]interface{}{
+					"Notification": []interface{}{
+						map[string]interface{}{
+							"matcher": ".*",
+							"hooks": []interface{}{
+								map[string]interface{}{
+									"command": "/usr/local/bin/claudio",
+									"type":    "command",
+								},
+							},
+						},
+					},
+					"Other": "keep",
+				},
+			},
+			hookNames: []string{"Notification"},
+			expectedSettings: &install.SettingsMap{
+				"hooks": map[string]interface{}{
+					"Other": "keep",
+				},
+			},
+		},
+		{
+			name: "remove complex array hook - dev directory path",
+			initialSettings: &install.SettingsMap{
+				"hooks": map[string]interface{}{
+					"SessionStart": []interface{}{
+						map[string]interface{}{
+							"matcher": ".*",
+							"hooks": []interface{}{
+								map[string]interface{}{
+									"command": "/root/code/claudio/claudio",
+									"type":    "command",
+								},
+							},
+						},
+					},
+				},
+			},
+			hookNames: []string{"SessionStart"},
+			expectedSettings: &install.SettingsMap{
+				// hooks section should be removed when empty
+			},
+		},
+		{
+			name: "remove claudio from mixed array with other commands - preserve others",
+			initialSettings: &install.SettingsMap{
+				"hooks": map[string]interface{}{
+					"Stop": []interface{}{
+						map[string]interface{}{
+							"matcher": ".*",
+							"hooks": []interface{}{
+								map[string]interface{}{
+									"command": "/usr/local/bin/claudio",
+									"type":    "command",
+								},
+								map[string]interface{}{
+									"command": "other-tool",
+									"type":    "command",
+								},
+							},
+						},
+					},
+				},
+			},
+			hookNames: []string{"Stop"},
+			expectedSettings: &install.SettingsMap{
+				"hooks": map[string]interface{}{
+					"Stop": []interface{}{
+						map[string]interface{}{
+							"matcher": ".*",
+							"hooks": []interface{}{
+								map[string]interface{}{
+									"command": "other-tool",
+									"type":    "command",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "mixed full paths and backward compatibility",
+			initialSettings: &install.SettingsMap{
+				"hooks": map[string]interface{}{
+					"PreToolUse":  "claudio",                      // Old format - should be removed
+					"PostToolUse": "/usr/local/bin/claudio",       // Full path - should be removed
+					"Stop":        "./claudio",                    // Relative path - should be removed
+					"Keep":        "/usr/bin/different-command",   // Non-claudio - should be kept
+				},
+			},
+			hookNames: []string{"PreToolUse", "PostToolUse", "Stop"},
+			expectedSettings: &install.SettingsMap{
+				"hooks": map[string]interface{}{
+					"Keep": "/usr/bin/different-command",
+				},
+			},
+		},
+		{
+			name: "no claudio paths to remove - no changes",
+			initialSettings: &install.SettingsMap{
+				"hooks": map[string]interface{}{
+					"PreToolUse":  "/usr/bin/git",
+					"PostToolUse": "/bin/echo",
+				},
+			},
+			hookNames: []string{"PreToolUse", "PostToolUse"},
+			expectedSettings: &install.SettingsMap{
+				"hooks": map[string]interface{}{
+					"PreToolUse":  "/usr/bin/git",
+					"PostToolUse": "/bin/echo",
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Make a copy to avoid modifying the original
+			settingsCopy := deepCopySettings(tc.initialSettings)
+
+			// Call both removal functions (since we don't know which format is used)
+			removeSimpleClaudioHooks(settingsCopy, tc.hookNames)
+			removeComplexClaudioHooks(settingsCopy, tc.hookNames)
+
+			// Verify the result
+			if !settingsEqual(settingsCopy, tc.expectedSettings) {
+				t.Errorf("Settings mismatch.\nExpected: %+v\nActual:   %+v", 
+					tc.expectedSettings, settingsCopy)
+			}
+
+			t.Logf("Full path removal test passed for %s", tc.name)
+		})
+	}
+}
+
 func TestRemoveSimpleClaudioHooks(t *testing.T) {
 	// TDD RED: Test removal of simple string claudio hooks
 	testCases := []struct {
