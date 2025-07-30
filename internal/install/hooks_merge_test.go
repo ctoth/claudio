@@ -2,15 +2,23 @@ package install
 
 import (
 	"encoding/json"
+	"path/filepath"
 	"testing"
 )
 
 // isClaudioHook checks if a hook value represents a claudio hook,
 // supporting both the old string format and new array format
 func isClaudioHook(hookValue interface{}) bool {
-	// Check old string format
+	// Helper function to check if command is a claudio executable
+	isClaudioCommand := func(cmdStr string) bool {
+		baseName := filepath.Base(cmdStr)
+		// Handle both production "claudio" and test "install.test" executables
+		return baseName == "claudio" || baseName == "install.test"
+	}
+	
+	// Check old string format (backward compatibility)
 	if str, ok := hookValue.(string); ok {
-		return str == "claudio"
+		return isClaudioCommand(str)
 	}
 	
 	// Check new array format
@@ -19,7 +27,7 @@ func isClaudioHook(hookValue interface{}) bool {
 			if hooks, ok := config["hooks"].([]interface{}); ok && len(hooks) > 0 {
 				if cmd, ok := hooks[0].(map[string]interface{}); ok {
 					if cmdStr, ok := cmd["command"].(string); ok {
-						return cmdStr == "claudio"
+						return isClaudioCommand(cmdStr)
 					}
 				}
 			}

@@ -2,6 +2,7 @@ package install
 
 import (
 	"encoding/json"
+	"os"
 	"testing"
 )
 
@@ -343,9 +344,127 @@ func TestGenerateClaudioHooksCorrectFormat(t *testing.T) {
 				t.Errorf("Hook %s command should have 'command' field", hookName)
 				return
 			}
-			if commandField != "claudio" {
-				t.Errorf("Hook %s command should be 'claudio', got %v", hookName, commandField)
+			// Check that command is an executable path ending with "claudio"
+			commandStr, ok := commandField.(string)
+			if !ok {
+				t.Errorf("Hook %s command should be string, got %T", hookName, commandField)
+				return
+			}
+			
+			// Get expected executable path for comparison
+			expectedPath, err := os.Executable()
+			if err != nil {
+				// If os.Executable() fails, we expect fallback to "claudio"
+				expectedPath = "claudio"
+			}
+			
+			if commandStr != expectedPath {
+				t.Errorf("Hook %s command should be '%s', got '%s'", hookName, expectedPath, commandStr)
 			}
 		})
+	}
+}
+
+func TestGenerateClaudioHooksHasMatcher(t *testing.T) {
+	// TDD RED: Test that all generated hooks have required matcher field
+	hooks, err := GenerateClaudioHooks()
+	if err != nil {
+		t.Fatalf("Failed to generate hooks: %v", err)
+	}
+	
+	// Handle both HooksMap and map[string]interface{} types
+	var hooksMap map[string]interface{}
+	switch h := hooks.(type) {
+	case HooksMap:
+		hooksMap = map[string]interface{}(h)
+	case map[string]interface{}:
+		hooksMap = h
+	default:
+		t.Fatalf("Expected hooks to be HooksMap or map[string]interface{}, got %T", hooks)
+	}
+	
+	for hookName, hookValue := range hooksMap {
+		hookArray := hookValue.([]interface{})
+		hookConfig := hookArray[0].(map[string]interface{})
+		
+		// Check matcher field exists
+		matcher, exists := hookConfig["matcher"]
+		if !exists {
+			t.Errorf("Hook %s missing required 'matcher' field", hookName)
+		}
+		
+		// Check matcher value is correct
+		if matcher != ".*" {
+			t.Errorf("Hook %s matcher should be '.*', got '%v'", hookName, matcher)
+		}
+	}
+}
+
+func TestGenerateClaudioHooksUsesExecutablePath(t *testing.T) {
+	// TDD RED: Test that generated hooks use current executable path, not hardcoded "claudio"
+	hooks, err := GenerateClaudioHooks()
+	if err != nil {
+		t.Fatalf("Failed to generate hooks: %v", err)
+	}
+	
+	// Handle both HooksMap and map[string]interface{} types
+	var hooksMap map[string]interface{}
+	switch h := hooks.(type) {
+	case HooksMap:
+		hooksMap = map[string]interface{}(h)
+	case map[string]interface{}:
+		hooksMap = h
+	default:
+		t.Fatalf("Expected hooks to be HooksMap or map[string]interface{}, got %T", hooks)
+	}
+	
+	// Get expected executable path for comparison
+	expectedPath, err := os.Executable()
+	if err != nil {
+		// If os.Executable() fails, we expect fallback to "claudio"
+		expectedPath = "claudio"
+	}
+	
+	for hookName, hookValue := range hooksMap {
+		hookArray := hookValue.([]interface{})
+		hookConfig := hookArray[0].(map[string]interface{})
+		
+		// Get hooks array from config
+		hooksField, exists := hookConfig["hooks"]
+		if !exists {
+			t.Errorf("Hook %s missing 'hooks' field", hookName)
+			continue
+		}
+		
+		hooksArray := hooksField.([]interface{})
+		if len(hooksArray) == 0 {
+			t.Errorf("Hook %s has empty hooks array", hookName)
+			continue
+		}
+		
+		hookCommand := hooksArray[0].(map[string]interface{})
+		
+		// Check command field uses executable path
+		command, exists := hookCommand["command"]
+		if !exists {
+			t.Errorf("Hook %s missing 'command' field", hookName)
+			continue
+		}
+		
+		commandStr, ok := command.(string)
+		if !ok {
+			t.Errorf("Hook %s command should be string, got %T", hookName, command)
+			continue
+		}
+		
+		// Verify command uses executable path, not hardcoded "claudio"
+		if commandStr != expectedPath {
+			t.Errorf("Hook %s command should be '%s', got '%s'", hookName, expectedPath, commandStr)
+		}
+		
+		// Specifically check that it's NOT the hardcoded "claudio" (unless that's the fallback)
+		if commandStr == "claudio" && expectedPath != "claudio" {
+			t.Errorf("Hook %s using hardcoded 'claudio' instead of executable path '%s'", hookName, expectedPath)
+		}
 	}
 }

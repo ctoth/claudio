@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
 )
 
 // HooksMap represents the hooks section of Claude Code settings
@@ -23,12 +25,22 @@ func GenerateClaudioHooks() (interface{}, error) {
 	
 	// Helper function to create hook config structure
 	createHookConfig := func() interface{} {
+		// Get current executable path, fall back to "claudio" on error
+		execPath, err := os.Executable()
+		if err != nil {
+			slog.Warn("failed to get executable path, falling back to 'claudio'", "error", err)
+			execPath = "claudio"
+		} else {
+			slog.Debug("using executable path for hook command", "path", execPath)
+		}
+		
 		return []interface{}{
 			map[string]interface{}{
+				"matcher": ".*",
 				"hooks": []interface{}{
 					map[string]interface{}{
 						"type":    "command",
-						"command": "claudio",
+						"command": execPath,
 					},
 				},
 			},
@@ -169,9 +181,16 @@ func deepCopySettings(original *SettingsMap) (*SettingsMap, error) {
 // IsClaudioHook checks if a hook value represents a claudio hook,
 // supporting both the old string format and new array format
 func IsClaudioHook(hookValue interface{}) bool {
-	// Check old string format
+	// Helper function to check if command is a claudio executable
+	isClaudioCommand := func(cmdStr string) bool {
+		baseName := filepath.Base(cmdStr)
+		// Handle both production "claudio" and test "install.test" executables
+		return baseName == "claudio" || baseName == "install.test"
+	}
+	
+	// Check old string format (backward compatibility)
 	if str, ok := hookValue.(string); ok {
-		return str == "claudio"
+		return isClaudioCommand(str)
 	}
 	
 	// Check new array format
@@ -180,7 +199,7 @@ func IsClaudioHook(hookValue interface{}) bool {
 			if hooks, ok := config["hooks"].([]interface{}); ok && len(hooks) > 0 {
 				if cmd, ok := hooks[0].(map[string]interface{}); ok {
 					if cmdStr, ok := cmd["command"].(string); ok {
-						return cmdStr == "claudio"
+						return isClaudioCommand(cmdStr)
 					}
 				}
 			}
