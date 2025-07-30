@@ -9,6 +9,164 @@ import (
 	"github.com/ctoth/claudio/internal/install"
 )
 
+func TestInstallUninstallWithExecutablePath(t *testing.T) {
+	// TDD RED: Test complete install/uninstall workflow with executable paths
+	testCases := []struct {
+		name                 string
+		scope               string
+		installFirst        bool
+		expectError         bool
+	}{
+		{
+			name:         "install with executable path then uninstall - user scope",
+			scope:        "user",
+			installFirst: true,
+			expectError:  false,
+		},
+		{
+			name:         "install with executable path then uninstall - project scope", 
+			scope:        "project",
+			installFirst: true,
+			expectError:  false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create temporary directory for test settings
+			tempDir, err := os.MkdirTemp("", "claudio-test-*")
+			if err != nil {
+				t.Fatalf("Failed to create temp dir: %v", err)
+			}
+			defer os.RemoveAll(tempDir)
+
+			// Set up test environment
+			var settingsPath string
+			if tc.scope == "user" {
+				settingsPath = filepath.Join(tempDir, ".claude", "settings.json")
+			} else {
+				settingsPath = filepath.Join(tempDir, ".claude", "settings.json")
+			}
+
+			// Create settings directory
+			settingsDir := filepath.Dir(settingsPath)
+			err = os.MkdirAll(settingsDir, 0755)
+			if err != nil {
+				t.Fatalf("Failed to create settings dir: %v", err)
+			}
+
+			if tc.installFirst {
+				// Step 1: Install claudio hooks (which should use executable path)
+				claudioHooks, err := install.GenerateClaudioHooks()
+				if err != nil {
+					t.Fatalf("Failed to generate claudio hooks: %v", err)
+				}
+
+				// Create empty settings to install into
+				initialSettings := install.SettingsMap{"version": "1.0"}
+				mergedSettings, err := install.MergeHooksIntoSettings(&initialSettings, claudioHooks)
+				if err != nil {
+					t.Fatalf("Failed to merge hooks: %v", err)
+				}
+
+				// Write settings file
+				settingsJSON, err := json.MarshalIndent(mergedSettings, "", "  ")
+				if err != nil {
+					t.Fatalf("Failed to marshal settings: %v", err)
+				}
+				err = os.WriteFile(settingsPath, settingsJSON, 0644)
+				if err != nil {
+					t.Fatalf("Failed to write settings file: %v", err)
+				}
+
+				// Step 2: Read back the settings to verify executable paths were used
+				settingsData, err := os.ReadFile(settingsPath)
+				if err != nil {
+					t.Fatalf("Failed to read settings file: %v", err)
+				}
+
+				// Debug: Print the actual settings content
+				t.Logf("Settings file content: %s", string(settingsData))
+
+				var readSettings install.SettingsMap
+				err = json.Unmarshal(settingsData, &readSettings)
+				if err != nil {
+					t.Fatalf("Failed to unmarshal settings: %v", err)
+				}
+
+				// Verify hooks contain executable paths (not just "claudio")
+				hooksInterface, exists := readSettings["hooks"]
+				if !exists {
+					t.Fatal("No hooks section found after install")
+				}
+
+				hooksMap, ok := hooksInterface.(map[string]interface{})
+				if !ok {
+					t.Fatal("Hooks section is not a map")
+				}
+
+				// Check that at least one hook uses an executable path
+				foundExecutablePath := false
+				for hookName, hookValue := range hooksMap {
+					if hookArray, ok := hookValue.([]interface{}); ok && len(hookArray) > 0 {
+						if hookConfig, ok := hookArray[0].(map[string]interface{}); ok {
+							if hooksField, ok := hookConfig["hooks"].([]interface{}); ok && len(hooksField) > 0 {
+								if cmd, ok := hooksField[0].(map[string]interface{}); ok {
+									if cmdStr, ok := cmd["command"].(string); ok {
+										// Command should not be just "claudio" (should be full path)
+										baseName := filepath.Base(cmdStr)
+										if cmdStr != "claudio" && (baseName == "claudio" || baseName == "install.test" || baseName == "uninstall.test") {
+											foundExecutablePath = true
+											t.Logf("Hook %s uses executable path: %s (base: %s)", hookName, cmdStr, baseName)
+											break
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+
+				if !foundExecutablePath {
+					t.Error("Expected at least one hook to use executable path instead of hardcoded 'claudio'")
+				}
+
+				// Step 3: Run uninstall workflow to remove hooks
+				err = runUninstallWorkflow(tc.scope, settingsPath)
+				if tc.expectError && err == nil {
+					t.Error("Expected error but got none")
+				}
+				if !tc.expectError && err != nil {
+					t.Errorf("Unexpected error: %v", err)
+				}
+
+				// Step 4: Verify all claudio hooks were removed
+				finalData, err := os.ReadFile(settingsPath)
+				if err != nil {
+					t.Fatalf("Failed to read final settings: %v", err)
+				}
+
+				var finalSettings install.SettingsMap
+				err = json.Unmarshal(finalData, &finalSettings)
+				if err != nil {
+					t.Fatalf("Failed to unmarshal final settings: %v", err)
+				}
+
+				// Check that hooks section is empty or doesn't exist
+				if finalHooks, exists := finalSettings["hooks"]; exists {
+					if finalHooksMap, ok := finalHooks.(map[string]interface{}); ok {
+						for hookName := range finalHooksMap {
+							t.Errorf("Hook '%s' was not removed during uninstall", hookName)
+						}
+					}
+				}
+
+				t.Logf("Install/uninstall executable path workflow test passed for %s", tc.name)
+			}
+		})
+	}
+}
+
 func TestRunUninstallWorkflow(t *testing.T) {
 	// TDD RED: Test complete uninstall workflow integration
 	testCases := []struct {

@@ -66,8 +66,8 @@ func detectClaudioHooks(settings *install.SettingsMap) []string {
 // isClaudioCommand checks if a command string represents a claudio executable
 func isClaudioCommand(cmdStr string) bool {
 	baseName := filepath.Base(cmdStr)
-	// Handle both production "claudio" and test "install.test" executables
-	return baseName == "claudio" || baseName == "install.test"
+	// Handle production "claudio" and test executables "install.test", "uninstall.test"
+	return baseName == "claudio" || baseName == "install.test" || baseName == "uninstall.test"
 }
 
 // containsClaudioCommand checks if an array contains a claudio command
