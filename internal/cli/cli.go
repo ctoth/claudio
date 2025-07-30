@@ -17,6 +17,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const Version = "1.3.0"
+
 // CLI represents the command-line interface
 type CLI struct {
 	rootCmd           *cobra.Command
@@ -83,9 +85,7 @@ func cliFromContext(ctx context.Context) *CLI {
 func handleVersionFlag(cmd *cobra.Command) (bool, error) {
 	version, _ := cmd.Flags().GetBool("version")
 	if version {
-		cmd.Print(`claudio version 1.2.1 (Version 1.2.1)
-Claude Code Audio Plugin - Hook-based sound system
-`)
+		cmd.Printf("claudio version %s (Version %s)\nClaude Code Audio Plugin - Hook-based sound system\n", Version, Version)
 		return true, nil
 	}
 	return false, nil
@@ -326,9 +326,7 @@ func (c *CLI) Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 	// This prevents unnecessary audio player creation for simple version requests
 	if len(args) > 1 && (args[1] == "--version" || args[1] == "-v") {
 		// Show version immediately without initializing any systems
-		fmt.Fprint(stdout, `claudio version 1.2.1 (Version 1.2.1)
-Claude Code Audio Plugin - Hook-based sound system
-`)
+		fmt.Fprintf(stdout, "claudio version %s (Version %s)\nClaude Code Audio Plugin - Hook-based sound system\n", Version, Version)
 		return 0
 	}
 	
@@ -502,10 +500,7 @@ Examples:
 
 // printVersion prints version information
 func (c *CLI) printVersion(w io.Writer) {
-	version := `claudio version 1.3.0 (Version 1.3.0)
-Claude Code Audio Plugin - Hook-based sound system
-`
-	fmt.Fprint(w, version)
+	fmt.Fprintf(w, "claudio version %s (Version %s)\nClaude Code Audio Plugin - Hook-based sound system\n", Version, Version)
 }
 
 // getStringPtr safely dereferences a string pointer, returning empty string if nil
