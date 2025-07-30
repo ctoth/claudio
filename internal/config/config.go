@@ -84,7 +84,7 @@ func (cm *ConfigManager) LoadFromFile(filePath string) (*Config, error) {
 		return nil, fmt.Errorf("config validation failed: %w", err)
 	}
 
-	slog.Info("config loaded successfully",
+	slog.Debug("config loaded successfully",
 		"file_path", filePath,
 		"volume", config.Volume,
 		"default_soundpack", config.DefaultSoundpack,
@@ -267,7 +267,7 @@ func (cm *ConfigManager) ApplyEnvironmentOverrides(config *Config) *Config {
 		slog.Debug("applied log level override from environment", "value", logLevel)
 	}
 
-	slog.Info("environment overrides applied")
+	slog.Debug("environment overrides applied")
 	return &result
 }
 
