@@ -45,11 +45,11 @@ func NewConfigManager() *ConfigManager {
 // GetDefaultConfig returns the default configuration
 func (cm *ConfigManager) GetDefaultConfig() *Config {
 	defaultConfig := &Config{
-		Volume:          0.7,
+		Volume:          0.5,
 		DefaultSoundpack: "default",
 		SoundpackPaths:  []string{}, // XDG paths will be used
 		Enabled:         true,
-		LogLevel:        "info",
+		LogLevel:        "warn",
 	}
 
 	slog.Debug("generated default config",
