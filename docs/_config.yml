@@ -1,8 +1,7 @@
 # Site settings
 title: "Claudio"
 description: "Your Claude Code sessions, now with sound effects"
-baseurl: "/claudio"
-url: "https://ctoth.github.io"
+url: "https://claudio.click"
 
 # Repository
 github_username: ctoth
@@ -36,12 +35,6 @@ plugins:
   - jekyll-feed
   - jekyll-sitemap
   - jekyll-seo-tag
-  - jekyll-readme-index
-
-# Configure README as index
-readme_index:
-  enabled: true
-  remove_originals: false
 
 # Exclude files
 exclude:
