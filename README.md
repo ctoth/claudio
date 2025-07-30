@@ -2,9 +2,9 @@
 
 Your Claude Code sessions, now with sound effects.
 
-Look, spending hours watching Claude Code work can be mind-numbing. Claudio fixes that by playing sounds when stuff happens. Claude runs `git commit`? You get a sound. File operation fails? Different sound. It's like having a very quiet DJ for your AI coding session.
+Spending hours watching Claude Code work gets mind-numbing. Claudio fixes that by playing sounds when stuff happens. Claude runs `git commit`? You get a sound. File operation fails? Different sound. It's like having a very quiet DJ for your AI coding session.
 
-The cool part is how smart it gets. When Claude runs `git commit -m "fix bug"`, Claudio doesn't just play a generic "bash command" sound. It knows Claude is doing git stuff, specifically a commit, and picks sounds accordingly. If that specific sound doesn't exist, it falls back through git → bash → generic success → default. Six levels of fallback because nobody wants silence when their AI assistant's code works.
+The cool part is how smart it gets. When Claude runs `git commit -m "fix bug"`, Claudio doesn't just play a generic "bash command" sound. It knows Claude is doing git stuff, specifically a commit, and picks sounds accordingly. If that specific sound doesn't exist, it falls back through git → bash → generic success → default. Nobody wants silence when their AI assistant's code works.
 
 ```bash
 go install github.com/ctoth/claudio@latest
@@ -22,9 +22,9 @@ Then tell Claude Code about it in your config:
 }
 ```
 
-## The Fallback Thing
+## How Fallback Works
 
-Here's what happens when Claude runs `git commit`:
+When Claude runs `git commit`:
 
 ```
 1. Look for: success/git-commit-success.wav
@@ -35,7 +35,7 @@ Here's what happens when Claude runs `git commit`:
 6. Fine: default.wav
 ```
 
-This means you can be as specific or as lazy as you want with your sound pack. Got a sound for every git subcommand? Great. Just want success/error/loading sounds? That works too.
+You can be as specific or as lazy as you want with your sound pack. Got a sound for every git subcommand? Great. Just want success/error/loading sounds? That works too.
 
 ## What Actually Happens
 
