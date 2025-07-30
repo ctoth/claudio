@@ -2,6 +2,7 @@ package uninstall
 
 import (
 	"log/slog"
+	"path/filepath"
 
 	"github.com/ctoth/claudio/internal/install"
 )
@@ -37,10 +38,10 @@ func detectClaudioHooks(settings *install.SettingsMap) []string {
 	for hookName, hookValue := range hooksMap {
 		slog.Debug("checking hook", "name", hookName, "value", hookValue)
 		
-		// Check for simple string hook: "PreToolUse": "claudio"
+		// Check for simple string hook: "PreToolUse": "claudio" or "/path/to/claudio"
 		if stringValue, ok := hookValue.(string); ok {
-			if stringValue == "claudio" {
-				slog.Debug("found simple claudio hook", "name", hookName)
+			if isClaudioCommand(stringValue) {
+				slog.Debug("found simple claudio hook", "name", hookName, "command", stringValue)
 				claudioHooks = append(claudioHooks, hookName)
 			}
 			continue
@@ -62,6 +63,13 @@ func detectClaudioHooks(settings *install.SettingsMap) []string {
 	return claudioHooks
 }
 
+// isClaudioCommand checks if a command string represents a claudio executable
+func isClaudioCommand(cmdStr string) bool {
+	baseName := filepath.Base(cmdStr)
+	// Handle both production "claudio" and test "install.test" executables
+	return baseName == "claudio" || baseName == "install.test"
+}
+
 // containsClaudioCommand checks if an array contains a claudio command
 func containsClaudioCommand(array []interface{}) bool {
 	for _, item := range array {
@@ -72,7 +80,7 @@ func containsClaudioCommand(array []interface{}) bool {
 					for _, hookItem := range hooksArray {
 						if hookMap, ok := hookItem.(map[string]interface{}); ok {
 							if command, exists := hookMap["command"]; exists {
-								if commandStr, ok := command.(string); ok && commandStr == "claudio" {
+								if commandStr, ok := command.(string); ok && isClaudioCommand(commandStr) {
 									return true
 								}
 							}
