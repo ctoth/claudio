@@ -36,10 +36,12 @@ plugins:
   - jekyll-feed
   - jekyll-sitemap
   - jekyll-seo-tag
+  - jekyll-readme-index
 
-# Include README files for processing
-include:
-  - README.md
+# Configure README as index
+readme_index:
+  enabled: true
+  remove_originals: false
 
 # Exclude files
 exclude:
