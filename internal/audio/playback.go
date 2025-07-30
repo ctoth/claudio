@@ -55,7 +55,7 @@ func NewAudioPlayer() *AudioPlayer {
 		mutex:   sync.RWMutex{},
 	}
 	
-	slog.Info("audio player created successfully", "default_volume", player.volume)
+	slog.Debug("audio player created successfully", "default_volume", player.volume)
 	return player
 }
 
@@ -86,7 +86,7 @@ func (p *AudioPlayer) SetVolume(volume float32) error {
 	p.volume = volume
 	p.mutex.Unlock()
 	
-	slog.Info("volume changed", "old_volume", oldVolume, "new_volume", volume)
+	slog.Debug("volume changed", "old_volume", oldVolume, "new_volume", volume)
 	return nil
 }
 
@@ -332,7 +332,7 @@ func (p *AudioPlayer) PlaySoundWithContext(ctx context.Context, soundID string) 
 	p.isPlaying = true
 	p.mutex.Unlock()
 	
-	slog.Info("sound playback started successfully", "sound_id", soundID)
+	slog.Debug("sound playback started successfully", "sound_id", soundID)
 	
 	// Wait for playback to complete or context cancellation
 	go func() {
@@ -404,7 +404,7 @@ func (p *AudioPlayer) StopAll() error {
 	p.isPlaying = false
 	p.mutex.Unlock()
 	
-	slog.Info("all sound playback stopped", "devices_stopped", len(devices))
+	slog.Debug("all sound playback stopped", "devices_stopped", len(devices))
 	return nil
 }
 
@@ -441,6 +441,6 @@ func (p *AudioPlayer) Close() error {
 	p.sounds = make(map[string]*AudioData)
 	p.mutex.Unlock()
 	
-	slog.Info("audio player closed successfully", "sounds_cleared", soundCount)
+	slog.Debug("audio player closed successfully", "sounds_cleared", soundCount)
 	return nil
 }

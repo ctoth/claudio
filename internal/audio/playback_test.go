@@ -1,7 +1,10 @@
 package audio
 
 import (
+	"bytes"
 	"context"
+	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -340,4 +343,58 @@ func TestAudioPlayerInterface(t *testing.T) {
 	_ = player.StopAll()
 	_ = player.UnloadSound("test")
 	_ = player.Close()
+}
+
+func TestAudioLoggingLevels(t *testing.T) {
+	// TDD RED: This test should FAIL because routine audio operations currently use INFO logging
+	// We expect routine audio operations to use DEBUG level, not INFO level
+	
+	// Capture log output to verify log levels
+	var logBuffer bytes.Buffer
+	originalHandler := slog.Default().Handler()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logBuffer, &slog.HandlerOptions{
+		Level: slog.LevelDebug, // Capture all logs
+	})))
+	defer slog.SetDefault(slog.New(originalHandler))
+	
+	// Test audio player creation - should be DEBUG level
+	player := NewAudioPlayer()
+	defer func() {
+		if err := player.Close(); err != nil {
+			t.Logf("Error closing player: %v", err)
+		}
+	}()
+	
+	// Test volume change - should be DEBUG level
+	err := player.SetVolume(0.8)
+	if err != nil {
+		t.Fatalf("SetVolume should not error: %v", err)
+	}
+	
+	logOutput := logBuffer.String()
+	
+	// CRITICAL: Routine operations should use DEBUG level, not INFO
+	problematicInfoLogs := []string{
+		"audio player created successfully",
+		"volume changed",
+		"sound playback started successfully", 
+		"audio player closed successfully",
+		"all sound playback stopped",
+	}
+	
+	for _, logMsg := range problematicInfoLogs {
+		if strings.Contains(logOutput, logMsg) {
+			// Check if it appears with INFO level (bad) vs DEBUG level (good)
+			if strings.Contains(logOutput, "level=INFO") && strings.Contains(logOutput, logMsg) {
+				t.Errorf("Routine operation '%s' should use DEBUG level, not INFO level", logMsg)
+				t.Logf("Full log output: %s", logOutput)
+			}
+		}
+	}
+	
+	// Verify that DEBUG logs are working properly
+	if !strings.Contains(logOutput, "level=DEBUG") {
+		t.Error("Expected some DEBUG level logs but found none")
+		t.Logf("Full log output: %s", logOutput)
+	}
 }
