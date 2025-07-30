@@ -159,7 +159,6 @@ echo '...' | claudio
 
 **Wrong sounds?** Turn on debug logging and see what fallback chain it's using.
 
-**Crackling?** Lower the volume. The audio processing isn't perfect yet.
 
 **Silence is golden?** `export CLAUDIO_ENABLED=false`
 
