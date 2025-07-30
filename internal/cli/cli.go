@@ -502,7 +502,7 @@ Examples:
 
 // printVersion prints version information
 func (c *CLI) printVersion(w io.Writer) {
-	version := `claudio version 1.2.1 (Version 1.2.1)
+	version := `claudio version 1.3.0 (Version 1.3.0)
 Claude Code Audio Plugin - Hook-based sound system
 `
 	fmt.Fprint(w, version)
