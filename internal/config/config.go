@@ -11,13 +11,24 @@ import (
 	"strings"
 )
 
+// FileLoggingConfig represents file-based logging configuration
+type FileLoggingConfig struct {
+	Enabled    bool   `json:"enabled"`       // Whether file logging is enabled
+	Filename   string `json:"filename"`      // Log file path (empty = XDG cache path)
+	MaxSizeMB  int    `json:"max_size_mb"`   // Max file size in MB before rotation
+	MaxBackups int    `json:"max_backups"`   // Max number of backup files to keep
+	MaxAgeDays int    `json:"max_age_days"`  // Max age in days before deletion
+	Compress   bool   `json:"compress"`      // Whether to compress rotated files
+}
+
 // Config represents Claudio configuration
 type Config struct {
-	Volume          float64  `json:"volume"`           // Audio volume (0.0 to 1.0)
-	DefaultSoundpack string   `json:"default_soundpack"` // Default soundpack to use
-	SoundpackPaths  []string `json:"soundpack_paths"`  // Additional paths to search for soundpacks
-	Enabled         bool     `json:"enabled"`          // Whether Claudio is enabled
-	LogLevel        string   `json:"log_level"`        // Log level (debug, info, warn, error)
+	Volume          float64             `json:"volume"`           // Audio volume (0.0 to 1.0)
+	DefaultSoundpack string              `json:"default_soundpack"` // Default soundpack to use
+	SoundpackPaths  []string            `json:"soundpack_paths"`  // Additional paths to search for soundpacks
+	Enabled         bool                `json:"enabled"`          // Whether Claudio is enabled
+	LogLevel        string              `json:"log_level"`        // Log level (debug, info, warn, error)
+	FileLogging     *FileLoggingConfig  `json:"file_logging,omitempty"` // File logging configuration
 }
 
 // XDGInterface defines the interface for XDG directory operations
@@ -50,13 +61,22 @@ func (cm *ConfigManager) GetDefaultConfig() *Config {
 		SoundpackPaths:  []string{}, // XDG paths will be used
 		Enabled:         true,
 		LogLevel:        "warn",
+		FileLogging: &FileLoggingConfig{
+			Enabled:    false,
+			Filename:   "",   // Empty = XDG cache path
+			MaxSizeMB:  10,
+			MaxBackups: 5,
+			MaxAgeDays: 30,
+			Compress:   true,
+		},
 	}
 
 	slog.Debug("generated default config",
 		"volume", defaultConfig.Volume,
 		"default_soundpack", defaultConfig.DefaultSoundpack,
 		"enabled", defaultConfig.Enabled,
-		"log_level", defaultConfig.LogLevel)
+		"log_level", defaultConfig.LogLevel,
+		"file_logging_enabled", defaultConfig.FileLogging.Enabled)
 
 	return defaultConfig
 }
@@ -179,6 +199,23 @@ func (cm *ConfigManager) ValidateConfig(config *Config) error {
 		if !valid {
 			errors = append(errors, fmt.Sprintf("invalid log level '%s', must be one of: %s", 
 				config.LogLevel, strings.Join(validLogLevels, ", ")))
+		}
+	}
+
+	// Validate file logging configuration
+	if config.FileLogging != nil {
+		fileLogging := config.FileLogging
+		
+		if fileLogging.MaxSizeMB < 0 {
+			errors = append(errors, fmt.Sprintf("file logging max_size_mb must be >= 0, got %d", fileLogging.MaxSizeMB))
+		}
+		
+		if fileLogging.MaxBackups < 0 {
+			errors = append(errors, fmt.Sprintf("file logging max_backups must be >= 0, got %d", fileLogging.MaxBackups))
+		}
+		
+		if fileLogging.MaxAgeDays < 0 {
+			errors = append(errors, fmt.Sprintf("file logging max_age_days must be >= 0, got %d", fileLogging.MaxAgeDays))
 		}
 	}
 
