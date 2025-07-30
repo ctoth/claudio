@@ -294,6 +294,17 @@ func runStdinModeE(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Apply log level configuration immediately after loading config
+	err = cli.configManager.ApplyLogLevel(cfg.LogLevel)
+	if err != nil {
+		cmd.PrintErrf("Error applying log level configuration: %v\n", err)
+		slog.Error("log level configuration failed", "error", err)
+		return fmt.Errorf("error applying log level configuration: %w", err)
+	}
+
+	// Initialize remaining systems after log level is configured
+	cli.initializeRemainingSystemsAfterConfig()
+
 	// Initialize audio and soundpack systems
 	audioCtx, err := initializeAudioSystem(cmd, cli, cfg)
 	if err != nil {
@@ -322,8 +333,8 @@ Claude Code Audio Plugin - Hook-based sound system
 		return 0
 	}
 	
-	// Initialize systems only when actually needed (not for version flag)
-	c.initializeSystems()
+	// Initialize config manager early (needed for log level configuration)
+	c.initializeConfigManager()
 	
 	// Ensure audio player is cleaned up on exit
 	defer func() {
@@ -353,11 +364,32 @@ Claude Code Audio Plugin - Hook-based sound system
 	return 0
 }
 
-// initializeSystems lazily initializes all CLI components when actually needed
-func (c *CLI) initializeSystems() {
+// initializeConfigManager initializes only the config manager early for log level configuration
+func (c *CLI) initializeConfigManager() {
 	if c.configManager == nil {
 		c.configManager = config.NewConfigManager()
 	}
+}
+
+// initializeRemainingSystemsAfterConfig initializes systems that can wait until after log level is configured
+func (c *CLI) initializeRemainingSystemsAfterConfig() {
+	if c.soundMapper == nil {
+		c.soundMapper = sounds.NewSoundMapper()
+	}
+	if c.audioPlayer == nil {
+		c.audioPlayer = audio.NewAudioPlayer()
+	}
+	if c.terminalDetector == nil {
+		c.terminalDetector = &DefaultTerminalDetector{}
+	}
+	// soundpackResolver is initialized in initializeAudioSystem when needed
+}
+
+// initializeSystems lazily initializes remaining CLI components when actually needed
+func (c *CLI) initializeSystems() {
+	// Config manager should already be initialized
+	c.initializeConfigManager()
+	
 	if c.soundMapper == nil {
 		c.soundMapper = sounds.NewSoundMapper()
 	}

@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -497,6 +498,54 @@ func TestConfigErrorHandling(t *testing.T) {
 			t.Error("Expected error loading file with no permissions")
 		}
 	})
+}
+
+func TestLogLevelApplicationToSlog(t *testing.T) {
+	// TDD RED: This test should FAIL because log level from config is not applied to slog
+	// We expect that when config has log_level "warn", slog should respect it and not show DEBUG/INFO logs
+	
+	mgr := NewConfigManager()
+	
+	// Capture log output to verify level is applied
+	var logBuffer strings.Builder
+	originalHandler := slog.Default().Handler()
+	defer slog.SetDefault(slog.New(originalHandler))
+	
+	// First, apply log level configuration with warn level
+	err := mgr.ApplyLogLevelWithWriter("warn", &logBuffer)
+	if err != nil {
+		t.Fatalf("ApplyLogLevelWithWriter should not error for valid log level: %v", err)
+	}
+	
+	// Test that DEBUG and INFO logs are filtered out when level is WARN
+	slog.Debug("this debug message should not appear")
+	slog.Info("this info message should not appear") 
+	slog.Warn("this warning should appear")
+	slog.Error("this error should appear")
+	
+	logOutput := logBuffer.String()
+	
+	// CRITICAL: With warn level, DEBUG and INFO should be filtered out
+	if strings.Contains(logOutput, "this debug message should not appear") {
+		t.Errorf("DEBUG logs should be filtered out when log level is warn, but found debug message in output")
+		t.Logf("Full log output: %s", logOutput)
+	}
+	
+	if strings.Contains(logOutput, "this info message should not appear") {
+		t.Errorf("INFO logs should be filtered out when log level is warn, but found info message in output")
+		t.Logf("Full log output: %s", logOutput)
+	}
+	
+	// WARN and ERROR should still appear
+	if !strings.Contains(logOutput, "this warning should appear") {
+		t.Errorf("WARN logs should appear when log level is warn, but warning message not found in output")
+		t.Logf("Full log output: %s", logOutput)
+	}
+	
+	if !strings.Contains(logOutput, "this error should appear") {
+		t.Errorf("ERROR logs should appear when log level is warn, but error message not found in output")
+		t.Logf("Full log output: %s", logOutput)
+	}
 }
 
 // Helper function

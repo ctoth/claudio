@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -268,4 +269,80 @@ func (cm *ConfigManager) ApplyEnvironmentOverrides(config *Config) *Config {
 
 	slog.Info("environment overrides applied")
 	return &result
+}
+
+// ApplyLogLevel configures slog with the specified log level
+func (cm *ConfigManager) ApplyLogLevel(logLevel string) error {
+	if logLevel == "" {
+		slog.Debug("no log level specified, keeping current slog configuration")
+		return nil
+	}
+
+	slog.Debug("applying log level configuration", "log_level", logLevel)
+
+	// Parse log level string to slog.Level
+	var level slog.Level
+	switch strings.ToLower(logLevel) {
+	case "debug":
+		level = slog.LevelDebug
+	case "info":
+		level = slog.LevelInfo
+	case "warn":
+		level = slog.LevelWarn
+	case "error":
+		level = slog.LevelError
+	default:
+		err := fmt.Errorf("invalid log level '%s', must be one of: debug, info, warn, error", logLevel)
+		slog.Error("invalid log level for slog configuration", "log_level", logLevel, "error", err)
+		return err
+	}
+
+	// Create new handler with the specified level
+	handler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		Level: level,
+	})
+
+	// Set as default slog logger
+	slog.SetDefault(slog.New(handler))
+
+	slog.Debug("slog configured successfully", "log_level", logLevel, "slog_level", level)
+	return nil
+}
+
+// ApplyLogLevelWithWriter configures slog with the specified log level and custom writer (for testing)
+func (cm *ConfigManager) ApplyLogLevelWithWriter(logLevel string, writer io.Writer) error {
+	if logLevel == "" {
+		slog.Debug("no log level specified, keeping current slog configuration")
+		return nil
+	}
+
+	slog.Debug("applying log level configuration with custom writer", "log_level", logLevel)
+
+	// Parse log level string to slog.Level
+	var level slog.Level
+	switch strings.ToLower(logLevel) {
+	case "debug":
+		level = slog.LevelDebug
+	case "info":
+		level = slog.LevelInfo
+	case "warn":
+		level = slog.LevelWarn
+	case "error":
+		level = slog.LevelError
+	default:
+		err := fmt.Errorf("invalid log level '%s', must be one of: debug, info, warn, error", logLevel)
+		slog.Error("invalid log level for slog configuration", "log_level", logLevel, "error", err)
+		return err
+	}
+
+	// Create new handler with the specified level and writer
+	handler := slog.NewTextHandler(writer, &slog.HandlerOptions{
+		Level: level,
+	})
+
+	// Set as default slog logger
+	slog.SetDefault(slog.New(handler))
+
+	slog.Debug("slog configured successfully with custom writer", "log_level", logLevel, "slog_level", level)
+	return nil
 }
