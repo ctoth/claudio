@@ -62,8 +62,8 @@ func (cm *ConfigManager) GetDefaultConfig() *Config {
 		Enabled:         true,
 		LogLevel:        "warn",
 		FileLogging: &FileLoggingConfig{
-			Enabled:    false,
-			Filename:   "",   // Empty = XDG cache path
+			Enabled:    true,  // Default enabled for hook-based usage
+			Filename:   "",    // Empty = XDG cache path
 			MaxSizeMB:  10,
 			MaxBackups: 5,
 			MaxAgeDays: 30,

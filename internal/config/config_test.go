@@ -748,8 +748,8 @@ func TestConfig_FileLoggingDefaults(t *testing.T) {
 	}
 
 	fileConfig := defaultConfig.FileLogging
-	if fileConfig.Enabled != false {
-		t.Error("FileLogging.Enabled should default to false")
+	if fileConfig.Enabled != true {
+		t.Error("FileLogging.Enabled should default to true for hook-based usage")
 	}
 	if fileConfig.Filename != "" {
 		t.Errorf("FileLogging.Filename should default to empty string for XDG path, got %q", fileConfig.Filename)
