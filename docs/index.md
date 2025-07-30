@@ -1,3 +1,8 @@
+---
+layout: default
+title: "Home"
+---
+
 # Claudio
 
 Your Claude Code sessions, now with sound effects.
