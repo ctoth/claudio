@@ -866,6 +866,37 @@ func TestConfig_FileLoggingValidation(t *testing.T) {
 	}
 }
 
+// TDD RED: Test XDG log file path resolution
+func TestXDG_LogPath(t *testing.T) {
+	mgr := NewConfigManager()
+
+	// Test with custom filename - should return as-is
+	customPath := "/custom/path/my-claudio.log"
+	resolved := mgr.ResolveLogFilePath(customPath)
+	if resolved != customPath {
+		t.Errorf("ResolveLogFilePath with custom path = %q, expected %q", resolved, customPath)
+	}
+
+	// Test with empty filename - should use XDG cache path
+	resolved = mgr.ResolveLogFilePath("")
+	expectedPath := filepath.Join(mgr.xdg.GetCachePath("logs"), "claudio.log")
+	if resolved != expectedPath {
+		t.Errorf("ResolveLogFilePath with empty filename = %q, expected %q", resolved, expectedPath)
+	}
+
+	// Verify the XDG path follows expected pattern
+	if !strings.Contains(resolved, ".cache/claudio/logs/claudio.log") {
+		t.Errorf("XDG log path should contain '.cache/claudio/logs/claudio.log', got %q", resolved)
+	}
+
+	// Test that different purposes create different cache paths
+	otherCachePath := mgr.xdg.GetCachePath("other")
+	logCachePath := mgr.xdg.GetCachePath("logs")
+	if otherCachePath == logCachePath {
+		t.Error("Different cache purposes should create different paths")
+	}
+}
+
 // Helper function
 func contains(s, substr string) bool {
 	return strings.Contains(s, substr)

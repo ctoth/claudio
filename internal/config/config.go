@@ -346,6 +346,16 @@ func (cm *ConfigManager) ApplyLogLevel(logLevel string) error {
 	return nil
 }
 
+// ResolveLogFilePath resolves the log file path using XDG cache directory when filename is empty
+func (cm *ConfigManager) ResolveLogFilePath(filename string) string {
+	if filename != "" {
+		return filename
+	}
+	
+	// Use XDG cache directory for log files
+	return filepath.Join(cm.xdg.GetCachePath("logs"), "claudio.log")
+}
+
 // ApplyLogLevelWithWriter configures slog with the specified log level and custom writer (for testing)
 func (cm *ConfigManager) ApplyLogLevelWithWriter(logLevel string, writer io.Writer) error {
 	if logLevel == "" {
