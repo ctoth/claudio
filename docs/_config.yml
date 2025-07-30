@@ -1,8 +1,8 @@
 # Site settings
 title: "Claudio"
 description: "Your Claude Code sessions, now with sound effects"
-baseurl: ""
-url: "https://claudio.click"
+baseurl: "/claudio"
+url: "https://ctoth.github.io"
 
 # Repository
 github_username: ctoth
