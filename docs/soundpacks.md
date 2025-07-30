@@ -35,6 +35,141 @@ default/                    # Soundpack directory
 └── default.wav            # Ultimate fallback sound
 ```
 
+## Virtual (JSON) Soundpacks
+
+Want to use existing system sounds without copying files around? JSON soundpacks let you map Claudio's sound paths to any audio files on your system.
+
+### How They Work
+
+Instead of organizing actual sound files in directories, you create a JSON file that maps relative paths to absolute file paths:
+
+```json
+{
+  "name": "system-sounds",
+  "description": "Uses existing system sounds",
+  "version": "1.0.0",
+  "mappings": {
+    "success/bash-success.wav": "/usr/share/sounds/alsa/Front_Right.wav",
+    "success/git-success.wav": "/usr/share/sounds/alsa/Front_Left.wav", 
+    "error/bash-error.wav": "/usr/share/sounds/alsa/Side_Right.wav",
+    "error/error.wav": "/usr/share/sounds/alsa/Side_Left.wav",
+    "loading/loading.wav": "/usr/share/sounds/alsa/Rear_Center.wav",
+    "default.wav": "/usr/share/sounds/alsa/Front_Center.wav"
+  }
+}
+```
+
+Save this as `/path/to/my-sounds.json` and reference it in your config:
+
+```json
+{
+  "default_soundpack": "my-sounds",
+  "soundpack_paths": ["/path/to/my-sounds.json"]
+}
+```
+
+### JSON Soundpack Structure
+
+**Required fields:**
+- `name` - Identifier for the soundpack
+- `mappings` - Object mapping relative paths to absolute file paths
+
+**Optional fields:**
+- `description` - Human-readable description  
+- `version` - Version string for tracking
+
+**Validation:**
+- All mapped files must exist when the soundpack loads
+- Supports same audio formats as directory soundpacks (WAV, MP3)
+
+### Use Cases
+
+**System Sound Integration:**
+```json
+{
+  "name": "macos-system", 
+  "mappings": {
+    "success/success.wav": "/System/Library/Sounds/Glass.aiff",
+    "error/error.wav": "/System/Library/Sounds/Sosumi.aiff",
+    "loading/loading.wav": "/System/Library/Sounds/Tink.aiff"
+  }
+}
+```
+
+**Reusing Files:**
+```json
+{
+  "name": "minimal-shared",
+  "mappings": {
+    "success/bash-success.wav": "/home/user/sounds/success.wav",
+    "success/git-success.wav": "/home/user/sounds/success.wav",
+    "success/success.wav": "/home/user/sounds/success.wav",
+    "error/bash-error.wav": "/home/user/sounds/error.wav", 
+    "error/git-error.wav": "/home/user/sounds/error.wav",
+    "error/error.wav": "/home/user/sounds/error.wav"
+  }
+}
+```
+
+**Mix and Match:**
+```json
+{
+  "name": "hybrid-pack",
+  "mappings": {
+    "success/git-commit-success.wav": "/home/user/custom/git-commit.wav",
+    "success/success.wav": "/usr/share/sounds/freedesktop/stereo/complete.oga",
+    "error/error.wav": "/usr/share/sounds/freedesktop/stereo/dialog-error.oga",
+    "default.wav": "/usr/share/sounds/freedesktop/stereo/bell.oga"
+  }
+}
+```
+
+### Creating JSON Soundpacks
+
+1. **Find your audio files:**
+   ```bash
+   find /usr/share/sounds -name "*.wav" -o -name "*.mp3" -o -name "*.oga"
+   ```
+
+2. **Create the JSON file:**
+   ```bash
+   cat > ~/.local/share/claudio/custom.json << 'EOF'
+   {
+     "name": "custom-sounds",
+     "description": "My custom sound mappings",
+     "mappings": {
+       "success/success.wav": "/path/to/my/success.wav",
+       "error/error.wav": "/path/to/my/error.wav", 
+       "default.wav": "/path/to/my/default.wav"
+     }
+   }
+   EOF
+   ```
+
+3. **Update your config:**
+   ```json
+   {
+     "default_soundpack": "custom-sounds",
+     "soundpack_paths": ["/home/user/.local/share/claudio/custom.json"]
+   }
+   ```
+
+4. **Test it:**
+   ```bash
+   echo '{"hook_event_name":"PostToolUse","tool_name":"Bash","tool_response":{"stdout":"test"}}' | claudio
+   ```
+
+### Benefits
+
+- **No file duplication** - Reference existing sounds anywhere on your system
+- **Easy distribution** - Share just a small JSON file instead of audio files
+- **Flexible mapping** - Multiple virtual sounds can use the same physical file
+- **System integration** - Use sounds that match your desktop environment
+
+### Same Fallback System
+
+JSON soundpacks use the exact same fallback system as directory soundpacks. The only difference is where the sounds come from.
+
 ## The Multi-Level Fallback System
 
 Claudio uses different fallback chains depending on the event type. Each chain searches for the most specific sound available:
@@ -214,13 +349,17 @@ Played when you send a message to Claude Code.
 
 ## Creating Custom Soundpacks
 
-### Step 1: Create Directory Structure
+You can create custom soundpacks in two ways: traditional directory-based soundpacks or virtual JSON soundpacks.
+
+### Option 1: Directory Soundpack
+
+**Step 1: Create Directory Structure**
 
 ```bash
 mkdir -p ~/.local/share/claudio/my-pack/{loading,success,error,interactive}
 ```
 
-### Step 2: Add Sound Files
+**Step 2: Add Sound Files**
 
 Add `.wav` or `.mp3` files to appropriate directories. Start with essentials:
 
@@ -233,9 +372,7 @@ touch ~/.local/share/claudio/my-pack/interactive/interactive.wav
 touch ~/.local/share/claudio/my-pack/default.wav
 ```
 
-### Step 3: Configure Claudio
-
-Update your configuration to use the new soundpack:
+**Step 3: Configure Claudio**
 
 ```json
 {
@@ -247,11 +384,39 @@ Update your configuration to use the new soundpack:
 }
 ```
 
-### Step 4: Test Your Soundpack
+### Option 2: JSON Soundpack (Recommended)
+
+**Step 1: Create JSON File**
+
+```bash
+cat > ~/.local/share/claudio/my-pack.json << 'EOF'
+{
+  "name": "my-pack",
+  "description": "My custom soundpack",
+  "mappings": {
+    "success/success.wav": "/usr/share/sounds/freedesktop/stereo/complete.oga",
+    "error/error.wav": "/usr/share/sounds/freedesktop/stereo/dialog-error.oga",
+    "loading/loading.wav": "/usr/share/sounds/freedesktop/stereo/bell.oga",
+    "default.wav": "/usr/share/sounds/freedesktop/stereo/bell.oga"
+  }
+}
+EOF
+```
+
+**Step 2: Configure Claudio**
+
+```json
+{
+  "default_soundpack": "my-pack",
+  "soundpack_paths": ["/home/user/.local/share/claudio/my-pack.json"]
+}
+```
+
+### Testing Your Soundpack
 
 ```bash
 # Test with your new soundpack
-CLAUDIO_SOUNDPACK=my-pack echo '{"hook_event_name":"PostToolUse","tool_name":"Bash","tool_response":{"stdout":"success"}}' | claudio
+echo '{"hook_event_name":"PostToolUse","tool_name":"Bash","tool_response":{"stdout":"success"}}' | claudio
 ```
 
 ## Advanced Soundpack Techniques
@@ -384,6 +549,12 @@ Claudio recognizes these tools and can provide specific sounds:
 - Enable debug logging: `CLAUDIO_LOG_LEVEL=debug`
 - Check fallback chain in debug output
 - Verify file naming matches expected patterns
+
+**JSON soundpack issues:**
+- Check JSON syntax is valid: `python -m json.tool my-pack.json`
+- Verify all mapped files exist and are readable
+- Ensure `name` field matches the soundpack identifier
+- Check file extensions in config match the JSON filename
 
 ## See Also
 
