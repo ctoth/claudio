@@ -65,8 +65,10 @@ func TestCLIBasicUsage(t *testing.T) {
 }
 
 func TestCLIFlags(t *testing.T) {
-	cli := NewCLI()
-
+	// Preserve original slog configuration to avoid test interference
+	originalHandler := slog.Default().Handler()
+	defer slog.SetDefault(slog.New(originalHandler))
+	
 	testCases := []struct {
 		name     string
 		args     []string
@@ -121,6 +123,9 @@ func TestCLIFlags(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			// Create fresh CLI instance for each test to avoid state pollution
+			cli := NewCLI()
+			
 			stdin := strings.NewReader("")
 			stdout := &bytes.Buffer{}
 			stderr := &bytes.Buffer{}
