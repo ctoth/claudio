@@ -262,7 +262,7 @@ func processHookInput(cmd *cobra.Command, cli *CLI, cfg *config.Config, audioCtx
 	slog.Info("hook event parsed",
 		"event_name", hookEvent.EventName,
 		"session_id", hookEvent.SessionID,
-		"tool_name", hookEvent.ToolName)
+		"tool_name", getStringPtr(hookEvent.ToolName))
 
 	// Process hook event
 	cli.processHookEvent(&hookEvent, cfg, audioCtx, cmd.OutOrStdout(), cmd.ErrOrStderr())
@@ -475,4 +475,12 @@ func (c *CLI) printVersion(w io.Writer) {
 Claude Code Audio Plugin - Hook-based sound system
 `
 	fmt.Fprint(w, version)
+}
+
+// getStringPtr safely dereferences a string pointer, returning empty string if nil
+func getStringPtr(ptr *string) string {
+	if ptr == nil {
+		return ""
+	}
+	return *ptr
 }

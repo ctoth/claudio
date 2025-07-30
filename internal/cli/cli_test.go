@@ -641,6 +641,68 @@ func TestVersionFlagEarlyExit(t *testing.T) {
 	}
 }
 
+func TestToolNameStringLogging(t *testing.T) {
+	// TDD RED: This test should FAIL because tool names currently log as memory addresses
+	// We expect tool names to appear as strings, not pointer addresses like "0xc000116480"
+	
+	cli := NewCLI()
+	
+	// Capture all log output to verify tool names are logged as strings
+	var logBuffer bytes.Buffer
+	originalHandler := slog.Default().Handler()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logBuffer, &slog.HandlerOptions{
+		Level: slog.LevelDebug, // Capture all logs
+	})))
+	defer slog.SetDefault(slog.New(originalHandler))
+	
+	// Hook JSON with explicit tool name
+	hookJSON := `{
+		"session_id": "test",
+		"transcript_path": "/test",
+		"cwd": "/test",
+		"hook_event_name": "PostToolUse",
+		"tool_name": "Bash",
+		"tool_response": {
+			"stdout": "success",
+			"stderr": "",
+			"interrupted": false
+		}
+	}`
+	
+	stdin := strings.NewReader(hookJSON)
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	
+	exitCode := cli.Run([]string{"claudio", "--silent"}, stdin, stdout, stderr)
+	
+	// Should process successfully
+	if exitCode != 0 {
+		t.Errorf("Expected exit code 0, got %d", exitCode)
+		t.Logf("Stderr: %s", stderr.String())
+	}
+	
+	// CRITICAL: Tool name should appear as string "Bash", not memory address
+	logOutput := logBuffer.String()
+	
+	// Should contain tool name as string
+	if !strings.Contains(logOutput, "tool_name=Bash") && !strings.Contains(logOutput, `tool_name="Bash"`) {
+		t.Errorf("Expected tool name to appear as string 'Bash' in logs")
+		t.Logf("Full log output: %s", logOutput)
+	}
+	
+	// Should NOT contain memory addresses (like 0xc000116480)
+	if strings.Contains(logOutput, "0x") {
+		t.Errorf("Tool name should not appear as memory address, but found pointer reference in logs")
+		t.Logf("Full log output: %s", logOutput)
+	}
+	
+	// Verify the specific pattern we expect to fix
+	if strings.Contains(logOutput, "tool_name=0x") {
+		t.Errorf("Found the exact bug: tool_name=0x... memory address instead of string")
+		t.Logf("Full log output: %s", logOutput)
+	}
+}
+
 func TestCLIUnifiedSoundpackIntegration(t *testing.T) {
 	// TDD Test: CLI integration with new unified soundpack system
 
