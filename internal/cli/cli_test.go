@@ -871,3 +871,70 @@ func TestCLIUnifiedSoundpackIntegration(t *testing.T) {
 		}
 	})
 }
+
+func TestCLILoggingLevels(t *testing.T) {
+	// TDD RED: This test should FAIL because CLI system initialization currently uses INFO logging
+	// We expect routine CLI operations to use DEBUG level, not INFO level
+	
+	// Capture log output to verify log levels
+	var logBuffer bytes.Buffer
+	originalHandler := slog.Default().Handler()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logBuffer, &slog.HandlerOptions{
+		Level: slog.LevelDebug, // Capture all logs
+	})))
+	defer slog.SetDefault(slog.New(originalHandler))
+	
+	cli := NewCLI()
+	defer func() {
+		if err := cli.rootCmd.Context(); err == nil {
+			// CLI cleanup if needed
+		}
+	}()
+	
+	// Test CLI with hook processing - triggers system initialization
+	hookJSON := `{
+		"session_id": "test",
+		"transcript_path": "/test",
+		"cwd": "/test",
+		"hook_event_name": "PostToolUse",
+		"tool_name": "Bash",
+		"tool_response": {"stdout": "success", "stderr": "", "interrupted": false}
+	}`
+	
+	stdin := strings.NewReader(hookJSON)
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	
+	// Run CLI - should trigger system initialization with DEBUG level logging
+	exitCode := cli.Run([]string{"claudio", "--silent"}, stdin, stdout, stderr)
+	
+	if exitCode != 0 {
+		t.Fatalf("CLI run should succeed, got exit code %d: %s", exitCode, stderr.String())
+	}
+	
+	logOutput := logBuffer.String()
+	
+	// CRITICAL: Routine operations should use DEBUG level, not INFO
+	problematicInfoLogs := []string{
+		"configuration loaded",
+		"soundpack resolver initialized",
+	}
+	
+	for _, logMsg := range problematicInfoLogs {
+		// Split into lines and check each line individually
+		lines := strings.Split(logOutput, "\n")
+		for _, line := range lines {
+			if strings.Contains(line, logMsg) && strings.Contains(line, "level=INFO") {
+				t.Errorf("Routine operation '%s' should use DEBUG level, not INFO level", logMsg)
+				t.Logf("Problematic line: %s", line)
+				t.Logf("Full log output: %s", logOutput)
+			}
+		}
+	}
+	
+	// Verify that DEBUG logs are working properly
+	if !strings.Contains(logOutput, "level=DEBUG") {
+		t.Error("Expected some DEBUG level logs but found none")
+		t.Logf("Full log output: %s", logOutput)
+	}
+}

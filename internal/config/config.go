@@ -141,14 +141,14 @@ func (cm *ConfigManager) LoadConfig() (*Config, error) {
 		slog.Debug("checking config path", "path_index", i, "path", configPath)
 
 		if _, err := os.Stat(configPath); err == nil {
-			slog.Info("found config file", "path", configPath)
+			slog.Debug("found config file", "path", configPath)
 			return cm.LoadFromFile(configPath)
 		} else {
 			slog.Debug("config file not found", "path", configPath, "error", err)
 		}
 	}
 
-	slog.Info("no config file found, using defaults")
+	slog.Debug("no config file found, using defaults")
 	return cm.GetDefaultConfig(), nil
 }
 
@@ -224,7 +224,7 @@ func (cm *ConfigManager) MergeConfigs(base, override *Config) *Config {
 	// In JSON, explicit false would override true from base
 	// This is handled naturally by the struct unmarshaling
 
-	slog.Info("configurations merged successfully")
+	slog.Debug("configurations merged successfully")
 	return &merged
 }
 
