@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/ctoth/claudio/internal/config"
 )
 
 func TestCLI(t *testing.T) {
@@ -936,5 +938,118 @@ func TestCLILoggingLevels(t *testing.T) {
 	if !strings.Contains(logOutput, "level=DEBUG") {
 		t.Error("Expected some DEBUG level logs but found none")
 		t.Logf("Full log output: %s", logOutput)
+	}
+}
+
+// TDD RED: Test existing stderr behavior unchanged when file logging disabled
+func TestLogging_SetupWithoutFile(t *testing.T) {
+	// This test should FAIL because setupLogging function doesn't exist yet
+	cfg := &config.Config{
+		Volume:          0.5,
+		DefaultSoundpack: "default",
+		Enabled:         true,
+		LogLevel:        "info",
+		FileLogging: &config.FileLoggingConfig{
+			Enabled: false, // File logging disabled
+		},
+	}
+
+	// Capture stderr output
+	var stderrBuffer bytes.Buffer
+	
+	// This should fail because setupLogging doesn't exist
+	setupLogging(cfg, &stderrBuffer)
+
+	// Test that a log message goes to stderr only
+	slog.Info("test message")
+	
+	stderrOutput := stderrBuffer.String()
+	if !strings.Contains(stderrOutput, "test message") {
+		t.Error("Log message should appear in stderr when file logging disabled")
+	}
+}
+
+// TDD RED: Test file + stderr combined output when file logging enabled  
+func TestLogging_SetupWithFile(t *testing.T) {
+	// This test should FAIL because setupLogging function doesn't exist yet
+	tempDir := t.TempDir()
+	logFile := filepath.Join(tempDir, "test.log")
+	
+	cfg := &config.Config{
+		Volume:          0.5,
+		DefaultSoundpack: "default", 
+		Enabled:         true,
+		LogLevel:        "info",
+		FileLogging: &config.FileLoggingConfig{
+			Enabled:    true,
+			Filename:   logFile,
+			MaxSizeMB:  1,
+			MaxBackups: 2,
+			MaxAgeDays: 7,
+			Compress:   false,
+		},
+	}
+
+	// Capture stderr output
+	var stderrBuffer bytes.Buffer
+	
+	// This should fail because setupLogging doesn't exist
+	setupLogging(cfg, &stderrBuffer)
+
+	// Test that a log message goes to both stderr and file
+	slog.Info("test dual output")
+	
+	// Check stderr
+	stderrOutput := stderrBuffer.String()
+	if !strings.Contains(stderrOutput, "test dual output") {
+		t.Error("Log message should appear in stderr when file logging enabled")
+	}
+	
+	// Check file
+	if _, err := os.Stat(logFile); os.IsNotExist(err) {
+		t.Error("Log file should be created when file logging enabled")
+	}
+	
+	fileContent, err := os.ReadFile(logFile)
+	if err != nil {
+		t.Fatalf("Failed to read log file: %v", err)
+	}
+	
+	if !strings.Contains(string(fileContent), "test dual output") {
+		t.Error("Log message should appear in log file")
+	}
+}
+
+// TDD RED: Test graceful degradation on file errors
+func TestLogging_SetupFileError(t *testing.T) {
+	// This test should FAIL because setupLogging function doesn't exist yet
+	cfg := &config.Config{
+		Volume:          0.5,
+		DefaultSoundpack: "default",
+		Enabled:         true,  
+		LogLevel:        "info",
+		FileLogging: &config.FileLoggingConfig{
+			Enabled:    true,
+			Filename:   "/invalid/path/cannot/create/test.log", // Invalid path
+			MaxSizeMB:  1,
+			MaxBackups: 2,
+			MaxAgeDays: 7,
+			Compress:   false,
+		},
+	}
+
+	// Capture stderr output
+	var stderrBuffer bytes.Buffer
+	
+	// This should fail because setupLogging doesn't exist
+	// Should NOT panic even with invalid file path
+	setupLogging(cfg, &stderrBuffer)
+
+	// Test that logging still works to stderr despite file error
+	slog.Info("test error recovery")
+	
+	stderrOutput := stderrBuffer.String()
+	if !strings.Contains(stderrOutput, "test error recovery") {
+		t.Error("Log message should still appear in stderr when file logging fails")
 	}
 }

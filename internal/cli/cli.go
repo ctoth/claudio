@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 
 	"github.com/ctoth/claudio/internal/audio"
@@ -15,6 +17,7 @@ import (
 	"github.com/ctoth/claudio/internal/sounds"
 	"github.com/ctoth/claudio/internal/soundpack"
 	"github.com/spf13/cobra"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 const Version = "1.3.1"
@@ -501,6 +504,60 @@ Examples:
 // printVersion prints version information
 func (c *CLI) printVersion(w io.Writer) {
 	fmt.Fprintf(w, "claudio version %s (Version %s)\nClaude Code Audio Plugin - Hook-based sound system\n", Version, Version)
+}
+
+// setupLogging configures slog with file logging when enabled
+func setupLogging(cfg *config.Config, stderrWriter io.Writer) {
+	// Parse log level
+	var level slog.Level
+	if err := level.UnmarshalText([]byte(cfg.LogLevel)); err != nil {
+		level = slog.LevelInfo // Default level if parsing fails
+	}
+
+	// Always include stderr
+	var writers []io.Writer
+	writers = append(writers, stderrWriter)
+
+	// Add file logging if enabled
+	if cfg.FileLogging != nil && cfg.FileLogging.Enabled {
+		// Resolve log file path using config manager
+		configManager := config.NewConfigManager()
+		logFilePath := configManager.ResolveLogFilePath(cfg.FileLogging.Filename)
+		
+		// Create log file directory if needed
+		logDir := filepath.Dir(logFilePath)
+		if err := os.MkdirAll(logDir, 0755); err != nil {
+			slog.Error("failed to create log directory", "path", logDir, "error", err)
+			// Continue without file logging rather than failing
+		} else {
+			// Create lumberjack logger for file rotation
+			fileWriter := &lumberjack.Logger{
+				Filename:   logFilePath,
+				MaxSize:    cfg.FileLogging.MaxSizeMB,
+				MaxBackups: cfg.FileLogging.MaxBackups,
+				MaxAge:     cfg.FileLogging.MaxAgeDays,
+				Compress:   cfg.FileLogging.Compress,
+			}
+			writers = append(writers, fileWriter)
+			slog.Debug("file logging enabled", "path", logFilePath)
+		}
+	}
+
+	// Create MultiWriter to combine all writers
+	multiWriter := io.MultiWriter(writers...)
+
+	// Create slog handler with combined writer
+	handler := slog.NewTextHandler(multiWriter, &slog.HandlerOptions{
+		Level: level,
+	})
+
+	// Set as default logger
+	slog.SetDefault(slog.New(handler))
+	
+	slog.Debug("logging setup completed", 
+		"level", level.String(), 
+		"writers", len(writers),
+		"file_enabled", cfg.FileLogging != nil && cfg.FileLogging.Enabled)
 }
 
 // getStringPtr safely dereferences a string pointer, returning empty string if nil
