@@ -297,13 +297,8 @@ func runStdinModeE(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// TODO: Apply log level configuration (temporarily disabled for testing)
-	// err = cli.configManager.ApplyLogLevel(cfg.LogLevel)
-	// if err != nil {
-	// 	cmd.PrintErrf("Error applying log level configuration: %v\n", err)
-	// 	slog.Error("log level configuration failed", "error", err)
-	// 	return fmt.Errorf("error applying log level configuration: %w", err)
-	// }
+	// Setup logging with file logging support
+	setupLogging(cfg, cmd.ErrOrStderr())
 
 	// No need for additional initialization - systems already initialized
 
