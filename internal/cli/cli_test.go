@@ -1053,3 +1053,88 @@ func TestLogging_SetupFileError(t *testing.T) {
 		t.Error("Log message should still appear in stderr when file logging fails")
 	}
 }
+
+// TDD RED: Test end-to-end CLI file logging integration
+func TestCLI_FileLoggingIntegration(t *testing.T) {
+	// This test should FAIL because setupLogging is not called in CLI lifecycle yet
+	tempDir := t.TempDir()
+	logFile := filepath.Join(tempDir, "claudio-test.log")
+	
+	// Create a config file with file logging enabled
+	configFile := filepath.Join(tempDir, "config.json")
+	configJSON := fmt.Sprintf(`{
+		"volume": 0.5,
+		"default_soundpack": "default",
+		"enabled": false,
+		"log_level": "info",
+		"file_logging": {
+			"enabled": true,
+			"filename": "%s",
+			"max_size_mb": 1,
+			"max_backups": 2,
+			"max_age_days": 7,
+			"compress": false
+		}
+	}`, logFile)
+	
+	err := os.WriteFile(configFile, []byte(configJSON), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write config file: %v", err)
+	}
+	
+	// Test hook JSON
+	hookJSON := `{
+		"session_id": "test-integration",
+		"transcript_path": "/test",
+		"cwd": "/test", 
+		"hook_event_name": "PostToolUse",
+		"tool_name": "Bash",
+		"tool_response": {"stdout": "integration test", "stderr": "", "interrupted": false}
+	}`
+	
+	cli := NewCLI()
+	stdin := strings.NewReader(hookJSON)
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	
+	// Run CLI with config file - should trigger file logging
+	// This should FAIL because setupLogging is not wired into CLI yet
+	exitCode := cli.Run([]string{"claudio", "--config", configFile, "--silent"}, stdin, stdout, stderr)
+	
+	if exitCode != 0 {
+		t.Fatalf("CLI should succeed, got exit code %d: %s", exitCode, stderr.String())
+	}
+	
+	// Check that log file was created and contains expected content
+	if _, err := os.Stat(logFile); os.IsNotExist(err) {
+		t.Error("Log file should be created when file logging is enabled in config")
+		t.Logf("Expected log file: %s", logFile)
+		t.Logf("Config file used: %s", configFile)
+		t.Logf("Stderr output: %s", stderr.String())
+		return
+	}
+	
+	// Read log file content
+	logContent, err := os.ReadFile(logFile)
+	if err != nil {
+		t.Fatalf("Failed to read log file: %v", err)
+	}
+	
+	logStr := string(logContent)
+	
+	// Verify expected log messages appear in file
+	expectedMessages := []string{
+		"hook event parsed",
+		"session_id=test-integration", 
+		"tool_name=Bash",
+	}
+	
+	for _, msg := range expectedMessages {
+		if !strings.Contains(logStr, msg) {
+			t.Errorf("Log file should contain %q", msg)
+			t.Logf("Log file content: %s", logStr)
+		}
+	}
+	
+	t.Logf("SUCCESS: Log file created at %s with content", logFile)
+}
