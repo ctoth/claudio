@@ -7,7 +7,6 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 
@@ -28,7 +27,8 @@ type CLI struct {
 	configManager     *config.ConfigManager
 	soundMapper       *sounds.SoundMapper
 	soundpackResolver soundpack.SoundpackResolver
-	audioPlayer       *audio.AudioPlayer
+	audioBackend      audio.AudioBackend
+	backendFactory    audio.BackendFactory
 	terminalDetector  TerminalDetector
 }
 
@@ -65,7 +65,8 @@ func NewCLI() *CLI {
 		configManager:     nil, // Lazy initialization - only create when needed
 		soundMapper:       nil, // Lazy initialization - only create when needed
 		soundpackResolver: nil, // Lazy initialization - only create when needed
-		audioPlayer:       nil, // Lazy initialization - only create when needed
+		audioBackend:      nil, // Lazy initialization - only create when needed
+		backendFactory:    nil, // Lazy initialization - only create when needed
 		terminalDetector:  nil, // Lazy initialization - only create when needed
 	}
 }
@@ -168,11 +169,12 @@ func loadAndValidateConfig(cmd *cobra.Command, cli *CLI) (*config.Config, error)
 	return cfg, nil
 }
 
-// initializeAudioSystem sets up the soundpack resolver and audio context
-func initializeAudioSystem(cmd *cobra.Command, cli *CLI, cfg *config.Config) (*audio.Context, error) {
+// initializeAudioSystem sets up the soundpack resolver and audio backend
+func initializeAudioSystem(cmd *cobra.Command, cli *CLI, cfg *config.Config) error {
 	slog.Debug("configuration loaded",
 		"volume", cfg.Volume,
 		"soundpack", cfg.DefaultSoundpack,
+		"audio_backend", cfg.AudioBackend,
 		"enabled", cfg.Enabled)
 
 	// Initialize unified soundpack resolver with auto-detection
@@ -201,31 +203,56 @@ func initializeAudioSystem(cmd *cobra.Command, cli *CLI, cfg *config.Config) (*a
 		"resolver_type", cli.soundpackResolver.GetType(),
 		"resolver_name", cli.soundpackResolver.GetName())
 	
-	// Set audio player volume
-	err = cli.audioPlayer.SetVolume(float32(cfg.Volume))
-	if err != nil {
-		cmd.PrintErrf("Error setting volume: %v\n", err)
-		slog.Error("volume setting failed", "error", err)
-		return nil, fmt.Errorf("error setting volume: %w", err)
-	}
-
-	// Initialize audio context if not in silent mode
-	var audioCtx *audio.Context
+	// Initialize audio backend system if not in silent mode
 	if cfg.Enabled {
-		audioCtx, err = audio.NewContext()
+		err = cli.initializeAudioSystemWithBackend(cfg)
 		if err != nil {
-			cmd.PrintErrf("Error initializing audio: %v\n", err)
-			slog.Error("audio initialization failed", "error", err)
-			return nil, fmt.Errorf("error initializing audio: %w", err)
+			cmd.PrintErrf("Error initializing audio backend: %v\n", err)
+			slog.Error("audio backend initialization failed", "error", err)
+			return fmt.Errorf("error initializing audio backend: %w", err)
 		}
-		slog.Debug("audio context initialized")
+		slog.Debug("audio backend system initialized")
 	}
 	
-	return audioCtx, nil
+	return nil
+}
+
+// initializeAudioSystemWithBackend creates and configures the audio backend
+func (c *CLI) initializeAudioSystemWithBackend(cfg *config.Config) error {
+	slog.Debug("initializing audio backend", "backend_type", cfg.AudioBackend)
+	
+	// Create audio backend using factory
+	backend, err := c.backendFactory.CreateBackend(cfg.AudioBackend)
+	if err != nil {
+		slog.Error("failed to create audio backend", "backend_type", cfg.AudioBackend, "error", err)
+		return fmt.Errorf("failed to create audio backend '%s': %w", cfg.AudioBackend, err)
+	}
+	
+	c.audioBackend = backend
+	
+	// Start the backend
+	err = c.audioBackend.Start()
+	if err != nil {
+		slog.Error("failed to start audio backend", "error", err)
+		return fmt.Errorf("failed to start audio backend: %w", err)
+	}
+	
+	// Set volume on backend
+	err = c.audioBackend.SetVolume(float32(cfg.Volume))
+	if err != nil {
+		slog.Error("failed to set volume on backend", "volume", cfg.Volume, "error", err)
+		return fmt.Errorf("failed to set volume on backend: %w", err)
+	}
+	
+	slog.Debug("audio backend initialized successfully",
+		"backend_type", fmt.Sprintf("%T", c.audioBackend),
+		"volume", cfg.Volume)
+	
+	return nil
 }
 
 // processHookInput reads hook JSON from stdin and processes it
-func processHookInput(cmd *cobra.Command, cli *CLI, cfg *config.Config, audioCtx *audio.Context) error {
+func processHookInput(cmd *cobra.Command, cli *CLI, cfg *config.Config) error {
 	// Read hook JSON from stdin
 	inputData, err := io.ReadAll(cmd.InOrStdin())
 	if err != nil {
@@ -268,7 +295,7 @@ func processHookInput(cmd *cobra.Command, cli *CLI, cfg *config.Config, audioCtx
 		"tool_name", getStringPtr(hookEvent.ToolName))
 
 	// Process hook event
-	cli.processHookEvent(&hookEvent, cfg, audioCtx, cmd.OutOrStdout(), cmd.ErrOrStderr())
+	cli.processHookEvent(&hookEvent, cfg, cmd.OutOrStdout(), cmd.ErrOrStderr())
 	
 	return nil
 }
@@ -303,16 +330,13 @@ func runStdinModeE(cmd *cobra.Command, args []string) error {
 	// No need for additional initialization - systems already initialized
 
 	// Initialize audio and soundpack systems
-	audioCtx, err := initializeAudioSystem(cmd, cli, cfg)
+	err = initializeAudioSystem(cmd, cli, cfg)
 	if err != nil {
 		return err
 	}
-	if audioCtx != nil {
-		defer audioCtx.Close()
-	}
 
 	// Process hook input from stdin
-	return processHookInput(cmd, cli, cfg, audioCtx)
+	return processHookInput(cmd, cli, cfg)
 }
 
 
@@ -331,12 +355,12 @@ func (c *CLI) Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 	// Initialize systems only when actually needed (not for version flag)
 	c.initializeSystems()
 	
-	// Ensure audio player is cleaned up on exit
+	// Ensure audio backend is cleaned up on exit
 	defer func() {
-		if c.audioPlayer != nil {
-			err := c.audioPlayer.Close()
+		if c.audioBackend != nil {
+			err := c.audioBackend.Close()
 			if err != nil {
-				slog.Error("error closing audio player", "error", err)
+				slog.Error("error closing audio backend", "error", err)
 			}
 		}
 	}()
@@ -371,13 +395,13 @@ func (c *CLI) initializeRemainingSystemsAfterConfig() {
 	if c.soundMapper == nil {
 		c.soundMapper = sounds.NewSoundMapper()
 	}
-	if c.audioPlayer == nil {
-		c.audioPlayer = audio.NewAudioPlayer()
+	if c.backendFactory == nil {
+		c.backendFactory = audio.NewBackendFactory()
 	}
 	if c.terminalDetector == nil {
 		c.terminalDetector = &DefaultTerminalDetector{}
 	}
-	// soundpackResolver is initialized in initializeAudioSystem when needed
+	// soundpackResolver and audioBackend are initialized in initializeAudioSystem when needed
 }
 
 // initializeSystems lazily initializes remaining CLI components when actually needed
@@ -388,17 +412,17 @@ func (c *CLI) initializeSystems() {
 	if c.soundMapper == nil {
 		c.soundMapper = sounds.NewSoundMapper()
 	}
-	if c.audioPlayer == nil {
-		c.audioPlayer = audio.NewAudioPlayer()
+	if c.backendFactory == nil {
+		c.backendFactory = audio.NewBackendFactory()
 	}
 	if c.terminalDetector == nil {
 		c.terminalDetector = &DefaultTerminalDetector{}
 	}
-	// soundpackResolver is initialized in initializeAudioSystem when needed
+	// soundpackResolver and audioBackend are initialized in initializeAudioSystem when needed
 }
 
 // processHookEvent processes the parsed hook event
-func (c *CLI) processHookEvent(hookEvent *hooks.HookEvent, cfg *config.Config, audioCtx *audio.Context, stdout, stderr io.Writer) {
+func (c *CLI) processHookEvent(hookEvent *hooks.HookEvent, cfg *config.Config, stdout, stderr io.Writer) {
 	slog.Debug("processing hook event", "event_name", hookEvent.EventName)
 
 	// Extract hook context directly from event
@@ -423,8 +447,8 @@ func (c *CLI) processHookEvent(hookEvent *hooks.HookEvent, cfg *config.Config, a
 		"selected_path", result.SelectedPath)
 
 	// Play sound if audio is enabled
-	if cfg.Enabled && audioCtx != nil {
-		err := c.playSound(audioCtx, result.SelectedPath, cfg.Volume)
+	if cfg.Enabled && c.audioBackend != nil {
+		err := c.playSoundWithBackend(result.SelectedPath, cfg.Volume)
 		if err != nil {
 			fmt.Fprintf(stderr, "Error playing sound: %v\n", err)
 			slog.Error("sound playback failed", "sound_path", result.SelectedPath, "error", err)
@@ -436,9 +460,9 @@ func (c *CLI) processHookEvent(hookEvent *hooks.HookEvent, cfg *config.Config, a
 	}
 }
 
-// playSound plays the specified sound file
-func (c *CLI) playSound(audioCtx *audio.Context, soundPath string, volume float64) error {
-	slog.Debug("loading and playing sound", "path", soundPath, "volume", volume)
+// playSoundWithBackend plays the specified sound file using the configured audio backend
+func (c *CLI) playSoundWithBackend(soundPath string, volume float64) error {
+	slog.Debug("loading and playing sound with backend", "path", soundPath, "volume", volume)
 
 	// Use unified soundpack resolver to resolve sound file path
 	fullPath, err := c.soundpackResolver.ResolveSound(soundPath)
@@ -450,16 +474,18 @@ func (c *CLI) playSound(audioCtx *audio.Context, soundPath string, volume float6
 		return fmt.Errorf("failed to resolve sound path: %w", err)
 	}
 	
-	// TEMPORARY TEST: Use paplay directly to avoid crackling
-	cmd := exec.Command("paplay", fullPath)
-	slog.Debug("running paplay command", "command", cmd.String())
+	// Create audio source from file path
+	source := audio.NewFileSource(fullPath)
 	
-	err = cmd.Run()
+	// Play using audio backend
+	ctx := context.Background()
+	err = c.audioBackend.Play(ctx, source)
 	if err != nil {
-		return fmt.Errorf("failed to play sound with paplay: %w", err)
+		slog.Error("backend playback failed", "path", fullPath, "backend_type", fmt.Sprintf("%T", c.audioBackend), "error", err)
+		return fmt.Errorf("failed to play sound with backend: %w", err)
 	}
 	
-	slog.Info("sound playback completed", "path", soundPath)
+	slog.Info("sound playback completed successfully", "path", soundPath, "backend_type", fmt.Sprintf("%T", c.audioBackend))
 	return nil
 }
 
@@ -483,10 +509,11 @@ Flags:
   --silent            Silent mode - no audio playback
 
 Environment Variables:
-  CLAUDIO_VOLUME      Override volume setting
-  CLAUDIO_SOUNDPACK   Override soundpack setting
-  CLAUDIO_ENABLED     Override enabled setting (true/false)
-  CLAUDIO_LOG_LEVEL   Override log level (debug/info/warn/error)
+  CLAUDIO_VOLUME        Override volume setting
+  CLAUDIO_SOUNDPACK     Override soundpack setting
+  CLAUDIO_ENABLED       Override enabled setting (true/false)
+  CLAUDIO_LOG_LEVEL     Override log level (debug/info/warn/error)
+  CLAUDIO_AUDIO_BACKEND Override audio backend (auto/system_command/malgo)
 
 Examples:
   echo '{"hook_event_name":"PostToolUse","session_id":"test","tool_name":"Bash"}' | claudio
