@@ -28,6 +28,7 @@ type Config struct {
 	SoundpackPaths  []string            `json:"soundpack_paths"`  // Additional paths to search for soundpacks
 	Enabled         bool                `json:"enabled"`          // Whether Claudio is enabled
 	LogLevel        string              `json:"log_level"`        // Log level (debug, info, warn, error)
+	AudioBackend    string              `json:"audio_backend"`    // Audio backend (auto, system_command, malgo)
 	FileLogging     *FileLoggingConfig  `json:"file_logging,omitempty"` // File logging configuration
 }
 
@@ -61,6 +62,7 @@ func (cm *ConfigManager) GetDefaultConfig() *Config {
 		SoundpackPaths:  []string{}, // XDG paths will be used
 		Enabled:         true,
 		LogLevel:        "warn",
+		AudioBackend:    "auto", // Default to auto-detection
 		FileLogging: &FileLoggingConfig{
 			Enabled:    true,  // Default enabled for hook-based usage
 			Filename:   "",    // Empty = XDG cache path
@@ -76,6 +78,7 @@ func (cm *ConfigManager) GetDefaultConfig() *Config {
 		"default_soundpack", defaultConfig.DefaultSoundpack,
 		"enabled", defaultConfig.Enabled,
 		"log_level", defaultConfig.LogLevel,
+		"audio_backend", defaultConfig.AudioBackend,
 		"file_logging_enabled", defaultConfig.FileLogging.Enabled)
 
 	return defaultConfig
@@ -202,6 +205,13 @@ func (cm *ConfigManager) ValidateConfig(config *Config) error {
 		}
 	}
 
+	// Validate audio backend
+	if !cm.IsValidAudioBackend(config.AudioBackend) {
+		supportedBackends := cm.GetSupportedAudioBackends()
+		errors = append(errors, fmt.Sprintf("invalid audio backend '%s', must be one of: %s", 
+			config.AudioBackend, strings.Join(supportedBackends, ", ")))
+	}
+
 	// Validate file logging configuration
 	if config.FileLogging != nil {
 		fileLogging := config.FileLogging
@@ -257,6 +267,11 @@ func (cm *ConfigManager) MergeConfigs(base, override *Config) *Config {
 		slog.Debug("merged log level override", "value", override.LogLevel)
 	}
 
+	if override.AudioBackend != "" {
+		merged.AudioBackend = override.AudioBackend
+		slog.Debug("merged audio backend override", "value", override.AudioBackend)
+	}
+
 	// Note: Enabled is a bool, so we need special handling
 	// In JSON, explicit false would override true from base
 	// This is handled naturally by the struct unmarshaling
@@ -302,6 +317,17 @@ func (cm *ConfigManager) ApplyEnvironmentOverrides(config *Config) *Config {
 	if logLevel := os.Getenv("CLAUDIO_LOG_LEVEL"); logLevel != "" {
 		result.LogLevel = logLevel
 		slog.Debug("applied log level override from environment", "value", logLevel)
+	}
+
+	// CLAUDIO_AUDIO_BACKEND
+	if audioBackend := os.Getenv("CLAUDIO_AUDIO_BACKEND"); audioBackend != "" {
+		// Validate the backend before applying
+		if cm.IsValidAudioBackend(audioBackend) {
+			result.AudioBackend = audioBackend
+			slog.Debug("applied audio backend override from environment", "value", audioBackend)
+		} else {
+			slog.Warn("invalid CLAUDIO_AUDIO_BACKEND environment variable", "value", audioBackend)
+		}
 	}
 
 	slog.Debug("environment overrides applied")
@@ -392,4 +418,25 @@ func (cm *ConfigManager) ApplyLogLevelWithWriter(logLevel string, writer io.Writ
 
 	slog.Debug("slog configured successfully with custom writer", "log_level", logLevel, "slog_level", level)
 	return nil
+}
+
+// GetSupportedAudioBackends returns a list of all supported audio backend types
+func (cm *ConfigManager) GetSupportedAudioBackends() []string {
+	return []string{"auto", "system_command", "malgo"}
+}
+
+// IsValidAudioBackend checks if an audio backend type is supported
+func (cm *ConfigManager) IsValidAudioBackend(backend string) bool {
+	// Empty string is valid (defaults to auto)
+	if backend == "" {
+		return true
+	}
+	
+	supported := cm.GetSupportedAudioBackends()
+	for _, supportedBackend := range supported {
+		if backend == supportedBackend {
+			return true
+		}
+	}
+	return false
 }
