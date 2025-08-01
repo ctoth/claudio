@@ -184,8 +184,8 @@ func IsClaudioHook(hookValue interface{}) bool {
 	// Helper function to check if command is a claudio executable
 	isClaudioCommand := func(cmdStr string) bool {
 		baseName := filepath.Base(cmdStr)
-		// Handle production "claudio" and test executables "install.test", "uninstall.test"
-		return baseName == "claudio" || baseName == "install.test" || baseName == "uninstall.test"
+		// Handle production "claudio" and test executables "install.test", "uninstall.test", "cli.test"
+		return baseName == "claudio" || baseName == "install.test" || baseName == "uninstall.test" || baseName == "cli.test"
 	}
 	
 	// Check old string format (backward compatibility)
