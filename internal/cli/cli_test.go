@@ -765,7 +765,7 @@ func TestHookProcessingLoggingIsolated(t *testing.T) {
 	cli.soundpackResolver = soundpack.NewSoundpackResolver(mapper)
 	
 	// Process hook event directly - this should log tool_name
-	cli.processHookEvent(hookEvent, cfg, nil, &bytes.Buffer{}, &bytes.Buffer{})
+	cli.processHookEvent(hookEvent, cfg, &bytes.Buffer{}, &bytes.Buffer{})
 	
 	// Verify tool name appears as string in logs
 	logOutput := logBuffer.String()
