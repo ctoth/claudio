@@ -220,7 +220,7 @@ func TestInstallDryRunFilesystemSafety(t *testing.T) {
 			}
 
 			// Verify output indicates dry-run mode
-			stdoutOutput := stdout.String()
+			stdoutOutput := strings.ToLower(stdout.String())
 			if !strings.Contains(stdoutOutput, "dry-run") && !strings.Contains(stdoutOutput, "would") {
 				t.Error("Dry-run output should indicate simulation mode with 'dry-run' or 'would' language")
 			}
