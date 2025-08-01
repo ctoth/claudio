@@ -272,7 +272,8 @@ func TestInstallForceInteractivePrompting(t *testing.T) {
 			
 			if tc.expectForce {
 				// Should indicate force mode
-				if !strings.Contains(stdoutOutput, "force") && !strings.Contains(stdoutOutput, "FORCE") {
+				stdoutLower := strings.ToLower(stdoutOutput)
+				if !strings.Contains(stdoutLower, "force") {
 					t.Error("Expected force mode indication in output")
 				}
 			} else {
