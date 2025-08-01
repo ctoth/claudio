@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -11,6 +12,8 @@ import (
 	"testing"
 
 	"github.com/ctoth/claudio/internal/config"
+	"github.com/ctoth/claudio/internal/hooks"
+	"github.com/ctoth/claudio/internal/soundpack"
 )
 
 func TestCLI(t *testing.T) {
@@ -707,6 +710,88 @@ func TestToolNameStringLogging(t *testing.T) {
 	if strings.Contains(logOutput, "tool_name=0x") {
 		t.Errorf("Found the exact bug: tool_name=0x... memory address instead of string")
 		t.Logf("Full log output: %s", logOutput)
+	}
+}
+
+// stringPtr returns a pointer to the given string
+func stringPtr(s string) *string {
+	return &s
+}
+
+func TestHookProcessingLoggingIsolated(t *testing.T) {
+	// Isolated test for hook processing logging without CLI.Run() overhead
+	// This provides more reliable, focused testing of logging behavior
+	
+	cli := NewCLI()
+	cli.initializeSystems()
+	
+	// Load config with silent mode to avoid audio initialization
+	cfg := cli.configManager.GetDefaultConfig()
+	cfg.Enabled = false // Silent mode
+	
+	// Set up test logger to capture output
+	var logBuffer bytes.Buffer
+	originalHandler := slog.Default().Handler()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logBuffer, &slog.HandlerOptions{
+		Level: slog.LevelDebug, // Capture all logs
+	})))
+	defer slog.SetDefault(slog.New(originalHandler))
+	
+	// Create test hook event
+	toolResponseJSON := json.RawMessage(`{"stdout":"success","stderr":"","interrupted":false}`)
+	hookEvent := &hooks.HookEvent{
+		SessionID:      "test-isolated",
+		TranscriptPath: "/test",
+		CWD:            "/test",
+		EventName:      "PostToolUse",
+		ToolName:       stringPtr("Bash"),
+		ToolResponse:   &toolResponseJSON,
+	}
+	
+	// Initialize audio and soundpack systems for processing
+	xdgDirs := config.NewXDGDirs()
+	soundpackPaths := xdgDirs.GetSoundpackPaths(cfg.DefaultSoundpack)
+	soundpackPaths = append(soundpackPaths, cfg.SoundpackPaths...)
+	
+	mapper, err := soundpack.CreateSoundpackMapperWithBasePaths(
+		cfg.DefaultSoundpack,
+		cfg.DefaultSoundpack,
+		soundpackPaths,
+	)
+	if err != nil {
+		// Create empty mapper as fallback
+		mapper = soundpack.NewDirectoryMapper("fallback", []string{})
+	}
+	cli.soundpackResolver = soundpack.NewSoundpackResolver(mapper)
+	
+	// Process hook event directly - this should log tool_name
+	cli.processHookEvent(hookEvent, cfg, nil, &bytes.Buffer{}, &bytes.Buffer{})
+	
+	// Verify tool name appears as string in logs
+	logOutput := logBuffer.String()
+	
+	if !strings.Contains(logOutput, "tool_name=Bash") && !strings.Contains(logOutput, `tool_name="Bash"`) {
+		t.Errorf("Expected tool name to appear as string 'Bash' in isolated test logs")
+		t.Logf("Full log output: %s", logOutput)
+	}
+	
+	// Should NOT contain memory addresses
+	if strings.Contains(logOutput, "0x") {
+		t.Errorf("Tool name should not appear as memory address in isolated test")
+		t.Logf("Full log output: %s", logOutput)
+	}
+	
+	// Should contain hook processing messages
+	expectedMessages := []string{
+		"processing hook event",
+		"hook context parsed",
+		"sound mapped",
+	}
+	
+	for _, msg := range expectedMessages {
+		if !strings.Contains(logOutput, msg) {
+			t.Errorf("Expected log message '%s' not found in isolated test output", msg)
+		}
 	}
 }
 
