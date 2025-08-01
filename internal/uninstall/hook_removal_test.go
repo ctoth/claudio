@@ -1,6 +1,7 @@
 package uninstall
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/ctoth/claudio/internal/install"
@@ -407,13 +408,13 @@ func settingsEqual(a, b *install.SettingsMap) bool {
 				}
 				for hookKey, hookValueA := range hooksA {
 					hookValueB, exists := hooksB[hookKey]
-					if !exists || hookValueA != hookValueB {
+					if !exists || !reflect.DeepEqual(hookValueA, hookValueB) {
 						return false
 					}
 				}
 			}
 		} else {
-			if valueA != valueB {
+			if !reflect.DeepEqual(valueA, valueB) {
 				return false
 			}
 		}
