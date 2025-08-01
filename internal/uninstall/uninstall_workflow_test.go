@@ -469,6 +469,11 @@ func TestUninstallWorkflowErrorHandling(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			// Skip permission test when running as root
+			if tc.name == "permission denied directory" && os.Getuid() == 0 {
+				t.Skip("Skipping permission test when running as root")
+			}
+			
 			settingsPath, cleanup := tc.setupFunc()
 			defer cleanup()
 
