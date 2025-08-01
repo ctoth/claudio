@@ -509,6 +509,18 @@ func setupLogging(cfg *config.Config, stderrWriter io.Writer) {
 		level = slog.LevelInfo // Default level if parsing fails
 	}
 
+	// Check if current logger is already more verbose than config specifies
+	// This preserves test logger setup
+	currentHandler := slog.Default().Handler()
+	if textHandler, ok := currentHandler.(*slog.TextHandler); ok {
+		// Check if current handler allows DEBUG level but config wants higher level
+		if textHandler.Enabled(context.Background(), slog.LevelDebug) && level > slog.LevelDebug {
+			// Current handler allows DEBUG but config wants higher level - preserve current handler
+			slog.Debug("preserving existing verbose logger setup", "config_level", level.String(), "current_allows", "DEBUG")
+			return
+		}
+	}
+
 	// Always include stderr
 	var writers []io.Writer
 	writers = append(writers, stderrWriter)
