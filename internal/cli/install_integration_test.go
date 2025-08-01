@@ -290,9 +290,15 @@ func TestInstallWorkflowErrorHandling(t *testing.T) {
 			setupFunc: func() (string, func()) {
 				tempDir := t.TempDir()
 				settingsDir := filepath.Join(tempDir, "restricted")
-				os.MkdirAll(settingsDir, 0000) // No permissions
+				os.MkdirAll(settingsDir, 0755) // Create with normal permissions first
 				
-				return filepath.Join(settingsDir, "settings.json"), func() {
+				// Create the settings file path
+				settingsFile := filepath.Join(settingsDir, "settings.json")
+				
+				// Now make the directory read-only to prevent file operations
+				os.Chmod(settingsDir, 0444) // Read-only permissions
+				
+				return settingsFile, func() {
 					os.Chmod(settingsDir, 0755) // Restore permissions for cleanup
 				}
 			},
@@ -320,6 +326,11 @@ func TestInstallWorkflowErrorHandling(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			// Skip permission test when running as root
+			if tc.name == "permission denied directory" && os.Getuid() == 0 {
+				t.Skip("Skipping permission test when running as root")
+			}
+			
 			settingsPath, cleanup := tc.setupFunc()
 			defer cleanup()
 
