@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 )
@@ -56,11 +57,8 @@ func NewConfigManager() *ConfigManager {
 
 // GetDefaultConfig returns the default configuration
 func (cm *ConfigManager) GetDefaultConfig() *Config {
-	// Use Windows soundpack on Windows platform
-	defaultSoundpack := "default"
-	if cm.IsWindowsPlatform() {
-		defaultSoundpack = "windows-media-native-soundpack"
-	}
+	// Use platform-specific soundpack if it exists, otherwise default
+	defaultSoundpack := cm.GetPlatformSoundpack()
 
 	defaultConfig := &Config{
 		Volume:          0.5,
@@ -447,17 +445,15 @@ func (cm *ConfigManager) IsValidAudioBackend(backend string) bool {
 	return false
 }
 
-// IsWindowsPlatform detects if we're running on Windows
-func (cm *ConfigManager) IsWindowsPlatform() bool {
-	// Check for Windows-specific environment variables
-	if os.Getenv("WINDIR") != "" || os.Getenv("SYSTEMROOT") != "" {
-		return true
+// GetPlatformSoundpack returns platform-specific soundpack if it exists, otherwise "default"
+func (cm *ConfigManager) GetPlatformSoundpack() string {
+	platformFile := runtime.GOOS + ".json"
+	
+	if _, err := os.Stat(platformFile); err == nil {
+		slog.Debug("platform soundpack found", "platform", runtime.GOOS, "file", platformFile)
+		return platformFile
 	}
 	
-	// Additional check for Windows paths
-	if strings.Contains(os.Getenv("PATH"), "C:\\Windows") {
-		return true
-	}
-	
-	return false
+	slog.Debug("platform soundpack not found, using default", "platform", runtime.GOOS, "file", platformFile)
+	return "default"
 }
