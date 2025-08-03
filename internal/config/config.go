@@ -56,9 +56,15 @@ func NewConfigManager() *ConfigManager {
 
 // GetDefaultConfig returns the default configuration
 func (cm *ConfigManager) GetDefaultConfig() *Config {
+	// Use Windows soundpack on Windows platform
+	defaultSoundpack := "default"
+	if cm.IsWindowsPlatform() {
+		defaultSoundpack = "windows-media-native-soundpack"
+	}
+
 	defaultConfig := &Config{
 		Volume:          0.5,
-		DefaultSoundpack: "default",
+		DefaultSoundpack: defaultSoundpack,
 		SoundpackPaths:  []string{}, // XDG paths will be used
 		Enabled:         true,
 		LogLevel:        "warn",
@@ -438,5 +444,20 @@ func (cm *ConfigManager) IsValidAudioBackend(backend string) bool {
 			return true
 		}
 	}
+	return false
+}
+
+// IsWindowsPlatform detects if we're running on Windows
+func (cm *ConfigManager) IsWindowsPlatform() bool {
+	// Check for Windows-specific environment variables
+	if os.Getenv("WINDIR") != "" || os.Getenv("SYSTEMROOT") != "" {
+		return true
+	}
+	
+	// Additional check for Windows paths
+	if strings.Contains(os.Getenv("PATH"), "C:\\Windows") {
+		return true
+	}
+	
 	return false
 }
