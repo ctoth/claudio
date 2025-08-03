@@ -60,7 +60,7 @@ func TestFileSource_AsFilePath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fs := NewFileSource(tt.path)
+			fs := NewFileSource(tt.path, NewDefaultRegistry())
 			result, err := fs.AsFilePath()
 			
 			if tt.wantErr && err == nil {
@@ -116,7 +116,7 @@ func TestFileSource_AsReader(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fs := NewFileSource(tt.path)
+			fs := NewFileSource(tt.path, NewDefaultRegistry())
 			reader, _, err := fs.AsReader()
 			
 			if tt.wantErr && err == nil {
@@ -152,8 +152,11 @@ func TestFileSource_FormatDetection(t *testing.T) {
 		{"wav extension", "/test/file.wav", "wav"},
 		{"wave extension", "/test/file.wave", "wav"},
 		{"mp3 extension", "/test/file.mp3", "mp3"},
-		{"flac extension", "/test/file.flac", "flac"},
-		{"ogg extension", "/test/file.ogg", "ogg"},
+		{"aiff extension", "/test/file.aiff", "aiff"},
+		{"aif extension", "/test/file.aif", "aiff"},
+		{"uppercase AIFF", "/test/file.AIFF", "aiff"},
+		{"flac extension (unsupported)", "/test/file.flac", ""},
+		{"ogg extension (unsupported)", "/test/file.ogg", ""},
 		{"unknown extension", "/test/file.xyz", ""},
 		{"no extension", "/test/file", ""},
 		{"uppercase extension", "/test/file.WAV", "wav"},
@@ -161,12 +164,22 @@ func TestFileSource_FormatDetection(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fs := NewFileSource(tt.path)
+			fs := NewFileSource(tt.path, NewDefaultRegistry())
 			result := fs.DetectFormat()
 			if result != tt.expected {
 				t.Errorf("expected %q, got %q", tt.expected, result)
 			}
 		})
+	}
+}
+
+// TestFileSource_UsesRegistry tests that FileSource uses registry for format detection
+func TestFileSource_UsesRegistry(t *testing.T) {
+	registry := NewDefaultRegistry()
+	fs := NewFileSource("/test/file.aiff", registry)
+	format := fs.DetectFormat()
+	if format != "aiff" {
+		t.Errorf("expected 'aiff', got '%s'", format)
 	}
 }
 

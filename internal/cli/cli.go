@@ -474,7 +474,7 @@ func (c *CLI) playSoundWithBackend(soundPath string, volume float64) error {
 	}
 
 	// Create audio source from file path
-	source := audio.NewFileSource(fullPath)
+	source := audio.NewFileSource(fullPath, audio.NewDefaultRegistry())
 
 	// Play using audio backend
 	ctx := context.Background()

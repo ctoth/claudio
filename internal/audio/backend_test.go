@@ -100,7 +100,7 @@ func TestSystemCommandBackend_Play(t *testing.T) {
 		{
 			name:    "play file source with nonexistent file",
 			command: "echo", // Use echo instead of paplay to avoid system dependencies
-			source:  NewFileSource("/test/sound.wav"),
+			source:  NewFileSource("/test/sound.wav", NewDefaultRegistry()),
 			wantErr: false, // echo will succeed even with nonexistent args
 		},
 		{
@@ -112,7 +112,7 @@ func TestSystemCommandBackend_Play(t *testing.T) {
 		{
 			name:    "invalid command",
 			command: "nonexistent-command-12345",
-			source:  NewFileSource("/test/sound.wav"),
+			source:  NewFileSource("/test/sound.wav", NewDefaultRegistry()),
 			wantErr: true,
 		},
 	}
@@ -154,7 +154,7 @@ func TestSystemCommandBackend_Lifecycle(t *testing.T) {
 	}
 	
 	// Operations after close should fail
-	err := backend.Play(context.Background(), NewFileSource("/test/sound.wav"))
+	err := backend.Play(context.Background(), NewFileSource("/test/sound.wav", NewDefaultRegistry()))
 	if !errors.Is(err, ErrBackendClosed) {
 		t.Errorf("expected ErrBackendClosed after Close(), got: %v", err)
 	}
@@ -193,7 +193,7 @@ func TestMalgoBackend_Interface(t *testing.T) {
 
 func TestMalgoBackend_Play(t *testing.T) {
 	backend := NewMalgoBackend()
-	source := NewFileSource("/test/sound.wav")
+	source := NewFileSource("/test/sound.wav", NewDefaultRegistry())
 	
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -258,7 +258,7 @@ func TestMockBackend(t *testing.T) {
 		t.Error("mock should not be playing initially")
 	}
 	
-	source := NewFileSource("/test/sound.wav")
+	source := NewFileSource("/test/sound.wav", NewDefaultRegistry())
 	ctx := context.Background()
 	
 	err = mock.Play(ctx, source)

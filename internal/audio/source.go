@@ -6,7 +6,6 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -33,13 +32,17 @@ type AudioSource interface {
 
 // FileSource represents an audio source backed by a file on disk
 type FileSource struct {
-	path string
+	path     string
+	registry *DecoderRegistry
 }
 
 // NewFileSource creates a new FileSource for the given file path
-func NewFileSource(path string) *FileSource {
+func NewFileSource(path string, registry *DecoderRegistry) *FileSource {
 	slog.Debug("creating new FileSource", "path", path)
-	return &FileSource{path: path}
+	return &FileSource{
+		path:     path, 
+		registry: registry,
+	}
 }
 
 // AsFilePath returns the file path directly
@@ -78,23 +81,22 @@ func (fs *FileSource) AsReader() (io.ReadCloser, string, error) {
 	return file, format, nil
 }
 
-// DetectFormat determines the audio format from the file extension
+// DetectFormat determines the audio format using the registry
 func (fs *FileSource) DetectFormat() string {
-	ext := strings.ToLower(filepath.Ext(fs.path))
-	
-	switch ext {
-	case ".wav", ".wave":
-		return "wav"
-	case ".mp3":
-		return "mp3"
-	case ".flac":
-		return "flac"
-	case ".ogg":
-		return "ogg"
-	default:
-		slog.Warn("unknown audio format", "extension", ext, "path", fs.path)
+	if fs.registry == nil {
+		slog.Warn("no registry available for format detection", "path", fs.path)
 		return ""
 	}
+	
+	decoder := fs.registry.DetectFormat(fs.path)
+	if decoder != nil {
+		format := strings.ToLower(decoder.FormatName())
+		slog.Debug("format detected via registry", "path", fs.path, "format", format)
+		return format
+	}
+	
+	slog.Warn("unknown audio format via registry", "path", fs.path)
+	return ""
 }
 
 // ReaderSource represents an audio source backed by an io.ReadCloser
