@@ -341,3 +341,257 @@ func TestNewDefaultRegistry(t *testing.T) {
 		t.Errorf("expected MP3 decoder, got %s", mp3Decoder.FormatName())
 	}
 }
+
+// Helper function to check if a format is in the list
+func containsFormat(formats []string, target string) bool {
+	for _, format := range formats {
+		if format == target {
+			return true
+		}
+	}
+	return false
+}
+
+// AIFF Registry Integration Tests
+
+func TestDefaultRegistrySupportsAIFF(t *testing.T) {
+	registry := NewDefaultRegistry()
+	
+	formats := registry.GetSupportedFormats()
+	if !containsFormat(formats, "AIFF") {
+		t.Error("expected default registry to support AIFF format")
+	}
+	
+	// Verify AIFF decoder is properly registered
+	decoders := registry.GetDecoders()
+	var aiffDecoder Decoder
+	for _, decoder := range decoders {
+		if decoder.FormatName() == "AIFF" {
+			aiffDecoder = decoder
+			break
+		}
+	}
+	
+	if aiffDecoder == nil {
+		t.Fatal("AIFF decoder not found in default registry")
+	}
+	
+	// Test that it's a real AIFF decoder, not a mock
+	if aiffDecoder.FormatName() != "AIFF" {
+		t.Errorf("expected AIFF decoder format name to be 'AIFF', got '%s'", aiffDecoder.FormatName())
+	}
+}
+
+func TestAiffFormatDetectionByExtension(t *testing.T) {
+	registry := NewDefaultRegistry()
+	
+	testCases := []struct {
+		filename     string
+		shouldDetect bool
+		description  string
+	}{
+		{"audio.aiff", true, "standard .aiff extension"},
+		{"sound.AIFF", true, "uppercase .AIFF extension"},
+		{"music.aif", true, "short .aif extension"},
+		{"track.AIF", true, "uppercase .AIF extension"},
+		{"file.aiff.backup", false, "AIFF extension not at end"},
+		{"aiff", false, "no extension"},
+		{"audio.wav", false, "different format (WAV)"},
+		{"audio.mp3", false, "different format (MP3)"},
+	}
+	
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			decoder := registry.DetectFormat(tc.filename)
+			
+			if tc.shouldDetect {
+				if decoder == nil {
+					t.Errorf("expected to detect AIFF format for '%s', got nil", tc.filename)
+				} else if decoder.FormatName() != "AIFF" {
+					t.Errorf("expected AIFF decoder for '%s', got %s", tc.filename, decoder.FormatName())
+				}
+			} else {
+				if decoder != nil && decoder.FormatName() == "AIFF" {
+					t.Errorf("should not detect AIFF format for '%s', but got AIFF decoder", tc.filename)
+				}
+			}
+		})
+	}
+}
+
+func TestAiffMagicByteDetection(t *testing.T) {
+	registry := NewDefaultRegistry()
+	
+	// Create minimal AIFF file with proper magic bytes
+	aiffData := []byte("FORM\x00\x00\x00\x1EAIFFCOMM\x00\x00\x00\x12\x00\x02\x00\x00\x00\x64\x00\x10\x40\x0E\xAC\x44\x00\x00\x00\x00\x00\x00")
+	
+	testCases := []struct {
+		name        string
+		filename    string
+		content     []byte
+		expected    string
+		description string
+	}{
+		{
+			name:        "AIFF content with wrong extension",
+			filename:    "fake.mp3",
+			content:     aiffData,
+			expected:    "AIFF",
+			description: "Should detect AIFF content despite .mp3 extension",
+		},
+		{
+			name:        "AIFF content with correct extension", 
+			filename:    "audio.aiff",
+			content:     aiffData,
+			expected:    "AIFF",
+			description: "Should detect AIFF content with .aiff extension",
+		},
+		{
+			name:        "Invalid AIFF content",
+			filename:    "fake.aiff",
+			content:     []byte("NOT_AIFF_DATA"),
+			expected:    "AIFF", // Should fallback to extension-based detection
+			description: "Should fallback to extension when magic bytes fail",
+		},
+	}
+	
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			reader := bytes.NewReader(tc.content)
+			decoder := registry.DetectFormatWithContent(tc.filename, reader)
+			
+			if decoder == nil {
+				t.Errorf("expected to detect %s format for '%s', got nil", tc.expected, tc.filename)
+			} else if decoder.FormatName() != tc.expected {
+				t.Errorf("expected %s decoder for '%s', got %s", tc.expected, tc.filename, decoder.FormatName())
+			}
+		})
+	}
+}
+
+func TestAiffDecodeFileIntegration(t *testing.T) {
+	registry := NewDefaultRegistry()
+	
+	// Create a valid AIFF file for testing
+	aiffData := createMinimalAIFFForRegistry(44100, 2, 16, 100) // 44.1kHz, stereo, 16-bit, 100 samples
+	
+	t.Run("successful AIFF file decode", func(t *testing.T) {
+		reader := bytes.NewReader(aiffData)
+		audioData, err := registry.DecodeFile("test.aiff", reader)
+		
+		if err != nil {
+			t.Fatalf("expected no error decoding AIFF file, got %v", err)
+		}
+		
+		if audioData == nil {
+			t.Fatal("expected audio data, got nil")
+		}
+		
+		// Verify decoded data properties
+		if audioData.SampleRate != 44100 {
+			t.Errorf("expected sample rate 44100, got %d", audioData.SampleRate)
+		}
+		
+		if audioData.Channels != 2 {
+			t.Errorf("expected 2 channels, got %d", audioData.Channels)
+		}
+		
+		if audioData.Format != malgo.FormatS16 {
+			t.Errorf("expected format S16, got %v", audioData.Format)
+		}
+		
+		expectedBytes := 100 * 2 * 2 // samples * channels * bytes_per_sample (16-bit)
+		if len(audioData.Samples) != expectedBytes {
+			t.Errorf("expected %d sample bytes, got %d", expectedBytes, len(audioData.Samples))
+		}
+	})
+	
+	t.Run("AIFF decode with invalid data", func(t *testing.T) {
+		reader := bytes.NewReader([]byte("invalid aiff data"))
+		audioData, err := registry.DecodeFile("invalid.aiff", reader)
+		
+		if err == nil {
+			t.Error("expected error for invalid AIFF data, got nil")
+		}
+		
+		if audioData != nil {
+			t.Error("expected nil audio data for invalid AIFF, got data")
+		}
+	})
+}
+
+// Helper function to create minimal AIFF file specifically for registry tests
+func createMinimalAIFFForRegistry(sampleRate, channels, bitDepth, numSamples int) []byte {
+	// Reuse the same AIFF generation logic from the decoder tests
+	// This ensures consistency between decoder and registry tests
+	
+	bytesPerSample := bitDepth / 8
+	dataSize := numSamples * channels * bytesPerSample
+	
+	// COMM chunk data
+	commData := make([]byte, 18)
+	// Channels (2 bytes)
+	commData[0] = byte(channels >> 8)
+	commData[1] = byte(channels)
+	// Sample frames (4 bytes)
+	frames := uint32(numSamples)
+	commData[2] = byte(frames >> 24)
+	commData[3] = byte(frames >> 16)
+	commData[4] = byte(frames >> 8)
+	commData[5] = byte(frames)
+	// Sample size (2 bytes)
+	commData[6] = byte(bitDepth >> 8)
+	commData[7] = byte(bitDepth)
+	// Sample rate (10 bytes IEEE 754 extended precision)
+	sampleRateBytes := simpleIEEE754Extended(float64(sampleRate))
+	copy(commData[8:18], sampleRateBytes)
+	
+	// SSND chunk data
+	ssndData := make([]byte, 8+dataSize) // 8 bytes header + data
+	
+	// Calculate total file size
+	totalSize := 4 + // "AIFF"
+		8 + len(commData) + // "COMM" + size + data
+		8 + len(ssndData) // "SSND" + size + data
+	
+	// Build the complete AIFF file
+	var buf []byte
+	
+	// FORM header
+	buf = append(buf, []byte("FORM")...)
+	buf = appendBigEndianUint32Registry(buf, uint32(totalSize))
+	buf = append(buf, []byte("AIFF")...)
+	
+	// COMM chunk
+	buf = append(buf, []byte("COMM")...)
+	buf = appendBigEndianUint32Registry(buf, uint32(len(commData)))
+	buf = append(buf, commData...)
+	
+	// SSND chunk
+	buf = append(buf, []byte("SSND")...)
+	buf = appendBigEndianUint32Registry(buf, uint32(len(ssndData)))
+	buf = append(buf, ssndData...)
+	
+	return buf
+}
+
+// Helper functions for AIFF generation in registry tests
+func appendBigEndianUint32Registry(buf []byte, val uint32) []byte {
+	return append(buf,
+		byte(val>>24),
+		byte(val>>16),
+		byte(val>>8),
+		byte(val))
+}
+
+func simpleIEEE754Extended(f float64) []byte {
+	// Simplified implementation for common sample rates
+	switch int(f) {
+	case 44100:
+		return []byte{0x40, 0x0E, 0xAC, 0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
+	case 48000:
+		return []byte{0x40, 0x0E, 0xBB, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
+	default:
+		return []byte{0x40, 0x0E, 0xAC, 0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
+	}
+}
