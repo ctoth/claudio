@@ -1,6 +1,7 @@
 package audio
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"log/slog"
@@ -22,15 +23,16 @@ func NewDecoderRegistry() *DecoderRegistry {
 	}
 }
 
-// NewDefaultRegistry creates a registry with default WAV and MP3 decoders
+// NewDefaultRegistry creates a registry with default WAV, MP3, and AIFF decoders
 func NewDefaultRegistry() *DecoderRegistry {
-	slog.Debug("creating default decoder registry with WAV and MP3 support")
+	slog.Debug("creating default decoder registry with WAV, MP3, and AIFF support")
 	
 	registry := NewDecoderRegistry()
 	
 	// Register default decoders
 	registry.Register(NewWavDecoder())
 	registry.Register(NewMp3Decoder())
+	registry.Register(NewAiffDecoder())
 	
 	slog.Info("default decoder registry initialized", 
 		"supported_formats", registry.GetSupportedFormats())
@@ -136,6 +138,10 @@ func (r *DecoderRegistry) DetectFormatWithContent(filename string, reader io.Rea
 		formatDecoder = r.findDecoderByFormat("MP3")
 		slog.Debug("magic bytes indicate MP3 format", "mime", detectedMime)
 		
+	case strings.Contains(mimeStr, "aiff") || mimeStr == "audio/aiff" || mimeStr == "audio/x-aiff" || strings.Contains(mimeStr, "audio-interchange-file-format"):
+		formatDecoder = r.findDecoderByFormat("AIFF")
+		slog.Debug("magic bytes indicate AIFF format", "mime", detectedMime)
+		
 	default:
 		slog.Debug("unsupported or unrecognized magic bytes", "mime_type", detectedMime)
 	}
@@ -178,7 +184,18 @@ func (r *DecoderRegistry) findDecoderByFormat(formatName string) Decoder {
 func (r *DecoderRegistry) DecodeFile(filename string, reader io.Reader) (*AudioData, error) {
 	slog.Debug("starting file decode operation", "filename", filename)
 	
-	decoder := r.DetectFormatWithContent(filename, reader)
+	// Buffer the entire content to avoid reader consumption issues during format detection
+	fullContent, err := io.ReadAll(reader)
+	if err != nil {
+		slog.Error("failed to read file content for decode", "filename", filename, "error", err)
+		return nil, fmt.Errorf("failed to read file content: %w", err)
+	}
+	
+	slog.Debug("buffered file content for decode", "filename", filename, "size_bytes", len(fullContent))
+	
+	// Use buffered content for format detection
+	contentReader := bytes.NewReader(fullContent)
+	decoder := r.DetectFormatWithContent(filename, contentReader)
 	if decoder == nil {
 		err := fmt.Errorf("unsupported audio format: %s", filename)
 		slog.Error("no suitable decoder found", "filename", filename, "error", err)
@@ -189,11 +206,9 @@ func (r *DecoderRegistry) DecodeFile(filename string, reader io.Reader) (*AudioD
 		"filename", filename,
 		"decoder_format", decoder.FormatName())
 	
-	// Note: reader may have been partially consumed by magic detection
-	// For robust implementation, we should either use io.Seeker or buffer the full content
-	// For now, we'll proceed with the assumption that decoders handle partial reads gracefully
-	
-	audioData, err := decoder.Decode(reader)
+	// Create fresh reader from buffered content for decoder
+	decoderReader := bytes.NewReader(fullContent)
+	audioData, err := decoder.Decode(decoderReader)
 	if err != nil {
 		slog.Error("decode operation failed", 
 			"filename", filename,
