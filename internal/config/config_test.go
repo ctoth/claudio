@@ -672,6 +672,231 @@ func TestConfigDefaultConsistency(t *testing.T) {
 		systemConfig.Volume, systemConfig.LogLevel, systemConfig.Enabled)
 }
 
+// TDD RED: Test file logging configuration fields parsing
+func TestConfig_FileLoggingFields(t *testing.T) {
+	mgr := NewConfigManager()
+
+	// Test parsing config with file logging configuration
+	tempDir := t.TempDir()
+	configFile := filepath.Join(tempDir, "file-logging-config.json")
+
+	// This test should FAIL because FileLoggingConfig doesn't exist yet
+	testConfigJSON := `{
+		"volume": 0.5,
+		"default_soundpack": "default",
+		"enabled": true,
+		"log_level": "info",
+		"file_logging": {
+			"enabled": true,
+			"filename": "/custom/path/claudio.log",
+			"max_size_mb": 15,
+			"max_backups": 3,
+			"max_age_days": 14,
+			"compress": true
+		}
+	}`
+
+	err := os.WriteFile(configFile, []byte(testConfigJSON), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write test config file: %v", err)
+	}
+
+	// This should fail because FileLogging field doesn't exist in Config struct
+	loadedConfig, err := mgr.LoadFromFile(configFile)
+	if err != nil {
+		t.Fatalf("LoadFromFile failed: %v", err)
+	}
+
+	// Verify file logging config was parsed correctly
+	if loadedConfig.FileLogging == nil {
+		t.Error("FileLogging should not be nil")
+		return
+	}
+
+	fileConfig := loadedConfig.FileLogging
+	if !fileConfig.Enabled {
+		t.Error("FileLogging.Enabled should be true")
+	}
+	if fileConfig.Filename != "/custom/path/claudio.log" {
+		t.Errorf("FileLogging.Filename = %q, expected '/custom/path/claudio.log'", fileConfig.Filename)
+	}
+	if fileConfig.MaxSizeMB != 15 {
+		t.Errorf("FileLogging.MaxSizeMB = %d, expected 15", fileConfig.MaxSizeMB)
+	}
+	if fileConfig.MaxBackups != 3 {
+		t.Errorf("FileLogging.MaxBackups = %d, expected 3", fileConfig.MaxBackups)
+	}
+	if fileConfig.MaxAgeDays != 14 {
+		t.Errorf("FileLogging.MaxAgeDays = %d, expected 14", fileConfig.MaxAgeDays)
+	}
+	if !fileConfig.Compress {
+		t.Error("FileLogging.Compress should be true")
+	}
+}
+
+// TDD RED: Test default values for file logging
+func TestConfig_FileLoggingDefaults(t *testing.T) {
+	mgr := NewConfigManager()
+
+	// This test should FAIL because FileLogging field doesn't exist yet
+	defaultConfig := mgr.GetDefaultConfig()
+
+	// Verify file logging defaults
+	if defaultConfig.FileLogging == nil {
+		t.Error("FileLogging should have default values, not be nil")
+		return
+	}
+
+	fileConfig := defaultConfig.FileLogging
+	if fileConfig.Enabled != true {
+		t.Error("FileLogging.Enabled should default to true for hook-based usage")
+	}
+	if fileConfig.Filename != "" {
+		t.Errorf("FileLogging.Filename should default to empty string for XDG path, got %q", fileConfig.Filename)
+	}
+	if fileConfig.MaxSizeMB != 10 {
+		t.Errorf("FileLogging.MaxSizeMB should default to 10, got %d", fileConfig.MaxSizeMB)
+	}
+	if fileConfig.MaxBackups != 5 {
+		t.Errorf("FileLogging.MaxBackups should default to 5, got %d", fileConfig.MaxBackups)
+	}
+	if fileConfig.MaxAgeDays != 30 {
+		t.Errorf("FileLogging.MaxAgeDays should default to 30, got %d", fileConfig.MaxAgeDays)
+	}
+	if !fileConfig.Compress {
+		t.Error("FileLogging.Compress should default to true")
+	}
+}
+
+// TDD RED: Test validation of file logging config
+func TestConfig_FileLoggingValidation(t *testing.T) {
+	mgr := NewConfigManager()
+
+	testCases := []struct {
+		name        string
+		config      *Config
+		shouldError bool
+		errorMsg    string
+	}{
+		{
+			name: "valid file logging config",
+			config: &Config{
+				Volume:          0.5,
+				DefaultSoundpack: "default",
+				Enabled:         true,
+				LogLevel:        "info",
+				FileLogging: &FileLoggingConfig{
+					Enabled:    true,
+					Filename:   "/valid/path/claudio.log",
+					MaxSizeMB:  10,
+					MaxBackups: 5,
+					MaxAgeDays: 30,
+					Compress:   true,
+				},
+			},
+			shouldError: false,
+		},
+		{
+			name: "negative max size",
+			config: &Config{
+				Volume:          0.5,
+				DefaultSoundpack: "default",
+				Enabled:         true,
+				FileLogging: &FileLoggingConfig{
+					Enabled:    true,
+					MaxSizeMB:  -1,  // Invalid
+					MaxBackups: 5,
+					MaxAgeDays: 30,
+				},
+			},
+			shouldError: true,
+			errorMsg:    "max_size_mb",
+		},
+		{
+			name: "negative max backups",
+			config: &Config{
+				Volume:          0.5,
+				DefaultSoundpack: "default",
+				Enabled:         true,
+				FileLogging: &FileLoggingConfig{
+					Enabled:    true,
+					MaxSizeMB:  10,
+					MaxBackups: -1,  // Invalid
+					MaxAgeDays: 30,
+				},
+			},
+			shouldError: true,
+			errorMsg:    "max_backups",
+		},
+		{
+			name: "negative max age",
+			config: &Config{
+				Volume:          0.5,
+				DefaultSoundpack: "default",
+				Enabled:         true,
+				FileLogging: &FileLoggingConfig{
+					Enabled:    true,
+					MaxSizeMB:  10,
+					MaxBackups: 5,
+					MaxAgeDays: -1,  // Invalid
+				},
+			},
+			shouldError: true,
+			errorMsg:    "max_age_days",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// This test should FAIL because ValidateConfig doesn't handle FileLogging yet
+			err := mgr.ValidateConfig(tc.config)
+
+			if tc.shouldError {
+				if err == nil {
+					t.Error("Expected validation error but got none")
+				} else if tc.errorMsg != "" && !contains(err.Error(), tc.errorMsg) {
+					t.Errorf("Expected error containing %q, got: %v", tc.errorMsg, err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected validation error: %v", err)
+				}
+			}
+		})
+	}
+}
+
+// TDD RED: Test XDG log file path resolution
+func TestXDG_LogPath(t *testing.T) {
+	mgr := NewConfigManager()
+
+	// Test with custom filename - should return as-is
+	customPath := "/custom/path/my-claudio.log"
+	resolved := mgr.ResolveLogFilePath(customPath)
+	if resolved != customPath {
+		t.Errorf("ResolveLogFilePath with custom path = %q, expected %q", resolved, customPath)
+	}
+
+	// Test with empty filename - should use XDG cache path
+	resolved = mgr.ResolveLogFilePath("")
+	expectedPath := filepath.Join(mgr.xdg.GetCachePath("logs"), "claudio.log")
+	if resolved != expectedPath {
+		t.Errorf("ResolveLogFilePath with empty filename = %q, expected %q", resolved, expectedPath)
+	}
+
+	// Verify the XDG path follows expected pattern
+	if !strings.Contains(resolved, ".cache/claudio/logs/claudio.log") {
+		t.Errorf("XDG log path should contain '.cache/claudio/logs/claudio.log', got %q", resolved)
+	}
+
+	// Test that different purposes create different cache paths
+	otherCachePath := mgr.xdg.GetCachePath("other")
+	logCachePath := mgr.xdg.GetCachePath("logs")
+	if otherCachePath == logCachePath {
+		t.Error("Different cache purposes should create different paths")
+	}
+}
+
 // Helper function
 func contains(s, substr string) bool {
 	return strings.Contains(s, substr)

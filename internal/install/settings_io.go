@@ -187,6 +187,13 @@ func AcquireFileLockWithTimeout(lockFile string, timeout time.Duration) (Setting
 func ReadSettingsFileWithLock(filePath string) (*SettingsMap, error) {
 	lockFile := filePath + ".lock"
 	
+	// Ensure directory exists for lock file
+	dir := filepath.Dir(lockFile)
+	err := os.MkdirAll(dir, 0755)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create directory for lock file %s: %w", dir, err)
+	}
+	
 	// Acquire file lock
 	lock, err := AcquireFileLock(lockFile)
 	if err != nil {
@@ -201,6 +208,13 @@ func ReadSettingsFileWithLock(filePath string) (*SettingsMap, error) {
 // WriteSettingsFileWithLock writes settings file with file locking for concurrent safety
 func WriteSettingsFileWithLock(filePath string, settings *SettingsMap) error {
 	lockFile := filePath + ".lock"
+	
+	// Ensure directory exists for lock file
+	dir := filepath.Dir(lockFile)
+	err := os.MkdirAll(dir, 0755)
+	if err != nil {
+		return fmt.Errorf("failed to create directory for lock file %s: %w", dir, err)
+	}
 	
 	// Acquire file lock
 	lock, err := AcquireFileLock(lockFile)

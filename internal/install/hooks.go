@@ -188,8 +188,8 @@ func IsClaudioHook(hookValue interface{}) bool {
 			cmdStr = cmdStr[1 : len(cmdStr)-1]
 		}
 		baseName := filepath.Base(cmdStr)
-		// Handle production "claudio" and "claudio.exe" (Windows) and test executables "install.test", "uninstall.test"
-		return baseName == "claudio" || baseName == "claudio.exe" || baseName == "install.test" || baseName == "uninstall.test"
+		// Handle production "claudio" and "claudio.exe" (Windows) and test executables "install.test", "uninstall.test", "cli.test"
+		return baseName == "claudio" || baseName == "claudio.exe" || baseName == "install.test" || baseName == "uninstall.test" || baseName == "cli.test"
 	}
 	
 	// Check old string format (backward compatibility)

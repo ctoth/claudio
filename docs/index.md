@@ -159,6 +159,7 @@ echo '...' | claudio
 
 **Wrong sounds?** Turn on debug logging and see what fallback chain it's using.
 
+**Something broken?** Logs are at `~/.cache/claudio/logs/claudio.log`
 
 **Silence is golden?** `export CLAUDIO_ENABLED=false`
 

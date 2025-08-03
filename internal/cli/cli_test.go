@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -9,6 +10,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/ctoth/claudio/internal/config"
+	"github.com/ctoth/claudio/internal/hooks"
+	"github.com/ctoth/claudio/internal/soundpack"
 )
 
 func TestCLI(t *testing.T) {
@@ -708,6 +713,88 @@ func TestToolNameStringLogging(t *testing.T) {
 	}
 }
 
+// stringPtr returns a pointer to the given string
+func stringPtr(s string) *string {
+	return &s
+}
+
+func TestHookProcessingLoggingIsolated(t *testing.T) {
+	// Isolated test for hook processing logging without CLI.Run() overhead
+	// This provides more reliable, focused testing of logging behavior
+	
+	cli := NewCLI()
+	cli.initializeSystems()
+	
+	// Load config with silent mode to avoid audio initialization
+	cfg := cli.configManager.GetDefaultConfig()
+	cfg.Enabled = false // Silent mode
+	
+	// Set up test logger to capture output
+	var logBuffer bytes.Buffer
+	originalHandler := slog.Default().Handler()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logBuffer, &slog.HandlerOptions{
+		Level: slog.LevelDebug, // Capture all logs
+	})))
+	defer slog.SetDefault(slog.New(originalHandler))
+	
+	// Create test hook event
+	toolResponseJSON := json.RawMessage(`{"stdout":"success","stderr":"","interrupted":false}`)
+	hookEvent := &hooks.HookEvent{
+		SessionID:      "test-isolated",
+		TranscriptPath: "/test",
+		CWD:            "/test",
+		EventName:      "PostToolUse",
+		ToolName:       stringPtr("Bash"),
+		ToolResponse:   &toolResponseJSON,
+	}
+	
+	// Initialize audio and soundpack systems for processing
+	xdgDirs := config.NewXDGDirs()
+	soundpackPaths := xdgDirs.GetSoundpackPaths(cfg.DefaultSoundpack)
+	soundpackPaths = append(soundpackPaths, cfg.SoundpackPaths...)
+	
+	mapper, err := soundpack.CreateSoundpackMapperWithBasePaths(
+		cfg.DefaultSoundpack,
+		cfg.DefaultSoundpack,
+		soundpackPaths,
+	)
+	if err != nil {
+		// Create empty mapper as fallback
+		mapper = soundpack.NewDirectoryMapper("fallback", []string{})
+	}
+	cli.soundpackResolver = soundpack.NewSoundpackResolver(mapper)
+	
+	// Process hook event directly - this should log tool_name
+	cli.processHookEvent(hookEvent, cfg, &bytes.Buffer{}, &bytes.Buffer{})
+	
+	// Verify tool name appears as string in logs
+	logOutput := logBuffer.String()
+	
+	if !strings.Contains(logOutput, "tool_name=Bash") && !strings.Contains(logOutput, `tool_name="Bash"`) {
+		t.Errorf("Expected tool name to appear as string 'Bash' in isolated test logs")
+		t.Logf("Full log output: %s", logOutput)
+	}
+	
+	// Should NOT contain memory addresses
+	if strings.Contains(logOutput, "0x") {
+		t.Errorf("Tool name should not appear as memory address in isolated test")
+		t.Logf("Full log output: %s", logOutput)
+	}
+	
+	// Should contain hook processing messages
+	expectedMessages := []string{
+		"processing hook event",
+		"hook context parsed",
+		"sound mapped",
+	}
+	
+	for _, msg := range expectedMessages {
+		if !strings.Contains(logOutput, msg) {
+			t.Errorf("Expected log message '%s' not found in isolated test output", msg)
+		}
+	}
+}
+
 func TestCLIUnifiedSoundpackIntegration(t *testing.T) {
 	// TDD Test: CLI integration with new unified soundpack system
 
@@ -937,4 +1024,202 @@ func TestCLILoggingLevels(t *testing.T) {
 		t.Error("Expected some DEBUG level logs but found none")
 		t.Logf("Full log output: %s", logOutput)
 	}
+}
+
+// TDD RED: Test existing stderr behavior unchanged when file logging disabled
+func TestLogging_SetupWithoutFile(t *testing.T) {
+	// This test should FAIL because setupLogging function doesn't exist yet
+	cfg := &config.Config{
+		Volume:          0.5,
+		DefaultSoundpack: "default",
+		Enabled:         true,
+		LogLevel:        "info",
+		FileLogging: &config.FileLoggingConfig{
+			Enabled: false, // File logging disabled
+		},
+	}
+
+	// Capture stderr output
+	var stderrBuffer bytes.Buffer
+	
+	// This should fail because setupLogging doesn't exist
+	setupLogging(cfg, &stderrBuffer)
+
+	// Test that a log message goes to stderr only
+	slog.Info("test message")
+	
+	stderrOutput := stderrBuffer.String()
+	if !strings.Contains(stderrOutput, "test message") {
+		t.Error("Log message should appear in stderr when file logging disabled")
+	}
+}
+
+// TDD RED: Test file + stderr combined output when file logging enabled  
+func TestLogging_SetupWithFile(t *testing.T) {
+	// This test should FAIL because setupLogging function doesn't exist yet
+	tempDir := t.TempDir()
+	logFile := filepath.Join(tempDir, "test.log")
+	
+	cfg := &config.Config{
+		Volume:          0.5,
+		DefaultSoundpack: "default", 
+		Enabled:         true,
+		LogLevel:        "info",
+		FileLogging: &config.FileLoggingConfig{
+			Enabled:    true,
+			Filename:   logFile,
+			MaxSizeMB:  1,
+			MaxBackups: 2,
+			MaxAgeDays: 7,
+			Compress:   false,
+		},
+	}
+
+	// Capture stderr output
+	var stderrBuffer bytes.Buffer
+	
+	// This should fail because setupLogging doesn't exist
+	setupLogging(cfg, &stderrBuffer)
+
+	// Test that a log message goes to both stderr and file
+	slog.Info("test dual output")
+	
+	// Check stderr
+	stderrOutput := stderrBuffer.String()
+	if !strings.Contains(stderrOutput, "test dual output") {
+		t.Error("Log message should appear in stderr when file logging enabled")
+	}
+	
+	// Check file
+	if _, err := os.Stat(logFile); os.IsNotExist(err) {
+		t.Error("Log file should be created when file logging enabled")
+	}
+	
+	fileContent, err := os.ReadFile(logFile)
+	if err != nil {
+		t.Fatalf("Failed to read log file: %v", err)
+	}
+	
+	if !strings.Contains(string(fileContent), "test dual output") {
+		t.Error("Log message should appear in log file")
+	}
+}
+
+// TDD RED: Test graceful degradation on file errors
+func TestLogging_SetupFileError(t *testing.T) {
+	// This test should FAIL because setupLogging function doesn't exist yet
+	cfg := &config.Config{
+		Volume:          0.5,
+		DefaultSoundpack: "default",
+		Enabled:         true,  
+		LogLevel:        "info",
+		FileLogging: &config.FileLoggingConfig{
+			Enabled:    true,
+			Filename:   "/invalid/path/cannot/create/test.log", // Invalid path
+			MaxSizeMB:  1,
+			MaxBackups: 2,
+			MaxAgeDays: 7,
+			Compress:   false,
+		},
+	}
+
+	// Capture stderr output
+	var stderrBuffer bytes.Buffer
+	
+	// This should fail because setupLogging doesn't exist
+	// Should NOT panic even with invalid file path
+	setupLogging(cfg, &stderrBuffer)
+
+	// Test that logging still works to stderr despite file error
+	slog.Info("test error recovery")
+	
+	stderrOutput := stderrBuffer.String()
+	if !strings.Contains(stderrOutput, "test error recovery") {
+		t.Error("Log message should still appear in stderr when file logging fails")
+	}
+}
+
+// TDD RED: Test end-to-end CLI file logging integration
+func TestCLI_FileLoggingIntegration(t *testing.T) {
+	// This test should FAIL because setupLogging is not called in CLI lifecycle yet
+	tempDir := t.TempDir()
+	logFile := filepath.Join(tempDir, "claudio-test.log")
+	
+	// Create a config file with file logging enabled
+	configFile := filepath.Join(tempDir, "config.json")
+	configJSON := fmt.Sprintf(`{
+		"volume": 0.5,
+		"default_soundpack": "default",
+		"enabled": false,
+		"log_level": "info",
+		"file_logging": {
+			"enabled": true,
+			"filename": "%s",
+			"max_size_mb": 1,
+			"max_backups": 2,
+			"max_age_days": 7,
+			"compress": false
+		}
+	}`, logFile)
+	
+	err := os.WriteFile(configFile, []byte(configJSON), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write config file: %v", err)
+	}
+	
+	// Test hook JSON
+	hookJSON := `{
+		"session_id": "test-integration",
+		"transcript_path": "/test",
+		"cwd": "/test", 
+		"hook_event_name": "PostToolUse",
+		"tool_name": "Bash",
+		"tool_response": {"stdout": "integration test", "stderr": "", "interrupted": false}
+	}`
+	
+	cli := NewCLI()
+	stdin := strings.NewReader(hookJSON)
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	
+	// Run CLI with config file - should trigger file logging
+	// This should FAIL because setupLogging is not wired into CLI yet
+	exitCode := cli.Run([]string{"claudio", "--config", configFile, "--silent"}, stdin, stdout, stderr)
+	
+	if exitCode != 0 {
+		t.Fatalf("CLI should succeed, got exit code %d: %s", exitCode, stderr.String())
+	}
+	
+	// Check that log file was created and contains expected content
+	if _, err := os.Stat(logFile); os.IsNotExist(err) {
+		t.Error("Log file should be created when file logging is enabled in config")
+		t.Logf("Expected log file: %s", logFile)
+		t.Logf("Config file used: %s", configFile)
+		t.Logf("Stderr output: %s", stderr.String())
+		return
+	}
+	
+	// Read log file content
+	logContent, err := os.ReadFile(logFile)
+	if err != nil {
+		t.Fatalf("Failed to read log file: %v", err)
+	}
+	
+	logStr := string(logContent)
+	
+	// Verify expected log messages appear in file
+	expectedMessages := []string{
+		"hook event parsed",
+		"session_id=test-integration", 
+		"tool_name=Bash",
+	}
+	
+	for _, msg := range expectedMessages {
+		if !strings.Contains(logStr, msg) {
+			t.Errorf("Log file should contain %q", msg)
+			t.Logf("Log file content: %s", logStr)
+		}
+	}
+	
+	t.Logf("SUCCESS: Log file created at %s with content", logFile)
 }
