@@ -1,0 +1,11 @@
+{
+  "name": "macos-native-soundpack",
+  "description": "macOS native system sounds",
+  "version": "1.0.0",
+  "mappings": {
+    "loading/bash-start.wav": "/System/Library/Sounds/Ping.aiff",
+    "success/bash-success.wav": "/System/Library/Sounds/Glass.aiff",
+    "error/bash-error.wav": "/System/Library/Sounds/Sosumi.aiff",
+    "default.wav": "/System/Library/Sounds/Ping.aiff"
+  }
+}
