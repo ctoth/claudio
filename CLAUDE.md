@@ -59,7 +59,8 @@ CLAUDIO_LOG_LEVEL=debug echo '...' | claudio --config /dev/null --silent
 3. **Audio System** (`internal/audio/`)
    - Uses malgo (miniaudio Go wrapper) for cross-platform audio
    - Memory-based playback with pre-loaded sounds
-   - Supports WAV and MP3 decoding
+   - Supports WAV, MP3, and AIFF decoding with comprehensive format detection
+   - AIFF support includes 16/24/32-bit depths, mono/stereo, and magic byte detection
    - Volume control with pre-processing to prevent crackling
 
 4. **Configuration** (`internal/config/`)
