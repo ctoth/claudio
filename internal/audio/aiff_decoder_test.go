@@ -193,9 +193,89 @@ func TestAiffDecoderMonoAndStereo(t *testing.T) {
 }
 
 // Helper function to create minimal AIFF file for testing
-// This will be implemented after we create the test file generator
 func createMinimalAiffFile(sampleRate, channels, bitDepth, numSamples int) []byte {
-	// Placeholder - will be implemented in test generator
-	// For now, return empty bytes to make tests compile but fail
-	return []byte{}
+	// Create a minimal valid AIFF file structure
+	// AIFF format: FORM + size + AIFF + COMM chunk + SSND chunk
+	
+	bytesPerSample := bitDepth / 8
+	dataSize := numSamples * channels * bytesPerSample
+	
+	// COMM chunk data
+	commData := make([]byte, 18)
+	// Channels (2 bytes)
+	commData[0] = byte(channels >> 8)
+	commData[1] = byte(channels)
+	// Sample frames (4 bytes) - total number of sample frames
+	frames := uint32(numSamples)
+	commData[2] = byte(frames >> 24)
+	commData[3] = byte(frames >> 16)  
+	commData[4] = byte(frames >> 8)
+	commData[5] = byte(frames)
+	// Sample size (2 bytes)
+	commData[6] = byte(bitDepth >> 8)
+	commData[7] = byte(bitDepth)
+	// Sample rate (10 bytes IEEE 754 extended precision)
+	// Simplified: just use 44100 as example
+	sampleRateBytes := float64ToIEEE754Extended(float64(sampleRate))
+	copy(commData[8:18], sampleRateBytes)
+	
+	// SSND chunk data - minimal silence
+	ssndData := make([]byte, 8+dataSize) // 8 bytes header + data
+	// Offset (4 bytes) - 0 for no offset
+	// Block size (4 bytes) - 0 for no blocking
+	// Audio data - fill with silence (zeros already)
+	
+	// Calculate total file size
+	totalSize := 4 + // "AIFF"
+		8 + len(commData) + // "COMM" + size + data
+		8 + len(ssndData) // "SSND" + size + data
+	
+	// Build the complete AIFF file
+	var buf []byte
+	
+	// FORM header
+	buf = append(buf, []byte("FORM")...)
+	buf = appendBigEndianUint32(buf, uint32(totalSize))
+	buf = append(buf, []byte("AIFF")...)
+	
+	// COMM chunk
+	buf = append(buf, []byte("COMM")...)
+	buf = appendBigEndianUint32(buf, uint32(len(commData)))
+	buf = append(buf, commData...)
+	
+	// SSND chunk  
+	buf = append(buf, []byte("SSND")...)
+	buf = appendBigEndianUint32(buf, uint32(len(ssndData)))
+	buf = append(buf, ssndData...)
+	
+	return buf
+}
+
+// Helper to append big-endian uint32
+func appendBigEndianUint32(buf []byte, val uint32) []byte {
+	return append(buf, 
+		byte(val>>24),
+		byte(val>>16), 
+		byte(val>>8),
+		byte(val))
+}
+
+// Simplified IEEE 754 extended precision conversion for common sample rates
+func float64ToIEEE754Extended(f float64) []byte {
+	// This is a simplified implementation for common sample rates
+	// Real implementation would need full IEEE 754 extended precision conversion
+	switch int(f) {
+	case 44100:
+		// Pre-calculated IEEE 754 extended precision for 44100
+		return []byte{0x40, 0x0E, 0xAC, 0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
+	case 48000:  
+		// Pre-calculated IEEE 754 extended precision for 48000
+		return []byte{0x40, 0x0E, 0xBB, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
+	case 22050:
+		// Pre-calculated IEEE 754 extended precision for 22050
+		return []byte{0x40, 0x0D, 0xAC, 0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
+	default:
+		// Default to 44100 for unsupported rates
+		return []byte{0x40, 0x0E, 0xAC, 0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
+	}
 }
