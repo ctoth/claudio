@@ -13,13 +13,13 @@ import (
 	"github.com/ctoth/claudio/internal/audio"
 	"github.com/ctoth/claudio/internal/config"
 	"github.com/ctoth/claudio/internal/hooks"
-	"github.com/ctoth/claudio/internal/sounds"
 	"github.com/ctoth/claudio/internal/soundpack"
+	"github.com/ctoth/claudio/internal/sounds"
 	"github.com/spf13/cobra"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
-const Version = "1.4.0"
+const Version = "1.5.0"
 
 // CLI represents the command-line interface
 type CLI struct {
@@ -35,31 +35,31 @@ type CLI struct {
 // NewCLI creates a new CLI instance
 func NewCLI() *CLI {
 	slog.Debug("creating new CLI instance")
-	
+
 	rootCmd := &cobra.Command{
 		Use:   "claudio",
 		Short: "Claude Code Audio Plugin",
 		Long:  "Claudio is a hook-based audio plugin for Claude Code that plays contextual sounds based on tool usage and events.",
 		RunE:  runStdinModeE, // Default behavior when no subcommand is provided
 	}
-	
+
 	// Add install subcommand
 	installCmd := newInstallCommand()
 	rootCmd.AddCommand(installCmd)
-	
+
 	// Add uninstall subcommand
 	uninstallCmd := newUninstallCommand()
 	rootCmd.AddCommand(uninstallCmd)
-	
+
 	// Add persistent flags to root command for backward compatibility
 	rootCmd.PersistentFlags().String("config", "", "Path to config file")
 	rootCmd.PersistentFlags().String("volume", "", "Set volume (0.0 to 1.0)")
 	rootCmd.PersistentFlags().String("soundpack", "", "Set soundpack to use")
 	rootCmd.PersistentFlags().Bool("silent", false, "Silent mode - no audio playback")
-	
+
 	// Add version flag
 	rootCmd.Flags().BoolP("version", "v", false, "Show version information")
-	
+
 	return &CLI{
 		rootCmd:           rootCmd,
 		configManager:     nil, // Lazy initialization - only create when needed
@@ -102,7 +102,7 @@ func loadAndValidateConfig(cmd *cobra.Command, cli *CLI) (*config.Config, error)
 	volumeStr, _ := cmd.Flags().GetString("volume")
 	soundpackFlag, _ := cmd.Flags().GetString("soundpack")
 	silent, _ := cmd.Flags().GetBool("silent")
-	
+
 	// Validate volume flag early to match old behavior
 	if volumeStr != "" {
 		vol, err := strconv.ParseFloat(volumeStr, 64)
@@ -117,7 +117,7 @@ func loadAndValidateConfig(cmd *cobra.Command, cli *CLI) (*config.Config, error)
 			return nil, fmt.Errorf("volume must be between 0.0 and 1.0, got %f", vol)
 		}
 	}
-	
+
 	// Load configuration
 	var cfg *config.Config
 	var err error
@@ -165,7 +165,7 @@ func loadAndValidateConfig(cmd *cobra.Command, cli *CLI) (*config.Config, error)
 		slog.Error("config validation failed", "error", err)
 		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
-	
+
 	return cfg, nil
 }
 
@@ -181,28 +181,28 @@ func initializeAudioSystem(cmd *cobra.Command, cli *CLI, cfg *config.Config) err
 	xdgDirs := config.NewXDGDirs()
 	soundpackPaths := xdgDirs.GetSoundpackPaths(cfg.DefaultSoundpack)
 	soundpackPaths = append(soundpackPaths, cfg.SoundpackPaths...)
-	
+
 	// Use factory to create appropriate mapper with fallback to base paths
 	mapper, err := soundpack.CreateSoundpackMapperWithBasePaths(
-		cfg.DefaultSoundpack, 
+		cfg.DefaultSoundpack,
 		cfg.DefaultSoundpack, // Try exact path first
 		soundpackPaths,       // Fallback to base directory search
 	)
 	if err != nil {
-		slog.Warn("failed to create soundpack mapper, using default empty mapper", 
-			"soundpack", cfg.DefaultSoundpack, 
+		slog.Warn("failed to create soundpack mapper, using default empty mapper",
+			"soundpack", cfg.DefaultSoundpack,
 			"error", err)
 		// Create empty directory mapper as fallback to prevent crashes
 		mapper = soundpack.NewDirectoryMapper("fallback", []string{})
 	}
-	
+
 	cli.soundpackResolver = soundpack.NewSoundpackResolver(mapper)
-	
+
 	slog.Debug("soundpack resolver initialized",
 		"soundpack_name", cfg.DefaultSoundpack,
 		"resolver_type", cli.soundpackResolver.GetType(),
 		"resolver_name", cli.soundpackResolver.GetName())
-	
+
 	// Initialize audio backend system if not in silent mode
 	if cfg.Enabled {
 		err = cli.initializeAudioSystemWithBackend(cfg)
@@ -213,41 +213,41 @@ func initializeAudioSystem(cmd *cobra.Command, cli *CLI, cfg *config.Config) err
 		}
 		slog.Debug("audio backend system initialized")
 	}
-	
+
 	return nil
 }
 
 // initializeAudioSystemWithBackend creates and configures the audio backend
 func (c *CLI) initializeAudioSystemWithBackend(cfg *config.Config) error {
 	slog.Debug("initializing audio backend", "backend_type", cfg.AudioBackend)
-	
+
 	// Create audio backend using factory
 	backend, err := c.backendFactory.CreateBackend(cfg.AudioBackend)
 	if err != nil {
 		slog.Error("failed to create audio backend", "backend_type", cfg.AudioBackend, "error", err)
 		return fmt.Errorf("failed to create audio backend '%s': %w", cfg.AudioBackend, err)
 	}
-	
+
 	c.audioBackend = backend
-	
+
 	// Start the backend
 	err = c.audioBackend.Start()
 	if err != nil {
 		slog.Error("failed to start audio backend", "error", err)
 		return fmt.Errorf("failed to start audio backend: %w", err)
 	}
-	
+
 	// Set volume on backend
 	err = c.audioBackend.SetVolume(float32(cfg.Volume))
 	if err != nil {
 		slog.Error("failed to set volume on backend", "volume", cfg.Volume, "error", err)
 		return fmt.Errorf("failed to set volume on backend: %w", err)
 	}
-	
+
 	slog.Debug("audio backend initialized successfully",
 		"backend_type", fmt.Sprintf("%T", c.audioBackend),
 		"volume", cfg.Volume)
-	
+
 	return nil
 }
 
@@ -296,7 +296,7 @@ func processHookInput(cmd *cobra.Command, cli *CLI, cfg *config.Config) error {
 
 	// Process hook event
 	cli.processHookEvent(&hookEvent, cfg, cmd.OutOrStdout(), cmd.ErrOrStderr())
-	
+
 	return nil
 }
 
@@ -308,7 +308,7 @@ func runStdinModeE(cmd *cobra.Command, args []string) error {
 		slog.Error("CLI instance not found in context")
 		return fmt.Errorf("CLI instance not found in context")
 	}
-	
+
 	// Handle version flag first
 	handled, err := handleVersionFlag(cmd)
 	if err != nil {
@@ -317,7 +317,7 @@ func runStdinModeE(cmd *cobra.Command, args []string) error {
 	if handled {
 		return nil
 	}
-	
+
 	// Load and validate configuration
 	cfg, err := loadAndValidateConfig(cmd, cli)
 	if err != nil {
@@ -339,11 +339,10 @@ func runStdinModeE(cmd *cobra.Command, args []string) error {
 	return processHookInput(cmd, cli, cfg)
 }
 
-
 // Run executes the CLI with the given arguments and I/O streams
 func (c *CLI) Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	slog.Debug("CLI run started", "args", args)
-	
+
 	// CRITICAL: Check for version flag BEFORE any system initialization
 	// This prevents unnecessary audio player creation for simple version requests
 	if len(args) > 1 && (args[1] == "--version" || args[1] == "-v") {
@@ -351,10 +350,10 @@ func (c *CLI) Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 		fmt.Fprintf(stdout, "claudio version %s (Version %s)\nClaude Code Audio Plugin - Hook-based sound system\n", Version, Version)
 		return 0
 	}
-	
+
 	// Initialize systems only when actually needed (not for version flag)
 	c.initializeSystems()
-	
+
 	// Ensure audio backend is cleaned up on exit
 	defer func() {
 		if c.audioBackend != nil {
@@ -370,16 +369,16 @@ func (c *CLI) Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 	c.rootCmd.SetIn(stdin)
 	c.rootCmd.SetOut(stdout)
 	c.rootCmd.SetErr(stderr)
-	
+
 	// Store CLI instance for access in command handlers
 	c.rootCmd.SetContext(contextWithCLI(c))
-	
+
 	// Execute cobra command
 	if err := c.rootCmd.Execute(); err != nil {
 		slog.Error("cobra execution failed", "error", err)
 		return 1
 	}
-	
+
 	return 0
 }
 
@@ -408,7 +407,7 @@ func (c *CLI) initializeRemainingSystemsAfterConfig() {
 func (c *CLI) initializeSystems() {
 	// Config manager should already be initialized
 	c.initializeConfigManager()
-	
+
 	if c.soundMapper == nil {
 		c.soundMapper = sounds.NewSoundMapper()
 	}
@@ -473,10 +472,10 @@ func (c *CLI) playSoundWithBackend(soundPath string, volume float64) error {
 		}
 		return fmt.Errorf("failed to resolve sound path: %w", err)
 	}
-	
+
 	// Create audio source from file path
 	source := audio.NewFileSource(fullPath)
-	
+
 	// Play using audio backend
 	ctx := context.Background()
 	err = c.audioBackend.Play(ctx, source)
@@ -484,7 +483,7 @@ func (c *CLI) playSoundWithBackend(soundPath string, volume float64) error {
 		slog.Error("backend playback failed", "path", fullPath, "backend_type", fmt.Sprintf("%T", c.audioBackend), "error", err)
 		return fmt.Errorf("failed to play sound with backend: %w", err)
 	}
-	
+
 	slog.Info("sound playback completed successfully", "path", soundPath, "backend_type", fmt.Sprintf("%T", c.audioBackend))
 	return nil
 }
@@ -557,7 +556,7 @@ func setupLogging(cfg *config.Config, stderrWriter io.Writer) {
 		// Resolve log file path using config manager
 		configManager := config.NewConfigManager()
 		logFilePath := configManager.ResolveLogFilePath(cfg.FileLogging.Filename)
-		
+
 		// Create log file directory if needed
 		logDir := filepath.Dir(logFilePath)
 		if err := os.MkdirAll(logDir, 0755); err != nil {
@@ -587,9 +586,9 @@ func setupLogging(cfg *config.Config, stderrWriter io.Writer) {
 
 	// Set as default logger
 	slog.SetDefault(slog.New(handler))
-	
-	slog.Debug("logging setup completed", 
-		"level", level.String(), 
+
+	slog.Debug("logging setup completed",
+		"level", level.String(),
 		"writers", len(writers),
 		"file_enabled", cfg.FileLogging != nil && cfg.FileLogging.Enabled)
 }
