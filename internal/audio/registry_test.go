@@ -315,10 +315,10 @@ func TestNewDefaultRegistry(t *testing.T) {
 		t.Fatal("NewDefaultRegistry returned nil")
 	}
 	
-	// Should have WAV and MP3 decoders registered
+	// Should have WAV, MP3, and AIFF decoders registered
 	formats := registry.GetSupportedFormats()
-	if len(formats) != 2 {
-		t.Errorf("expected 2 default formats, got %d", len(formats))
+	if len(formats) != 3 {
+		t.Errorf("expected 3 default formats, got %d", len(formats))
 	}
 	
 	// Check for WAV support
@@ -339,6 +339,16 @@ func TestNewDefaultRegistry(t *testing.T) {
 	
 	if mp3Decoder.FormatName() != "MP3" {
 		t.Errorf("expected MP3 decoder, got %s", mp3Decoder.FormatName())
+	}
+	
+	// Check for AIFF support
+	aiffDecoder := registry.DetectFormat("test.aiff")
+	if aiffDecoder == nil {
+		t.Error("default registry should support AIFF files")
+	}
+	
+	if aiffDecoder.FormatName() != "AIFF" {
+		t.Errorf("expected AIFF decoder, got %s", aiffDecoder.FormatName())
 	}
 }
 
