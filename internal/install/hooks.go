@@ -40,7 +40,7 @@ func GenerateClaudioHooks() (interface{}, error) {
 				"hooks": []interface{}{
 					map[string]interface{}{
 						"type":    "command",
-						"command": execPath,
+						"command": fmt.Sprintf(`"%s"`, execPath),
 					},
 				},
 			},
@@ -183,9 +183,13 @@ func deepCopySettings(original *SettingsMap) (*SettingsMap, error) {
 func IsClaudioHook(hookValue interface{}) bool {
 	// Helper function to check if command is a claudio executable
 	isClaudioCommand := func(cmdStr string) bool {
+		// Strip quotes if present (for Windows compatibility)
+		if len(cmdStr) >= 2 && cmdStr[0] == '"' && cmdStr[len(cmdStr)-1] == '"' {
+			cmdStr = cmdStr[1 : len(cmdStr)-1]
+		}
 		baseName := filepath.Base(cmdStr)
-		// Handle production "claudio" and test executables "install.test", "uninstall.test", "cli.test"
-		return baseName == "claudio" || baseName == "install.test" || baseName == "uninstall.test" || baseName == "cli.test"
+		// Handle production "claudio" and "claudio.exe" (Windows) and test executables "install.test", "uninstall.test", "cli.test"
+		return baseName == "claudio" || baseName == "claudio.exe" || baseName == "install.test" || baseName == "uninstall.test" || baseName == "cli.test"
 	}
 	
 	// Check old string format (backward compatibility)
