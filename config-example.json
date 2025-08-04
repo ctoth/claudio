@@ -1,0 +1,8 @@
+{
+  "volume": 0.5,
+  "default_soundpack": "default",
+  "soundpack_paths": [],
+  "enabled": true,
+  "log_level": "warn",
+  "audio_backend": "auto"
+}
