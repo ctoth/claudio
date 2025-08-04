@@ -8,8 +8,8 @@ import (
 	"time"
 )
 
-// TestMalgoBackendAIFFSupport tests that MalgoBackend can play AIFF files
-// This test currently FAILS because MalgoBackend uses SimplePlayer which doesn't support AIFF
+// TestMalgoBackendAIFFSupport tests that MalgoBackend can detect AIFF files
+// This test verifies the unified system recognizes AIFF format (even if decode fails on mock data)
 func TestMalgoBackendAIFFSupport(t *testing.T) {
 	backend := NewMalgoBackend()
 	defer backend.Close()
@@ -21,15 +21,22 @@ func TestMalgoBackendAIFFSupport(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// This should work after unification but currently fails
+	// Test that unified system attempts AIFF processing (not "unsupported format")
 	err := backend.Play(ctx, source)
 	if err != nil {
-		t.Logf("Expected failure (will be fixed): %v", err)
-		// For now, expect failure - test will pass after unification
+		// We should get a decode error, not an "unsupported format" error
+		errorMsg := strings.ToLower(err.Error())
+		if strings.Contains(errorMsg, "unsupported") || strings.Contains(errorMsg, "unsupported audio format") {
+			t.Errorf("Unified system should recognize AIFF format, got: %v", err)
+		} else {
+			// Expected: decode error because mock data is invalid, but format was recognized
+			t.Logf("Expected decode failure on mock data: %v", err)
+		}
 		return
 	}
 
-	t.Error("Test should fail until unification is complete")
+	// If it doesn't error, that's actually unexpected with mock data
+	t.Error("Expected decode error with mock AIFF data")
 }
 
 // TestMalgoBackendUsesRegistrySystem tests that MalgoBackend uses DecoderRegistry

@@ -9,33 +9,34 @@ import (
 	"sync"
 )
 
-// MalgoBackend implements AudioBackend by wrapping the existing SimplePlayer
+// MalgoBackend implements AudioBackend using AudioPlayer and DecoderRegistry
 type MalgoBackend struct {
-	player  *SimplePlayer
-	volume  float32
-	closed  bool
-	mutex   sync.RWMutex
+	audioPlayer *AudioPlayer
+	registry    *DecoderRegistry
+	closed      bool
+	mutex       sync.RWMutex
 }
 
-// NewMalgoBackend creates a new MalgoBackend using the existing SimplePlayer
+// NewMalgoBackend creates a new MalgoBackend using AudioPlayer and DecoderRegistry
 func NewMalgoBackend() *MalgoBackend {
-	slog.Debug("creating new MalgoBackend")
+	slog.Debug("creating new MalgoBackend with unified audio system")
+	
 	return &MalgoBackend{
-		player: NewSimplePlayer(),
-		volume: 1.0, // Default full volume
+		audioPlayer: NewAudioPlayer(),
+		registry:    NewDefaultRegistry(), // Includes AIFF support
 	}
 }
 
-// Start initializes the backend (no-op for malgo)
+// Start initializes the backend
 func (mb *MalgoBackend) Start() error {
 	mb.mutex.Lock()
 	defer mb.mutex.Unlock()
-	
+
 	if mb.closed {
 		return ErrBackendClosed
 	}
-	
-	slog.Debug("MalgoBackend started")
+
+	slog.Debug("MalgoBackend started with unified audio system")
 	return nil
 }
 
@@ -43,11 +44,17 @@ func (mb *MalgoBackend) Start() error {
 func (mb *MalgoBackend) Stop() error {
 	mb.mutex.Lock()
 	defer mb.mutex.Unlock()
-	
+
 	if mb.closed {
 		return ErrBackendClosed
 	}
-	
+
+	err := mb.audioPlayer.StopAll()
+	if err != nil {
+		slog.Error("error stopping audio player", "error", err)
+		return fmt.Errorf("error stopping audio player: %w", err)
+	}
+
 	slog.Debug("MalgoBackend stopped")
 	return nil
 }
@@ -56,62 +63,63 @@ func (mb *MalgoBackend) Stop() error {
 func (mb *MalgoBackend) Close() error {
 	mb.mutex.Lock()
 	defer mb.mutex.Unlock()
-	
+
 	if mb.closed {
 		slog.Debug("MalgoBackend already closed")
 		return nil
 	}
-	
+
 	mb.closed = true
-	
-	if mb.player != nil {
-		err := mb.player.Close()
+
+	if mb.audioPlayer != nil {
+		err := mb.audioPlayer.Close()
 		if err != nil {
-			slog.Error("error closing SimplePlayer", "error", err)
-			return fmt.Errorf("error closing SimplePlayer: %w", err)
+			slog.Error("error closing AudioPlayer", "error", err)
+			return fmt.Errorf("error closing AudioPlayer: %w", err)
 		}
 	}
-	
+
 	slog.Debug("MalgoBackend closed")
 	return nil
 }
 
-// IsPlaying returns the current playing state (simplified for now)
+// IsPlaying returns the current playing state
 func (mb *MalgoBackend) IsPlaying() bool {
 	mb.mutex.RLock()
 	defer mb.mutex.RUnlock()
-	return !mb.closed
+	
+	if mb.closed {
+		return false
+	}
+	
+	return mb.audioPlayer.IsPlaying()
 }
 
 // SetVolume sets the volume level (0.0 to 1.0)
 func (mb *MalgoBackend) SetVolume(volume float32) error {
-	if volume < 0.0 || volume > 1.0 {
-		err := fmt.Errorf("invalid volume level: %f (must be 0.0-1.0)", volume)
-		slog.Error("invalid volume setting", "volume", volume, "error", err)
-		return err
-	}
-	
 	mb.mutex.Lock()
 	defer mb.mutex.Unlock()
-	
+
 	if mb.closed {
 		return ErrBackendClosed
 	}
-	
-	oldVolume := mb.volume
-	mb.volume = volume
-	slog.Debug("volume changed", "old_volume", oldVolume, "new_volume", volume)
-	return nil
+
+	return mb.audioPlayer.SetVolume(volume)
 }
 
 // GetVolume returns the current volume level
 func (mb *MalgoBackend) GetVolume() float32 {
 	mb.mutex.RLock()
 	defer mb.mutex.RUnlock()
-	return mb.volume
+	
+	if mb.closed {
+		return 0.0
+	}
+	
+	return mb.audioPlayer.GetVolume()
 }
 
-// Play plays audio from the given source using the existing SimplePlayer
+// Play plays audio from the given source using unified audio system
 func (mb *MalgoBackend) Play(ctx context.Context, source AudioSource) error {
 	mb.mutex.RLock()
 	if mb.closed {
@@ -119,75 +127,113 @@ func (mb *MalgoBackend) Play(ctx context.Context, source AudioSource) error {
 		return ErrBackendClosed
 	}
 	mb.mutex.RUnlock()
-	
-	slog.Debug("MalgoBackend starting playback")
-	
-	// Try file path first (most efficient for SimplePlayer)
-	if filePath, err := source.AsFilePath(); err == nil {
-		return mb.playFile(ctx, filePath)
-	}
-	
-	// Fall back to reader via temporary file
-	reader, format, err := source.AsReader()
-	if err != nil {
-		slog.Error("failed to get reader from source", "error", err)
-		return fmt.Errorf("failed to get audio data from source: %w", err)
-	}
-	defer reader.Close()
-	
-	return mb.playReaderViaTempFile(ctx, reader, format)
-}
 
-// playFile plays a file using the SimplePlayer
-func (mb *MalgoBackend) playFile(ctx context.Context, filePath string) error {
-	slog.Debug("playing file via SimplePlayer", "file", filePath)
-	
-	// Use the existing SimplePlayer.PlayFile method
-	err := mb.player.PlayFile(filePath, mb.volume)
-	if err != nil {
-		slog.Error("SimplePlayer failed to play file", "file", filePath, "error", err)
-		return fmt.Errorf("SimplePlayer failed to play file: %w", err)
+	slog.Debug("MalgoBackend starting playback with unified system")
+
+	// Get audio data from source
+	var audioData *AudioData
+	var err error
+
+	// Try file path first (most efficient)
+	if filePath, err := source.AsFilePath(); err == nil {
+		audioData, err = mb.loadAudioFile(filePath)
+	} else {
+		// Use reader
+		reader, format, err := source.AsReader()
+		if err != nil {
+			slog.Error("failed to get reader from source", "error", err)
+			return fmt.Errorf("failed to get audio data from source: %w", err)
+		}
+		defer reader.Close()
+
+		audioData, err = mb.loadAudioFromReader(reader, format)
 	}
-	
-	slog.Debug("file playback completed successfully", "file", filePath)
+
+	if err != nil {
+		slog.Error("failed to load audio data", "error", err)
+		return fmt.Errorf("failed to load audio data: %w", err)
+	}
+
+	if audioData == nil {
+		slog.Error("audio data is nil after loading")
+		return fmt.Errorf("audio data is nil")
+	}
+
+	// Generate unique sound ID for this playback
+	soundID := fmt.Sprintf("play_%d", len(audioData.Samples))
+
+	// Preload and play
+	err = mb.audioPlayer.PreloadSound(soundID, audioData)
+	if err != nil {
+		slog.Error("failed to preload sound", "sound_id", soundID, "error", err)
+		return fmt.Errorf("failed to preload sound: %w", err)
+	}
+
+	err = mb.audioPlayer.PlaySoundWithContext(ctx, soundID)
+	if err != nil {
+		// Clean up on error
+		mb.audioPlayer.UnloadSound(soundID)
+		slog.Error("failed to play sound", "sound_id", soundID, "error", err)
+		return fmt.Errorf("failed to play sound: %w", err)
+	}
+
+	// Clean up after playback
+	go func() {
+		<-ctx.Done()
+		mb.audioPlayer.UnloadSound(soundID)
+		slog.Debug("sound cleanup completed", "sound_id", soundID)
+	}()
+
+	slog.Debug("unified playback completed successfully")
 	return nil
 }
 
-// playReaderViaTempFile writes reader data to a temporary file and plays it
-func (mb *MalgoBackend) playReaderViaTempFile(ctx context.Context, reader io.Reader, format string) error {
-	slog.Debug("playing reader via temporary file", "format", format)
-	
-	// Create temporary file with appropriate extension
-	tempFile, err := os.CreateTemp("", "claudio-malgo-*."+format)
+// loadAudioFile loads an audio file using the registry
+func (mb *MalgoBackend) loadAudioFile(filePath string) (*AudioData, error) {
+	slog.Debug("loading audio file with registry", "file", filePath)
+
+	file, err := os.Open(filePath)
 	if err != nil {
-		slog.Error("failed to create temporary file", "format", format, "error", err)
-		return fmt.Errorf("failed to create temporary file: %w", err)
+		slog.Error("failed to open audio file", "file", filePath, "error", err)
+		return nil, fmt.Errorf("failed to open file: %w", err)
 	}
-	
-	// Ensure cleanup
-	tempPath := tempFile.Name()
-	defer func() {
-		os.Remove(tempPath)
-		slog.Debug("temporary file cleaned up", "path", tempPath)
-	}()
-	
-	// Copy reader data to temporary file
-	_, err = io.Copy(tempFile, reader)
+	defer file.Close()
+
+	// Use registry to decode - this handles AIFF/WAV/MP3 automatically
+	audioData, err := mb.registry.DecodeFile(filePath, file)
 	if err != nil {
-		tempFile.Close()
-		slog.Error("failed to write audio data to temporary file", "path", tempPath, "error", err)
-		return fmt.Errorf("failed to write audio data to temporary file: %w", err)
+		slog.Error("registry decode failed", "file", filePath, "error", err)
+		return nil, fmt.Errorf("decode failed: %w", err)
 	}
-	
-	// Close file before playing
-	err = tempFile.Close()
+
+	slog.Info("audio file loaded successfully via registry",
+		"file", filePath,
+		"channels", audioData.Channels,
+		"sample_rate", audioData.SampleRate,
+		"data_size", len(audioData.Samples))
+
+	return audioData, nil
+}
+
+// loadAudioFromReader loads audio from a reader using the registry
+func (mb *MalgoBackend) loadAudioFromReader(reader io.Reader, format string) (*AudioData, error) {
+	slog.Debug("loading audio from reader with registry", "format", format)
+
+	// Create filename for format detection
+	filename := "stream." + format
+
+	// Use registry to decode
+	audioData, err := mb.registry.DecodeFile(filename, reader)
 	if err != nil {
-		slog.Error("failed to close temporary file", "path", tempPath, "error", err)
-		return fmt.Errorf("failed to close temporary file: %w", err)
+		slog.Error("registry decode from reader failed", "format", format, "error", err)
+		return nil, fmt.Errorf("decode from reader failed: %w", err)
 	}
-	
-	slog.Debug("temporary file created successfully", "path", tempPath, "format", format)
-	
-	// Play the temporary file
-	return mb.playFile(ctx, tempPath)
+
+	slog.Info("audio reader loaded successfully via registry",
+		"format", format,
+		"channels", audioData.Channels,
+		"sample_rate", audioData.SampleRate,
+		"data_size", len(audioData.Samples))
+
+	return audioData, nil
 }
