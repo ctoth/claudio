@@ -306,7 +306,7 @@ func TestCLIAIFFSupportViaUnifiedSystem(t *testing.T) {
 	
 	// Test that an AIFF file path would be processed (even if file doesn't exist)
 	ctx := context.Background()
-	source := audio.NewFileSource("/test/nonexistent.aiff")
+	source := audio.NewFileSource("/test/nonexistent.aiff", audio.NewDefaultRegistry())
 	
 	err = malgoBackend.Play(ctx, source)
 	if err != nil {

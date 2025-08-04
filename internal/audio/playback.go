@@ -232,7 +232,10 @@ func (p *AudioPlayer) PlaySoundWithContext(ctx context.Context, soundID string) 
 	
 	// Track playback position for this sound instance
 	var frameOffset uint32
-	totalFrames := uint32(len(audioData.Samples) / int(audioData.Channels) / 2) // Assuming 16-bit samples
+	
+	// Calculate bytes per sample based on format
+	bytesPerSample := getBytesPerSample(audioData.Format)
+	totalFrames := uint32(len(audioData.Samples) / int(audioData.Channels) / bytesPerSample)
 	
 	// Audio callback function
 	onSamples := func(pOutputSample, pInputSamples []byte, framecount uint32) {
@@ -245,7 +248,7 @@ func (p *AudioPlayer) PlaySoundWithContext(ctx context.Context, soundID string) 
 		}
 		
 		// Calculate byte offset in our audio data
-		bytesPerFrame := int(audioData.Channels * 2) // 2 bytes per 16-bit sample
+		bytesPerFrame := int(audioData.Channels) * bytesPerSample
 		startByte := int(frameOffset) * bytesPerFrame
 		requestedBytes := int(framecount) * bytesPerFrame
 		
@@ -277,19 +280,7 @@ func (p *AudioPlayer) PlaySoundWithContext(ctx context.Context, soundID string) 
 		// Apply volume if needed
 		volume := p.GetVolume()
 		if volume != 1.0 {
-			for i := 0; i < bytesToCopy; i += 2 {
-				if i+1 < bytesToCopy {
-					// Read 16-bit sample (little endian)
-					sample := int16(pOutputSample[i]) | int16(pOutputSample[i+1])<<8
-					
-					// Apply volume
-					sample = int16(float32(sample) * volume)
-					
-					// Write back (little endian)
-					pOutputSample[i] = byte(sample)
-					pOutputSample[i+1] = byte(sample >> 8)
-				}
-			}
+			applyVolumeToSamples(pOutputSample[:bytesToCopy], audioData.Format, volume)
 		}
 		
 		frameOffset += framecount
@@ -334,39 +325,38 @@ func (p *AudioPlayer) PlaySoundWithContext(ctx context.Context, soundID string) 
 	
 	slog.Debug("sound playback started successfully", "sound_id", soundID)
 	
-	// Wait for playback to complete or context cancellation
-	go func() {
-		// Estimate playback duration
-		duration := time.Duration(totalFrames) * time.Second / time.Duration(audioData.SampleRate)
-		timer := time.NewTimer(duration + 100*time.Millisecond) // Add small buffer
-		
-		select {
-		case <-ctx.Done():
-			slog.Debug("playback context cancelled", "sound_id", soundID)
-		case <-timer.C:
-			slog.Debug("playback duration elapsed", "sound_id", soundID)
-		}
-		
-		// Cleanup device
-		device.Stop()
-		device.Uninit()
-		
-		p.deviceMutex.Lock()
-		delete(p.devices, soundID)
-		p.deviceMutex.Unlock()
-		
-		// Update playing status if no more devices
-		p.deviceMutex.Lock()
-		stillPlaying := len(p.devices) > 0
-		p.deviceMutex.Unlock()
-		
-		p.mutex.Lock()
-		p.isPlaying = stillPlaying
-		p.mutex.Unlock()
-		
-		slog.Info("sound playback cleanup completed", "sound_id", soundID, "still_playing", stillPlaying)
-	}()
+	// Estimate playback duration
+	duration := time.Duration(totalFrames) * time.Second / time.Duration(audioData.SampleRate)
 	
+	// Wait for playback to complete or context cancellation
+	timer := time.NewTimer(duration + 500*time.Millisecond) // Add buffer for callback processing
+	defer timer.Stop()
+	
+	select {
+	case <-ctx.Done():
+		slog.Debug("playback context cancelled", "sound_id", soundID)
+	case <-timer.C:
+		slog.Debug("playback duration elapsed", "sound_id", soundID)
+	}
+	
+	// Cleanup device
+	device.Stop()
+	device.Uninit()
+	
+	p.deviceMutex.Lock()
+	delete(p.devices, soundID)
+	p.deviceMutex.Unlock()
+	
+	// Update playing status if no more devices
+	p.deviceMutex.Lock()
+	stillPlaying := len(p.devices) > 0
+	p.deviceMutex.Unlock()
+	
+	p.mutex.Lock()
+	p.isPlaying = stillPlaying
+	p.mutex.Unlock()
+	
+	slog.Info("sound playback cleanup completed", "sound_id", soundID, "still_playing", stillPlaying)
 	return nil
 }
 
@@ -443,4 +433,65 @@ func (p *AudioPlayer) Close() error {
 	
 	slog.Debug("audio player closed successfully", "sounds_cleared", soundCount)
 	return nil
+}
+
+// getBytesPerSample returns the number of bytes per sample for a given format
+func getBytesPerSample(format malgo.FormatType) int {
+	switch format {
+	case malgo.FormatU8:
+		return 1
+	case malgo.FormatS16:
+		return 2
+	case malgo.FormatS24:
+		return 3
+	case malgo.FormatS32, malgo.FormatF32:
+		return 4
+	default:
+		slog.Warn("unknown audio format, assuming 2 bytes per sample", "format", format)
+		return 2
+	}
+}
+
+// applyVolumeToSamples applies volume scaling to audio samples based on format
+func applyVolumeToSamples(samples []byte, format malgo.FormatType, volume float32) {
+	switch format {
+	case malgo.FormatS16:
+		// 16-bit signed samples
+		for i := 0; i < len(samples)-1; i += 2 {
+			sample := int16(samples[i]) | int16(samples[i+1])<<8
+			sample = int16(float32(sample) * volume)
+			samples[i] = byte(sample)
+			samples[i+1] = byte(sample >> 8)
+		}
+	case malgo.FormatS24:
+		// 24-bit signed samples (little endian)
+		for i := 0; i < len(samples)-2; i += 3 {
+			// Read 24-bit sample (little endian, sign-extended to 32-bit)
+			sample := int32(samples[i]) | int32(samples[i+1])<<8 | int32(samples[i+2])<<16
+			// Sign extend from 24-bit to 32-bit
+			if sample&0x800000 != 0 {
+				sample |= ^0xFFFFFF // Set upper 8 bits to 1 for negative numbers
+			}
+			
+			// Apply volume
+			sample = int32(float32(sample) * volume)
+			
+			// Write back (little endian, truncate to 24-bit)
+			samples[i] = byte(sample)
+			samples[i+1] = byte(sample >> 8)
+			samples[i+2] = byte(sample >> 16)
+		}
+	case malgo.FormatS32:
+		// 32-bit signed samples
+		for i := 0; i < len(samples)-3; i += 4 {
+			sample := int32(samples[i]) | int32(samples[i+1])<<8 | int32(samples[i+2])<<16 | int32(samples[i+3])<<24
+			sample = int32(float32(sample) * volume)
+			samples[i] = byte(sample)
+			samples[i+1] = byte(sample >> 8)
+			samples[i+2] = byte(sample >> 16)
+			samples[i+3] = byte(sample >> 24)
+		}
+	default:
+		slog.Warn("volume adjustment not implemented for format", "format", format)
+	}
 }
