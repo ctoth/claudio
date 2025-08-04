@@ -27,8 +27,8 @@ func TestXDGSoundpackPaths(t *testing.T) {
 			name:        "default soundpack",
 			soundpackID: "default",
 			expectedDirs: []string{
-				"claudio/soundpacks/default",     // user data dir
-				"claudio/soundpacks/default",     // system data dirs
+				"claudio/soundpacks/default", // user data dir
+				"claudio/soundpacks/default", // system data dirs
 			},
 		},
 		{
@@ -43,7 +43,7 @@ func TestXDGSoundpackPaths(t *testing.T) {
 			name:        "empty soundpack id",
 			soundpackID: "",
 			expectedDirs: []string{
-				"claudio/soundpacks",  // fallback to base soundpacks dir
+				"claudio/soundpacks", // fallback to base soundpacks dir
 			},
 		},
 	}
@@ -100,7 +100,7 @@ func TestXDGCachePaths(t *testing.T) {
 		{
 			name:         "web cache",
 			purpose:      "web",
-			expectedPath: "claudio/web", 
+			expectedPath: "claudio/web",
 		},
 		{
 			name:         "empty purpose",
@@ -146,7 +146,7 @@ func TestXDGConfigPaths(t *testing.T) {
 		},
 		{
 			name:         "soundpack config",
-			filename:     "soundpacks.yaml", 
+			filename:     "soundpacks.yaml",
 			expectedFile: "soundpacks.yaml",
 		},
 		{
@@ -230,11 +230,11 @@ func TestXDGFindSoundFile(t *testing.T) {
 	xdg := NewXDGDirs()
 
 	testCases := []struct {
-		name           string
-		soundpackID    string
-		relativePath   string
-		createFile     bool
-		shouldFind     bool
+		name         string
+		soundpackID  string
+		relativePath string
+		createFile   bool
+		shouldFind   bool
 	}{
 		{
 			name:         "existing file",
@@ -246,7 +246,7 @@ func TestXDGFindSoundFile(t *testing.T) {
 		{
 			name:         "non-existing file",
 			soundpackID:  "test-pack",
-			relativePath: "error/missing-sound.wav", 
+			relativePath: "error/missing-sound.wav",
 			createFile:   false,
 			shouldFind:   false,
 		},
@@ -275,7 +275,7 @@ func TestXDGFindSoundFile(t *testing.T) {
 				soundpackPaths := xdg.GetSoundpackPaths(tc.soundpackID)
 				if len(soundpackPaths) > 0 {
 					testFilePath = filepath.Join(soundpackPaths[0], tc.relativePath)
-					
+
 					// Create parent directories
 					err := os.MkdirAll(filepath.Dir(testFilePath), 0755)
 					if err != nil {

@@ -36,17 +36,17 @@ func (c *Context) Close() error {
 	}
 
 	slog.Debug("closing audio context")
-	
+
 	// malgo requires both Uninit() and Free()
 	err := c.ctx.Uninit()
 	if err != nil {
 		slog.Error("failed to uninitialize audio context", "error", err)
 		return err
 	}
-	
+
 	c.ctx.Free()
 	c.ctx = nil
-	
+
 	slog.Info("audio context closed successfully")
 	return nil
 }

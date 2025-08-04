@@ -19,7 +19,7 @@ func TestRemoveClaudioHooksWithFullPaths(t *testing.T) {
 			name: "remove simple string hook - full system path",
 			initialSettings: &install.SettingsMap{
 				"hooks": map[string]interface{}{
-					"PreToolUse":  "/usr/local/bin/claudio",
+					"PreToolUse": "/usr/local/bin/claudio",
 					"PostCommit": "git push",
 				},
 				"version": "1.0",
@@ -119,7 +119,7 @@ func TestRemoveClaudioHooksWithFullPaths(t *testing.T) {
 					},
 				},
 			},
-			hookNames: []string{"SessionStart"},
+			hookNames:        []string{"SessionStart"},
 			expectedSettings: &install.SettingsMap{
 				// hooks section should be removed when empty
 			},
@@ -166,10 +166,10 @@ func TestRemoveClaudioHooksWithFullPaths(t *testing.T) {
 			name: "mixed full paths and backward compatibility",
 			initialSettings: &install.SettingsMap{
 				"hooks": map[string]interface{}{
-					"PreToolUse":  "claudio",                      // Old format - should be removed
-					"PostToolUse": "/usr/local/bin/claudio",       // Full path - should be removed
-					"Stop":        "./claudio",                    // Relative path - should be removed
-					"Keep":        "/usr/bin/different-command",   // Non-claudio - should be kept
+					"PreToolUse":  "claudio",                    // Old format - should be removed
+					"PostToolUse": "/usr/local/bin/claudio",     // Full path - should be removed
+					"Stop":        "./claudio",                  // Relative path - should be removed
+					"Keep":        "/usr/bin/different-command", // Non-claudio - should be kept
 				},
 			},
 			hookNames: []string{"PreToolUse", "PostToolUse", "Stop"},
@@ -208,7 +208,7 @@ func TestRemoveClaudioHooksWithFullPaths(t *testing.T) {
 
 			// Verify the result
 			if !settingsEqual(settingsCopy, tc.expectedSettings) {
-				t.Errorf("Settings mismatch.\nExpected: %+v\nActual:   %+v", 
+				t.Errorf("Settings mismatch.\nExpected: %+v\nActual:   %+v",
 					tc.expectedSettings, settingsCopy)
 			}
 
@@ -220,17 +220,17 @@ func TestRemoveClaudioHooksWithFullPaths(t *testing.T) {
 func TestRemoveSimpleClaudioHooks(t *testing.T) {
 	// TDD RED: Test removal of simple string claudio hooks
 	testCases := []struct {
-		name           string
-		initialSettings *install.SettingsMap
-		hookNames      []string
+		name             string
+		initialSettings  *install.SettingsMap
+		hookNames        []string
 		expectedSettings *install.SettingsMap
-		expectError    bool
+		expectError      bool
 	}{
 		{
 			name: "remove single claudio hook with other hooks preserved",
 			initialSettings: &install.SettingsMap{
 				"hooks": map[string]interface{}{
-					"PreToolUse":  "claudio",
+					"PreToolUse": "claudio",
 					"PostCommit": "git push",
 					"Other":      "keep-this",
 				},
@@ -305,11 +305,11 @@ func TestRemoveSimpleClaudioHooks(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name: "nil settings - no error",
-			initialSettings: nil,
-			hookNames: []string{"PreToolUse"},
+			name:             "nil settings - no error",
+			initialSettings:  nil,
+			hookNames:        []string{"PreToolUse"},
 			expectedSettings: nil,
-			expectError: false,
+			expectError:      false,
 		},
 		{
 			name: "remove hook that exists but is not claudio - no changes",
@@ -343,7 +343,7 @@ func TestRemoveSimpleClaudioHooks(t *testing.T) {
 
 			// Verify the result
 			if !settingsEqual(settingsCopy, tc.expectedSettings) {
-				t.Errorf("Settings mismatch.\nExpected: %+v\nActual:   %+v", 
+				t.Errorf("Settings mismatch.\nExpected: %+v\nActual:   %+v",
 					tc.expectedSettings, settingsCopy)
 			}
 
@@ -357,7 +357,7 @@ func deepCopySettings(original *install.SettingsMap) *install.SettingsMap {
 	if original == nil {
 		return nil
 	}
-	
+
 	copy := make(install.SettingsMap)
 	for key, value := range *original {
 		if key == "hooks" {
@@ -385,17 +385,17 @@ func settingsEqual(a, b *install.SettingsMap) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	
+
 	if len(*a) != len(*b) {
 		return false
 	}
-	
+
 	for key, valueA := range *a {
 		valueB, exists := (*b)[key]
 		if !exists {
 			return false
 		}
-		
+
 		if key == "hooks" {
 			hooksA, okA := valueA.(map[string]interface{})
 			hooksB, okB := valueB.(map[string]interface{})
@@ -419,18 +419,18 @@ func settingsEqual(a, b *install.SettingsMap) bool {
 			}
 		}
 	}
-	
+
 	return true
 }
 
 func TestRemoveComplexClaudioHooks(t *testing.T) {
 	// TDD RED: Test removal of complex array claudio hooks
 	testCases := []struct {
-		name           string
-		initialSettings *install.SettingsMap
-		hookNames      []string
+		name             string
+		initialSettings  *install.SettingsMap
+		hookNames        []string
 		expectedSettings *install.SettingsMap
-		expectError    bool
+		expectError      bool
 	}{
 		{
 			name: "remove claudio from array with other commands - preserve others",
@@ -605,7 +605,7 @@ func TestRemoveComplexClaudioHooks(t *testing.T) {
 
 			// Verify the result
 			if !complexSettingsEqual(settingsCopy, tc.expectedSettings) {
-				t.Errorf("Settings mismatch.\nExpected: %+v\nActual:   %+v", 
+				t.Errorf("Settings mismatch.\nExpected: %+v\nActual:   %+v",
 					tc.expectedSettings, settingsCopy)
 			}
 
@@ -619,7 +619,7 @@ func deepCopyComplexSettings(original *install.SettingsMap) *install.SettingsMap
 	if original == nil {
 		return nil
 	}
-	
+
 	copy := make(install.SettingsMap)
 	for key, value := range *original {
 		if key == "hooks" {
@@ -667,22 +667,22 @@ func complexSettingsEqual(a, b *install.SettingsMap) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	
+
 	if len(*a) != len(*b) {
 		return false
 	}
-	
+
 	for key, valueA := range *a {
 		valueB, exists := (*b)[key]
 		if !exists {
 			return false
 		}
-		
+
 		if !deepValueEqual(valueA, valueB) {
 			return false
 		}
 	}
-	
+
 	return true
 }
 

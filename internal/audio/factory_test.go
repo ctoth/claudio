@@ -20,84 +20,84 @@ func TestNewBackendFactory(t *testing.T) {
 
 func TestBackendFactory_CreateBackend(t *testing.T) {
 	tests := []struct {
-		name            string
-		backendType     string
-		isWSL           bool
+		name              string
+		backendType       string
+		isWSL             bool
 		availableCommands []string
-		expectedType    string
-		expectError     bool
+		expectedType      string
+		expectError       bool
 	}{
 		{
-			name:        "auto - WSL with paplay",
-			backendType: "auto",
-			isWSL:       true,
+			name:              "auto - WSL with paplay",
+			backendType:       "auto",
+			isWSL:             true,
 			availableCommands: []string{"paplay"},
-			expectedType: "system_command",
-			expectError:  false,
+			expectedType:      "system_command",
+			expectError:       false,
 		},
 		{
-			name:        "auto - WSL with ffplay (no paplay)",
-			backendType: "auto",
-			isWSL:       true,
+			name:              "auto - WSL with ffplay (no paplay)",
+			backendType:       "auto",
+			isWSL:             true,
 			availableCommands: []string{"ffplay"},
-			expectedType: "system_command",
-			expectError:  false,
+			expectedType:      "system_command",
+			expectError:       false,
 		},
 		{
-			name:        "auto - WSL with no audio commands",
-			backendType: "auto",
-			isWSL:       true,
+			name:              "auto - WSL with no audio commands",
+			backendType:       "auto",
+			isWSL:             true,
 			availableCommands: []string{},
-			expectedType: "malgo",
-			expectError:  false,
+			expectedType:      "malgo",
+			expectError:       false,
 		},
 		{
-			name:        "auto - native Linux",
-			backendType: "auto",
-			isWSL:       false,
+			name:              "auto - native Linux",
+			backendType:       "auto",
+			isWSL:             false,
 			availableCommands: []string{"paplay"},
-			expectedType: "malgo",
-			expectError:  false,
+			expectedType:      "malgo",
+			expectError:       false,
 		},
 		{
-			name:        "explicit system_command - paplay available",
-			backendType: "system_command",
-			isWSL:       false,
+			name:              "explicit system_command - paplay available",
+			backendType:       "system_command",
+			isWSL:             false,
 			availableCommands: []string{"paplay"},
-			expectedType: "system_command",
-			expectError:  false,
+			expectedType:      "system_command",
+			expectError:       false,
 		},
 		{
-			name:        "explicit system_command - no commands available",
-			backendType: "system_command",
-			isWSL:       false,
+			name:              "explicit system_command - no commands available",
+			backendType:       "system_command",
+			isWSL:             false,
 			availableCommands: []string{},
-			expectedType: "",
-			expectError:  true,
+			expectedType:      "",
+			expectError:       true,
 		},
 		{
-			name:        "explicit malgo",
-			backendType: "malgo",
-			isWSL:       true,
+			name:              "explicit malgo",
+			backendType:       "malgo",
+			isWSL:             true,
 			availableCommands: []string{"paplay"},
-			expectedType: "malgo",
-			expectError:  false,
+			expectedType:      "malgo",
+			expectError:       false,
 		},
 		{
-			name:        "invalid backend type",
-			backendType: "invalid",
-			isWSL:       false,
+			name:              "invalid backend type",
+			backendType:       "invalid",
+			isWSL:             false,
 			availableCommands: []string{},
-			expectedType: "",
-			expectError:  true,
+			expectedType:      "",
+			expectError:       true,
 		},
 		{
-			name:        "empty backend type defaults to auto",
-			backendType: "",
-			isWSL:       false,
+			name:              "empty backend type defaults to auto",
+			backendType:       "",
+			isWSL:             false,
 			availableCommands: []string{},
-			expectedType: "malgo",
-			expectError:  false,
+			expectedType:      "malgo",
+			expectError:       false,
 		},
 	}
 

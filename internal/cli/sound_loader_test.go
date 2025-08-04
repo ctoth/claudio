@@ -11,7 +11,7 @@ import (
 func TestSoundLoader(t *testing.T) {
 	// Create temporary test directory
 	tempDir := t.TempDir()
-	
+
 	// Create a simple soundpack directory structure
 	successDir := filepath.Join(tempDir, "test-pack", "success")
 	err := os.MkdirAll(successDir, 0755)
@@ -34,11 +34,11 @@ func TestSoundLoader(t *testing.T) {
 		if err != nil {
 			t.Errorf("Expected to load sound, got error: %v", err)
 		}
-		
+
 		if audioData == nil {
 			t.Error("Expected audio data, got nil")
 		}
-		
+
 		if audioData != nil {
 			if audioData.Channels == 0 {
 				t.Error("Expected non-zero channels")
@@ -57,7 +57,7 @@ func TestSoundLoader(t *testing.T) {
 		if err == nil {
 			t.Error("Expected error for nonexistent file")
 		}
-		
+
 		if !IsFileNotFoundError(err) {
 			t.Errorf("Expected file not found error, got: %v", err)
 		}
@@ -84,7 +84,7 @@ func TestSoundLoader(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create second soundpack dir: %v", err)
 		}
-		
+
 		secondWavFile := filepath.Join(secondPackDir, "bash-success.wav")
 		err = os.WriteFile(secondWavFile, wavData, 0644)
 		if err != nil {
@@ -93,15 +93,15 @@ func TestSoundLoader(t *testing.T) {
 
 		// Create loader with both paths (first path should be checked first)
 		multiLoader := NewSoundLoader([]string{
-			filepath.Join(tempDir, "empty-pack"),    // This one doesn't exist
-			filepath.Join(tempDir, "second-pack"),   // This one has the file
+			filepath.Join(tempDir, "empty-pack"),  // This one doesn't exist
+			filepath.Join(tempDir, "second-pack"), // This one has the file
 		})
 
 		audioData, err := multiLoader.LoadSound("success/bash-success.wav")
 		if err != nil {
 			t.Errorf("Expected to load sound from fallback path, got error: %v", err)
 		}
-		
+
 		if audioData == nil {
 			t.Error("Expected audio data from fallback path")
 		}
@@ -111,7 +111,7 @@ func TestSoundLoader(t *testing.T) {
 func TestSoundLoaderIntegration(t *testing.T) {
 	// Test integration with real AudioPlayer
 	tempDir := t.TempDir()
-	
+
 	// Create soundpack structure
 	successDir := filepath.Join(tempDir, "integration-pack", "success")
 	err := os.MkdirAll(successDir, 0755)
@@ -167,20 +167,20 @@ func createMinimalWAV() []byte {
 		'R', 'I', 'F', 'F',
 		44, 0, 0, 0, // File size - 8 (44 - 8 = 36 + 8 data = 44)
 		'W', 'A', 'V', 'E',
-		
+
 		// fmt chunk
 		'f', 'm', 't', ' ',
 		16, 0, 0, 0, // fmt chunk size
-		1, 0,        // PCM format
-		1, 0,        // mono
+		1, 0, // PCM format
+		1, 0, // mono
 		0x44, 0xAC, 0, 0, // 44100 Hz sample rate
 		0x88, 0x58, 0x01, 0, // byte rate
-		2, 0,        // block align
-		16, 0,       // 16 bits per sample
-		
+		2, 0, // block align
+		16, 0, // 16 bits per sample
+
 		// data chunk
 		'd', 'a', 't', 'a',
-		8, 0, 0, 0,  // data size
+		8, 0, 0, 0, // data size
 		0, 0, 0x7F, 0x7F, 0, 0, 0x7F, 0x7F, // 4 samples of audio data
 	}
 	return wav
@@ -189,7 +189,7 @@ func createMinimalWAV() []byte {
 func TestSoundLoader_ResolveSoundPath(t *testing.T) {
 	// Create temporary test directory
 	tempDir := t.TempDir()
-	
+
 	// Create a simple soundpack directory structure
 	successDir := filepath.Join(tempDir, "test-pack", "success")
 	err := os.MkdirAll(successDir, 0755)
@@ -212,7 +212,7 @@ func TestSoundLoader_ResolveSoundPath(t *testing.T) {
 		if err != nil {
 			t.Errorf("Expected to resolve sound path, got error: %v", err)
 		}
-		
+
 		expectedPath := filepath.Join(tempDir, "test-pack", "success", "bash-success.wav")
 		if fullPath != expectedPath {
 			t.Errorf("Expected path %s, got %s", expectedPath, fullPath)
@@ -224,7 +224,7 @@ func TestSoundLoader_ResolveSoundPath(t *testing.T) {
 		if err == nil {
 			t.Error("Expected error for nonexistent file")
 		}
-		
+
 		if !IsFileNotFoundError(err) {
 			t.Errorf("Expected file not found error, got: %v", err)
 		}

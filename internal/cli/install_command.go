@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/spf13/cobra"
 	"github.com/ctoth/claudio/internal/install"
+	"github.com/spf13/cobra"
 )
 
 // InstallScope represents the scope of installation
@@ -38,16 +38,16 @@ func newInstallCommand() *cobra.Command {
 
 	// Add --scope flag with validation
 	cmd.Flags().StringP("scope", "s", "user", "Installation scope: 'user' for user-specific settings, 'project' for project-specific settings")
-	
+
 	// Add --dry-run flag
 	cmd.Flags().BoolP("dry-run", "d", false, "Show what would be done without making changes (simulation mode)")
-	
+
 	// Add --force flag
 	cmd.Flags().BoolP("force", "f", false, "Overwrite existing hooks without prompting")
 
 	// Add --quiet flag
 	cmd.Flags().BoolP("quiet", "q", false, "Suppress output (no progress messages)")
-	
+
 	// Add --print flag
 	cmd.Flags().BoolP("print", "p", false, "Print configuration that would be written")
 
@@ -100,11 +100,11 @@ func runInstallCommandE(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to find Claude Code settings paths: %w", err)
 	}
-	
+
 	if len(settingsPaths) == 0 {
 		return fmt.Errorf("no Claude Code settings paths found for scope: %s", scope)
 	}
-	
+
 	// Use the first available path
 	settingsPath := settingsPaths[0]
 	slog.Debug("using settings path", "path", settingsPath, "scope", scope)
@@ -121,7 +121,7 @@ func runInstallCommandE(cmd *cobra.Command, args []string) error {
 		} else {
 			configDetails = "PRINT: Install configuration for scope: " + scope.String()
 		}
-		
+
 		cmd.Printf("%s\n", configDetails)
 		if dryRun {
 			cmd.Printf("  Mode: Simulation (no changes will be made)\n")
@@ -142,7 +142,7 @@ func runInstallCommandE(cmd *cobra.Command, args []string) error {
 		if !quiet {
 			cmd.Printf("DRY-RUN: Claudio installation simulation for %s scope\n", scope.String())
 			cmd.Printf("Settings path: %s\n", settingsPath)
-			
+
 			// Use registry to show hook names instead of hardcoded list
 			hookNames := install.GetHookNames()
 			hookList := strings.Join(hookNames, ", ")
@@ -182,63 +182,63 @@ func runInstallCommandE(cmd *cobra.Command, args []string) error {
 // runInstallWorkflow orchestrates the complete Claudio installation process
 // Workflow: Detect paths → Read settings → Generate hooks → Merge → Write → Verify
 func runInstallWorkflow(scope string, settingsPath string) error {
-	slog.Info("starting Claudio installation workflow", 
-		"scope", scope, 
+	slog.Info("starting Claudio installation workflow",
+		"scope", scope,
 		"settings_path", settingsPath)
-	
+
 	// Step 1: Validate scope
 	if scope != "user" && scope != "project" {
 		return fmt.Errorf("invalid scope '%s': must be 'user' or 'project'", scope)
 	}
-	
+
 	slog.Debug("validated installation scope", "scope", scope)
-	
+
 	// Step 2: Read existing settings (uses file locking for safety)
 	slog.Debug("reading existing settings", "path", settingsPath)
 	existingSettings, err := install.ReadSettingsFileWithLock(settingsPath)
 	if err != nil {
 		return fmt.Errorf("failed to read existing settings from %s: %w", settingsPath, err)
 	}
-	
-	slog.Info("loaded existing settings", 
+
+	slog.Info("loaded existing settings",
 		"path", settingsPath,
 		"settings_keys", getSettingsKeys(existingSettings))
-	
+
 	// Step 3: Generate Claudio hooks configuration
 	slog.Debug("generating Claudio hooks configuration")
 	claudioHooks, err := install.GenerateClaudioHooks()
 	if err != nil {
 		return fmt.Errorf("failed to generate Claudio hooks: %w", err)
 	}
-	
+
 	slog.Info("generated Claudio hooks", "hooks", claudioHooks)
-	
+
 	// Step 4: Merge Claudio hooks into existing settings
 	slog.Debug("merging Claudio hooks into existing settings")
 	mergedSettings, err := install.MergeHooksIntoSettings(existingSettings, claudioHooks)
 	if err != nil {
 		return fmt.Errorf("failed to merge Claudio hooks into settings: %w", err)
 	}
-	
-	slog.Info("merged Claudio hooks into settings", 
+
+	slog.Info("merged Claudio hooks into settings",
 		"merged_settings_keys", getSettingsKeys(mergedSettings))
-	
+
 	// Step 5: Write merged settings back to file (uses file locking for safety)
 	slog.Debug("writing merged settings to file", "path", settingsPath)
 	err = install.WriteSettingsFileWithLock(settingsPath, mergedSettings)
 	if err != nil {
 		return fmt.Errorf("failed to write merged settings to %s: %w", settingsPath, err)
 	}
-	
+
 	slog.Info("wrote merged settings to file", "path", settingsPath)
-	
+
 	// Step 6: Verify installation by reading back and checking hooks
 	slog.Debug("verifying installation by reading back settings")
 	verifySettings, err := install.ReadSettingsFileWithLock(settingsPath)
 	if err != nil {
 		return fmt.Errorf("failed to verify installation by reading %s: %w", settingsPath, err)
 	}
-	
+
 	// Check that all Claudio hooks are present
 	if hooks, exists := (*verifySettings)["hooks"]; exists {
 		if hooksMap, ok := hooks.(map[string]interface{}); ok {
@@ -250,8 +250,8 @@ func runInstallWorkflow(scope string, settingsPath string) error {
 					return fmt.Errorf("verification failed: Claudio hook '%s' has wrong value '%v', expected a claudio hook", hookName, val)
 				}
 			}
-			
-			slog.Info("installation verification successful", 
+
+			slog.Info("installation verification successful",
 				"total_hooks", len(hooksMap),
 				"claudio_hooks_verified", len(expectedHooks))
 		} else {
@@ -260,11 +260,11 @@ func runInstallWorkflow(scope string, settingsPath string) error {
 	} else {
 		return fmt.Errorf("verification failed: no hooks section found after installation")
 	}
-	
-	slog.Info("Claudio installation workflow completed successfully", 
-		"scope", scope, 
+
+	slog.Info("Claudio installation workflow completed successfully",
+		"scope", scope,
 		"settings_path", settingsPath)
-	
+
 	return nil
 }
 
@@ -273,7 +273,7 @@ func getSettingsKeys(settings *install.SettingsMap) []string {
 	if settings == nil {
 		return []string{}
 	}
-	
+
 	keys := make([]string, 0, len(*settings))
 	for key := range *settings {
 		keys = append(keys, key)

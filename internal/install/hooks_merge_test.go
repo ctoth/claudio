@@ -15,12 +15,12 @@ func isClaudioHook(hookValue interface{}) bool {
 		// Handle production "claudio" and test executables "install.test", "uninstall.test"
 		return baseName == "claudio" || baseName == "install.test" || baseName == "uninstall.test"
 	}
-	
+
 	// Check old string format (backward compatibility)
 	if str, ok := hookValue.(string); ok {
 		return isClaudioCommand(str)
 	}
-	
+
 	// Check new array format
 	if arr, ok := hookValue.([]interface{}); ok && len(arr) > 0 {
 		if config, ok := arr[0].(map[string]interface{}); ok {
@@ -33,7 +33,7 @@ func isClaudioHook(hookValue interface{}) bool {
 			}
 		}
 	}
-	
+
 	return false
 }
 
@@ -45,9 +45,9 @@ func TestMergeHooksIdempotent(t *testing.T) {
 		expectError      bool
 	}{
 		{
-			name: "empty settings - first installation",
+			name:             "empty settings - first installation",
 			existingSettings: &SettingsMap{},
-			expectError: false,
+			expectError:      false,
 		},
 		{
 			name: "settings with other content",
@@ -55,7 +55,7 @@ func TestMergeHooksIdempotent(t *testing.T) {
 				"version": "1.0",
 				"plugins": []string{"plugin1", "plugin2"},
 				"config": map[string]interface{}{
-					"debug": true,
+					"debug":   true,
 					"timeout": 30,
 				},
 			},
@@ -64,7 +64,7 @@ func TestMergeHooksIdempotent(t *testing.T) {
 		{
 			name: "settings with existing empty hooks",
 			existingSettings: &SettingsMap{
-				"hooks": map[string]interface{}{},
+				"hooks":   map[string]interface{}{},
 				"version": "1.0",
 			},
 			expectError: false,
@@ -74,8 +74,8 @@ func TestMergeHooksIdempotent(t *testing.T) {
 			existingSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					// Using old string format to test backward compatibility
-					"PreToolUse": "claudio",
-					"PostToolUse": "claudio", 
+					"PreToolUse":       "claudio",
+					"PostToolUse":      "claudio",
 					"UserPromptSubmit": "claudio",
 				},
 				"version": "1.0",
@@ -91,7 +91,7 @@ func TestMergeHooksIdempotent(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to generate Claudio hooks: %v", err)
 			}
-			
+
 			// First merge
 			result1, err := MergeHooksIntoSettings(tc.existingSettings, claudioHooks)
 			if tc.expectError && err == nil {
@@ -103,34 +103,34 @@ func TestMergeHooksIdempotent(t *testing.T) {
 			if tc.expectError {
 				return // Skip further tests if error was expected
 			}
-			
+
 			// Second merge (idempotent test)
 			result2, err := MergeHooksIntoSettings(result1, claudioHooks)
 			if err != nil {
 				t.Errorf("Second merge failed: %v", err)
 			}
-			
+
 			// Third merge (triple idempotent test)
 			result3, err := MergeHooksIntoSettings(result2, claudioHooks)
 			if err != nil {
 				t.Errorf("Third merge failed: %v", err)
 			}
-			
+
 			// All results should be identical
 			json1, _ := json.Marshal(result1)
 			json2, _ := json.Marshal(result2)
 			json3, _ := json.Marshal(result3)
-			
+
 			if string(json1) != string(json2) {
-				t.Errorf("First and second merge results differ:\nFirst:  %s\nSecond: %s", 
+				t.Errorf("First and second merge results differ:\nFirst:  %s\nSecond: %s",
 					string(json1), string(json2))
 			}
-			
+
 			if string(json2) != string(json3) {
-				t.Errorf("Second and third merge results differ:\nSecond: %s\nThird:  %s", 
+				t.Errorf("Second and third merge results differ:\nSecond: %s\nThird:  %s",
 					string(json2), string(json3))
 			}
-			
+
 			// Verify Claudio hooks are present
 			if hooks, exists := (*result3)["hooks"]; exists {
 				hooksMap, ok := hooks.(map[string]interface{})
@@ -149,7 +149,7 @@ func TestMergeHooksIdempotent(t *testing.T) {
 			} else {
 				t.Error("Hooks section should exist after merge")
 			}
-			
+
 			t.Logf("Idempotent merge test passed for %s", tc.name)
 		})
 	}
@@ -158,16 +158,16 @@ func TestMergeHooksIdempotent(t *testing.T) {
 func TestMergeHooksPreservesExisting(t *testing.T) {
 	// TDD RED: Test that merging preserves existing non-Claudio hooks and settings
 	testCases := []struct {
-		name                  string
-		existingSettings      *SettingsMap
-		expectPreservedKeys   []string
-		expectPreservedHooks  map[string]string
+		name                 string
+		existingSettings     *SettingsMap
+		expectPreservedKeys  []string
+		expectPreservedHooks map[string]string
 	}{
 		{
 			name: "preserve existing hooks",
 			existingSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
-					"PreCommit": "git diff --check",
+					"PreCommit":  "git diff --check",
 					"PostCommit": "git push origin main",
 					"CustomHook": "echo 'custom'",
 				},
@@ -175,8 +175,8 @@ func TestMergeHooksPreservesExisting(t *testing.T) {
 			},
 			expectPreservedKeys: []string{"version"},
 			expectPreservedHooks: map[string]string{
-				"PreCommit": "git diff --check",
-				"PostCommit": "git push origin main", 
+				"PreCommit":  "git diff --check",
+				"PostCommit": "git push origin main",
 				"CustomHook": "echo 'custom'",
 			},
 		},
@@ -184,11 +184,11 @@ func TestMergeHooksPreservesExisting(t *testing.T) {
 			name: "preserve mixed existing and Claudio hooks",
 			existingSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
-					"PreToolUse": "claudio", // Existing Claudio hook (should be preserved)
-					"PreCommit": "git diff", // Custom hook (should be preserved)
+					"PreToolUse":  "claudio",             // Existing Claudio hook (should be preserved)
+					"PreCommit":   "git diff",            // Custom hook (should be preserved)
 					"PostToolUse": "custom-sound-player", // Conflicting hook (should be resolved)
 				},
-				"debug": true,
+				"debug":   true,
 				"timeout": 5000,
 			},
 			expectPreservedKeys: []string{"debug", "timeout"},
@@ -225,13 +225,13 @@ func TestMergeHooksPreservesExisting(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to generate Claudio hooks: %v", err)
 			}
-			
+
 			// Perform merge
 			result, err := MergeHooksIntoSettings(tc.existingSettings, claudioHooks)
 			if err != nil {
 				t.Errorf("Merge failed: %v", err)
 			}
-			
+
 			// Verify preserved top-level keys
 			for _, key := range tc.expectPreservedKeys {
 				if _, exists := (*result)[key]; !exists {
@@ -240,17 +240,17 @@ func TestMergeHooksPreservesExisting(t *testing.T) {
 					// Deep comparison for complex values
 					originalVal := (*tc.existingSettings)[key]
 					resultVal := (*result)[key]
-					
+
 					origJSON, _ := json.Marshal(originalVal)
 					resultJSON, _ := json.Marshal(resultVal)
-					
+
 					if string(origJSON) != string(resultJSON) {
-						t.Errorf("Preserved key '%s' value changed:\nOriginal: %s\nResult:   %s", 
+						t.Errorf("Preserved key '%s' value changed:\nOriginal: %s\nResult:   %s",
 							key, string(origJSON), string(resultJSON))
 					}
 				}
 			}
-			
+
 			// Verify preserved hooks
 			if hooks, exists := (*result)["hooks"]; exists {
 				hooksMap, ok := hooks.(map[string]interface{})
@@ -261,13 +261,13 @@ func TestMergeHooksPreservesExisting(t *testing.T) {
 						if val, exists := hooksMap[hookName]; !exists {
 							t.Errorf("Expected preserved hook '%s' missing", hookName)
 						} else if val != expectedValue {
-							t.Errorf("Preserved hook '%s' value changed: expected '%s', got '%v'", 
+							t.Errorf("Preserved hook '%s' value changed: expected '%s', got '%v'",
 								hookName, expectedValue, val)
 						}
 					}
 				}
 			}
-			
+
 			// Verify Claudio hooks are also present
 			if hooks, exists := (*result)["hooks"]; exists {
 				hooksMap, ok := hooks.(map[string]interface{})
@@ -283,7 +283,7 @@ func TestMergeHooksPreservesExisting(t *testing.T) {
 					}
 				}
 			}
-			
+
 			t.Logf("Preserve existing test passed for %s", tc.name)
 		})
 	}
@@ -333,7 +333,7 @@ func TestMergeHooksErrorHandling(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			result, err := MergeHooksIntoSettings(tc.existingSettings, tc.claudioHooks)
-			
+
 			if tc.expectError {
 				if err == nil {
 					t.Errorf("Expected error but got none")
@@ -351,7 +351,7 @@ func TestMergeHooksErrorHandling(t *testing.T) {
 					t.Errorf("Expected result but got nil")
 				}
 			}
-			
+
 			t.Logf("Error handling test passed for %s", tc.name)
 		})
 	}
@@ -369,74 +369,74 @@ func TestMergeHooksDeepCopy(t *testing.T) {
 			},
 		},
 	}
-	
+
 	// Create a backup for comparison
 	originalJSON, err := json.Marshal(original)
 	if err != nil {
 		t.Fatalf("Failed to marshal original: %v", err)
 	}
-	
+
 	// Generate Claudio hooks
 	claudioHooks, err := GenerateClaudioHooks()
 	if err != nil {
 		t.Fatalf("Failed to generate Claudio hooks: %v", err)
 	}
-	
+
 	// Perform merge
 	result, err := MergeHooksIntoSettings(original, claudioHooks)
 	if err != nil {
 		t.Errorf("Merge failed: %v", err)
 	}
-	
+
 	// Verify original wasn't modified
 	currentJSON, err := json.Marshal(original)
 	if err != nil {
 		t.Fatalf("Failed to marshal current original: %v", err)
 	}
-	
+
 	if string(originalJSON) != string(currentJSON) {
-		t.Errorf("Original settings were modified during merge:\nBefore: %s\nAfter:  %s", 
+		t.Errorf("Original settings were modified during merge:\nBefore: %s\nAfter:  %s",
 			string(originalJSON), string(currentJSON))
 	}
-	
+
 	// Verify result is different from original (has Claudio hooks)
 	resultJSON, err := json.Marshal(result)
 	if err != nil {
 		t.Fatalf("Failed to marshal result: %v", err)
 	}
-	
+
 	if string(originalJSON) == string(resultJSON) {
 		t.Error("Result should be different from original (should contain Claudio hooks)")
 	}
-	
+
 	// Modify result to verify it doesn't affect original
 	if resultHooks, exists := (*result)["hooks"]; exists {
 		if hooksMap, ok := resultHooks.(map[string]interface{}); ok {
 			hooksMap["TestModification"] = "test-value"
 		}
 	}
-	
+
 	// Verify original is still unchanged
 	finalJSON, err := json.Marshal(original)
 	if err != nil {
 		t.Fatalf("Failed to marshal final original: %v", err)
 	}
-	
+
 	if string(originalJSON) != string(finalJSON) {
 		t.Error("Original settings were modified by result modification (deep copy failed)")
 	}
-	
+
 	t.Logf("Deep copy test passed")
 }
 
 // Helper function for case-insensitive string matching
 func containsIgnoreCase(s, substr string) bool {
 	// Simple implementation for testing
-	return len(s) >= len(substr) && 
-		   (s == substr || 
-		    len(s) > len(substr) && 
-		    (s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
-		     findSubstring(s, substr)))
+	return len(s) >= len(substr) &&
+		(s == substr ||
+			len(s) > len(substr) &&
+				(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
+					findSubstring(s, substr)))
 }
 
 func findSubstring(s, substr string) bool {

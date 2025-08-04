@@ -49,7 +49,7 @@ func main() {
 		eventName = name
 	}
 
-	slog.Info("parsed hook event", 
+	slog.Info("parsed hook event",
 		"event_name", eventName,
 		"fields", getJsonKeys(hookData))
 
@@ -99,11 +99,11 @@ func saveHookData(data []byte, eventName string) error {
 func saveRawData(data []byte, suffix string) {
 	logsDir := "/tmp/claudio-hook-logs"
 	os.MkdirAll(logsDir, 0755)
-	
+
 	timestamp := time.Now().Format("2006-01-02_15-04-05.000")
 	filename := fmt.Sprintf("%s_%s.raw", timestamp, suffix)
 	filepath := filepath.Join(logsDir, filename)
-	
+
 	os.WriteFile(filepath, data, 0644)
 	slog.Info("raw data saved", "file", filepath)
 }

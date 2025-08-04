@@ -18,13 +18,13 @@ type DefaultTerminalDetector struct{}
 // IsTerminal implements TerminalDetector interface
 func (d *DefaultTerminalDetector) IsTerminal(fd int) bool {
 	slog.Debug("checking if file descriptor is interactive terminal", "fd", fd)
-	
+
 	isTerminal := term.IsTerminal(fd)
-	
-	slog.Debug("terminal detection result", 
-		"fd", fd, 
+
+	slog.Debug("terminal detection result",
+		"fd", fd,
 		"is_terminal", isTerminal)
-	
+
 	return isTerminal
 }
 
@@ -34,6 +34,6 @@ func (c *CLI) isInteractiveTerminal(fd int) bool {
 	if c.terminalDetector == nil {
 		c.terminalDetector = &DefaultTerminalDetector{}
 	}
-	
+
 	return c.terminalDetector.IsTerminal(fd)
 }

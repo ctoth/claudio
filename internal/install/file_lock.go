@@ -24,7 +24,7 @@ type FileLock struct {
 // NewFileLock creates a new file lock for the specified path
 func NewFileLock(filePath string) FileLockInterface {
 	slog.Debug("creating new file lock", "file_path", filePath)
-	
+
 	return &FileLock{
 		filePath: filePath,
 		flock:    flock.New(filePath),
@@ -34,15 +34,15 @@ func NewFileLock(filePath string) FileLockInterface {
 // Lock acquires an exclusive lock on the file (blocking)
 func (fl *FileLock) Lock() error {
 	slog.Debug("attempting to acquire file lock", "file_path", fl.filePath)
-	
+
 	err := fl.flock.Lock()
 	if err != nil {
-		slog.Error("failed to acquire file lock", 
-			"file_path", fl.filePath, 
+		slog.Error("failed to acquire file lock",
+			"file_path", fl.filePath,
 			"error", err)
 		return err
 	}
-	
+
 	slog.Info("file lock acquired successfully", "file_path", fl.filePath)
 	return nil
 }
@@ -51,36 +51,36 @@ func (fl *FileLock) Lock() error {
 // Returns true if lock was acquired, false if file is already locked
 func (fl *FileLock) TryLock() (bool, error) {
 	slog.Debug("attempting to try-lock file", "file_path", fl.filePath)
-	
+
 	success, err := fl.flock.TryLock()
 	if err != nil {
-		slog.Error("error during try-lock attempt", 
-			"file_path", fl.filePath, 
+		slog.Error("error during try-lock attempt",
+			"file_path", fl.filePath,
 			"error", err)
 		return false, err
 	}
-	
+
 	if success {
 		slog.Info("file lock acquired via try-lock", "file_path", fl.filePath)
 	} else {
 		slog.Debug("try-lock failed - file already locked", "file_path", fl.filePath)
 	}
-	
+
 	return success, nil
 }
 
 // Unlock releases the file lock
 func (fl *FileLock) Unlock() error {
 	slog.Debug("attempting to release file lock", "file_path", fl.filePath)
-	
+
 	err := fl.flock.Unlock()
 	if err != nil {
-		slog.Error("failed to release file lock", 
-			"file_path", fl.filePath, 
+		slog.Error("failed to release file lock",
+			"file_path", fl.filePath,
 			"error", err)
 		return err
 	}
-	
+
 	slog.Info("file lock released successfully", "file_path", fl.filePath)
 	return nil
 }

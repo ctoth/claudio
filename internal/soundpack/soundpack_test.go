@@ -9,7 +9,7 @@ import (
 
 func TestUnifiedSoundpackResolver(t *testing.T) {
 	// TDD Test: Verify unified soundpack resolver with different mappers
-	
+
 	t.Run("directory mapper integration", func(t *testing.T) {
 		// Create temporary soundpack directory
 		tempDir := t.TempDir()
@@ -111,7 +111,7 @@ func TestUnifiedSoundpackResolver(t *testing.T) {
 		// Test fallback resolution
 		fallbackPaths := []string{
 			"success/bash-specific.wav", // Won't exist
-			"success/bash.wav",          // Won't exist  
+			"success/bash.wav",          // Won't exist
 			"success/success.wav",       // This exists
 			"default.wav",               // Fallback
 		}
@@ -129,7 +129,7 @@ func TestUnifiedSoundpackResolver(t *testing.T) {
 
 	t.Run("handles missing sounds gracefully", func(t *testing.T) {
 		tempDir := t.TempDir()
-		
+
 		mapper := NewDirectoryMapper("test", []string{tempDir})
 		resolver := NewSoundpackResolver(mapper)
 
@@ -159,7 +159,7 @@ func TestUnifiedSoundpackResolver(t *testing.T) {
 
 func TestDirectoryMapper(t *testing.T) {
 	// TDD Test: Verify DirectoryMapper specific functionality
-	
+
 	t.Run("maps paths correctly", func(t *testing.T) {
 		mapper := NewDirectoryMapper("test", []string{"/path1", "/path2"})
 
@@ -199,7 +199,7 @@ func TestDirectoryMapper(t *testing.T) {
 
 func TestJSONMapper(t *testing.T) {
 	// TDD Test: Verify JSONMapper specific functionality
-	
+
 	t.Run("maps paths correctly", func(t *testing.T) {
 		mapping := map[string]string{
 			"success/bash.wav": "/absolute/path/to/sound1.wav",
@@ -258,7 +258,7 @@ func TestJSONSoundpackLoading(t *testing.T) {
 		// Create temporary JSON soundpack file
 		tempDir := t.TempDir()
 		jsonFile := filepath.Join(tempDir, "test-soundpack.json")
-		
+
 		// Create actual sound files that the JSON will reference
 		soundFile1 := filepath.Join(tempDir, "success-sound.wav")
 		soundFile2 := filepath.Join(tempDir, "error-sound.wav")
@@ -364,13 +364,13 @@ func TestJSONSoundpackLoading(t *testing.T) {
 	t.Run("supports 5-level fallback system", func(t *testing.T) {
 		tempDir := t.TempDir()
 		jsonFile := filepath.Join(tempDir, "fallback-test.json")
-		
+
 		// Create sound files for different fallback levels
 		bashSpecific := filepath.Join(tempDir, "bash-specific.wav")
 		bashGeneral := filepath.Join(tempDir, "bash-general.wav")
 		successCategory := filepath.Join(tempDir, "success-category.wav")
 		defaultSound := filepath.Join(tempDir, "default.wav")
-		
+
 		for _, file := range []string{bashSpecific, bashGeneral, successCategory, defaultSound} {
 			err := os.WriteFile(file, []byte("fake wav data"), 0644)
 			if err != nil {
@@ -469,7 +469,7 @@ func TestSoundpackFactory(t *testing.T) {
 		// Create temporary JSON soundpack file
 		tempDir := t.TempDir()
 		jsonFile := filepath.Join(tempDir, "test-soundpack.json")
-		
+
 		// Create actual sound file that the JSON will reference
 		soundFile := filepath.Join(tempDir, "test-sound.wav")
 		err := os.WriteFile(soundFile, []byte("fake wav data"), 0644)
@@ -516,7 +516,7 @@ func TestSoundpackFactory(t *testing.T) {
 	t.Run("auto-detects based on file extension", func(t *testing.T) {
 		// Create temporary files
 		tempDir := t.TempDir()
-		
+
 		// Test .json extension
 		jsonFile := filepath.Join(tempDir, "soundpack.json")
 		soundFile := filepath.Join(tempDir, "sound.wav")
@@ -550,8 +550,8 @@ func TestSoundpackFactory(t *testing.T) {
 	t.Run("fallback to directory base paths when exact path not found", func(t *testing.T) {
 		// Test factory behavior when given soundpack name instead of exact path
 		// This should create directory mapper with base paths
-		
-		// Create temporary soundpack directory structure  
+
+		// Create temporary soundpack directory structure
 		tempDir := t.TempDir()
 		soundpackDir := filepath.Join(tempDir, "fallback-test")
 		err := os.MkdirAll(soundpackDir, 0755)

@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/spf13/cobra"
-	"github.com/ctoth/claudio/internal/uninstall"
 	"github.com/ctoth/claudio/internal/install"
+	"github.com/ctoth/claudio/internal/uninstall"
+	"github.com/spf13/cobra"
 )
 
 // newUninstallCommand creates the uninstall subcommand with flags
@@ -20,16 +20,16 @@ func newUninstallCommand() *cobra.Command {
 
 	// Add --scope flag with validation
 	cmd.Flags().StringP("scope", "s", "user", "Uninstall scope: 'user' for user-specific settings, 'project' for project-specific settings")
-	
+
 	// Add --dry-run flag
 	cmd.Flags().BoolP("dry-run", "d", false, "Show what would be removed without making changes (simulation mode)")
-	
+
 	// Add --force flag
 	cmd.Flags().BoolP("force", "f", false, "Remove hooks without prompting")
 
 	// Add --quiet flag
 	cmd.Flags().BoolP("quiet", "q", false, "Suppress output (no progress messages)")
-	
+
 	// Add --print flag
 	cmd.Flags().BoolP("print", "p", false, "Print hooks that would be removed")
 
@@ -82,11 +82,11 @@ func runUninstallCommandE(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to find Claude Code settings paths: %w", err)
 	}
-	
+
 	if len(settingsPaths) == 0 {
 		return fmt.Errorf("no Claude Code settings paths found for scope: %s", scope)
 	}
-	
+
 	// Use the first available path
 	settingsPath := settingsPaths[0]
 	slog.Debug("using settings path", "path", settingsPath, "scope", scope)
@@ -138,7 +138,7 @@ func handlePrintUninstall(cmd *cobra.Command, scope InstallScope, settingsPath s
 	} else {
 		configDetails = "PRINT: Uninstall configuration for scope: " + scope.String()
 	}
-	
+
 	cmd.Printf("%s\n", configDetails)
 	if dryRun {
 		cmd.Printf("  Mode: Simulation (no changes will be made)\n")

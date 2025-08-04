@@ -18,12 +18,12 @@ type AudioBackend interface {
 	Start() error
 	Stop() error
 	Close() error
-	
+
 	// State management
 	IsPlaying() bool
 	SetVolume(volume float32) error
 	GetVolume() float32
-	
+
 	// Playback - unified interface supporting both file paths and readers
 	Play(ctx context.Context, source AudioSource) error
 }

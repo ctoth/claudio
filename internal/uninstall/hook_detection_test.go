@@ -82,10 +82,10 @@ func TestDetectClaudioHooksWithFullPaths(t *testing.T) {
 			name: "mixed full paths and backward compatibility",
 			settings: &install.SettingsMap{
 				"hooks": map[string]interface{}{
-					"PreToolUse":  "claudio",                      // Old format
-					"PostToolUse": "/usr/local/bin/claudio",       // Full path
-					"Stop":        "./claudio",                    // Relative path  
-					"Other":       "/usr/bin/different-command",   // Non-claudio
+					"PreToolUse":  "claudio",                    // Old format
+					"PostToolUse": "/usr/local/bin/claudio",     // Full path
+					"Stop":        "./claudio",                  // Relative path
+					"Other":       "/usr/bin/different-command", // Non-claudio
 				},
 			},
 			expected: []string{"PreToolUse", "PostToolUse", "Stop"},
@@ -114,14 +114,14 @@ func TestDetectClaudioHooksWithFullPaths(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			result := detectClaudioHooks(tc.settings)
-			
+
 			// Check length
 			if len(result) != len(tc.expected) {
-				t.Errorf("Expected %d claudio hooks, got %d: %v", 
+				t.Errorf("Expected %d claudio hooks, got %d: %v",
 					len(tc.expected), len(result), result)
 				return
 			}
-			
+
 			// Check each expected hook is present
 			for _, expectedHook := range tc.expected {
 				found := false
@@ -132,11 +132,11 @@ func TestDetectClaudioHooksWithFullPaths(t *testing.T) {
 					}
 				}
 				if !found {
-					t.Errorf("Expected hook '%s' not found in result: %v", 
+					t.Errorf("Expected hook '%s' not found in result: %v",
 						expectedHook, result)
 				}
 			}
-			
+
 			t.Logf("Full path detection test passed for %s: found %v", tc.name, result)
 		})
 	}
@@ -224,14 +224,14 @@ func TestDetectClaudioHooks(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			result := detectClaudioHooks(tc.settings)
-			
+
 			// Check length
 			if len(result) != len(tc.expected) {
-				t.Errorf("Expected %d claudio hooks, got %d: %v", 
+				t.Errorf("Expected %d claudio hooks, got %d: %v",
 					len(tc.expected), len(result), result)
 				return
 			}
-			
+
 			// Check each expected hook is present
 			for _, expectedHook := range tc.expected {
 				found := false
@@ -242,11 +242,11 @@ func TestDetectClaudioHooks(t *testing.T) {
 					}
 				}
 				if !found {
-					t.Errorf("Expected hook '%s' not found in result: %v", 
+					t.Errorf("Expected hook '%s' not found in result: %v",
 						expectedHook, result)
 				}
 			}
-			
+
 			t.Logf("Hook detection test passed for %s: found %v", tc.name, result)
 		})
 	}

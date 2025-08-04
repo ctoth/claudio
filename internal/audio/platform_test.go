@@ -108,46 +108,46 @@ func TestCommandExists(t *testing.T) {
 
 func TestDetectOptimalBackend(t *testing.T) {
 	tests := []struct {
-		name            string
-		isWSL           bool
+		name              string
+		isWSL             bool
 		availableCommands []string
-		expectedBackend string
+		expectedBackend   string
 	}{
 		{
-			name:            "WSL with paplay available",
-			isWSL:           true,
+			name:              "WSL with paplay available",
+			isWSL:             true,
 			availableCommands: []string{"paplay"},
-			expectedBackend: "system_command",
+			expectedBackend:   "system_command",
 		},
 		{
-			name:            "WSL with ffplay available (no paplay)",
-			isWSL:           true,
+			name:              "WSL with ffplay available (no paplay)",
+			isWSL:             true,
 			availableCommands: []string{"ffplay"},
-			expectedBackend: "system_command",
+			expectedBackend:   "system_command",
 		},
 		{
-			name:            "WSL with no audio commands available",
-			isWSL:           true,
+			name:              "WSL with no audio commands available",
+			isWSL:             true,
 			availableCommands: []string{},
-			expectedBackend: "malgo", // Fallback to malgo even in WSL
+			expectedBackend:   "malgo", // Fallback to malgo even in WSL
 		},
 		{
-			name:            "Native Linux with paplay",
-			isWSL:           false,
+			name:              "Native Linux with paplay",
+			isWSL:             false,
 			availableCommands: []string{"paplay"},
-			expectedBackend: "malgo", // Prefer malgo on native Linux
+			expectedBackend:   "malgo", // Prefer malgo on native Linux
 		},
 		{
-			name:            "Native Linux without audio commands",
-			isWSL:           false,
+			name:              "Native Linux without audio commands",
+			isWSL:             false,
 			availableCommands: []string{},
-			expectedBackend: "malgo", // Default to malgo
+			expectedBackend:   "malgo", // Default to malgo
 		},
 		{
-			name:            "macOS-like environment",
-			isWSL:           false,
+			name:              "macOS-like environment",
+			isWSL:             false,
 			availableCommands: []string{"afplay"},
-			expectedBackend: "malgo", // Still prefer malgo on native systems
+			expectedBackend:   "malgo", // Still prefer malgo on native systems
 		},
 	}
 
@@ -244,7 +244,7 @@ func TestRealSystemIntegration(t *testing.T) {
 		// This will test the actual IsWSL() function against the real system
 		result := IsWSL()
 		t.Logf("Real system WSL detection: %v", result)
-		
+
 		// We can't assert a specific value since it depends on the test environment,
 		// but we can ensure the function doesn't panic
 	})
@@ -255,12 +255,12 @@ func TestRealSystemIntegration(t *testing.T) {
 		if !echoExists {
 			t.Error("echo command should exist on most systems")
 		}
-		
+
 		lsExists := CommandExists("ls")
 		if !lsExists {
 			t.Error("ls command should exist on most Unix-like systems")
 		}
-		
+
 		fakeExists := CommandExists("definitely-does-not-exist-12345")
 		if fakeExists {
 			t.Error("fake command should not exist")
@@ -270,13 +270,13 @@ func TestRealSystemIntegration(t *testing.T) {
 	t.Run("real backend detection", func(t *testing.T) {
 		backend := DetectOptimalBackend()
 		t.Logf("Real system optimal backend: %s", backend)
-		
+
 		// Should return one of our known backend types
 		validBackends := map[string]bool{
 			"malgo":          true,
 			"system_command": true,
 		}
-		
+
 		if !validBackends[backend] {
 			t.Errorf("DetectOptimalBackend returned invalid backend: %s", backend)
 		}
@@ -291,12 +291,12 @@ func TestHelperFunctions(t *testing.T) {
 		if !result {
 			t.Error("should detect WSL2 from proc version")
 		}
-		
+
 		result = detectWSLFromData("", "Ubuntu")
 		if !result {
 			t.Error("should detect WSL from environment variable")
 		}
-		
+
 		result = detectWSLFromData("regular linux", "")
 		if result {
 			t.Error("should not detect WSL from regular linux")

@@ -612,7 +612,7 @@ func TestEventCategorization_All7Events(t *testing.T) {
 
 			context := event.GetContext()
 			if context.Category != tt.expected {
-				t.Errorf("%s: expected category %s, got %s. %s", 
+				t.Errorf("%s: expected category %s, got %s. %s",
 					tt.eventName, tt.expected.String(), context.Category.String(), tt.description)
 			}
 		})
@@ -722,7 +722,7 @@ func TestNotificationTypeDetection(t *testing.T) {
 		{
 			"Permission notification alternative phrasing",
 			"Claude needs permission to run bash command",
-			"notification-permission", 
+			"notification-permission",
 			"Should detect permission with alternative phrasing",
 		},
 		{
@@ -762,7 +762,7 @@ func TestNotificationTypeDetection(t *testing.T) {
 
 			context := event.GetContext()
 			if context.SoundHint != tt.expectedHint {
-				t.Errorf("%s: expected hint '%s', got '%s'. %s", 
+				t.Errorf("%s: expected hint '%s', got '%s'. %s",
 					tt.name, tt.expectedHint, context.SoundHint, tt.description)
 			}
 
@@ -799,7 +799,7 @@ func TestEnhancedEventContextExtraction(t *testing.T) {
 			"Stop events should generate agent-complete hint for Claude finishing",
 		},
 		{
-			"SubagentStop event context", 
+			"SubagentStop event context",
 			"SubagentStop",
 			"subagent-complete",
 			Completion,
@@ -808,7 +808,7 @@ func TestEnhancedEventContextExtraction(t *testing.T) {
 		},
 		{
 			"PreCompact event context",
-			"PreCompact", 
+			"PreCompact",
 			"compacting",
 			System,
 			"compact",
@@ -833,17 +833,17 @@ func TestEnhancedEventContextExtraction(t *testing.T) {
 			context := event.GetContext()
 
 			if context.Category != tt.expectedCategory {
-				t.Errorf("%s: expected category %s, got %s", 
+				t.Errorf("%s: expected category %s, got %s",
 					tt.name, tt.expectedCategory.String(), context.Category.String())
 			}
 
 			if context.SoundHint != tt.expectedHint {
-				t.Errorf("%s: expected hint '%s', got '%s'. %s", 
+				t.Errorf("%s: expected hint '%s', got '%s'. %s",
 					tt.name, tt.expectedHint, context.SoundHint, tt.description)
 			}
 
 			if context.Operation != tt.expectedOp {
-				t.Errorf("%s: expected operation '%s', got '%s'", 
+				t.Errorf("%s: expected operation '%s', got '%s'",
 					tt.name, tt.expectedOp, context.Operation)
 			}
 		})
@@ -916,7 +916,7 @@ func TestParseEdgeCases(t *testing.T) {
 	})
 }
 
-// TDD Phase 2.5 RED: Test PreToolUse suffix change from '-thinking' to '-start'  
+// TDD Phase 2.5 RED: Test PreToolUse suffix change from '-thinking' to '-start'
 func TestPreToolUseStartSuffixInsteadOfThinking(t *testing.T) {
 	parser := NewHookEventParser()
 
@@ -1004,7 +1004,7 @@ func TestPreToolUseStartSuffixInsteadOfThinking(t *testing.T) {
 
 			// Test will fail initially - parser still generates '-thinking' suffix
 			if context.SoundHint != tt.expectedHint {
-				t.Errorf("%s: expected hint '%s', got '%s'. %s", 
+				t.Errorf("%s: expected hint '%s', got '%s'. %s",
 					tt.name, tt.expectedHint, context.SoundHint, tt.description)
 			}
 
@@ -1076,7 +1076,7 @@ func TestPostToolUseSuffixesUnchanged(t *testing.T) {
 
 			// These should continue working correctly
 			if context.SoundHint != tt.expectedHint {
-				t.Errorf("%s: expected hint '%s', got '%s'. %s", 
+				t.Errorf("%s: expected hint '%s', got '%s'. %s",
 					tt.name, tt.expectedHint, context.SoundHint, tt.description)
 			}
 
@@ -1086,7 +1086,7 @@ func TestPostToolUseSuffixesUnchanged(t *testing.T) {
 				expectedCategory = Error
 			}
 			if context.Category != expectedCategory {
-				t.Errorf("%s: expected %s category, got %s", 
+				t.Errorf("%s: expected %s category, got %s",
 					tt.name, expectedCategory.String(), context.Category.String())
 			}
 		})

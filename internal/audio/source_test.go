@@ -15,10 +15,10 @@ func TestAudioSourceInterface(t *testing.T) {
 
 // testAudioSource is a mock implementation for testing
 type testAudioSource struct {
-	filePath string
-	reader   io.ReadCloser
-	format   string
-	fileErr  error
+	filePath  string
+	reader    io.ReadCloser
+	format    string
+	fileErr   error
 	readerErr error
 }
 
@@ -62,7 +62,7 @@ func TestFileSource_AsFilePath(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			fs := NewFileSource(tt.path, NewDefaultRegistry())
 			result, err := fs.AsFilePath()
-			
+
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error but got none")
 			}
@@ -118,14 +118,14 @@ func TestFileSource_AsReader(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			fs := NewFileSource(tt.path, NewDefaultRegistry())
 			reader, _, err := fs.AsReader()
-			
+
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error but got none")
 			}
 			if !tt.wantErr && err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
-			
+
 			// For non-existent files, we still want to test format detection
 			// The format should be detected before file opening fails
 			if tt.path != "" && !strings.Contains(tt.path, ".xyz") {
@@ -134,7 +134,7 @@ func TestFileSource_AsReader(t *testing.T) {
 					t.Errorf("format detection failed: expected %q, got %q", tt.expectedFormat, expectedFormat)
 				}
 			}
-			
+
 			if reader != nil {
 				reader.Close() // Clean up
 			}
@@ -186,7 +186,7 @@ func TestFileSource_UsesRegistry(t *testing.T) {
 func TestReaderSource_AsFilePath(t *testing.T) {
 	reader := io.NopCloser(strings.NewReader("test data"))
 	rs := NewReaderSource(reader, "wav")
-	
+
 	_, err := rs.AsFilePath()
 	if !errors.Is(err, ErrNotSupported) {
 		t.Errorf("expected ErrNotSupported, got %v", err)
@@ -197,9 +197,9 @@ func TestReaderSource_AsReader(t *testing.T) {
 	testData := "test audio data"
 	reader := io.NopCloser(strings.NewReader(testData))
 	expectedFormat := "wav"
-	
+
 	rs := NewReaderSource(reader, expectedFormat)
-	
+
 	returnedReader, format, err := rs.AsReader()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -210,7 +210,7 @@ func TestReaderSource_AsReader(t *testing.T) {
 	if returnedReader == nil {
 		t.Error("expected non-nil reader")
 	}
-	
+
 	// Clean up
 	if returnedReader != nil {
 		returnedReader.Close()
@@ -228,7 +228,7 @@ func TestErrorDefinitions(t *testing.T) {
 	if ErrSourceClosed == nil {
 		t.Error("ErrSourceClosed should be defined")
 	}
-	
+
 	// Test error messages
 	if ErrNotSupported.Error() != "operation not supported by this source" {
 		t.Errorf("unexpected ErrNotSupported message: %s", ErrNotSupported.Error())

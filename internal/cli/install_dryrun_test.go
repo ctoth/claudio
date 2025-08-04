@@ -81,7 +81,7 @@ func TestInstallDryRunFlag(t *testing.T) {
 func TestInstallDryRunFlagHelp(t *testing.T) {
 	// TDD RED: Test that install command shows proper help for --dry-run flag
 	cli := NewCLI()
-	
+
 	stdin := strings.NewReader("")
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
@@ -94,7 +94,7 @@ func TestInstallDryRunFlagHelp(t *testing.T) {
 	}
 
 	helpOutput := stdout.String()
-	
+
 	// Should contain --dry-run flag documentation
 	expectedHelpContent := []string{
 		"--dry-run",
@@ -170,10 +170,10 @@ func TestInstallDryRunFlagValidation(t *testing.T) {
 func TestInstallDryRunFilesystemSafety(t *testing.T) {
 	// TDD RED: Test that dry-run mode never writes to filesystem
 	// This is the core requirement - dry-run should simulate without changes
-	
+
 	// Create temporary directory to monitor for unwanted changes
 	tempDir := t.TempDir()
-	
+
 	testCases := []struct {
 		name string
 		args []string
@@ -183,7 +183,7 @@ func TestInstallDryRunFilesystemSafety(t *testing.T) {
 			args: []string{"claudio", "install", "--dry-run", "--scope", "user"},
 		},
 		{
-			name: "dry-run project scope", 
+			name: "dry-run project scope",
 			args: []string{"claudio", "install", "--dry-run", "--scope", "project"},
 		},
 	}

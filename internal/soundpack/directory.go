@@ -13,11 +13,11 @@ type DirectoryMapper struct {
 
 // NewDirectoryMapper creates a new directory-based path mapper
 func NewDirectoryMapper(name string, basePaths []string) PathMapper {
-	slog.Debug("creating directory mapper", 
+	slog.Debug("creating directory mapper",
 		"name", name,
 		"base_paths", basePaths,
 		"base_paths_count", len(basePaths))
-	
+
 	return &DirectoryMapper{
 		name:      name,
 		basePaths: basePaths,
@@ -30,7 +30,7 @@ func (d *DirectoryMapper) MapPath(relativePath string) ([]string, error) {
 		return []string{}, nil
 	}
 
-	slog.Debug("mapping directory path", 
+	slog.Debug("mapping directory path",
 		"relative_path", relativePath,
 		"base_paths_count", len(d.basePaths),
 		"mapper_name", d.name)
@@ -39,15 +39,15 @@ func (d *DirectoryMapper) MapPath(relativePath string) ([]string, error) {
 	for i, basePath := range d.basePaths {
 		candidate := filepath.Join(basePath, relativePath)
 		candidates = append(candidates, candidate)
-		
-		slog.Debug("generated directory candidate", 
+
+		slog.Debug("generated directory candidate",
 			"index", i,
 			"base_path", basePath,
 			"relative_path", relativePath,
 			"candidate", candidate)
 	}
 
-	slog.Debug("directory mapping completed", 
+	slog.Debug("directory mapping completed",
 		"relative_path", relativePath,
 		"candidates_count", len(candidates),
 		"mapper_name", d.name)

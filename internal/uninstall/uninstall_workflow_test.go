@@ -12,10 +12,10 @@ import (
 func TestInstallUninstallWithExecutablePath(t *testing.T) {
 	// TDD RED: Test complete install/uninstall workflow with executable paths
 	testCases := []struct {
-		name                 string
-		scope               string
-		installFirst        bool
-		expectError         bool
+		name         string
+		scope        string
+		installFirst bool
+		expectError  bool
 	}{
 		{
 			name:         "install with executable path then uninstall - user scope",
@@ -24,7 +24,7 @@ func TestInstallUninstallWithExecutablePath(t *testing.T) {
 			expectError:  false,
 		},
 		{
-			name:         "install with executable path then uninstall - project scope", 
+			name:         "install with executable path then uninstall - project scope",
 			scope:        "project",
 			installFirst: true,
 			expectError:  false,
@@ -171,7 +171,7 @@ func TestRunUninstallWorkflow(t *testing.T) {
 	// TDD RED: Test complete uninstall workflow integration
 	testCases := []struct {
 		name                 string
-		scope               string
+		scope                string
 		existingSettings     map[string]interface{}
 		existingSettingsFile bool
 		expectError          bool
@@ -184,7 +184,7 @@ func TestRunUninstallWorkflow(t *testing.T) {
 			existingSettings: map[string]interface{}{
 				"hooks": map[string]interface{}{
 					"PreToolUse":       "claudio",
-					"PostToolUse":      "claudio", 
+					"PostToolUse":      "claudio",
 					"UserPromptSubmit": "claudio",
 					"Other":            "keep-this",
 				},
@@ -298,7 +298,7 @@ func TestRunUninstallWorkflow(t *testing.T) {
 		},
 		{
 			name:                 "uninstall from non-existent settings file",
-			scope:               "user",
+			scope:                "user",
 			existingSettings:     nil,
 			existingSettingsFile: false,
 			expectError:          false,
@@ -325,7 +325,7 @@ func TestRunUninstallWorkflow(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Failed to marshal existing settings: %v", err)
 				}
-				
+
 				err = os.WriteFile(settingsFile, settingsJSON, 0644)
 				if err != nil {
 					t.Fatalf("Failed to write existing settings file: %v", err)
@@ -334,14 +334,14 @@ func TestRunUninstallWorkflow(t *testing.T) {
 
 			// Test the complete uninstall workflow
 			err = runUninstallWorkflow(tc.scope, settingsFile)
-			
+
 			if tc.expectError && err == nil {
 				t.Errorf("Expected error but got none")
 			}
 			if !tc.expectError && err != nil {
 				t.Errorf("Unexpected error: %v", err)
 			}
-			
+
 			if tc.expectError {
 				return // Skip verification if error was expected
 			}
@@ -373,10 +373,10 @@ func TestRunUninstallWorkflow(t *testing.T) {
 						t.Errorf("Hooks should be a map, got: %T", hooks)
 					} else {
 						if len(hooksMap) != tc.expectedHooksCount {
-							t.Errorf("Expected %d hooks, got %d: %v", 
+							t.Errorf("Expected %d hooks, got %d: %v",
 								tc.expectedHooksCount, len(hooksMap), getMapKeys(hooksMap))
 						}
-						
+
 						// 4. Verify no claudio hooks remain
 						claudioHooks := detectClaudioHooks(settings)
 						if len(claudioHooks) > 0 {
@@ -394,7 +394,7 @@ func TestRunUninstallWorkflow(t *testing.T) {
 					if key == "hooks" {
 						continue // Already tested above
 					}
-					
+
 					if actualValue, exists := (*settings)[key]; !exists {
 						t.Errorf("Existing setting '%s' was not preserved", key)
 					} else {
@@ -402,7 +402,7 @@ func TestRunUninstallWorkflow(t *testing.T) {
 						expectedJSON, _ := json.Marshal(expectedValue)
 						actualJSON, _ := json.Marshal(actualValue)
 						if string(expectedJSON) != string(actualJSON) {
-							t.Errorf("Existing setting '%s' was modified:\nExpected: %s\nActual:   %s", 
+							t.Errorf("Existing setting '%s' was modified:\nExpected: %s\nActual:   %s",
 								key, string(expectedJSON), string(actualJSON))
 						}
 					}
@@ -440,7 +440,7 @@ func TestUninstallWorkflowErrorHandling(t *testing.T) {
 				tempDir := t.TempDir()
 				settingsDir := filepath.Join(tempDir, "restricted")
 				os.MkdirAll(settingsDir, 0000) // No permissions
-				
+
 				return filepath.Join(settingsDir, "settings.json"), func() {
 					os.Chmod(settingsDir, 0755) // Restore permissions for cleanup
 				}
@@ -450,16 +450,16 @@ func TestUninstallWorkflowErrorHandling(t *testing.T) {
 		},
 		{
 			name:  "corrupted existing settings file",
-			scope: "user", 
+			scope: "user",
 			setupFunc: func() (string, func()) {
 				tempDir := t.TempDir()
 				settingsDir := filepath.Join(tempDir, ".claude")
 				os.MkdirAll(settingsDir, 0755)
-				
+
 				settingsFile := filepath.Join(settingsDir, "settings.json")
 				// Write invalid JSON
 				os.WriteFile(settingsFile, []byte("{invalid json"), 0644)
-				
+
 				return settingsFile, func() {}
 			},
 			expectError: true,
@@ -473,12 +473,12 @@ func TestUninstallWorkflowErrorHandling(t *testing.T) {
 			if tc.name == "permission denied directory" && os.Getuid() == 0 {
 				t.Skip("Skipping permission test when running as root")
 			}
-			
+
 			settingsPath, cleanup := tc.setupFunc()
 			defer cleanup()
 
 			err := runUninstallWorkflow(tc.scope, settingsPath)
-			
+
 			if tc.expectError {
 				if err == nil {
 					t.Errorf("Expected error but got none")
@@ -506,8 +506,8 @@ func getMapKeys(m map[string]interface{}) []string {
 }
 
 func containsString(s, substr string) bool {
-	return len(s) >= len(substr) && 
-		   (s == substr || findSubstringSimple(s, substr))
+	return len(s) >= len(substr) &&
+		(s == substr || findSubstringSimple(s, substr))
 }
 
 func findSubstringSimple(s, substr string) bool {

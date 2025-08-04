@@ -54,11 +54,11 @@ func TestLoadConfigAutoDiscovery(t *testing.T) {
 	// Create a test config file
 	configFile := filepath.Join(configDir, "config.json")
 	testConfig := &Config{
-		Volume:          0.8,
+		Volume:           0.8,
 		DefaultSoundpack: "test-pack",
-		SoundpackPaths:  []string{"/test/path"},
-		Enabled:         true,
-		LogLevel:        "debug",
+		SoundpackPaths:   []string{"/test/path"},
+		Enabled:          true,
+		LogLevel:         "debug",
 	}
 
 	// Write the config file
@@ -109,12 +109,12 @@ func TestLoadConfigRealXDGPaths(t *testing.T) {
 
 	// Test with real XDG paths to see what happens
 	configPaths := mgr.xdg.GetConfigPaths("config.json")
-	
+
 	t.Logf("Real XDG config paths: %v", configPaths)
-	
+
 	// Our config should be in a proper XDG config directory, not data directory
 	properConfigPath := "/etc/xdg/claudio/config.json"
-	
+
 	// Check if the proper config path is in XDG config paths
 	found := false
 	for _, path := range configPaths {
@@ -123,19 +123,19 @@ func TestLoadConfigRealXDGPaths(t *testing.T) {
 			break
 		}
 	}
-	
+
 	if !found {
 		t.Errorf("Expected XDG config path %s not found in config paths: %v", properConfigPath, configPaths)
 	}
-	
+
 	// Test actual LoadConfig behavior - should find config when placed correctly
 	config, err := mgr.LoadConfig()
 	if err != nil {
 		t.Fatalf("LoadConfig() failed: %v", err)
 	}
-	
+
 	t.Logf("Loaded config: %+v", config)
-	
+
 	// This test should FAIL until we move the config file to the correct location
 	if len(config.SoundpackPaths) == 0 {
 		t.Error("LoadConfig() returned default config - config file should be moved to proper XDG config directory")
@@ -175,11 +175,11 @@ func TestLoadConfigFromFile(t *testing.T) {
 	configFile := filepath.Join(tempDir, "test-config.json")
 
 	testConfig := &Config{
-		Volume:          0.75,
+		Volume:           0.75,
 		DefaultSoundpack: "mechanical",
-		SoundpackPaths:  []string{"/custom/path"},
-		Enabled:         false,
-		LogLevel:        "warn",
+		SoundpackPaths:   []string{"/custom/path"},
+		Enabled:          false,
+		LogLevel:         "warn",
 	}
 
 	// Write test config to file
@@ -229,20 +229,20 @@ func TestLoadConfigWithValidation(t *testing.T) {
 		{
 			name: "valid config",
 			config: &Config{
-				Volume:          0.5,
+				Volume:           0.5,
 				DefaultSoundpack: "default",
-				SoundpackPaths:  []string{"/valid/path"},
-				Enabled:         true,
-				LogLevel:        "info",
+				SoundpackPaths:   []string{"/valid/path"},
+				Enabled:          true,
+				LogLevel:         "info",
 			},
 			shouldError: false,
 		},
 		{
 			name: "volume too high",
 			config: &Config{
-				Volume:          1.5,
+				Volume:           1.5,
 				DefaultSoundpack: "default",
-				Enabled:         true,
+				Enabled:          true,
 			},
 			shouldError: true,
 			errorMsg:    "volume",
@@ -250,9 +250,9 @@ func TestLoadConfigWithValidation(t *testing.T) {
 		{
 			name: "volume too low",
 			config: &Config{
-				Volume:          -0.1,
+				Volume:           -0.1,
 				DefaultSoundpack: "default",
-				Enabled:         true,
+				Enabled:          true,
 			},
 			shouldError: true,
 			errorMsg:    "volume",
@@ -260,9 +260,9 @@ func TestLoadConfigWithValidation(t *testing.T) {
 		{
 			name: "empty soundpack",
 			config: &Config{
-				Volume:          0.5,
+				Volume:           0.5,
 				DefaultSoundpack: "",
-				Enabled:         true,
+				Enabled:          true,
 			},
 			shouldError: true,
 			errorMsg:    "soundpack",
@@ -270,10 +270,10 @@ func TestLoadConfigWithValidation(t *testing.T) {
 		{
 			name: "invalid log level",
 			config: &Config{
-				Volume:          0.5,
+				Volume:           0.5,
 				DefaultSoundpack: "default",
-				Enabled:         true,
-				LogLevel:        "invalid",
+				Enabled:          true,
+				LogLevel:         "invalid",
 			},
 			shouldError: true,
 			errorMsg:    "log level",
@@ -306,11 +306,11 @@ func TestSaveConfig(t *testing.T) {
 	configFile := filepath.Join(tempDir, "save-test.json")
 
 	testConfig := &Config{
-		Volume:          0.8,
+		Volume:           0.8,
 		DefaultSoundpack: "test-pack",
-		SoundpackPaths:  []string{"/test/path1", "/test/path2"},
-		Enabled:         true,
-		LogLevel:        "debug",
+		SoundpackPaths:   []string{"/test/path1", "/test/path2"},
+		Enabled:          true,
+		LogLevel:         "debug",
 	}
 
 	// Save config
@@ -376,15 +376,15 @@ func TestConfigMerging(t *testing.T) {
 	mgr := NewConfigManager()
 
 	baseConfig := &Config{
-		Volume:          0.5,
+		Volume:           0.5,
 		DefaultSoundpack: "base",
-		SoundpackPaths:  []string{"/base/path"},
-		Enabled:         true,
-		LogLevel:        "info",
+		SoundpackPaths:   []string{"/base/path"},
+		Enabled:          true,
+		LogLevel:         "info",
 	}
 
 	overrideConfig := &Config{
-		Volume:          0.8,
+		Volume:           0.8,
 		DefaultSoundpack: "override",
 		// SoundpackPaths intentionally omitted
 		// Enabled intentionally omitted
@@ -430,10 +430,10 @@ func TestConfigEnvironmentOverrides(t *testing.T) {
 	}()
 
 	baseConfig := &Config{
-		Volume:          0.5,
+		Volume:           0.5,
 		DefaultSoundpack: "base",
-		Enabled:         true,
-		LogLevel:        "info",
+		Enabled:          true,
+		LogLevel:         "info",
 	}
 
 	finalConfig := mgr.ApplyEnvironmentOverrides(baseConfig)
@@ -503,45 +503,45 @@ func TestConfigErrorHandling(t *testing.T) {
 func TestLogLevelApplicationToSlog(t *testing.T) {
 	// TDD RED: This test should FAIL because log level from config is not applied to slog
 	// We expect that when config has log_level "warn", slog should respect it and not show DEBUG/INFO logs
-	
+
 	mgr := NewConfigManager()
-	
+
 	// Capture log output to verify level is applied
 	var logBuffer strings.Builder
 	originalHandler := slog.Default().Handler()
 	defer slog.SetDefault(slog.New(originalHandler))
-	
+
 	// First, apply log level configuration with warn level
 	err := mgr.ApplyLogLevelWithWriter("warn", &logBuffer)
 	if err != nil {
 		t.Fatalf("ApplyLogLevelWithWriter should not error for valid log level: %v", err)
 	}
-	
+
 	// Test that DEBUG and INFO logs are filtered out when level is WARN
 	slog.Debug("this debug message should not appear")
-	slog.Info("this info message should not appear") 
+	slog.Info("this info message should not appear")
 	slog.Warn("this warning should appear")
 	slog.Error("this error should appear")
-	
+
 	logOutput := logBuffer.String()
-	
+
 	// CRITICAL: With warn level, DEBUG and INFO should be filtered out
 	if strings.Contains(logOutput, "this debug message should not appear") {
 		t.Errorf("DEBUG logs should be filtered out when log level is warn, but found debug message in output")
 		t.Logf("Full log output: %s", logOutput)
 	}
-	
+
 	if strings.Contains(logOutput, "this info message should not appear") {
 		t.Errorf("INFO logs should be filtered out when log level is warn, but found info message in output")
 		t.Logf("Full log output: %s", logOutput)
 	}
-	
+
 	// WARN and ERROR should still appear
 	if !strings.Contains(logOutput, "this warning should appear") {
 		t.Errorf("WARN logs should appear when log level is warn, but warning message not found in output")
 		t.Logf("Full log output: %s", logOutput)
 	}
-	
+
 	if !strings.Contains(logOutput, "this error should appear") {
 		t.Errorf("ERROR logs should appear when log level is warn, but error message not found in output")
 		t.Logf("Full log output: %s", logOutput)
@@ -551,7 +551,7 @@ func TestLogLevelApplicationToSlog(t *testing.T) {
 func TestConfigLoggingLevels(t *testing.T) {
 	// TDD RED: This test should FAIL because config loading operations currently use INFO logging
 	// We expect routine config operations to use DEBUG level, not INFO level
-	
+
 	// Capture log output to verify log levels
 	var logBuffer strings.Builder
 	originalHandler := slog.Default().Handler()
@@ -559,56 +559,56 @@ func TestConfigLoggingLevels(t *testing.T) {
 		Level: slog.LevelDebug, // Capture all logs
 	})))
 	defer slog.SetDefault(slog.New(originalHandler))
-	
+
 	mgr := NewConfigManager()
-	
+
 	// Test config loading from file - should be DEBUG level
 	tempDir := t.TempDir()
 	configFile := filepath.Join(tempDir, "test-config.json")
-	
+
 	testConfig := &Config{
-		Volume:          0.8,
+		Volume:           0.8,
 		DefaultSoundpack: "test-pack",
-		SoundpackPaths:  []string{"/test/path"},
-		Enabled:         true,
-		LogLevel:        "debug",
+		SoundpackPaths:   []string{"/test/path"},
+		Enabled:          true,
+		LogLevel:         "debug",
 	}
-	
+
 	// Write test config to file
 	data, err := json.MarshalIndent(testConfig, "", "  ")
 	if err != nil {
 		t.Fatalf("Failed to marshal test config: %v", err)
 	}
-	
+
 	err = os.WriteFile(configFile, data, 0644)
 	if err != nil {
 		t.Fatalf("Failed to write test config file: %v", err)
 	}
-	
+
 	// Load config from file - should use DEBUG level for routine operation
 	_, err = mgr.LoadFromFile(configFile)
 	if err != nil {
 		t.Fatalf("LoadFromFile should not error: %v", err)
 	}
-	
+
 	// Test environment overrides - should be DEBUG level
 	baseConfig := &Config{
-		Volume:          0.5,
+		Volume:           0.5,
 		DefaultSoundpack: "base",
-		Enabled:         true,
-		LogLevel:        "info",
+		Enabled:          true,
+		LogLevel:         "info",
 	}
-	
+
 	_ = mgr.ApplyEnvironmentOverrides(baseConfig)
-	
+
 	logOutput := logBuffer.String()
-	
+
 	// CRITICAL: Routine operations should use DEBUG level, not INFO
 	problematicInfoLogs := []string{
 		"config loaded successfully",
 		"environment overrides applied",
 	}
-	
+
 	for _, logMsg := range problematicInfoLogs {
 		if strings.Contains(logOutput, logMsg) {
 			// Check if it appears with INFO level (bad) vs DEBUG level (good)
@@ -618,7 +618,7 @@ func TestConfigLoggingLevels(t *testing.T) {
 			}
 		}
 	}
-	
+
 	// Verify that DEBUG logs are working properly
 	if !strings.Contains(logOutput, "level=DEBUG") {
 		t.Error("Expected some DEBUG level logs but found none")
@@ -629,46 +629,46 @@ func TestConfigLoggingLevels(t *testing.T) {
 func TestConfigDefaultConsistency(t *testing.T) {
 	// TDD RED: This test should FAIL because default values in code don't match system config
 	// We expect default values to match what's deployed in the system config file
-	
+
 	mgr := NewConfigManager()
 	defaults := mgr.GetDefaultConfig()
-	
+
 	// Load the actual system config to compare against
 	systemConfigPath := "/etc/xdg/claudio/config.json"
-	
+
 	// Only run this test if system config exists (skip in environments without it)
 	if _, err := os.Stat(systemConfigPath); os.IsNotExist(err) {
 		t.Skip("System config file not found, skipping consistency test")
 		return
 	}
-	
+
 	systemConfig, err := mgr.LoadFromFile(systemConfigPath)
 	if err != nil {
 		t.Fatalf("Failed to load system config for comparison: %v", err)
 	}
-	
+
 	// CRITICAL: Default values should match deployed system configuration
 	if defaults.Volume != systemConfig.Volume {
-		t.Errorf("Default volume inconsistency: code has %f, system config has %f", 
+		t.Errorf("Default volume inconsistency: code has %f, system config has %f",
 			defaults.Volume, systemConfig.Volume)
 	}
-	
+
 	if defaults.LogLevel != systemConfig.LogLevel {
-		t.Errorf("Default log level inconsistency: code has %q, system config has %q", 
+		t.Errorf("Default log level inconsistency: code has %q, system config has %q",
 			defaults.LogLevel, systemConfig.LogLevel)
 	}
-	
+
 	// These should be consistent in principle (system config uses specific path, defaults use XDG resolution)
 	// But we won't test DefaultSoundpack as it's expected to differ (system uses specific path, defaults use name)
-	
+
 	if defaults.Enabled != systemConfig.Enabled {
-		t.Errorf("Default enabled inconsistency: code has %v, system config has %v", 
+		t.Errorf("Default enabled inconsistency: code has %v, system config has %v",
 			defaults.Enabled, systemConfig.Enabled)
 	}
-	
-	t.Logf("Code defaults: volume=%f, log_level=%q, enabled=%v", 
+
+	t.Logf("Code defaults: volume=%f, log_level=%q, enabled=%v",
 		defaults.Volume, defaults.LogLevel, defaults.Enabled)
-	t.Logf("System config: volume=%f, log_level=%q, enabled=%v", 
+	t.Logf("System config: volume=%f, log_level=%q, enabled=%v",
 		systemConfig.Volume, systemConfig.LogLevel, systemConfig.Enabled)
 }
 
@@ -781,10 +781,10 @@ func TestConfig_FileLoggingValidation(t *testing.T) {
 		{
 			name: "valid file logging config",
 			config: &Config{
-				Volume:          0.5,
+				Volume:           0.5,
 				DefaultSoundpack: "default",
-				Enabled:         true,
-				LogLevel:        "info",
+				Enabled:          true,
+				LogLevel:         "info",
 				FileLogging: &FileLoggingConfig{
 					Enabled:    true,
 					Filename:   "/valid/path/claudio.log",
@@ -799,12 +799,12 @@ func TestConfig_FileLoggingValidation(t *testing.T) {
 		{
 			name: "negative max size",
 			config: &Config{
-				Volume:          0.5,
+				Volume:           0.5,
 				DefaultSoundpack: "default",
-				Enabled:         true,
+				Enabled:          true,
 				FileLogging: &FileLoggingConfig{
 					Enabled:    true,
-					MaxSizeMB:  -1,  // Invalid
+					MaxSizeMB:  -1, // Invalid
 					MaxBackups: 5,
 					MaxAgeDays: 30,
 				},
@@ -815,13 +815,13 @@ func TestConfig_FileLoggingValidation(t *testing.T) {
 		{
 			name: "negative max backups",
 			config: &Config{
-				Volume:          0.5,
+				Volume:           0.5,
 				DefaultSoundpack: "default",
-				Enabled:         true,
+				Enabled:          true,
 				FileLogging: &FileLoggingConfig{
 					Enabled:    true,
 					MaxSizeMB:  10,
-					MaxBackups: -1,  // Invalid
+					MaxBackups: -1, // Invalid
 					MaxAgeDays: 30,
 				},
 			},
@@ -831,14 +831,14 @@ func TestConfig_FileLoggingValidation(t *testing.T) {
 		{
 			name: "negative max age",
 			config: &Config{
-				Volume:          0.5,
+				Volume:           0.5,
 				DefaultSoundpack: "default",
-				Enabled:         true,
+				Enabled:          true,
 				FileLogging: &FileLoggingConfig{
 					Enabled:    true,
 					MaxSizeMB:  10,
 					MaxBackups: 5,
-					MaxAgeDays: -1,  // Invalid
+					MaxAgeDays: -1, // Invalid
 				},
 			},
 			shouldError: true,

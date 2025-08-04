@@ -8,10 +8,10 @@ import (
 
 // HookDefinition represents a single hook configuration in the registry
 type HookDefinition struct {
-	Name           string                 // Hook name (e.g., "PreToolUse")
-	Category       hooks.EventCategory    // Event category from parser
-	Description    string                 // Human-readable description
-	DefaultEnabled bool                   // Whether enabled by default
+	Name           string              // Hook name (e.g., "PreToolUse")
+	Category       hooks.EventCategory // Event category from parser
+	Description    string              // Human-readable description
+	DefaultEnabled bool                // Whether enabled by default
 }
 
 // AllHooks defines the complete registry of all Claude Code hooks supported by Claudio
@@ -23,7 +23,7 @@ var AllHooks = []HookDefinition{
 		DefaultEnabled: true,
 	},
 	{
-		Name:           "PostToolUse", 
+		Name:           "PostToolUse",
 		Category:       hooks.Success, // Note: Can also be Error category depending on outcome
 		Description:    "Play success/error sounds after tool execution",
 		DefaultEnabled: true,
@@ -75,31 +75,31 @@ func GetAllHooks() []HookDefinition {
 // GetEnabledHooks returns only hooks that are enabled by default
 func GetEnabledHooks() []HookDefinition {
 	var enabled []HookDefinition
-	
+
 	for _, hook := range AllHooks {
 		if hook.DefaultEnabled {
 			enabled = append(enabled, hook)
 		}
 	}
-	
-	slog.Debug("retrieved enabled hooks from registry", 
-		"enabled_count", len(enabled), 
+
+	slog.Debug("retrieved enabled hooks from registry",
+		"enabled_count", len(enabled),
 		"total_count", len(AllHooks))
-	
+
 	return enabled
 }
 
 // GetHookByName looks up a hook by name and returns it with a found flag
 func GetHookByName(name string) (HookDefinition, bool) {
 	slog.Debug("looking up hook by name", "hook_name", name)
-	
+
 	for _, hook := range AllHooks {
 		if hook.Name == name {
 			slog.Debug("found hook in registry", "hook_name", name, "category", hook.Category)
 			return hook, true
 		}
 	}
-	
+
 	slog.Debug("hook not found in registry", "hook_name", name)
 	return HookDefinition{}, false
 }
@@ -107,14 +107,14 @@ func GetHookByName(name string) (HookDefinition, bool) {
 // GetHookNames returns a slice of all hook names from the registry
 func GetHookNames() []string {
 	names := make([]string, len(AllHooks))
-	
+
 	for i, hook := range AllHooks {
 		names[i] = hook.Name
 	}
-	
-	slog.Debug("retrieved hook names from registry", 
+
+	slog.Debug("retrieved hook names from registry",
 		"hook_count", len(names),
 		"names", names)
-	
+
 	return names
 }

@@ -30,11 +30,11 @@ func TestFindClaudeSettings(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Failed to create temp Claude dir: %v", err)
 				}
-				
+
 				// Set HOME environment variable for testing
 				originalHome := os.Getenv("HOME")
 				os.Setenv("HOME", tempDir)
-				
+
 				return tempDir, func() {
 					os.Setenv("HOME", originalHome)
 				}
@@ -55,11 +55,11 @@ func TestFindClaudeSettings(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Failed to create temp Claude dir: %v", err)
 				}
-				
+
 				// Change to temp directory for testing
 				originalDir, _ := os.Getwd()
 				os.Chdir(tempDir)
-				
+
 				return tempDir, func() {
 					os.Chdir(originalDir)
 				}
@@ -71,19 +71,19 @@ func TestFindClaudeSettings(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			tempDir, cleanup := tc.setupFunc()
 			defer cleanup()
-			
+
 			// Test the FindClaudeSettingsPaths function
 			paths, err := FindClaudeSettingsPaths(tc.scope)
 			if err != nil {
 				t.Errorf("FindClaudeSettingsPaths failed: %v", err)
 				return
 			}
-			
+
 			if len(paths) == 0 {
 				t.Error("Expected at least one Claude settings path")
 				return
 			}
-			
+
 			// Verify that returned paths are reasonable
 			for _, path := range paths {
 				if !strings.Contains(path, "claude") {
@@ -93,7 +93,7 @@ func TestFindClaudeSettings(t *testing.T) {
 					t.Errorf("Expected path to contain 'settings.json', got: %s", path)
 				}
 			}
-			
+
 			t.Logf("Found Claude settings paths for %s scope: %v", tc.scope, paths)
 			t.Logf("Temp directory used: %s", tempDir)
 		})
@@ -104,20 +104,20 @@ func TestFindClaudeSettingsInvalidScope(t *testing.T) {
 	// TDD RED: Test that invalid scopes return appropriate errors
 	invalidScopes := []string{
 		"invalid",
-		"global", 
+		"global",
 		"system",
 		"admin",
 		"",
 	}
-	
+
 	for _, scope := range invalidScopes {
 		t.Run("invalid_scope_"+scope, func(t *testing.T) {
 			paths, err := FindClaudeSettingsPaths(scope)
-			
+
 			if err == nil {
 				t.Errorf("Expected error for invalid scope '%s', but got paths: %v", scope, paths)
 			}
-			
+
 			if len(paths) != 0 {
 				t.Errorf("Expected no paths for invalid scope '%s', but got: %v", scope, paths)
 			}
@@ -141,7 +141,7 @@ func TestFindClaudeSettingsExistingFiles(t *testing.T) {
 		},
 		{
 			name:           "project scope with existing settings",
-			scope:          "project", 
+			scope:          "project",
 			createFiles:    []string{".claude/settings.json"},
 			expectedExists: true,
 		},
@@ -162,7 +162,7 @@ func TestFindClaudeSettingsExistingFiles(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			tempDir := t.TempDir()
-			
+
 			// Create test files
 			for _, file := range tc.createFiles {
 				fullPath := filepath.Join(tempDir, file)
@@ -179,14 +179,14 @@ func TestFindClaudeSettingsExistingFiles(t *testing.T) {
 					if err != nil {
 						t.Fatalf("Failed to create directory %s: %v", dir, err)
 					}
-					
+
 					err = os.WriteFile(fullPath, []byte(`{"test": true}`), 0644)
 					if err != nil {
 						t.Fatalf("Failed to create file %s: %v", fullPath, err)
 					}
 				}
 			}
-			
+
 			// Set up environment for the scope
 			var cleanup func()
 			if tc.scope == "user" {
@@ -199,14 +199,14 @@ func TestFindClaudeSettingsExistingFiles(t *testing.T) {
 				cleanup = func() { os.Chdir(originalDir) }
 			}
 			defer cleanup()
-			
+
 			// Test finding settings
 			paths, err := FindClaudeSettingsPaths(tc.scope)
 			if err != nil {
 				t.Errorf("FindClaudeSettingsPaths failed: %v", err)
 				return
 			}
-			
+
 			// Check if any paths exist
 			foundExisting := false
 			for _, path := range paths {
@@ -215,7 +215,7 @@ func TestFindClaudeSettingsExistingFiles(t *testing.T) {
 					break
 				}
 			}
-			
+
 			if foundExisting != tc.expectedExists {
 				t.Errorf("Expected existing files: %v, but found: %v", tc.expectedExists, foundExisting)
 				t.Logf("Paths checked: %v", paths)
@@ -260,11 +260,11 @@ func TestFindClaudeSettingsMultiplePaths(t *testing.T) {
 				t.Errorf("FindClaudeSettingsPaths failed: %v", err)
 				return
 			}
-			
+
 			if len(paths) < tc.minPaths {
 				t.Errorf("Expected at least %d paths, got %d: %v", tc.minPaths, len(paths), paths)
 			}
-			
+
 			// Check that paths contain expected patterns
 			for _, pattern := range tc.pathPatterns {
 				found := false
@@ -279,7 +279,7 @@ func TestFindClaudeSettingsMultiplePaths(t *testing.T) {
 					// Note: This is logged but not failed as path patterns may vary by platform
 				}
 			}
-			
+
 			t.Logf("Paths for %s scope: %v", tc.scope, paths)
 		})
 	}
@@ -288,7 +288,7 @@ func TestFindClaudeSettingsMultiplePaths(t *testing.T) {
 func TestFindClaudeSettingsPathValidation(t *testing.T) {
 	// TDD RED: Test that returned paths are valid and accessible
 	scopes := []string{"user", "project"}
-	
+
 	for _, scope := range scopes {
 		t.Run("path_validation_"+scope, func(t *testing.T) {
 			paths, err := FindClaudeSettingsPaths(scope)
@@ -296,26 +296,26 @@ func TestFindClaudeSettingsPathValidation(t *testing.T) {
 				t.Errorf("FindClaudeSettingsPaths failed: %v", err)
 				return
 			}
-			
+
 			for _, path := range paths {
 				// Path should be absolute or clearly relative
 				if !filepath.IsAbs(path) && !strings.HasPrefix(path, "./") && !strings.HasPrefix(path, ".claude") {
 					t.Errorf("Path should be absolute or clearly relative: %s", path)
 				}
-				
+
 				// Path should be clean (no double slashes, etc.)
 				cleanPath := filepath.Clean(path)
 				if path != cleanPath && !strings.Contains(path, "~") {
 					t.Errorf("Path should be clean, got: %s, expected: %s", path, cleanPath)
 				}
-				
+
 				// Directory should be creatable (test parent directory)
 				dir := filepath.Dir(path)
 				if strings.HasPrefix(dir, "~") {
 					// Skip home directory expansion for this test
 					continue
 				}
-				
+
 				// Try to create the directory structure
 				tempTestPath := filepath.Join(t.TempDir(), "test-path-validation", filepath.Base(path))
 				testDir := filepath.Dir(tempTestPath)
@@ -324,7 +324,7 @@ func TestFindClaudeSettingsPathValidation(t *testing.T) {
 					t.Errorf("Unable to create directory structure for path %s: %v", path, err)
 				}
 			}
-			
+
 			t.Logf("Validated %d paths for %s scope", len(paths), scope)
 		})
 	}
@@ -373,24 +373,24 @@ func TestFindClaudeSettingsEnvironmentIntegration(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cleanup := tc.setup()
 			defer cleanup()
-			
+
 			paths, err := FindClaudeSettingsPaths(tc.scope)
 			if err != nil {
 				t.Errorf("FindClaudeSettingsPaths failed: %v", err)
 				return
 			}
-			
+
 			if len(paths) == 0 {
 				t.Error("Expected at least one path")
 				return
 			}
-			
+
 			// Verify that paths reflect environment variables
 			for envVar, envValue := range tc.envVars {
 				if envValue == "" {
 					continue
 				}
-				
+
 				found := false
 				for _, path := range paths {
 					if strings.Contains(path, envValue) || strings.Contains(path, strings.Replace(envValue, "\\", "/", -1)) {
@@ -398,11 +398,11 @@ func TestFindClaudeSettingsEnvironmentIntegration(t *testing.T) {
 						break
 					}
 				}
-				
+
 				// Log results (some platforms may not use certain env vars)
 				t.Logf("Environment %s=%s found in paths: %v", envVar, envValue, found)
 			}
-			
+
 			t.Logf("Paths with custom environment: %v", paths)
 		})
 	}

@@ -32,11 +32,11 @@ func NewSystemCommandBackend(command string) *SystemCommandBackend {
 func (scb *SystemCommandBackend) Start() error {
 	scb.mutex.Lock()
 	defer scb.mutex.Unlock()
-	
+
 	if scb.closed {
 		return ErrBackendClosed
 	}
-	
+
 	slog.Debug("SystemCommandBackend started", "command", scb.command)
 	return nil
 }
@@ -45,11 +45,11 @@ func (scb *SystemCommandBackend) Start() error {
 func (scb *SystemCommandBackend) Stop() error {
 	scb.mutex.Lock()
 	defer scb.mutex.Unlock()
-	
+
 	if scb.closed {
 		return ErrBackendClosed
 	}
-	
+
 	scb.isPlaying = false
 	slog.Debug("SystemCommandBackend stopped")
 	return nil
@@ -59,7 +59,7 @@ func (scb *SystemCommandBackend) Stop() error {
 func (scb *SystemCommandBackend) Close() error {
 	scb.mutex.Lock()
 	defer scb.mutex.Unlock()
-	
+
 	scb.closed = true
 	scb.isPlaying = false
 	slog.Debug("SystemCommandBackend closed")
@@ -80,14 +80,14 @@ func (scb *SystemCommandBackend) SetVolume(volume float32) error {
 		slog.Error("invalid volume setting", "volume", volume, "error", err)
 		return err
 	}
-	
+
 	scb.mutex.Lock()
 	defer scb.mutex.Unlock()
-	
+
 	if scb.closed {
 		return ErrBackendClosed
 	}
-	
+
 	oldVolume := scb.volume
 	scb.volume = volume
 	slog.Debug("volume changed", "old_volume", oldVolume, "new_volume", volume)
@@ -110,21 +110,21 @@ func (scb *SystemCommandBackend) Play(ctx context.Context, source AudioSource) e
 	}
 	scb.isPlaying = true
 	scb.mutex.Unlock()
-	
+
 	// Ensure we reset playing state when done
 	defer func() {
 		scb.mutex.Lock()
 		scb.isPlaying = false
 		scb.mutex.Unlock()
 	}()
-	
+
 	slog.Debug("SystemCommandBackend starting playback", "command", scb.command)
-	
+
 	// Try file path first (most efficient for system commands)
 	if filePath, err := source.AsFilePath(); err == nil {
 		return scb.playFile(ctx, filePath)
 	}
-	
+
 	// Fall back to reader via temporary file
 	reader, format, err := source.AsReader()
 	if err != nil {
@@ -132,24 +132,24 @@ func (scb *SystemCommandBackend) Play(ctx context.Context, source AudioSource) e
 		return fmt.Errorf("failed to get audio data from source: %w", err)
 	}
 	defer reader.Close()
-	
+
 	return scb.playReaderViaTempFile(ctx, reader, format)
 }
 
 // playFile plays a file directly using the system command
 func (scb *SystemCommandBackend) playFile(ctx context.Context, filePath string) error {
 	slog.Debug("playing file via system command", "file", filePath, "command", scb.command)
-	
+
 	// Create command with context for cancellation
 	cmd := exec.CommandContext(ctx, scb.command, filePath)
-	
+
 	// Run the command and wait for completion
 	err := cmd.Run()
 	if err != nil {
 		slog.Error("system command failed", "command", scb.command, "file", filePath, "error", err)
 		return fmt.Errorf("system command failed: %w", err)
 	}
-	
+
 	slog.Debug("file playback completed successfully", "file", filePath)
 	return nil
 }
@@ -157,21 +157,21 @@ func (scb *SystemCommandBackend) playFile(ctx context.Context, filePath string) 
 // playReaderViaTempFile writes reader data to a temporary file and plays it
 func (scb *SystemCommandBackend) playReaderViaTempFile(ctx context.Context, reader io.Reader, format string) error {
 	slog.Debug("playing reader via temporary file", "format", format)
-	
+
 	// Create temporary file with appropriate extension
 	tempFile, err := os.CreateTemp("", "claudio-*."+format)
 	if err != nil {
 		slog.Error("failed to create temporary file", "format", format, "error", err)
 		return fmt.Errorf("failed to create temporary file: %w", err)
 	}
-	
+
 	// Ensure cleanup
 	tempPath := tempFile.Name()
 	defer func() {
 		os.Remove(tempPath)
 		slog.Debug("temporary file cleaned up", "path", tempPath)
 	}()
-	
+
 	// Copy reader data to temporary file
 	_, err = io.Copy(tempFile, reader)
 	if err != nil {
@@ -179,16 +179,16 @@ func (scb *SystemCommandBackend) playReaderViaTempFile(ctx context.Context, read
 		slog.Error("failed to write audio data to temporary file", "path", tempPath, "error", err)
 		return fmt.Errorf("failed to write audio data to temporary file: %w", err)
 	}
-	
+
 	// Close file before playing
 	err = tempFile.Close()
 	if err != nil {
 		slog.Error("failed to close temporary file", "path", tempPath, "error", err)
 		return fmt.Errorf("failed to close temporary file: %w", err)
 	}
-	
+
 	slog.Debug("temporary file created successfully", "path", tempPath, "format", format)
-	
+
 	// Play the temporary file
 	return scb.playFile(ctx, tempPath)
 }

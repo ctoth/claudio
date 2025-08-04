@@ -15,29 +15,29 @@ func DetectClaudioHooks(settings *install.SettingsMap) []string {
 // detectClaudioHooks finds all hook names that reference claudio
 func detectClaudioHooks(settings *install.SettingsMap) []string {
 	slog.Debug("detecting claudio hooks in settings")
-	
+
 	if settings == nil {
 		slog.Debug("settings is nil, returning empty list")
 		return []string{}
 	}
-	
+
 	hooksInterface, exists := (*settings)["hooks"]
 	if !exists {
 		slog.Debug("no hooks section found in settings")
 		return []string{}
 	}
-	
+
 	hooksMap, ok := hooksInterface.(map[string]interface{})
 	if !ok {
 		slog.Warn("hooks section is not a map", "type", typeof(hooksInterface))
 		return []string{}
 	}
-	
+
 	var claudioHooks []string
-	
+
 	for hookName, hookValue := range hooksMap {
 		slog.Debug("checking hook", "name", hookName, "value", hookValue)
-		
+
 		// Check for simple string hook: "PreToolUse": "claudio" or "/path/to/claudio"
 		if stringValue, ok := hookValue.(string); ok {
 			if isClaudioCommand(stringValue) {
@@ -46,7 +46,7 @@ func detectClaudioHooks(settings *install.SettingsMap) []string {
 			}
 			continue
 		}
-		
+
 		// Check for complex array hook
 		if arrayValue, ok := hookValue.([]interface{}); ok {
 			if containsClaudioCommand(arrayValue) {
@@ -55,10 +55,10 @@ func detectClaudioHooks(settings *install.SettingsMap) []string {
 			}
 			continue
 		}
-		
+
 		slog.Debug("hook is neither string nor array", "name", hookName, "type", typeof(hookValue))
 	}
-	
+
 	slog.Info("claudio hook detection completed", "found_hooks", claudioHooks)
 	return claudioHooks
 }

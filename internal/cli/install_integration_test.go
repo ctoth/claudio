@@ -85,7 +85,7 @@ func TestInstallWorkflowUser(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Failed to marshal existing settings: %v", err)
 				}
-				
+
 				err = os.WriteFile(userSettingsFile, settingsJSON, 0644)
 				if err != nil {
 					t.Fatalf("Failed to write existing settings file: %v", err)
@@ -94,14 +94,14 @@ func TestInstallWorkflowUser(t *testing.T) {
 
 			// Test the complete installation workflow
 			err = runInstallWorkflow("user", userSettingsFile)
-			
+
 			if tc.expectError && err == nil {
 				t.Errorf("Expected error but got none")
 			}
 			if !tc.expectError && err != nil {
 				t.Errorf("Unexpected error: %v", err)
 			}
-			
+
 			if tc.expectError {
 				return // Skip verification if error was expected
 			}
@@ -125,10 +125,10 @@ func TestInstallWorkflowUser(t *testing.T) {
 					t.Errorf("Hooks should be a map, got: %T", hooks)
 				} else {
 					if len(hooksMap) != tc.expectHooksCount {
-						t.Errorf("Expected %d hooks, got %d: %v", 
+						t.Errorf("Expected %d hooks, got %d: %v",
 							tc.expectHooksCount, len(hooksMap), getMapKeys(hooksMap))
 					}
-					
+
 					// 4. Claudio hooks should be present
 					expectedClaudioHooks := install.GetHookNames() // Use registry instead of hardcoded list
 					for _, hookName := range expectedClaudioHooks {
@@ -149,7 +149,7 @@ func TestInstallWorkflowUser(t *testing.T) {
 					if key == "hooks" {
 						continue // Already tested above
 					}
-					
+
 					if actualValue, exists := (*settings)[key]; !exists {
 						t.Errorf("Existing setting '%s' was not preserved", key)
 					} else {
@@ -157,7 +157,7 @@ func TestInstallWorkflowUser(t *testing.T) {
 						expectedJSON, _ := json.Marshal(expectedValue)
 						actualJSON, _ := json.Marshal(actualValue)
 						if string(expectedJSON) != string(actualJSON) {
-							t.Errorf("Existing setting '%s' was modified:\nExpected: %s\nActual:   %s", 
+							t.Errorf("Existing setting '%s' was modified:\nExpected: %s\nActual:   %s",
 								key, string(expectedJSON), string(actualJSON))
 						}
 					}
@@ -222,7 +222,7 @@ func TestInstallWorkflowProject(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Failed to marshal existing settings: %v", err)
 				}
-				
+
 				err = os.WriteFile(projectSettingsFile, settingsJSON, 0644)
 				if err != nil {
 					t.Fatalf("Failed to write existing settings file: %v", err)
@@ -231,14 +231,14 @@ func TestInstallWorkflowProject(t *testing.T) {
 
 			// Test the complete installation workflow
 			err = runInstallWorkflow("project", projectSettingsFile)
-			
+
 			if tc.expectError && err == nil {
 				t.Errorf("Expected error but got none")
 			}
 			if !tc.expectError && err != nil {
 				t.Errorf("Unexpected error: %v", err)
 			}
-			
+
 			if tc.expectError {
 				return
 			}
@@ -291,13 +291,13 @@ func TestInstallWorkflowErrorHandling(t *testing.T) {
 				tempDir := t.TempDir()
 				settingsDir := filepath.Join(tempDir, "restricted")
 				os.MkdirAll(settingsDir, 0755) // Create with normal permissions first
-				
+
 				// Create the settings file path
 				settingsFile := filepath.Join(settingsDir, "settings.json")
-				
+
 				// Now make the directory read-only to prevent file operations
 				os.Chmod(settingsDir, 0444) // Read-only permissions
-				
+
 				return settingsFile, func() {
 					os.Chmod(settingsDir, 0755) // Restore permissions for cleanup
 				}
@@ -307,16 +307,16 @@ func TestInstallWorkflowErrorHandling(t *testing.T) {
 		},
 		{
 			name:  "corrupted existing settings file",
-			scope: "user", 
+			scope: "user",
 			setupFunc: func() (string, func()) {
 				tempDir := t.TempDir()
 				settingsDir := filepath.Join(tempDir, ".claude")
 				os.MkdirAll(settingsDir, 0755)
-				
+
 				settingsFile := filepath.Join(settingsDir, "settings.json")
 				// Write invalid JSON
 				os.WriteFile(settingsFile, []byte("{invalid json"), 0644)
-				
+
 				return settingsFile, func() {}
 			},
 			expectError: true,
@@ -330,12 +330,12 @@ func TestInstallWorkflowErrorHandling(t *testing.T) {
 			if tc.name == "permission denied directory" && os.Getuid() == 0 {
 				t.Skip("Skipping permission test when running as root")
 			}
-			
+
 			settingsPath, cleanup := tc.setupFunc()
 			defer cleanup()
 
 			err := runInstallWorkflow(tc.scope, settingsPath)
-			
+
 			if tc.expectError {
 				if err == nil {
 					t.Errorf("Expected error but got none")
@@ -363,7 +363,7 @@ func TestInstallWorkflowConcurrency(t *testing.T) {
 	}
 
 	settingsFile := filepath.Join(settingsDir, "settings.json")
-	
+
 	// Create initial settings
 	initialSettings := map[string]interface{}{
 		"version": "1.0",
@@ -380,7 +380,7 @@ func TestInstallWorkflowConcurrency(t *testing.T) {
 	// Run multiple concurrent installations
 	const numConcurrent = 5
 	errors := make(chan error, numConcurrent)
-	
+
 	for i := 0; i < numConcurrent; i++ {
 		go func() {
 			err := runInstallWorkflow("user", settingsFile)
@@ -409,7 +409,7 @@ func TestInstallWorkflowConcurrency(t *testing.T) {
 		} else {
 			expectedHooks := 1 + len(install.GetEnabledHooks()) // PreCommit + Claudio hooks from registry
 			if len(hooksMap) != expectedHooks {
-				t.Errorf("Expected %d hooks after concurrent installation, got %d", 
+				t.Errorf("Expected %d hooks after concurrent installation, got %d",
 					expectedHooks, len(hooksMap))
 			}
 		}
@@ -428,8 +428,8 @@ func getMapKeys(m map[string]interface{}) []string {
 }
 
 func containsString(s, substr string) bool {
-	return len(s) >= len(substr) && 
-		   (s == substr || findSubstringSimple(s, substr))
+	return len(s) >= len(substr) &&
+		(s == substr || findSubstringSimple(s, substr))
 }
 
 func findSubstringSimple(s, substr string) bool {

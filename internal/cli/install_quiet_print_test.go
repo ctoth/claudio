@@ -92,7 +92,7 @@ func TestInstallQuietFlag(t *testing.T) {
 func TestInstallQuietFlagHelp(t *testing.T) {
 	// TDD RED: Test that install command shows proper help for --quiet flag
 	cli := NewCLI()
-	
+
 	stdin := strings.NewReader("")
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
@@ -105,7 +105,7 @@ func TestInstallQuietFlagHelp(t *testing.T) {
 	}
 
 	helpOutput := stdout.String()
-	
+
 	// Should contain --quiet flag documentation
 	expectedHelpContent := []string{
 		"--quiet",
@@ -180,7 +180,7 @@ func TestInstallQuietFlagValidation(t *testing.T) {
 func TestInstallQuietOutputSuppression(t *testing.T) {
 	// TDD RED: Test that quiet flag suppresses normal output messages
 	// This is the core requirement - quiet should minimize stdout messages
-	
+
 	testCases := []struct {
 		name        string
 		args        []string
@@ -224,7 +224,7 @@ func TestInstallQuietOutputSuppression(t *testing.T) {
 			}
 
 			stdoutOutput := stdout.String()
-			
+
 			if tc.expectQuiet {
 				// Should have minimal or no output in quiet mode
 				if len(stdoutOutput) > 100 { // Allow for brief success messages
@@ -328,7 +328,7 @@ func TestInstallPrintFlag(t *testing.T) {
 func TestInstallPrintFlagHelp(t *testing.T) {
 	// TDD RED: Test that install command shows proper help for --print flag
 	cli := NewCLI()
-	
+
 	stdin := strings.NewReader("")
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
@@ -341,7 +341,7 @@ func TestInstallPrintFlagHelp(t *testing.T) {
 	}
 
 	helpOutput := stdout.String()
-	
+
 	// Should contain --print flag documentation
 	expectedHelpContent := []string{
 		"--print",
@@ -416,7 +416,7 @@ func TestInstallPrintFlagValidation(t *testing.T) {
 func TestInstallPrintConfigurationOutput(t *testing.T) {
 	// TDD RED: Test that print flag shows configuration that would be written
 	// This is the core requirement - print should show the generated hook configuration
-	
+
 	testCases := []struct {
 		name        string
 		args        []string
@@ -460,7 +460,7 @@ func TestInstallPrintConfigurationOutput(t *testing.T) {
 			}
 
 			stdoutOutput := stdout.String()
-			
+
 			if tc.expectPrint {
 				// Should show configuration details when print flag is set
 				if !strings.Contains(stdoutOutput, "PRINT:") && !strings.Contains(stdoutOutput, "configuration") {
@@ -534,7 +534,7 @@ func TestInstallQuietPrintCombination(t *testing.T) {
 			}
 
 			stdoutOutput := stdout.String()
-			
+
 			// When both quiet and print are specified, print should take precedence
 			// Should show configuration details despite quiet flag
 			if !strings.Contains(stdoutOutput, "PRINT:") && !strings.Contains(stdoutOutput, "configuration") {

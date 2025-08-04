@@ -13,20 +13,20 @@ func TestInstallCommandExists(t *testing.T) {
 
 	// This test expects the CLI to have an install subcommand
 	// The install command should be accessible via cli.rootCmd.Commands()
-	
+
 	installCmd := findCommand(cli.rootCmd, "install")
 	if installCmd == nil {
 		t.Fatal("install subcommand not found - expected 'claudio install' to be available")
 	}
-	
+
 	if installCmd.Use != "install" {
 		t.Errorf("Expected install command Use to be 'install', got %q", installCmd.Use)
 	}
-	
+
 	if installCmd.Short == "" {
 		t.Error("Expected install command to have a Short description")
 	}
-	
+
 	t.Logf("Install command found: Use=%q, Short=%q", installCmd.Use, installCmd.Short)
 }
 

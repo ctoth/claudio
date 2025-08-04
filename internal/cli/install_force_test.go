@@ -86,7 +86,7 @@ func TestInstallForceFlag(t *testing.T) {
 func TestInstallForceFlagHelp(t *testing.T) {
 	// TDD RED: Test that install command shows proper help for --force flag
 	cli := NewCLI()
-	
+
 	stdin := strings.NewReader("")
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
@@ -99,7 +99,7 @@ func TestInstallForceFlagHelp(t *testing.T) {
 	}
 
 	helpOutput := stdout.String()
-	
+
 	// Should contain --force flag documentation
 	expectedHelpContent := []string{
 		"--force",
@@ -174,7 +174,7 @@ func TestInstallForceFlagValidation(t *testing.T) {
 func TestInstallForceTerminalIntegration(t *testing.T) {
 	// TDD RED: Test that force flag integrates with terminal detection
 	// The force flag should override interactive prompts when not running in a terminal
-	
+
 	testCases := []struct {
 		name string
 		args []string
@@ -184,7 +184,7 @@ func TestInstallForceTerminalIntegration(t *testing.T) {
 			args: []string{"claudio", "install", "--force", "--scope", "user"},
 		},
 		{
-			name: "force project scope", 
+			name: "force project scope",
 			args: []string{"claudio", "install", "--force", "--scope", "project"},
 		},
 		{
@@ -225,7 +225,7 @@ func TestInstallForceTerminalIntegration(t *testing.T) {
 func TestInstallForceInteractivePrompting(t *testing.T) {
 	// TDD RED: Test that force flag bypasses interactive prompts
 	// This test simulates scenarios where files would exist and need confirmation
-	
+
 	testCases := []struct {
 		name        string
 		args        []string
@@ -269,7 +269,7 @@ func TestInstallForceInteractivePrompting(t *testing.T) {
 			}
 
 			stdoutOutput := stdout.String()
-			
+
 			if tc.expectForce {
 				// Should indicate force mode
 				stdoutLower := strings.ToLower(stdoutOutput)

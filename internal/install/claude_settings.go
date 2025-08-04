@@ -23,7 +23,7 @@ func FindClaudeSettingsPaths(scope string) ([]string, error) {
 // findUserScopePaths returns potential user-scope Claude settings paths
 func findUserScopePaths() ([]string, error) {
 	var paths []string
-	
+
 	// Get home directory - try multiple environment variables for cross-platform support
 	homeDir := getHomeDirectory()
 	if homeDir != "" {
@@ -31,7 +31,7 @@ func findUserScopePaths() ([]string, error) {
 		userPath := filepath.Join(homeDir, ".claude", "settings.json")
 		paths = append(paths, userPath)
 	}
-	
+
 	// On Windows, also check USERPROFILE if different from HOME
 	if runtime.GOOS == "windows" {
 		userProfile := os.Getenv("USERPROFILE")
@@ -40,27 +40,27 @@ func findUserScopePaths() ([]string, error) {
 			paths = append(paths, winPath)
 		}
 	}
-	
+
 	// Ensure we have at least one path
 	if len(paths) == 0 {
 		// Fallback to relative path from home if no environment variables are set
 		paths = append(paths, filepath.Join("~", ".claude", "settings.json"))
 	}
-	
+
 	return paths, nil
 }
 
 // findProjectScopePaths returns potential project-scope Claude settings paths
 func findProjectScopePaths() ([]string, error) {
 	var paths []string
-	
+
 	// Project settings are relative to current working directory
 	// Primary project path: ./.claude/settings.json
 	paths = append(paths, filepath.Join(".", ".claude", "settings.json"))
-	
+
 	// Alternative project path without leading dot-slash
 	paths = append(paths, filepath.Join(".claude", "settings.json"))
-	
+
 	return paths, nil
 }
 
@@ -70,19 +70,19 @@ func getHomeDirectory() string {
 	if home := os.Getenv("HOME"); home != "" {
 		return home
 	}
-	
+
 	// Try USERPROFILE (Windows standard)
 	if userProfile := os.Getenv("USERPROFILE"); userProfile != "" {
 		return userProfile
 	}
-	
+
 	// Try HOMEDRIVE + HOMEPATH combination (Windows alternative)
 	if homeDrive := os.Getenv("HOMEDRIVE"); homeDrive != "" {
 		if homePath := os.Getenv("HOMEPATH"); homePath != "" {
 			return homeDrive + homePath
 		}
 	}
-	
+
 	// No home directory found
 	return ""
 }

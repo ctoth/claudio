@@ -136,7 +136,7 @@ func (x *XDGDirs) FindSoundFile(soundpackID, relativePath string) string {
 	for i, basePath := range soundpackPaths {
 		fullPath := filepath.Join(basePath, relativePath)
 
-		slog.Debug("checking sound file path", 
+		slog.Debug("checking sound file path",
 			"path_index", i,
 			"base_path", basePath,
 			"full_path", fullPath)

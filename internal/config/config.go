@@ -14,23 +14,23 @@ import (
 
 // FileLoggingConfig represents file-based logging configuration
 type FileLoggingConfig struct {
-	Enabled    bool   `json:"enabled"`       // Whether file logging is enabled
-	Filename   string `json:"filename"`      // Log file path (empty = XDG cache path)
-	MaxSizeMB  int    `json:"max_size_mb"`   // Max file size in MB before rotation
-	MaxBackups int    `json:"max_backups"`   // Max number of backup files to keep
-	MaxAgeDays int    `json:"max_age_days"`  // Max age in days before deletion
-	Compress   bool   `json:"compress"`      // Whether to compress rotated files
+	Enabled    bool   `json:"enabled"`      // Whether file logging is enabled
+	Filename   string `json:"filename"`     // Log file path (empty = XDG cache path)
+	MaxSizeMB  int    `json:"max_size_mb"`  // Max file size in MB before rotation
+	MaxBackups int    `json:"max_backups"`  // Max number of backup files to keep
+	MaxAgeDays int    `json:"max_age_days"` // Max age in days before deletion
+	Compress   bool   `json:"compress"`     // Whether to compress rotated files
 }
 
 // Config represents Claudio configuration
 type Config struct {
-	Volume          float64             `json:"volume"`           // Audio volume (0.0 to 1.0)
-	DefaultSoundpack string              `json:"default_soundpack"` // Default soundpack to use
-	SoundpackPaths  []string            `json:"soundpack_paths"`  // Additional paths to search for soundpacks
-	Enabled         bool                `json:"enabled"`          // Whether Claudio is enabled
-	LogLevel        string              `json:"log_level"`        // Log level (debug, info, warn, error)
-	AudioBackend    string              `json:"audio_backend"`    // Audio backend (auto, system_command, malgo)
-	FileLogging     *FileLoggingConfig  `json:"file_logging,omitempty"` // File logging configuration
+	Volume           float64            `json:"volume"`                 // Audio volume (0.0 to 1.0)
+	DefaultSoundpack string             `json:"default_soundpack"`      // Default soundpack to use
+	SoundpackPaths   []string           `json:"soundpack_paths"`        // Additional paths to search for soundpacks
+	Enabled          bool               `json:"enabled"`                // Whether Claudio is enabled
+	LogLevel         string             `json:"log_level"`              // Log level (debug, info, warn, error)
+	AudioBackend     string             `json:"audio_backend"`          // Audio backend (auto, system_command, malgo)
+	FileLogging      *FileLoggingConfig `json:"file_logging,omitempty"` // File logging configuration
 }
 
 // XDGInterface defines the interface for XDG directory operations
@@ -61,15 +61,15 @@ func (cm *ConfigManager) GetDefaultConfig() *Config {
 	defaultSoundpack := cm.GetPlatformSoundpack()
 
 	defaultConfig := &Config{
-		Volume:          0.5,
+		Volume:           0.5,
 		DefaultSoundpack: defaultSoundpack,
-		SoundpackPaths:  []string{}, // XDG paths will be used
-		Enabled:         true,
-		LogLevel:        "warn",
-		AudioBackend:    "auto", // Default to auto-detection
+		SoundpackPaths:   []string{}, // XDG paths will be used
+		Enabled:          true,
+		LogLevel:         "warn",
+		AudioBackend:     "auto", // Default to auto-detection
 		FileLogging: &FileLoggingConfig{
-			Enabled:    true,  // Default enabled for hook-based usage
-			Filename:   "",    // Empty = XDG cache path
+			Enabled:    true, // Default enabled for hook-based usage
+			Filename:   "",   // Empty = XDG cache path
 			MaxSizeMB:  10,
 			MaxBackups: 5,
 			MaxAgeDays: 30,
@@ -204,7 +204,7 @@ func (cm *ConfigManager) ValidateConfig(config *Config) error {
 			}
 		}
 		if !valid {
-			errors = append(errors, fmt.Sprintf("invalid log level '%s', must be one of: %s", 
+			errors = append(errors, fmt.Sprintf("invalid log level '%s', must be one of: %s",
 				config.LogLevel, strings.Join(validLogLevels, ", ")))
 		}
 	}
@@ -212,22 +212,22 @@ func (cm *ConfigManager) ValidateConfig(config *Config) error {
 	// Validate audio backend
 	if !cm.IsValidAudioBackend(config.AudioBackend) {
 		supportedBackends := cm.GetSupportedAudioBackends()
-		errors = append(errors, fmt.Sprintf("invalid audio backend '%s', must be one of: %s", 
+		errors = append(errors, fmt.Sprintf("invalid audio backend '%s', must be one of: %s",
 			config.AudioBackend, strings.Join(supportedBackends, ", ")))
 	}
 
 	// Validate file logging configuration
 	if config.FileLogging != nil {
 		fileLogging := config.FileLogging
-		
+
 		if fileLogging.MaxSizeMB < 0 {
 			errors = append(errors, fmt.Sprintf("file logging max_size_mb must be >= 0, got %d", fileLogging.MaxSizeMB))
 		}
-		
+
 		if fileLogging.MaxBackups < 0 {
 			errors = append(errors, fmt.Sprintf("file logging max_backups must be >= 0, got %d", fileLogging.MaxBackups))
 		}
-		
+
 		if fileLogging.MaxAgeDays < 0 {
 			errors = append(errors, fmt.Sprintf("file logging max_age_days must be >= 0, got %d", fileLogging.MaxAgeDays))
 		}
@@ -381,7 +381,7 @@ func (cm *ConfigManager) ResolveLogFilePath(filename string) string {
 	if filename != "" {
 		return filename
 	}
-	
+
 	// Use XDG cache directory for log files
 	return filepath.Join(cm.xdg.GetCachePath("logs"), "claudio.log")
 }
@@ -435,7 +435,7 @@ func (cm *ConfigManager) IsValidAudioBackend(backend string) bool {
 	if backend == "" {
 		return true
 	}
-	
+
 	supported := cm.GetSupportedAudioBackends()
 	for _, supportedBackend := range supported {
 		if backend == supportedBackend {
@@ -448,12 +448,12 @@ func (cm *ConfigManager) IsValidAudioBackend(backend string) bool {
 // GetPlatformSoundpack returns platform-specific soundpack if it exists, otherwise "default"
 func (cm *ConfigManager) GetPlatformSoundpack() string {
 	platformFile := runtime.GOOS + ".json"
-	
+
 	if _, err := os.Stat(platformFile); err == nil {
 		slog.Debug("platform soundpack found", "platform", runtime.GOOS, "file", platformFile)
 		return platformFile
 	}
-	
+
 	slog.Debug("platform soundpack not found, using default", "platform", runtime.GOOS, "file", platformFile)
 	return "default"
 }

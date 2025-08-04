@@ -35,7 +35,7 @@ func NewSoundMapper() *SoundMapper {
 
 // MapSound maps a hook event context to sound file paths using event-specific fallback chains:
 // - PreToolUse: 9-level enhanced fallback with command-only sounds
-// - PostToolUse: 6-level fallback (skip command-only sounds for semantic accuracy)  
+// - PostToolUse: 6-level fallback (skip command-only sounds for semantic accuracy)
 // - Simple events: 4-level fallback (UserPromptSubmit, Notification, Stop, SubagentStop, PreCompact)
 func (m *SoundMapper) MapSound(context *hooks.EventContext) *SoundMappingResult {
 	if context == nil {
@@ -49,7 +49,7 @@ func (m *SoundMapper) MapSound(context *hooks.EventContext) *SoundMappingResult 
 		}
 	}
 
-	// Determine chain type based on event context 
+	// Determine chain type based on event context
 	chainType := m.determineChainType(context)
 	slog.Debug("determined fallback chain type", "chain_type", chainType, "category", context.Category.String())
 
@@ -58,7 +58,7 @@ func (m *SoundMapper) MapSound(context *hooks.EventContext) *SoundMappingResult 
 	case ChainTypeEnhanced:
 		return m.mapEnhancedSound(context)
 	case ChainTypePostTool:
-		return m.mapPostToolSound(context)  
+		return m.mapPostToolSound(context)
 	case ChainTypeSimple:
 		return m.mapSimpleSound(context)
 	default:
@@ -73,11 +73,11 @@ func (m *SoundMapper) determineChainType(context *hooks.EventContext) string {
 	if m.isEnhancedChainEvent(context) {
 		return ChainTypeEnhanced
 	}
-	
+
 	if m.isPostToolChainEvent(context) {
 		return ChainTypePostTool
 	}
-	
+
 	// Default to simple chain for all other events
 	return ChainTypeSimple
 }
@@ -88,7 +88,7 @@ func (m *SoundMapper) isEnhancedChainEvent(context *hooks.EventContext) bool {
 	return context.Category == hooks.Loading && context.ToolName != ""
 }
 
-// isPostToolChainEvent determines if event should use PostToolUse 6-level fallback  
+// isPostToolChainEvent determines if event should use PostToolUse 6-level fallback
 func (m *SoundMapper) isPostToolChainEvent(context *hooks.EventContext) bool {
 	// PostToolUse events with tool names use 6-level fallback (skip command-only sounds for semantic accuracy)
 	return (context.Category == hooks.Success || context.Category == hooks.Error) && context.ToolName != ""
@@ -269,7 +269,7 @@ func (m *SoundMapper) extractCommandFromHint(hint, toolName string) (command, su
 			// Check if second part is a known suffix, if not it's likely a subcommand
 			suffixes := []string{"start", "thinking", "success", "error", "complete"}
 			secondPart := parts[1]
-			
+
 			// If second part is not a suffix, it's a subcommand
 			isSuffix := false
 			for _, suffix := range suffixes {
@@ -278,7 +278,7 @@ func (m *SoundMapper) extractCommandFromHint(hint, toolName string) (command, su
 					break
 				}
 			}
-			
+
 			if !isSuffix && len(parts) >= 3 {
 				// Pattern: git-commit-start -> command="git", subcommand="commit"
 				subcommand = secondPart
@@ -291,10 +291,10 @@ func (m *SoundMapper) extractCommandFromHint(hint, toolName string) (command, su
 		command = toolName
 	}
 
-	slog.Debug("extracted command from hint", 
-		"hint", hint, 
-		"tool_name", toolName, 
-		"command", command, 
+	slog.Debug("extracted command from hint",
+		"hint", hint,
+		"tool_name", toolName,
+		"command", command,
 		"subcommand", subcommand)
 
 	return command, subcommand
@@ -311,17 +311,17 @@ func (m *SoundMapper) extractSuffixFromOperation(operation string) string {
 	case "tool-start":
 		return "start"
 	case "tool-complete":
-		return "complete" 
+		return "complete"
 	case "prompt":
 		return "submit"
 	case "notification":
-		return ""  // No suffix for notifications
+		return "" // No suffix for notifications
 	case "stop":
 		return "complete"
 	case "subagent-stop":
 		return "complete"
 	case "compact":
-		return ""  // No suffix for compact operations
+		return "" // No suffix for compact operations
 	default:
 		// For unknown operations, try to extract meaningful suffix
 		if strings.HasSuffix(operation, "-start") {
@@ -330,7 +330,7 @@ func (m *SoundMapper) extractSuffixFromOperation(operation string) string {
 		if strings.HasSuffix(operation, "-complete") {
 			return "complete"
 		}
-		return operation  // Use as-is if no known pattern
+		return operation // Use as-is if no known pattern
 	}
 }
 
@@ -358,7 +358,7 @@ func (m *SoundMapper) mapPostToolSound(context *hooks.EventContext) *SoundMappin
 
 	// Extract command once for reuse (skip subcommand since we don't use command-subcommand level)
 	command, _ := m.extractCommandFromHint(context.SoundHint, context.ToolName)
-	
+
 	// Determine suffix based on category (success/error context)
 	suffix := m.determineCategorySuffix(context.Category, context.Operation)
 
@@ -601,11 +601,11 @@ func normalizeName(name string) string {
 
 	// Convert to lowercase
 	normalized := strings.ToLower(name)
-	
+
 	// Replace spaces and underscores with hyphens
 	normalized = strings.ReplaceAll(normalized, " ", "-")
 	normalized = strings.ReplaceAll(normalized, "_", "-")
-	
+
 	// Replace any non-alphanumeric characters with hyphens to preserve word boundaries
 	var result strings.Builder
 	for _, r := range normalized {
@@ -617,17 +617,17 @@ func normalizeName(name string) string {
 			result.WriteRune(r) // Keep existing hyphens
 		}
 	}
-	
+
 	normalized = result.String()
-	
+
 	// Clean up multiple consecutive hyphens (but don't remove them entirely)
 	for strings.Contains(normalized, "--") {
 		normalized = strings.ReplaceAll(normalized, "--", "-")
 	}
-	
+
 	// Remove leading/trailing hyphens
 	normalized = strings.Trim(normalized, "-")
-	
+
 	slog.Debug("normalized sound name", "original", name, "normalized", normalized)
 	return normalized
 }

@@ -131,7 +131,7 @@ func (s *settingsLockWrapper) Release() error {
 	if s.lock == nil {
 		return nil // Already released or never acquired
 	}
-	
+
 	err := s.lock.Unlock()
 	s.lock = nil // Mark as released
 	return err
@@ -145,62 +145,62 @@ func AcquireFileLock(lockFile string) (SettingsLock, error) {
 // AcquireFileLockWithTimeout acquires an exclusive file lock with timeout
 func AcquireFileLockWithTimeout(lockFile string, timeout time.Duration) (SettingsLock, error) {
 	fileLock := NewFileLock(lockFile)
-	
+
 	// Use context for timeout handling
 	deadline := time.Now().Add(timeout)
 	retryDelay := 10 * time.Millisecond
-	
+
 	for time.Now().Before(deadline) {
 		locked, err := fileLock.TryLock()
 		if err != nil {
 			return nil, fmt.Errorf("failed to try lock %s: %w", lockFile, err)
 		}
-		
+
 		if locked {
 			return &settingsLockWrapper{lock: fileLock}, nil
 		}
-		
+
 		// Wait before retrying, but don't exceed deadline
 		remaining := time.Until(deadline)
 		if remaining <= 0 {
 			break
 		}
-		
+
 		sleepTime := retryDelay
 		if sleepTime > remaining {
 			sleepTime = remaining
 		}
-		
+
 		time.Sleep(sleepTime)
-		
+
 		// Exponential backoff, but cap at 100ms
 		retryDelay *= 2
 		if retryDelay > 100*time.Millisecond {
 			retryDelay = 100 * time.Millisecond
 		}
 	}
-	
+
 	return nil, fmt.Errorf("timeout acquiring file lock %s after %v", lockFile, timeout)
 }
 
 // ReadSettingsFileWithLock reads settings file with file locking for concurrent safety
 func ReadSettingsFileWithLock(filePath string) (*SettingsMap, error) {
 	lockFile := filePath + ".lock"
-	
+
 	// Ensure directory exists for lock file
 	dir := filepath.Dir(lockFile)
 	err := os.MkdirAll(dir, 0755)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create directory for lock file %s: %w", dir, err)
 	}
-	
+
 	// Acquire file lock
 	lock, err := AcquireFileLock(lockFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to acquire read lock: %w", err)
 	}
 	defer lock.Release()
-	
+
 	// Read settings with the lock held
 	return ReadSettingsFile(filePath)
 }
@@ -208,21 +208,21 @@ func ReadSettingsFileWithLock(filePath string) (*SettingsMap, error) {
 // WriteSettingsFileWithLock writes settings file with file locking for concurrent safety
 func WriteSettingsFileWithLock(filePath string, settings *SettingsMap) error {
 	lockFile := filePath + ".lock"
-	
+
 	// Ensure directory exists for lock file
 	dir := filepath.Dir(lockFile)
 	err := os.MkdirAll(dir, 0755)
 	if err != nil {
 		return fmt.Errorf("failed to create directory for lock file %s: %w", dir, err)
 	}
-	
+
 	// Acquire file lock
 	lock, err := AcquireFileLock(lockFile)
 	if err != nil {
 		return fmt.Errorf("failed to acquire write lock: %w", err)
 	}
 	defer lock.Release()
-	
+
 	// Write settings with the lock held
 	return WriteSettingsFile(filePath, settings)
 }

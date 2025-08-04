@@ -21,7 +21,7 @@ type DefaultBackendFactory struct {
 
 // Factory errors
 var (
-	ErrInvalidBackendType = errors.New("invalid backend type")
+	ErrInvalidBackendType    = errors.New("invalid backend type")
 	ErrBackendCreationFailed = errors.New("backend creation failed")
 )
 
@@ -74,7 +74,7 @@ func (f *DefaultBackendFactory) IsValidBackendType(backendType string) bool {
 	if backendType == "" {
 		return true
 	}
-	
+
 	supported := f.GetSupportedBackends()
 	for _, supportedType := range supported {
 		if backendType == supportedType {
@@ -87,10 +87,10 @@ func (f *DefaultBackendFactory) IsValidBackendType(backendType string) bool {
 // createAutoBackend automatically selects the best backend for the current platform
 func (f *DefaultBackendFactory) createAutoBackend() (AudioBackend, error) {
 	slog.Debug("auto-detecting optimal backend")
-	
+
 	optimalType := f.detectOptimalBackendType()
 	slog.Debug("auto-detection result", "selected_type", optimalType)
-	
+
 	switch optimalType {
 	case "system_command":
 		return f.createSystemCommandBackend()
@@ -105,13 +105,13 @@ func (f *DefaultBackendFactory) createAutoBackend() (AudioBackend, error) {
 // createSystemCommandBackend creates a SystemCommandBackend with the best available command
 func (f *DefaultBackendFactory) createSystemCommandBackend() (AudioBackend, error) {
 	slog.Debug("creating system command backend")
-	
+
 	preferredCommand := f.getPreferredSystemCommand()
 	if preferredCommand == "" {
 		slog.Error("no system audio commands available")
 		return nil, fmt.Errorf("%w: no system audio commands found", ErrBackendNotAvailable)
 	}
-	
+
 	slog.Debug("system command backend created", "command", preferredCommand)
 	backend := NewSystemCommandBackend(preferredCommand)
 	return backend, nil

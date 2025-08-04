@@ -169,7 +169,7 @@ func (e *HookEvent) GetContext() *EventContext {
 				context.ToolName = commandInfo.Command
 
 				if commandInfo.HasSubcommand {
-					context.SoundHint = strings.ToLower(commandInfo.Command) + "-" + 
+					context.SoundHint = strings.ToLower(commandInfo.Command) + "-" +
 						strings.ToLower(commandInfo.Subcommand) + "-start"
 				} else {
 					context.SoundHint = strings.ToLower(commandInfo.Command) + "-start"
@@ -203,7 +203,7 @@ func (e *HookEvent) GetContext() *EventContext {
 					if errorType != "" {
 						context.SoundHint = errorType
 					} else if commandInfo.HasSubcommand {
-						context.SoundHint = strings.ToLower(commandInfo.Command) + "-" + 
+						context.SoundHint = strings.ToLower(commandInfo.Command) + "-" +
 							strings.ToLower(commandInfo.Subcommand) + "-error"
 					} else {
 						context.SoundHint = strings.ToLower(commandInfo.Command) + "-error"
@@ -237,7 +237,7 @@ func (e *HookEvent) GetContext() *EventContext {
 					context.ToolName = commandInfo.Command
 
 					if commandInfo.HasSubcommand {
-						context.SoundHint = strings.ToLower(commandInfo.Command) + "-" + 
+						context.SoundHint = strings.ToLower(commandInfo.Command) + "-" +
 							strings.ToLower(commandInfo.Subcommand) + "-success"
 					} else {
 						context.SoundHint = strings.ToLower(commandInfo.Command) + "-success"
@@ -260,7 +260,7 @@ func (e *HookEvent) GetContext() *EventContext {
 
 	case "Stop":
 		context.Category = Completion
-		context.SoundHint = "agent-complete" 
+		context.SoundHint = "agent-complete"
 		context.Operation = "stop"
 		slog.Debug("categorizing Stop event as Completion", "hint", context.SoundHint, "operation", context.Operation)
 
@@ -460,24 +460,24 @@ func isValidSubcommand(command, word string) bool {
 	if strings.Contains(word, "/") || strings.Contains(word, ".") {
 		return false
 	}
-	
+
 	// URLs are not subcommands
 	if strings.Contains(word, "://") {
 		return false
 	}
-	
+
 	// Known command patterns that have subcommands
 	knownSubcommands := map[string][]string{
-		"git":    {"add", "commit", "push", "pull", "clone", "checkout", "branch", "merge", "rebase", "status", "log", "diff", "fetch", "remote", "tag", "stash", "reset", "revert"},
-		"npm":    {"install", "uninstall", "update", "start", "stop", "restart", "test", "run", "build", "publish", "pack", "init", "config", "cache", "audit", "fund", "outdated"},
-		"docker": {"build", "run", "pull", "push", "start", "stop", "restart", "kill", "rm", "rmi", "ps", "images", "logs", "exec", "compose", "volume", "network"},
-		"cargo":  {"build", "run", "test", "doc", "new", "init", "add", "install", "update", "search", "publish", "bench", "clean", "check", "fmt", "clippy"},
-		"go":     {"build", "run", "test", "install", "get", "mod", "fmt", "vet", "generate", "clean", "env", "bug", "version", "doc"},
-		"pip":    {"install", "uninstall", "list", "show", "freeze", "search", "download", "wheel", "hash", "completion", "debug", "help"},
-		"yarn":   {"add", "install", "remove", "upgrade", "start", "build", "test", "run", "init", "cache", "config", "info", "why"},
+		"git":     {"add", "commit", "push", "pull", "clone", "checkout", "branch", "merge", "rebase", "status", "log", "diff", "fetch", "remote", "tag", "stash", "reset", "revert"},
+		"npm":     {"install", "uninstall", "update", "start", "stop", "restart", "test", "run", "build", "publish", "pack", "init", "config", "cache", "audit", "fund", "outdated"},
+		"docker":  {"build", "run", "pull", "push", "start", "stop", "restart", "kill", "rm", "rmi", "ps", "images", "logs", "exec", "compose", "volume", "network"},
+		"cargo":   {"build", "run", "test", "doc", "new", "init", "add", "install", "update", "search", "publish", "bench", "clean", "check", "fmt", "clippy"},
+		"go":      {"build", "run", "test", "install", "get", "mod", "fmt", "vet", "generate", "clean", "env", "bug", "version", "doc"},
+		"pip":     {"install", "uninstall", "list", "show", "freeze", "search", "download", "wheel", "hash", "completion", "debug", "help"},
+		"yarn":    {"add", "install", "remove", "upgrade", "start", "build", "test", "run", "init", "cache", "config", "info", "why"},
 		"kubectl": {"get", "describe", "create", "apply", "delete", "patch", "replace", "expose", "scale", "autoscale", "rollout", "logs", "exec", "port-forward", "proxy", "cp", "auth", "config"},
 	}
-	
+
 	if subcommands, exists := knownSubcommands[command]; exists {
 		for _, subCmd := range subcommands {
 			if word == subCmd {
@@ -486,7 +486,7 @@ func isValidSubcommand(command, word string) bool {
 		}
 		return false
 	}
-	
+
 	// For unknown commands, be conservative - only allow alphanumeric subcommands
 	// This catches cases like "systemctl start" but rejects "ls /path/to/file"
 	for _, r := range word {
@@ -494,7 +494,7 @@ func isValidSubcommand(command, word string) bool {
 			return false
 		}
 	}
-	
+
 	return true
 }
 
@@ -520,9 +520,9 @@ func extractFileExtension(path string) string {
 	if lastDot == -1 || lastDot == len(path)-1 {
 		return ""
 	}
-	
+
 	ext := strings.ToLower(path[lastDot+1:])
-	
+
 	// Filter out common non-file-type extensions
 	switch ext {
 	case "tmp", "bak", "log", "old", "orig":

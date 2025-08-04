@@ -10,28 +10,28 @@ func TestContextLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create audio context: %v", err)
 	}
-	
+
 	// Verify context is valid
 	if !ctx.IsValid() {
 		t.Error("context should be valid after creation")
 	}
-	
+
 	// Verify underlying context exists
 	if ctx.GetContext() == nil {
 		t.Error("underlying malgo context should not be nil")
 	}
-	
+
 	// Test context cleanup
 	err = ctx.Close()
 	if err != nil {
 		t.Errorf("failed to close audio context: %v", err)
 	}
-	
+
 	// Verify context is invalid after close
 	if ctx.IsValid() {
 		t.Error("context should be invalid after close")
 	}
-	
+
 	// Test double close (should not error)
 	err = ctx.Close()
 	if err != nil {
@@ -45,7 +45,7 @@ func TestContextCreationFailure(t *testing.T) {
 	// - No audio devices
 	// - Driver issues
 	// - Permission problems
-	
+
 	// For now, we just verify the function signature and error handling
 	ctx, err := NewContext()
 	if err != nil {
@@ -53,10 +53,10 @@ func TestContextCreationFailure(t *testing.T) {
 		t.Logf("context creation failed as expected: %v", err)
 		return
 	}
-	
+
 	// If creation succeeds, clean up
 	defer ctx.Close()
-	
+
 	if !ctx.IsValid() {
 		t.Error("valid context should report as valid")
 	}
