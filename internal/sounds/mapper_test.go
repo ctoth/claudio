@@ -1,13 +1,16 @@
 package sounds
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/ctoth/claudio/internal/hooks"
+	"github.com/ctoth/claudio/internal/tracking"
 )
 
 func TestSoundMapper(t *testing.T) {
-	mapper := NewSoundMapper()
+	mapper := NewSoundMapper(nil)
 
 	if mapper == nil {
 		t.Fatal("NewSoundMapper returned nil")
@@ -15,7 +18,7 @@ func TestSoundMapper(t *testing.T) {
 }
 
 func TestMapSoundEventSpecificFallback(t *testing.T) {
-	mapper := NewSoundMapper()
+	mapper := NewSoundMapper(nil)
 
 	testCases := []struct {
 		name          string
@@ -155,7 +158,7 @@ func TestMapSoundEventSpecificFallback(t *testing.T) {
 }
 
 func TestMapSoundPathNormalization(t *testing.T) {
-	mapper := NewSoundMapper()
+	mapper := NewSoundMapper(nil)
 
 	testCases := []struct {
 		name     string
@@ -195,7 +198,7 @@ func TestMapSoundPathNormalization(t *testing.T) {
 }
 
 func TestMapSoundFallbackSelection(t *testing.T) {
-	mapper := NewSoundMapper()
+	mapper := NewSoundMapper(nil)
 
 	// Test fallback path generation - updated for event-specific architecture
 
@@ -280,7 +283,7 @@ func TestMapSoundFallbackSelection(t *testing.T) {
 }
 
 func TestMapSoundEdgeCases(t *testing.T) {
-	mapper := NewSoundMapper()
+	mapper := NewSoundMapper(nil)
 
 	t.Run("nil context", func(t *testing.T) {
 		result := mapper.MapSound(nil)
@@ -351,7 +354,7 @@ func TestMapSoundEdgeCases(t *testing.T) {
 }
 
 func TestMapSoundResultMetadata(t *testing.T) {
-	mapper := NewSoundMapper()
+	mapper := NewSoundMapper(nil)
 
 	context := &hooks.EventContext{
 		Category:  hooks.Success,
@@ -386,7 +389,7 @@ func TestMapSoundResultMetadata(t *testing.T) {
 }
 
 func TestMapSoundWithOriginalToolFallback(t *testing.T) {
-	mapper := NewSoundMapper()
+	mapper := NewSoundMapper(nil)
 
 	// Test context with extracted command but original tool for fallback
 	context := &hooks.EventContext{
@@ -430,7 +433,7 @@ func TestMapSoundWithOriginalToolFallback(t *testing.T) {
 
 // TDD Phase 2.1 RED: Event-specific fallback chain differentiation tests
 func TestEventSpecificFallbackChains(t *testing.T) {
-	mapper := NewSoundMapper()
+	mapper := NewSoundMapper(nil)
 
 	tests := []struct {
 		name              string
@@ -573,7 +576,7 @@ func TestEventSpecificFallbackChains(t *testing.T) {
 
 // TDD Phase 2.1 RED: PreToolUse enhanced 9-level fallback chain test
 func TestPreToolUse9LevelEnhancedFallback(t *testing.T) {
-	mapper := NewSoundMapper()
+	mapper := NewSoundMapper(nil)
 
 	context := &hooks.EventContext{
 		Category:     hooks.Loading,
@@ -615,7 +618,7 @@ func TestPreToolUse9LevelEnhancedFallback(t *testing.T) {
 
 // TDD Phase 2.1 RED: PostToolUse 6-level fallback chain test (skip command-only sounds)
 func TestPostToolUse6LevelFallback(t *testing.T) {
-	mapper := NewSoundMapper()
+	mapper := NewSoundMapper(nil)
 
 	tests := []struct {
 		name     string
@@ -684,7 +687,7 @@ func TestPostToolUse6LevelFallback(t *testing.T) {
 
 // TDD Phase 2.1 RED: Simple event 4-level fallback chain test
 func TestSimpleEvent4LevelFallback(t *testing.T) {
-	mapper := NewSoundMapper()
+	mapper := NewSoundMapper(nil)
 
 	tests := []struct {
 		name     string
@@ -782,3 +785,230 @@ func TestSimpleEvent4LevelFallback(t *testing.T) {
 		})
 	}
 }
+
+// TDD Cycle 6 RED: SoundChecker Integration Tests
+func TestNewSoundMapperWithSoundChecker(t *testing.T) {
+	checker := tracking.NewSoundChecker()
+	mapper := NewSoundMapper(checker)
+
+	if mapper == nil {
+		t.Fatal("NewSoundMapper with SoundChecker returned nil")
+	}
+}
+
+func TestNewSoundMapperWithNilChecker(t *testing.T) {
+	mapper := NewSoundMapper(nil)
+
+	if mapper == nil {
+		t.Fatal("NewSoundMapper with nil checker returned nil")
+	}
+}
+
+func TestMapSoundTriggersPathChecking(t *testing.T) {
+	// Create a test hook to capture path checks
+	var checkedPaths []string
+	var checkedSequences []int
+	var checkedExists []bool
+	var checkedContext *hooks.EventContext
+
+	testHook := func(path string, exists bool, sequence int, context *hooks.EventContext) {
+		checkedPaths = append(checkedPaths, path)
+		checkedExists = append(checkedExists, exists)
+		checkedSequences = append(checkedSequences, sequence)
+		checkedContext = context
+	}
+
+	checker := tracking.NewSoundChecker(tracking.WithHook(testHook))
+	mapper := NewSoundMapper(checker)
+
+	context := &hooks.EventContext{
+		Category:  hooks.Success,
+		ToolName:  "Edit",
+		SoundHint: "file-saved",
+		Operation: "tool-complete",
+	}
+
+	result := mapper.MapSound(context)
+
+	// Verify that path checking was triggered
+	if len(checkedPaths) == 0 {
+		t.Error("Expected path checking to be triggered, but no paths were checked")
+	}
+
+	// Verify that all paths from the result were checked
+	if len(checkedPaths) != len(result.AllPaths) {
+		t.Errorf("Expected %d paths to be checked, got %d", len(result.AllPaths), len(checkedPaths))
+	}
+
+	// Verify paths match between result and checked paths
+	for i, expectedPath := range result.AllPaths {
+		if i < len(checkedPaths) && checkedPaths[i] != expectedPath {
+			t.Errorf("Checked path[%d] = %s, expected %s", i, checkedPaths[i], expectedPath)
+		}
+	}
+
+	// Verify sequences are 1-based and incremental
+	for i, seq := range checkedSequences {
+		expectedSeq := i + 1 // 1-based
+		if seq != expectedSeq {
+			t.Errorf("Sequence[%d] = %d, expected %d", i, seq, expectedSeq)
+		}
+	}
+
+	// Verify context was passed correctly
+	if checkedContext != context {
+		t.Error("Expected original context to be passed to path checker")
+	}
+}
+
+func TestMapSoundFallbackLevelBasedOnFileExistence(t *testing.T) {
+	// Create a temporary directory structure for this test
+	tempDir := t.TempDir()
+	
+	// Create the success subdirectory
+	successDir := filepath.Join(tempDir, "success")
+	err := os.MkdirAll(successDir, 0755)
+	if err != nil {
+		t.Fatalf("Failed to create test directory: %v", err)
+	}
+	
+	// Create only the second file (edit-success.wav) to simulate level 2 existing
+	level2File := filepath.Join(successDir, "edit-success.wav")
+	err = os.WriteFile(level2File, []byte("test audio data"), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+	
+	// Change to the temp directory so relative paths work
+	originalDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get current directory: %v", err)
+	}
+	defer os.Chdir(originalDir)
+	
+	err = os.Chdir(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to change to temp directory: %v", err)
+	}
+
+	var checkedPaths []string
+	trackingHook := func(path string, exists bool, sequence int, context *hooks.EventContext) {
+		checkedPaths = append(checkedPaths, path)
+		t.Logf("Path check: %s (exists: %v, sequence: %d)", path, exists, sequence)
+	}
+
+	checker := tracking.NewSoundChecker(tracking.WithHook(trackingHook))
+	mapper := NewSoundMapper(checker)
+
+	context := &hooks.EventContext{
+		Category:  hooks.Success,
+		ToolName:  "Edit",
+		SoundHint: "file-saved",
+		Operation: "tool-complete",
+	}
+
+	result := mapper.MapSound(context)
+
+	// Since level 1 doesn't exist but level 2 does, fallback level should be 2
+	expectedFallbackLevel := 2
+	if result.FallbackLevel != expectedFallbackLevel {
+		t.Errorf("Expected fallback level %d, got %d", expectedFallbackLevel, result.FallbackLevel)
+		t.Logf("All paths: %v", result.AllPaths)
+		t.Logf("Checked paths: %v", checkedPaths)
+	}
+
+	// Selected path should be the second path (first existing one)
+	if len(result.AllPaths) >= 2 {
+		expectedSelectedPath := result.AllPaths[1] // Second path (level 2)
+		if result.SelectedPath != expectedSelectedPath {
+			t.Errorf("Expected selected path %s, got %s", expectedSelectedPath, result.SelectedPath)
+		}
+	} else {
+		t.Error("Expected at least 2 paths in AllPaths")
+	}
+
+	// Verify all expected paths were checked
+	if len(checkedPaths) != len(result.AllPaths) {
+		t.Errorf("Expected %d path checks, got %d", len(result.AllPaths), len(checkedPaths))
+	}
+}
+
+func TestMapSoundAllPathsChecked(t *testing.T) {
+	var checkedPaths []string
+
+	testHook := func(path string, exists bool, sequence int, context *hooks.EventContext) {
+		checkedPaths = append(checkedPaths, path)
+	}
+
+	checker := tracking.NewSoundChecker(tracking.WithHook(testHook))
+	mapper := NewSoundMapper(checker)
+
+	// Test with enhanced 9-level fallback (PreToolUse)
+	context := &hooks.EventContext{
+		Category:     hooks.Loading,
+		ToolName:     "git",
+		OriginalTool: "Bash",
+		SoundHint:    "git-commit-start",
+		Operation:    "tool-start",
+	}
+
+	result := mapper.MapSound(context)
+
+	// Verify all paths in the result were checked
+	if len(checkedPaths) != len(result.AllPaths) {
+		t.Errorf("Expected all %d paths to be checked, only checked %d", len(result.AllPaths), len(checkedPaths))
+	}
+
+	// Verify exact path matching
+	for i, expectedPath := range result.AllPaths {
+		if i < len(checkedPaths) && checkedPaths[i] != expectedPath {
+			t.Errorf("Path check[%d]: expected %s, got %s", i, expectedPath, checkedPaths[i])
+		}
+	}
+
+	// Should generate 9 paths for enhanced fallback
+	expectedPathCount := 9
+	if len(result.AllPaths) != expectedPathCount {
+		t.Errorf("Expected %d paths for enhanced fallback, got %d", expectedPathCount, len(result.AllPaths))
+	}
+}
+
+func TestMapSoundWithoutTrackingSkipsPathChecking(t *testing.T) {
+	var pathCheckTriggered bool
+
+	// This hook should never be called 
+	_ = func(path string, exists bool, sequence int, context *hooks.EventContext) {
+		pathCheckTriggered = true
+	}
+
+	// This should NOT trigger path checking
+	mapper := NewSoundMapper(nil)
+
+	context := &hooks.EventContext{
+		Category:  hooks.Success,
+		ToolName:  "Edit",
+		Operation: "tool-complete",
+	}
+
+	result := mapper.MapSound(context)
+
+	// Path checking should not have been triggered
+	if pathCheckTriggered {
+		t.Error("Expected no path checking for nil SoundChecker, but path checking was triggered")
+	}
+
+	// Should still return valid result
+	if result == nil {
+		t.Error("Expected valid result even without tracking")
+	}
+
+	if len(result.AllPaths) == 0 {
+		t.Error("Expected paths to be generated even without tracking")
+	}
+
+	// Fallback level should be 1 (default behavior without actual checking)
+	if result.FallbackLevel != 1 {
+		t.Errorf("Expected fallback level 1 for no tracking, got %d", result.FallbackLevel)
+	}
+}
+

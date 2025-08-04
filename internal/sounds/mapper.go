@@ -5,10 +5,13 @@ import (
 	"strings"
 
 	"github.com/ctoth/claudio/internal/hooks"
+	"github.com/ctoth/claudio/internal/tracking"
 )
 
 // SoundMapper maps hook events to sound file paths using event-specific fallback chains
-type SoundMapper struct{}
+type SoundMapper struct{
+	soundChecker *tracking.SoundChecker // Optional for sound path tracking
+}
 
 // Chain type constants for sound mapping strategy
 const (
@@ -27,10 +30,13 @@ type SoundMappingResult struct {
 	ChainType     string   // Type of fallback chain used: "enhanced", "posttool", "simple"
 }
 
-// NewSoundMapper creates a new sound mapper
-func NewSoundMapper() *SoundMapper {
-	slog.Debug("creating new sound mapper")
-	return &SoundMapper{}
+// NewSoundMapper creates a new sound mapper with SoundChecker for tracking
+func NewSoundMapper(soundChecker *tracking.SoundChecker) *SoundMapper {
+	slog.Debug("creating new sound mapper with tracking enabled")
+	
+	return &SoundMapper{
+		soundChecker: soundChecker,
+	}
 }
 
 // MapSound maps a hook event context to sound file paths using event-specific fallback chains:
@@ -177,9 +183,16 @@ func (m *SoundMapper) mapEnhancedSound(context *hooks.EventContext) *SoundMappin
 		paths = []string{"default.wav"}
 	}
 
+	// Calculate fallback level and determine selected path
+	fallbackLevel := m.calculateFallbackLevel(context, paths)
+	selectedPath := paths[0] // Default to first path
+	if fallbackLevel > 0 && fallbackLevel <= len(paths) {
+		selectedPath = paths[fallbackLevel-1] // Convert 1-based to 0-based index
+	}
+
 	result := &SoundMappingResult{
-		SelectedPath:  paths[0],
-		FallbackLevel: m.calculateFallbackLevel(context, paths),
+		SelectedPath:  selectedPath,
+		FallbackLevel: fallbackLevel,
 		TotalPaths:    len(paths),
 		AllPaths:      paths,
 		ChainType:     ChainTypeEnhanced,
@@ -336,9 +349,23 @@ func (m *SoundMapper) extractSuffixFromOperation(operation string) string {
 
 // calculateFallbackLevel determines which level in the fallback chain would be selected
 func (m *SoundMapper) calculateFallbackLevel(context *hooks.EventContext, paths []string) int {
-	// For now, always return 1 since we always put the most specific path first
-	// In a real implementation, this would check file existence and return the level of the first existing file
-	return 1
+	// If no SoundChecker is configured, return 1 (backward compatibility)
+	if m.soundChecker == nil {
+		return 1
+	}
+	
+	// Use SoundChecker to check all paths and determine which level exists
+	results := m.soundChecker.CheckPaths(context, paths)
+	
+	// Find the first existing path (1-based level)
+	for i, exists := range results {
+		if exists {
+			return i + 1 // Convert to 1-based level
+		}
+	}
+	
+	// If no files exist, fallback to the last level (default.wav)
+	return len(paths)
 }
 
 // mapPostToolSound handles PostToolUse events with 6-level fallback (skip command-only sounds)
@@ -407,9 +434,16 @@ func (m *SoundMapper) mapPostToolSound(context *hooks.EventContext) *SoundMappin
 		paths = []string{"default.wav"}
 	}
 
+	// Calculate fallback level and determine selected path
+	fallbackLevel := m.calculateFallbackLevel(context, paths)
+	selectedPath := paths[0] // Default to first path
+	if fallbackLevel > 0 && fallbackLevel <= len(paths) {
+		selectedPath = paths[fallbackLevel-1] // Convert 1-based to 0-based index
+	}
+
 	result := &SoundMappingResult{
-		SelectedPath:  paths[0],
-		FallbackLevel: m.calculateFallbackLevel(context, paths),
+		SelectedPath:  selectedPath,
+		FallbackLevel: fallbackLevel,
 		TotalPaths:    len(paths),
 		AllPaths:      paths,
 		ChainType:     ChainTypePostTool,
@@ -469,9 +503,16 @@ func (m *SoundMapper) mapSimpleSound(context *hooks.EventContext) *SoundMappingR
 		paths = []string{"default.wav"}
 	}
 
+	// Calculate fallback level and determine selected path
+	fallbackLevel := m.calculateFallbackLevel(context, paths)
+	selectedPath := paths[0] // Default to first path
+	if fallbackLevel > 0 && fallbackLevel <= len(paths) {
+		selectedPath = paths[fallbackLevel-1] // Convert 1-based to 0-based index
+	}
+
 	result := &SoundMappingResult{
-		SelectedPath:  paths[0],
-		FallbackLevel: m.calculateFallbackLevel(context, paths),
+		SelectedPath:  selectedPath,
+		FallbackLevel: fallbackLevel,
 		TotalPaths:    len(paths),
 		AllPaths:      paths,
 		ChainType:     ChainTypeSimple,
@@ -556,27 +597,19 @@ func (m *SoundMapper) mapLegacySound(context *hooks.EventContext) *SoundMappingR
 		chainType = ChainTypeSimple // Will be properly implemented in Phase 2.4
 	}
 
+	// Calculate fallback level and determine selected path
+	fallbackLevel := m.calculateFallbackLevel(context, paths)
+	selectedPath := paths[0] // Default to first path
+	if fallbackLevel > 0 && fallbackLevel <= len(paths) {
+		selectedPath = paths[fallbackLevel-1] // Convert 1-based to 0-based index
+	}
+
 	result := &SoundMappingResult{
-		SelectedPath:  paths[0],
-		FallbackLevel: 1,
+		SelectedPath:  selectedPath,
+		FallbackLevel: fallbackLevel,
 		TotalPaths:    len(paths),
 		AllPaths:      paths,
 		ChainType:     chainType,
-	}
-
-	// Calculate actual fallback level
-	if context.SoundHint != "" {
-		result.FallbackLevel = 1
-	} else if context.ToolName != "" {
-		result.FallbackLevel = 2
-	} else if context.OriginalTool != "" && context.OriginalTool != context.ToolName {
-		result.FallbackLevel = 3
-	} else if context.Operation != "" {
-		result.FallbackLevel = 4
-	} else if categoryStr != "" && categoryStr != "unknown" {
-		result.FallbackLevel = 5
-	} else {
-		result.FallbackLevel = 6
 	}
 
 	slog.Info("legacy sound mapping completed",
