@@ -24,13 +24,14 @@ type FileLoggingConfig struct {
 
 // Config represents Claudio configuration
 type Config struct {
-	Volume           float64            `json:"volume"`                 // Audio volume (0.0 to 1.0)
-	DefaultSoundpack string             `json:"default_soundpack"`      // Default soundpack to use
-	SoundpackPaths   []string           `json:"soundpack_paths"`        // Additional paths to search for soundpacks
-	Enabled          bool               `json:"enabled"`                // Whether Claudio is enabled
-	LogLevel         string             `json:"log_level"`              // Log level (debug, info, warn, error)
-	AudioBackend     string             `json:"audio_backend"`          // Audio backend (auto, system_command, malgo)
-	FileLogging      *FileLoggingConfig `json:"file_logging,omitempty"` // File logging configuration
+	Volume           float64              `json:"volume"`                  // Audio volume (0.0 to 1.0)
+	DefaultSoundpack string               `json:"default_soundpack"`       // Default soundpack to use
+	SoundpackPaths   []string             `json:"soundpack_paths"`         // Additional paths to search for soundpacks
+	Enabled          bool                 `json:"enabled"`                 // Whether Claudio is enabled
+	LogLevel         string               `json:"log_level"`               // Log level (debug, info, warn, error)
+	AudioBackend     string               `json:"audio_backend"`           // Audio backend (auto, system_command, malgo)
+	FileLogging      *FileLoggingConfig   `json:"file_logging,omitempty"`  // File logging configuration
+	SoundTracking    *SoundTrackingConfig `json:"sound_tracking,omitempty"` // Sound tracking configuration
 }
 
 // XDGInterface defines the interface for XDG directory operations
@@ -75,6 +76,7 @@ func (cm *ConfigManager) GetDefaultConfig() *Config {
 			MaxAgeDays: 30,
 			Compress:   true,
 		},
+		SoundTracking: GetDefaultSoundTrackingConfig(),
 	}
 
 	slog.Debug("generated default config",
@@ -332,6 +334,11 @@ func (cm *ConfigManager) ApplyEnvironmentOverrides(config *Config) *Config {
 		} else {
 			slog.Warn("invalid CLAUDIO_AUDIO_BACKEND environment variable", "value", audioBackend)
 		}
+	}
+
+	// Apply sound tracking environment overrides
+	if result.SoundTracking != nil {
+		result.SoundTracking = ApplySoundTrackingEnvironmentOverrides(result.SoundTracking)
 	}
 
 	slog.Debug("environment overrides applied")
