@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"context"
+	"strings"
 	"testing"
 
 	"github.com/ctoth/claudio/internal/audio"
@@ -9,7 +11,7 @@ import (
 // TestCLIBackendIntegration tests that CLI properly integrates with audio backend system
 func TestCLIBackendIntegration(t *testing.T) {
 	cli := NewCLI()
-	
+
 	// Test that CLI structure has been updated to use backends
 	if cli.backendFactory != nil {
 		t.Error("backendFactory should be nil before initialization")
@@ -21,33 +23,33 @@ func TestCLIBackendIntegration(t *testing.T) {
 
 func TestCLIInitializeAudioSystemWithBackend(t *testing.T) {
 	tests := []struct {
-		name           string
-		audioBackend   string
-		expectError    bool
+		name                string
+		audioBackend        string
+		expectError         bool
 		expectedBackendType string
 	}{
 		{
-			name:           "auto backend selection",
-			audioBackend:   "auto",
-			expectError:    false,
+			name:                "auto backend selection",
+			audioBackend:        "auto",
+			expectError:         false,
 			expectedBackendType: "", // Will depend on system
 		},
 		{
-			name:           "explicit malgo backend",
-			audioBackend:   "malgo",
-			expectError:    false,
+			name:                "explicit malgo backend",
+			audioBackend:        "malgo",
+			expectError:         false,
 			expectedBackendType: "*audio.MalgoBackend",
 		},
 		{
-			name:           "explicit system_command backend",
-			audioBackend:   "system_command",
-			expectError:    false,
+			name:                "explicit system_command backend",
+			audioBackend:        "system_command",
+			expectError:         false,
 			expectedBackendType: "*audio.SystemCommandBackend",
 		},
 		{
-			name:           "invalid backend",
-			audioBackend:   "invalid",
-			expectError:    true,
+			name:                "invalid backend",
+			audioBackend:        "invalid",
+			expectError:         true,
 			expectedBackendType: "",
 		},
 	}
@@ -100,7 +102,7 @@ func TestCLIPlaySoundWithBackend(t *testing.T) {
 	// Initialize with malgo backend for testing
 	cfg := cli.configManager.GetDefaultConfig()
 	cfg.AudioBackend = "malgo"
-	
+
 	// Need to initialize soundpack resolver for playSoundWithBackend to work
 	err := initializeAudioSystem(nil, cli, cfg)
 	if err != nil {
@@ -110,7 +112,7 @@ func TestCLIPlaySoundWithBackend(t *testing.T) {
 
 	// Test that playSound uses backend instead of hardcoded paplay
 	err = cli.playSoundWithBackend("/test/nonexistent.wav", cfg.Volume)
-	
+
 	// We should get a "file not found" type error, but no panic
 	// The important thing is that it doesn't crash and uses the backend system
 	t.Logf("PlaySound error (expected): %v", err)
@@ -259,12 +261,12 @@ func getType(v interface{}) string {
 }
 
 func containsSubstring(s, substr string) bool {
-	return len(s) >= len(substr) && 
-		   (s == substr || 
-		    (len(s) > len(substr) && 
-		     (s[:len(substr)] == substr ||
-		      s[len(s)-len(substr):] == substr ||
-		      containsSubstringMiddle(s, substr))))
+	return len(s) >= len(substr) &&
+		(s == substr ||
+			(len(s) > len(substr) &&
+				(s[:len(substr)] == substr ||
+					s[len(s)-len(substr):] == substr ||
+					containsSubstringMiddle(s, substr))))
 }
 
 func containsSubstringMiddle(s, substr string) bool {
@@ -274,4 +276,47 @@ func containsSubstringMiddle(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+// TestCLIAIFFSupportViaUnifiedSystem verifies AIFF support works through CLI
+func TestCLIAIFFSupportViaUnifiedSystem(t *testing.T) {
+	cli := NewCLI()
+	cli.initializeSystems()
+
+	// Initialize with malgo backend for testing
+	cfg := cli.configManager.GetDefaultConfig()
+	cfg.AudioBackend = "malgo"
+
+	err := cli.initializeAudioSystemWithBackend(cfg)
+	if err != nil {
+		t.Fatalf("failed to initialize audio system: %v", err)
+	}
+	defer cli.audioBackend.Close()
+
+	// Verify that the CLI's audio backend supports AIFF
+	malgoBackend, ok := cli.audioBackend.(*audio.MalgoBackend)
+	if !ok {
+		t.Fatalf("expected MalgoBackend, got %T", cli.audioBackend)
+	}
+
+	// Access the registry through the backend (this tests our unified system)
+	// We can't directly access private fields, but we can test via the documented interface
+	// The logs should show AIFF support is available
+	t.Logf("CLI successfully initialized with unified audio system supporting AIFF")
+	
+	// Test that an AIFF file path would be processed (even if file doesn't exist)
+	ctx := context.Background()
+	source := audio.NewFileSource("/test/nonexistent.aiff")
+	
+	err = malgoBackend.Play(ctx, source)
+	if err != nil {
+		// We expect file not found error, NOT unsupported format error
+		errorMsg := strings.ToLower(err.Error())
+		if strings.Contains(errorMsg, "unsupported") && strings.Contains(errorMsg, "format") {
+			t.Errorf("CLI should support AIFF through unified system, got: %v", err)
+		} else {
+			// Expected: file not found or decode error
+			t.Logf("Expected error with nonexistent AIFF file: %v", err)
+		}
+	}
 }
