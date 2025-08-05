@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,6 +16,7 @@ import (
 	"github.com/ctoth/claudio/internal/hooks"
 	"github.com/ctoth/claudio/internal/soundpack"
 	"github.com/ctoth/claudio/internal/sounds"
+	"github.com/ctoth/claudio/internal/tracking"
 	"github.com/spf13/cobra"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
@@ -25,11 +27,11 @@ const Version = "1.6.0"
 type CLI struct {
 	rootCmd           *cobra.Command
 	configManager     *config.ConfigManager
-	soundMapper       *sounds.SoundMapper
 	soundpackResolver soundpack.SoundpackResolver
 	audioBackend      audio.AudioBackend
 	backendFactory    audio.BackendFactory
 	terminalDetector  TerminalDetector
+	trackingDB        *sql.DB // Optional tracking database
 }
 
 // NewCLI creates a new CLI instance
@@ -63,11 +65,11 @@ func NewCLI() *CLI {
 	return &CLI{
 		rootCmd:           rootCmd,
 		configManager:     nil, // Lazy initialization - only create when needed
-		soundMapper:       nil, // Lazy initialization - only create when needed
 		soundpackResolver: nil, // Lazy initialization - only create when needed
 		audioBackend:      nil, // Lazy initialization - only create when needed
 		backendFactory:    nil, // Lazy initialization - only create when needed
 		terminalDetector:  nil, // Lazy initialization - only create when needed
+		trackingDB:        nil, // Lazy initialization - only create when needed
 	}
 }
 
@@ -329,6 +331,9 @@ func runStdinModeE(cmd *cobra.Command, args []string) error {
 
 	// No need for additional initialization - systems already initialized
 
+	// Initialize tracking (before audio system initialization)
+	cli.initializeTracking()
+	
 	// Initialize audio and soundpack systems
 	err = initializeAudioSystem(cmd, cli, cfg)
 	if err != nil {
@@ -352,14 +357,24 @@ func (c *CLI) Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 	}
 
 	// Initialize systems only when actually needed (not for version flag)
+	fmt.Fprintf(stderr, "DEBUG: about to call initializeSystems()\n")
+	slog.Debug("about to call initializeSystems()")
 	c.initializeSystems()
+	fmt.Fprintf(stderr, "DEBUG: initializeSystems() completed\n")
+	slog.Debug("initializeSystems() completed")
 
-	// Ensure audio backend is cleaned up on exit
+	// Ensure resources are cleaned up on exit
 	defer func() {
 		if c.audioBackend != nil {
 			err := c.audioBackend.Close()
 			if err != nil {
 				slog.Error("error closing audio backend", "error", err)
+			}
+		}
+		if c.trackingDB != nil {
+			err := c.trackingDB.Close()
+			if err != nil {
+				slog.Error("error closing tracking database", "error", err)
 			}
 		}
 	}()
@@ -391,9 +406,10 @@ func (c *CLI) initializeConfigManager() {
 
 // initializeRemainingSystemsAfterConfig initializes systems that can wait until after log level is configured
 func (c *CLI) initializeRemainingSystemsAfterConfig() {
-	if c.soundMapper == nil {
-		c.soundMapper = sounds.NewSoundMapper()
-	}
+	// Initialize tracking first
+	c.initializeTracking()
+	
+	// Don't create global SoundMapper - it will be created per-request with session-specific SoundChecker
 	if c.backendFactory == nil {
 		c.backendFactory = audio.NewBackendFactory()
 	}
@@ -405,12 +421,14 @@ func (c *CLI) initializeRemainingSystemsAfterConfig() {
 
 // initializeSystems lazily initializes remaining CLI components when actually needed
 func (c *CLI) initializeSystems() {
+	slog.Debug("initializeSystems() called")
 	// Config manager should already be initialized
 	c.initializeConfigManager()
 
-	if c.soundMapper == nil {
-		c.soundMapper = sounds.NewSoundMapper()
-	}
+	// Initialize tracking first
+	c.initializeTracking()
+	
+	// Don't create global SoundMapper - it will be created per-request with session-specific SoundChecker
 	if c.backendFactory == nil {
 		c.backendFactory = audio.NewBackendFactory()
 	}
@@ -433,8 +451,25 @@ func (c *CLI) processHookEvent(hookEvent *hooks.HookEvent, cfg *config.Config, s
 		"tool", context.ToolName,
 		"hint", context.SoundHint)
 
+	// Create session-specific SoundChecker for this request
+	var soundChecker *tracking.SoundChecker
+	if c.trackingDB != nil {
+		// Create DBHook with actual session ID from hook event
+		dbHook := tracking.NewDBHook(c.trackingDB, hookEvent.SessionID)
+		soundChecker = tracking.NewSoundChecker(tracking.WithHook(dbHook.GetHook()))
+		slog.Debug("created session-specific SoundChecker with DBHook", "session_id", hookEvent.SessionID)
+	} else {
+		// Create NopHook for no-op tracking
+		nopHook := tracking.NewNopHook()
+		soundChecker = tracking.NewSoundChecker(tracking.WithHook(nopHook.GetHook()))
+		slog.Debug("created SoundChecker with NopHook (tracking disabled)")
+	}
+
+	// Create SoundMapper with session-specific SoundChecker
+	soundMapper := sounds.NewSoundMapper(soundChecker)
+
 	// Map to sound file
-	result := c.soundMapper.MapSound(context)
+	result := soundMapper.MapSound(context)
 	if result == nil {
 		slog.Warn("no sound mapping found for event")
 		return
@@ -591,6 +626,73 @@ func setupLogging(cfg *config.Config, stderrWriter io.Writer) {
 		"level", level.String(),
 		"writers", len(writers),
 		"file_enabled", cfg.FileLogging != nil && cfg.FileLogging.Enabled)
+}
+
+// initializeTracking initializes the tracking database if enabled in configuration
+func (c *CLI) initializeTracking() {
+	slog.Debug("initializeTracking() called", "trackingDB_nil", c.trackingDB == nil)
+	
+	if c.trackingDB != nil {
+		slog.Debug("tracking database already initialized, skipping")
+		return // Already initialized
+	}
+	
+	// Load config to check if tracking is enabled
+	cfg, err := c.configManager.LoadConfig()
+	if err != nil {
+		slog.Debug("failed to load config for tracking initialization, using defaults", "error", err)
+		cfg = c.configManager.GetDefaultConfig()
+	}
+	
+	// Apply environment overrides
+	cfg = c.configManager.ApplyEnvironmentOverrides(cfg)
+	
+	slog.Debug("tracking config loaded", 
+		"tracking_nil", cfg.SoundTracking == nil,
+		"enabled", cfg.SoundTracking != nil && cfg.SoundTracking.Enabled,
+		"db_path", func() string {
+			if cfg.SoundTracking != nil {
+				return cfg.SoundTracking.DatabasePath
+			}
+			return ""
+		}())
+	
+	// Check if tracking is enabled
+	if cfg.SoundTracking == nil || !cfg.SoundTracking.Enabled {
+		slog.Debug("sound tracking disabled, skipping database initialization",
+			"tracking_nil", cfg.SoundTracking == nil,
+			"enabled", cfg.SoundTracking != nil && cfg.SoundTracking.Enabled)
+		return
+	}
+	
+	// Determine database path
+	var dbPath string
+	if cfg.SoundTracking.DatabasePath != "" {
+		dbPath = cfg.SoundTracking.DatabasePath
+		slog.Debug("using custom database path from config", "path", dbPath)
+	} else {
+		// Use default XDG cache path
+		var err error
+		dbPath, err = tracking.GetDatabasePath()
+		if err != nil {
+			slog.Error("failed to get database path, continuing without tracking", "error", err)
+			return // Graceful degradation
+		}
+		slog.Debug("using default XDG database path", "path", dbPath)
+	}
+	
+	slog.Debug("attempting to initialize tracking database", "path", dbPath)
+	
+	// Initialize database with graceful degradation
+	db, err := tracking.NewDatabase(dbPath)
+	if err != nil {
+		slog.Error("failed to initialize tracking database, continuing without tracking", 
+			"path", dbPath, "error", err)
+		return // Graceful degradation - continue without tracking
+	}
+	
+	c.trackingDB = db
+	slog.Info("tracking database initialized successfully", "path", dbPath)
 }
 
 // getStringPtr safely dereferences a string pointer, returning empty string if nil

@@ -337,9 +337,10 @@ func (cm *ConfigManager) ApplyEnvironmentOverrides(config *Config) *Config {
 	}
 
 	// Apply sound tracking environment overrides
-	if result.SoundTracking != nil {
-		result.SoundTracking = ApplySoundTrackingEnvironmentOverrides(result.SoundTracking)
+	if result.SoundTracking == nil {
+		result.SoundTracking = GetDefaultSoundTrackingConfig()
 	}
+	result.SoundTracking = ApplySoundTrackingEnvironmentOverrides(result.SoundTracking)
 
 	slog.Debug("environment overrides applied")
 	return &result
