@@ -1,8 +1,12 @@
 package tracking
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"github.com/ctoth/claudio/internal/hooks"
 )
 
@@ -179,5 +183,86 @@ func TestSoundChecker_LogicalPathsAlwaysFail(t *testing.T) {
 	// This demonstrates the bug - all logical paths fail, so fallback always goes to last level
 	if len(results) > 0 && !results[len(results)-1] {
 		t.Log("BUG DEMONSTRATED: Even default.wav fails because we're checking logical path, not resolved path")
+	}
+}
+
+// MockSoundpackResolver implements a simple mock for testing
+type MockSoundpackResolver struct {
+	mappings map[string]string // logical -> physical path mappings
+}
+
+func (m *MockSoundpackResolver) ResolveSound(relativePath string) (string, error) {
+	if physical, exists := m.mappings[relativePath]; exists {
+		return physical, nil
+	}
+	return "", fmt.Errorf("sound not found: %s", relativePath)
+}
+
+func (m *MockSoundpackResolver) ResolveSoundWithFallback(paths []string) (string, error) {
+	for _, path := range paths {
+		if resolved, err := m.ResolveSound(path); err == nil {
+			return resolved, nil
+		}
+	}
+	return "", fmt.Errorf("no sounds found in fallback chain")
+}
+
+func (m *MockSoundpackResolver) GetName() string { return "mock" }
+func (m *MockSoundpackResolver) GetType() string { return "mock" }
+
+func TestSoundChecker_WithResolver_SHOULD_FAIL(t *testing.T) {
+	// This test should FAIL until we implement the resolver integration
+	
+	// Create temporary test files
+	tempDir := t.TempDir()
+	bashSuccessFile := filepath.Join(tempDir, "bash-success.wav")
+	defaultFile := filepath.Join(tempDir, "default.wav")
+	
+	// Create the files
+	err := os.WriteFile(bashSuccessFile, []byte("test"), 0644)
+	require.NoError(t, err)
+	err = os.WriteFile(defaultFile, []byte("test"), 0644)
+	require.NoError(t, err)
+	
+	// Mock resolver maps logical paths to our temp files
+	resolver := &MockSoundpackResolver{
+		mappings: map[string]string{
+			"success/bash-success.wav": bashSuccessFile,
+			"default.wav": defaultFile,
+		},
+	}
+	
+	var checkedPaths []string
+	var existsResults []bool
+	hook := func(path string, exists bool, sequence int, context *hooks.EventContext) {
+		checkedPaths = append(checkedPaths, path)
+		existsResults = append(existsResults, exists)
+	}
+	
+	// This will fail until we implement resolver integration
+	checker := NewSoundCheckerWithResolver(resolver, WithHook(hook))
+	context := &hooks.EventContext{Category: hooks.Success, ToolName: "bash"}
+	
+	logicalPaths := []string{
+		"success/bash-success.wav",
+		"success/tool-complete.wav", 
+		"default.wav",
+	}
+	
+	results := checker.CheckPaths(context, logicalPaths)
+	
+	// First path should exist (bash-success.wav maps to real file)
+	if !results[0] {
+		t.Errorf("Expected first path to exist after resolution, got false")
+	}
+	
+	// Third path should exist (default.wav maps to real file)  
+	if !results[2] {
+		t.Errorf("Expected default.wav to exist after resolution, got false")
+	}
+	
+	// Second path should not exist (no mapping provided)
+	if results[1] {
+		t.Errorf("Expected second path to not exist (no mapping), got true")
 	}
 }
