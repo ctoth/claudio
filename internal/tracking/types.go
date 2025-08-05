@@ -6,13 +6,22 @@ import (
 	"github.com/ctoth/claudio/internal/hooks"
 )
 
+// SoundpackResolver interface for resolving logical paths to physical paths
+type SoundpackResolver interface {
+	ResolveSound(relativePath string) (string, error)
+	ResolveSoundWithFallback(paths []string) (string, error)
+	GetName() string
+	GetType() string
+}
+
 // PathCheckedHook is called when a sound path is checked for existence
 // sequence is 1-based (not 0-based) to match fallback level numbering
 type PathCheckedHook func(path string, exists bool, sequence int, context *hooks.EventContext)
 
 // SoundChecker manages sound path checking with optional hooks
 type SoundChecker struct {
-	hooks []PathCheckedHook
+	hooks    []PathCheckedHook
+	resolver SoundpackResolver
 }
 
 // SoundCheckerOption is a functional option for configuring SoundChecker
@@ -22,6 +31,20 @@ type SoundCheckerOption func(*SoundChecker)
 func NewSoundChecker(opts ...SoundCheckerOption) *SoundChecker {
 	sc := &SoundChecker{
 		hooks: make([]PathCheckedHook, 0),
+	}
+
+	for _, opt := range opts {
+		opt(sc)
+	}
+
+	return sc
+}
+
+// NewSoundCheckerWithResolver creates a new SoundChecker with soundpack resolver
+func NewSoundCheckerWithResolver(resolver SoundpackResolver, opts ...SoundCheckerOption) *SoundChecker {
+	sc := &SoundChecker{
+		hooks:    make([]PathCheckedHook, 0),
+		resolver: resolver,
 	}
 
 	for _, opt := range opts {
@@ -43,7 +66,7 @@ func (sc *SoundChecker) CheckPaths(context *hooks.EventContext, paths []string) 
 	results := make([]bool, len(paths))
 	
 	for i, path := range paths {
-		exists := fileExists(path)
+		exists := sc.fileExists(path)
 		results[i] = exists
 		
 		// Call all hooks with 1-based sequence numbering
@@ -56,9 +79,20 @@ func (sc *SoundChecker) CheckPaths(context *hooks.EventContext, paths []string) 
 	return results
 }
 
-// fileExists is a placeholder that returns false for now
-// This will be replaced with actual file existence checking later
-func fileExists(path string) bool {
+// fileExists checks if a path exists, using resolver if available
+func (sc *SoundChecker) fileExists(path string) bool {
+	if sc.resolver != nil {
+		// Use resolver to convert logical path to physical path
+		resolved, err := sc.resolver.ResolveSound(path)
+		if err != nil {
+			return false // Path doesn't resolve to existing file
+		}
+		// Check if resolved physical path exists
+		_, err = os.Stat(resolved)
+		return err == nil
+	}
+	
+	// Fallback to direct path checking (backward compatibility)
 	_, err := os.Stat(path)
 	return err == nil
 }
