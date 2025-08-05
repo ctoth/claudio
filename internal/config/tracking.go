@@ -37,6 +37,12 @@ func ApplySoundTrackingEnvironmentOverrides(config *SoundTrackingConfig) *SoundT
 		}
 	}
 
+	// CLAUDIO_SOUND_TRACKING_DB
+	if dbPath := os.Getenv("CLAUDIO_SOUND_TRACKING_DB"); dbPath != "" {
+		result.DatabasePath = dbPath
+		slog.Debug("applied sound tracking database path override from environment", "value", dbPath)
+	}
+
 	slog.Debug("sound tracking environment overrides applied")
 	return &result
 }
