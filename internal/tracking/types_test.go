@@ -143,3 +143,41 @@ func TestPathCheckedHookSignature(t *testing.T) {
 		t.Error("PathCheckedHook should not be nil")
 	}
 }
+
+func TestSoundChecker_LogicalPathsAlwaysFail(t *testing.T) {
+	// This test reproduces the bug: SoundChecker checks logical paths directly
+	// instead of resolving them through soundpack first
+	
+	var checkedPaths []string
+	hook := func(path string, exists bool, sequence int, context *hooks.EventContext) {
+		checkedPaths = append(checkedPaths, path)
+		// This will always be false because logical paths like "success/bash-success.wav" don't exist
+		if exists {
+			t.Errorf("Expected path %s to not exist (logical path), but it was reported as existing", path)
+		}
+	}
+	
+	checker := NewSoundChecker(WithHook(hook))
+	context := &hooks.EventContext{Category: hooks.Success, ToolName: "bash"}
+	
+	logicalPaths := []string{
+		"success/bash-success.wav",
+		"success/tool-complete.wav", 
+		"success/success.wav",
+		"default.wav",
+	}
+	
+	results := checker.CheckPaths(context, logicalPaths)
+	
+	// Bug: All paths should return false because we're checking logical paths
+	for i, result := range results {
+		if result {
+			t.Errorf("Path %s should not exist (logical path), but CheckPaths returned true", logicalPaths[i])
+		}
+	}
+	
+	// This demonstrates the bug - all logical paths fail, so fallback always goes to last level
+	if len(results) > 0 && !results[len(results)-1] {
+		t.Log("BUG DEMONSTRATED: Even default.wav fails because we're checking logical path, not resolved path")
+	}
+}
