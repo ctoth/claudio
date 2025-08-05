@@ -6,6 +6,7 @@ import (
 
 	"github.com/ctoth/claudio/internal/hooks"
 	"github.com/ctoth/claudio/internal/tracking"
+	"github.com/ctoth/claudio/internal/soundpack"
 )
 
 // SoundMapper maps hook events to sound file paths using event-specific fallback chains
@@ -33,6 +34,18 @@ type SoundMappingResult struct {
 // NewSoundMapper creates a new sound mapper with SoundChecker for tracking
 func NewSoundMapper(soundChecker *tracking.SoundChecker) *SoundMapper {
 	slog.Debug("creating new sound mapper with tracking enabled")
+	
+	return &SoundMapper{
+		soundChecker: soundChecker,
+	}
+}
+
+// NewSoundMapperWithResolver creates a new sound mapper with resolver-enabled SoundChecker
+func NewSoundMapperWithResolver(resolver soundpack.SoundpackResolver) *SoundMapper {
+	slog.Debug("creating new sound mapper with resolver-enabled tracking")
+	
+	// Create SoundChecker with resolver (no hooks for now)
+	soundChecker := tracking.NewSoundCheckerWithResolver(resolver)
 	
 	return &SoundMapper{
 		soundChecker: soundChecker,
