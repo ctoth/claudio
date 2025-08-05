@@ -455,22 +455,19 @@ func (c *CLI) processHookEvent(hookEvent *hooks.HookEvent, cfg *config.Config, s
 		"tool", context.ToolName,
 		"hint", context.SoundHint)
 
-	// Create session-specific SoundChecker for this request
-	var soundChecker *tracking.SoundChecker
+	// Create SoundMapper with resolver-enabled SoundChecker for proper path resolution
+	var soundMapper *sounds.SoundMapper
 	if c.trackingDB != nil {
 		// Create DBHook with actual session ID from hook event
 		dbHook := tracking.NewDBHook(c.trackingDB, hookEvent.SessionID)
-		soundChecker = tracking.NewSoundChecker(tracking.WithHook(dbHook.GetHook()))
-		slog.Debug("created session-specific SoundChecker with DBHook", "session_id", hookEvent.SessionID)
+		soundMapper = sounds.NewSoundMapperWithResolver(c.soundpackResolver, tracking.WithHook(dbHook.GetHook()))
+		slog.Debug("created SoundMapper with resolver and DBHook", "session_id", hookEvent.SessionID)
 	} else {
 		// Create NopHook for no-op tracking
 		nopHook := tracking.NewNopHook()
-		soundChecker = tracking.NewSoundChecker(tracking.WithHook(nopHook.GetHook()))
-		slog.Debug("created SoundChecker with NopHook (tracking disabled)")
+		soundMapper = sounds.NewSoundMapperWithResolver(c.soundpackResolver, tracking.WithHook(nopHook.GetHook()))
+		slog.Debug("created SoundMapper with resolver and NopHook (tracking disabled)")
 	}
-
-	// Create SoundMapper with session-specific SoundChecker
-	soundMapper := sounds.NewSoundMapper(soundChecker)
 
 	// Map to sound file
 	result := soundMapper.MapSound(context)

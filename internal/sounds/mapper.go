@@ -41,11 +41,11 @@ func NewSoundMapper(soundChecker *tracking.SoundChecker) *SoundMapper {
 }
 
 // NewSoundMapperWithResolver creates a new sound mapper with resolver-enabled SoundChecker
-func NewSoundMapperWithResolver(resolver soundpack.SoundpackResolver) *SoundMapper {
+func NewSoundMapperWithResolver(resolver soundpack.SoundpackResolver, opts ...tracking.SoundCheckerOption) *SoundMapper {
 	slog.Debug("creating new sound mapper with resolver-enabled tracking")
 	
-	// Create SoundChecker with resolver (no hooks for now)
-	soundChecker := tracking.NewSoundCheckerWithResolver(resolver)
+	// Create SoundChecker with resolver and optional hooks
+	soundChecker := tracking.NewSoundCheckerWithResolver(resolver, opts...)
 	
 	return &SoundMapper{
 		soundChecker: soundChecker,
