@@ -1,10 +1,12 @@
 package sounds
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"github.com/ctoth/claudio/internal/hooks"
 	"github.com/ctoth/claudio/internal/tracking"
 )
@@ -1011,4 +1013,113 @@ func TestMapSoundWithoutTrackingSkipsPathChecking(t *testing.T) {
 		t.Errorf("Expected fallback level 1 for no tracking, got %d", result.FallbackLevel)
 	}
 }
+
+func TestSoundMapper_BugReproduction_AllPathsFallbackToDefault(t *testing.T) {
+	// This test reproduces the original bug where all sounds fallback to default.wav
+	// because SoundChecker can't find logical paths
+	
+	// Create temp files for realistic testing
+	tempDir := t.TempDir()
+	bashSuccessFile := filepath.Join(tempDir, "bash-success.wav")
+	defaultFile := filepath.Join(tempDir, "default.wav")
+	
+	err := os.WriteFile(bashSuccessFile, []byte("test"), 0644)
+	require.NoError(t, err)
+	err = os.WriteFile(defaultFile, []byte("test"), 0644)
+	require.NoError(t, err)
+	
+	// Mock resolver that maps specific sounds
+	resolver := &MockSoundpackResolver{
+		mappings: map[string]string{
+			"success/bash-success.wav": bashSuccessFile, // This should be found
+			"default.wav": defaultFile,
+		},
+		// Note: success/tool-complete.wav and success/success.wav are NOT mapped
+	}
+	
+	mapper := NewSoundMapperWithResolver(resolver)
+	
+	context := &hooks.EventContext{
+		Category:  hooks.Success,
+		ToolName:  "bash",
+		Operation: "tool-complete",
+	}
+	
+	result := mapper.MapSound(context)
+	
+	// Should find bash-success.wav (level 1) instead of falling back to default.wav
+	expectedPath := "success/bash-success.wav"
+	if result.SelectedPath != expectedPath {
+		t.Errorf("Expected selected path %s, got %s (fallback level %d)", 
+			expectedPath, result.SelectedPath, result.FallbackLevel)
+		t.Logf("All paths: %v", result.AllPaths)
+	}
+	
+	// Should be fallback level 1 (first path found)
+	if result.FallbackLevel != 1 {
+		t.Errorf("Expected fallback level 1, got %d", result.FallbackLevel)
+	}
+}
+
+func TestSoundMapper_BugReproduction_NoSpecificSoundFallsToDefault(t *testing.T) {
+	// Test case where specific sound doesn't exist, should fallback properly
+	
+	tempDir := t.TempDir()
+	defaultFile := filepath.Join(tempDir, "default.wav")
+	
+	err := os.WriteFile(defaultFile, []byte("test"), 0644)
+	require.NoError(t, err)
+	
+	// Resolver only has default.wav, no specific sounds
+	resolver := &MockSoundpackResolver{
+		mappings: map[string]string{
+			"default.wav": defaultFile,
+		},
+	}
+	
+	mapper := NewSoundMapperWithResolver(resolver)
+	
+	context := &hooks.EventContext{
+		Category:  hooks.Success,
+		ToolName:  "unknowntool",
+		Operation: "tool-complete",
+	}
+	
+	result := mapper.MapSound(context)
+	
+	// Should fallback to default.wav (last level)
+	expectedPath := "default.wav"
+	if result.SelectedPath != expectedPath {
+		t.Errorf("Expected selected path %s, got %s", expectedPath, result.SelectedPath)
+	}
+	
+	// Should be fallback level = len(paths) (last level)
+	if result.FallbackLevel != len(result.AllPaths) {
+		t.Errorf("Expected fallback level %d (last), got %d", len(result.AllPaths), result.FallbackLevel)
+	}
+}
+
+// MockSoundpackResolver for testing (same as in types_test.go)
+type MockSoundpackResolver struct {
+	mappings map[string]string
+}
+
+func (m *MockSoundpackResolver) ResolveSound(relativePath string) (string, error) {
+	if physical, exists := m.mappings[relativePath]; exists {
+		return physical, nil
+	}
+	return "", fmt.Errorf("sound not found: %s", relativePath)
+}
+
+func (m *MockSoundpackResolver) ResolveSoundWithFallback(paths []string) (string, error) {
+	for _, path := range paths {
+		if resolved, err := m.ResolveSound(path); err == nil {
+			return resolved, nil
+		}
+	}
+	return "", fmt.Errorf("no sounds found in fallback chain")
+}
+
+func (m *MockSoundpackResolver) GetName() string { return "mock" }
+func (m *MockSoundpackResolver) GetType() string { return "mock" }
 
