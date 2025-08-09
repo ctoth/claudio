@@ -2,6 +2,7 @@ package tracking
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 )
@@ -11,6 +12,8 @@ type MissingSound struct {
 	Path         string   `json:"path"`
 	RequestCount int      `json:"request_count"`
 	Tools        []string `json:"tools,omitempty"` // Which tools requested this sound
+	Category     string   `json:"category,omitempty"` // Category from context JSON (loading, success, error, etc.)
+	ToolName     string   `json:"tool_name,omitempty"` // Tool name from context JSON
 }
 
 // MissingSoundQuery holds parameters for querying missing sounds
@@ -31,7 +34,8 @@ func GetMissingSounds(db *sql.DB, query MissingSoundQuery) ([]MissingSound, erro
 		SELECT 
 			pl.path,
 			COUNT(*) as request_count,
-			GROUP_CONCAT(DISTINCT he.tool_name) as tools
+			GROUP_CONCAT(DISTINCT he.tool_name) as tools,
+			he.context
 		FROM path_lookups pl
 		JOIN hook_events he ON pl.event_id = he.id
 		WHERE pl.found = 0`
@@ -52,6 +56,7 @@ func GetMissingSounds(db *sql.DB, query MissingSoundQuery) ([]MissingSound, erro
 	}
 
 	// Group by path and order by frequency
+	// We group by path and take any context (since all requests for same path should have similar context)
 	baseQuery += `
 		GROUP BY pl.path
 		ORDER BY request_count DESC`
@@ -71,8 +76,9 @@ func GetMissingSounds(db *sql.DB, query MissingSoundQuery) ([]MissingSound, erro
 	for rows.Next() {
 		var sound MissingSound
 		var toolsStr sql.NullString
+		var contextStr sql.NullString
 
-		err := rows.Scan(&sound.Path, &sound.RequestCount, &toolsStr)
+		err := rows.Scan(&sound.Path, &sound.RequestCount, &toolsStr, &contextStr)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan missing sound row: %w", err)
 		}
@@ -91,6 +97,13 @@ func GetMissingSounds(db *sql.DB, query MissingSoundQuery) ([]MissingSound, erro
 			for tool := range toolMap {
 				sound.Tools = append(sound.Tools, tool)
 			}
+		}
+
+		// Parse context JSON to extract Category and ToolName
+		if contextStr.Valid && contextStr.String != "" {
+			category, toolName := extractFromContextJSON(contextStr.String)
+			sound.Category = category
+			sound.ToolName = toolName
 		}
 
 		results = append(results, sound)
@@ -208,4 +221,55 @@ func trimString(s string) string {
 // isWhitespace checks if a character is whitespace
 func isWhitespace(c byte) bool {
 	return c == ' ' || c == '\t' || c == '\n' || c == '\r'
+}
+
+// extractFromContextJSON parses context JSON to extract Category and ToolName
+func extractFromContextJSON(contextJSON string) (category, toolName string) {
+	if contextJSON == "" {
+		return "", ""
+	}
+	
+	// Parse the JSON context to extract Category and ToolName
+	var context map[string]interface{}
+	err := json.Unmarshal([]byte(contextJSON), &context)
+	if err != nil {
+		// If JSON parsing fails, return empty strings (graceful degradation)
+		return "", ""
+	}
+	
+	// Extract Category (as integer) and convert to string
+	if categoryVal, exists := context["Category"]; exists {
+		if categoryInt, ok := categoryVal.(float64); ok { // JSON numbers are float64
+			category = categoryToString(int(categoryInt))
+		}
+	}
+	
+	// Extract ToolName (as string)
+	if toolNameVal, exists := context["ToolName"]; exists {
+		if toolNameStr, ok := toolNameVal.(string); ok {
+			toolName = toolNameStr
+		}
+	}
+	
+	return category, toolName
+}
+
+// categoryToString converts category integer to string representation
+func categoryToString(categoryInt int) string {
+	switch categoryInt {
+	case 0:
+		return "loading"
+	case 1:
+		return "success"
+	case 2:
+		return "error"
+	case 3:
+		return "interactive"
+	case 4:
+		return "completion"
+	case 5:
+		return "system"
+	default:
+		return "unknown"
+	}
 }
