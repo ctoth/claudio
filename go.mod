@@ -1,4 +1,4 @@
-module github.com/ctoth/claudio
+module claudio.click
 
 go 1.23.4
 
