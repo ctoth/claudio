@@ -11,111 +11,7 @@ import (
 	"github.com/ctoth/claudio/internal/tracking"
 )
 
-// TDD GREEN: Add data structures for tool-first grouping
-
-// ToolGroup represents a tool with its missing sounds grouped by category
-type ToolGroup struct {
-	Name       string          `json:"name"`
-	Total      int             `json:"total"`       // Total requests across all categories
-	Count      int             `json:"count"`       // Total missing sounds count
-	Categories []CategoryGroup `json:"categories"`
-}
-
-// CategoryGroup represents a category of missing sounds within a tool
-type CategoryGroup struct {
-	Name   string                     `json:"name"`
-	Total  int                        `json:"total"`  // Total requests for this category
-	Count  int                        `json:"count"`  // Number of missing sounds
-	Sounds []tracking.MissingSound    `json:"sounds"`
-}
-
-// Analysis represents the complete analysis of missing sounds grouped by tool
-type Analysis struct {
-	Tools []ToolGroup     `json:"tools"`  // Tool-specific missing sounds
-	Other []CategoryGroup `json:"other"`  // Non-tool-specific missing sounds (interactive, system, etc.)
-}
-
-// TDD REFACTOR: Actual groupByTool implementation with tool-first grouping logic
-func groupByTool(missingSounds []tracking.MissingSound) Analysis {
-	toolMap := make(map[string]map[string][]tracking.MissingSound) // tool -> category -> sounds
-	otherMap := make(map[string][]tracking.MissingSound)           // category -> sounds (for non-tool sounds)
-	
-	// Group sounds by tool and category
-	for _, sound := range missingSounds {
-		if sound.ToolName != "" {
-			// Tool-specific sound
-			if toolMap[sound.ToolName] == nil {
-				toolMap[sound.ToolName] = make(map[string][]tracking.MissingSound)
-			}
-			toolMap[sound.ToolName][sound.Category] = append(toolMap[sound.ToolName][sound.Category], sound)
-		} else {
-			// Non-tool sound (goes to Other section)
-			otherMap[sound.Category] = append(otherMap[sound.Category], sound)
-		}
-	}
-	
-	// Build tool groups
-	var tools []ToolGroup
-	for toolName, categoryMap := range toolMap {
-		var categories []CategoryGroup
-		toolTotal := 0
-		toolCount := 0
-		
-		for categoryName, sounds := range categoryMap {
-			categoryTotal := 0
-			for _, sound := range sounds {
-				categoryTotal += sound.RequestCount
-			}
-			
-			categories = append(categories, CategoryGroup{
-				Name:   categoryName,
-				Total:  categoryTotal,
-				Count:  len(sounds),
-				Sounds: sounds,
-			})
-			
-			toolTotal += categoryTotal
-			toolCount += len(sounds)
-		}
-		
-		tools = append(tools, ToolGroup{
-			Name:       toolName,
-			Total:      toolTotal,
-			Count:      toolCount,
-			Categories: categories,
-		})
-	}
-	
-	// Build other groups
-	var other []CategoryGroup
-	for categoryName, sounds := range otherMap {
-		categoryTotal := 0
-		for _, sound := range sounds {
-			categoryTotal += sound.RequestCount
-		}
-		
-		other = append(other, CategoryGroup{
-			Name:   categoryName,
-			Total:  categoryTotal,
-			Count:  len(sounds),
-			Sounds: sounds,
-		})
-	}
-	
-	// Sort tools by total requests (descending)
-	for i := 0; i < len(tools); i++ {
-		for j := i + 1; j < len(tools); j++ {
-			if tools[j].Total > tools[i].Total {
-				tools[i], tools[j] = tools[j], tools[i]
-			}
-		}
-	}
-	
-	return Analysis{
-		Tools: tools,
-		Other: other,
-	}
-}
+// TDD Step 3 GREEN: Data structures and functions moved to analyze_command.go
 
 // TDD RED: Test analyze missing command functionality
 
@@ -161,7 +57,12 @@ func TestAnalyzeMissingCommand(t *testing.T) {
 
 	// Insert test hook events and path lookups
 	for i, data := range testData {
-		// Insert hook event
+		// Insert hook event with proper context JSON for tool extraction
+		contextJSON := `{"Category":1,"ToolName":"` + data.toolName + `","IsSuccess":true}`
+		if data.toolName == "Bash" {
+			// For Bash tools, use git as the extracted tool name
+			contextJSON = `{"Category":1,"ToolName":"git","OriginalTool":"Bash","IsSuccess":true}`
+		}
 		eventResult, err := db.Exec(`
 			INSERT INTO hook_events (timestamp, session_id, tool_name, selected_path, fallback_level, context)
 			VALUES (?, ?, ?, ?, ?, ?)`,
@@ -170,7 +71,7 @@ func TestAnalyzeMissingCommand(t *testing.T) {
 			data.toolName,
 			data.selectedPath,
 			5, // High fallback level indicates missing sounds
-			`{"Category":1,"ToolName":"`+data.toolName+`","IsSuccess":true}`)
+			contextJSON)
 		if err != nil {
 			t.Fatalf("Failed to insert test event: %v", err)
 		}
@@ -213,33 +114,41 @@ func TestAnalyzeMissingCommand(t *testing.T) {
 
 	output := stdout.String()
 	
-	// Verify output contains expected missing sounds
-	expectedContent := []string{
-		"Missing Sounds",
-		"success/edit-success.wav", // Should appear (2 requests)
-		"success/bash-success.wav", // Should appear (1 request)
-		"success/git-push.wav",     // Should appear (1 request)
-		"success/tool-complete.wav", // Should appear (1 request)
+	// TDD Step 3 GREEN: Update expectations for hierarchical tool-first output format with corrected tool names
+	expectedHierarchicalContent := []string{
+		"Missing Sounds by Tool", // New hierarchical header
+		"Edit", // Tool names should appear as headers (from context ToolName)
+		"git",  // Tool names should appear as headers (extracted from Bash context ToolName)
+		"success/edit-success.wav", // Should appear under Edit tool
+		"success/bash-success.wav", // Should appear under git tool (extracted from Bash)
+		"success/git-push.wav",     // Should appear under git tool (extracted from Bash)
+		"success/tool-complete.wav", // Should appear under Edit tool
 		"requests", // Should show request counts
+		"total:", // Should show tool totals
 	}
 
-	for _, content := range expectedContent {
+	for _, content := range expectedHierarchicalContent {
 		if !strings.Contains(output, content) {
-			t.Errorf("Expected output to contain '%s', got: %s", content, output)
+			t.Errorf("Expected hierarchical output to contain '%s', got: %s", content, output)
 		}
 	}
 
-	// Verify sounds are ordered by frequency (most requested first)
-	editIndex := strings.Index(output, "success/edit-success.wav")
-	bashIndex := strings.Index(output, "success/bash-success.wav")
+	// TDD Step 3 GREEN: Verify tools are ordered by total requests (Edit=3, git=2)
+	editToolIndex := strings.Index(output, "Edit (total:")   // Tool header with total
+	gitToolIndex := strings.Index(output, "git (total:")     // Tool header with total
 	
-	if editIndex == -1 || bashIndex == -1 {
-		t.Fatal("Expected both edit and bash sounds in output")
+	if editToolIndex == -1 || gitToolIndex == -1 {
+		t.Fatal("Expected both Edit and git tool headers in hierarchical output")
 	}
 
-	// edit-success.wav (2 requests) should appear before bash-success.wav (1 request)
-	if editIndex > bashIndex {
-		t.Error("Expected sounds to be ordered by frequency (most requested first)")
+	// Edit (3 total requests) should appear before git (2 total requests) 
+	if editToolIndex > gitToolIndex {
+		t.Error("Expected tools to be ordered by total requests (Edit=3 should come before git=2)")
+	}
+
+	// TDD Step 3 GREEN: Verify hierarchical indentation for sounds under tools  
+	if !strings.Contains(output, "    success/edit-success.wav") {
+		t.Error("Expected sounds to be indented under their tool section (4 spaces)")
 	}
 }
 
