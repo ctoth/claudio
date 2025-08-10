@@ -5,6 +5,7 @@ import (
 	"log/slog"
 
 	"github.com/ctoth/claudio/internal/install"
+	"github.com/ctoth/claudio/internal/util"
 )
 
 // RunUninstallWorkflow orchestrates the complete Claudio uninstall process (public interface)
@@ -27,7 +28,7 @@ func runUninstallWorkflow(scope string, settingsPath string) error {
 
 	slog.Debug("validated uninstall scope", "scope", scope)
 
-	// Step 2: Read existing settings (uses file locking for safety)
+	// Step 2: Read existing settings
 	slog.Debug("reading existing settings", "path", settingsPath)
 	factory := install.GetFilesystemFactory()
 	prodFS := factory.Production()
@@ -38,7 +39,7 @@ func runUninstallWorkflow(scope string, settingsPath string) error {
 
 	slog.Info("loaded existing settings",
 		"path", settingsPath,
-		"settings_keys", getSettingsKeys(existingSettings))
+		"settings_keys", util.GetSettingsKeys(existingSettings))
 
 	// Step 3: Detect Claudio hooks in settings
 	slog.Debug("detecting claudio hooks in settings")
@@ -60,7 +61,7 @@ func runUninstallWorkflow(scope string, settingsPath string) error {
 	slog.Debug("removing complex claudio hooks")
 	removeComplexClaudioHooks(existingSettings, claudioHooks)
 
-	// Step 6: Write updated settings back to file (uses file locking for safety)
+	// Step 6: Write updated settings back to file
 	slog.Debug("writing updated settings to file", "path", settingsPath)
 	err = install.WriteSettingsFile(prodFS, settingsPath, existingSettings)
 	if err != nil {
@@ -94,15 +95,3 @@ func runUninstallWorkflow(scope string, settingsPath string) error {
 	return nil
 }
 
-// getSettingsKeys returns a list of top-level keys in settings for logging
-func getSettingsKeys(settings *install.SettingsMap) []string {
-	if settings == nil {
-		return []string{}
-	}
-
-	keys := make([]string, 0, len(*settings))
-	for key := range *settings {
-		keys = append(keys, key)
-	}
-	return keys
-}

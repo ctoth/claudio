@@ -71,24 +71,52 @@ func WriteSettingsFile(filesystem afero.Fs, filePath string, settings *SettingsM
 		return fmt.Errorf("failed to create directory %s: %w", dir, err)
 	}
 
+	// Detect existing file permissions to preserve them
+	fileMode := os.FileMode(0644) // Default for new files
+	if existingInfo, err := filesystem.Stat(filePath); err == nil {
+		fileMode = existingInfo.Mode() & os.ModePerm // Preserve existing permissions
+	}
+
 	// Marshal settings to JSON with indentation
 	data, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal settings to JSON: %w", err)
 	}
 
-	// Write atomically using temp file + rename
-	tempFile := filePath + ".tmp"
-	err = afero.WriteFile(filesystem, tempFile, data, 0644)
+	// Write atomically using unique temp file + rename
+	tempFile, err := afero.TempFile(filesystem, dir, ".settings-*.tmp")
 	if err != nil {
-		return fmt.Errorf("failed to write temp settings file: %w", err)
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+	tempFileName := tempFile.Name()
+
+	// Write data to temp file with correct permissions
+	_, err = tempFile.Write(data)
+	if err != nil {
+		tempFile.Close()
+		filesystem.Remove(tempFileName)
+		return fmt.Errorf("failed to write to temp file: %w", err)
+	}
+
+	// Close temp file
+	err = tempFile.Close()
+	if err != nil {
+		filesystem.Remove(tempFileName)
+		return fmt.Errorf("failed to close temp file: %w", err)
+	}
+
+	// Set permissions after closing
+	err = filesystem.Chmod(tempFileName, fileMode)
+	if err != nil {
+		filesystem.Remove(tempFileName)
+		return fmt.Errorf("failed to set temp file permissions: %w", err)
 	}
 
 	// Atomic rename
-	err = filesystem.Rename(tempFile, filePath)
+	err = filesystem.Rename(tempFileName, filePath)
 	if err != nil {
 		// Clean up temp file on failure
-		filesystem.Remove(tempFile)
+		filesystem.Remove(tempFileName)
 		return fmt.Errorf("failed to rename temp settings file: %w", err)
 	}
 
