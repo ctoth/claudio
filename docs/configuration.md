@@ -115,8 +115,8 @@ echo '...' | claudio --soundpack retro
 # Quiet installation
 claudio install --quiet --scope user
 
-# Force installation
-claudio install --force --scope user
+# Standard installation (overwrites existing Claudio hooks)
+claudio install --scope user
 ```
 
 ## Priority Order

@@ -244,8 +244,8 @@ Common issues and solutions for Claudio installation and usage.
 
 3. **Reinstall hooks:**
    ```bash
-   # Force reinstallation
-   claudio install --force --scope user
+   # Reinstall hooks (overwrites existing Claudio hooks)
+   claudio install --scope user
    ```
 
 4. **Test hook execution manually:**

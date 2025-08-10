@@ -11,7 +11,13 @@ import (
 func isClaudioHook(hookValue interface{}) bool {
 	// Helper function to check if command is a claudio executable
 	isClaudioCommand := func(cmdStr string) bool {
-		baseName := filepath.Base(cmdStr)
+		// Remove quotes if present (handles quoted paths in JSON)
+		unquoted := cmdStr
+		if len(cmdStr) >= 2 && cmdStr[0] == '"' && cmdStr[len(cmdStr)-1] == '"' {
+			unquoted = cmdStr[1 : len(cmdStr)-1]
+		}
+		
+		baseName := filepath.Base(unquoted)
 		// Handle production "claudio" and test executables "install.test", "uninstall.test"
 		return baseName == "claudio" || baseName == "install.test" || baseName == "uninstall.test"
 	}
@@ -40,12 +46,10 @@ func isClaudioHook(hookValue interface{}) bool {
 // Helper function for merge tests to generate hooks with test parameters
 func generateTestHooksForMerge() (interface{}, error) {
 	factory := GetFilesystemFactory()
-	prodFS := factory.Production()
-	execPath, _ := GetExecutablePath()
-	if execPath == "" {
-		execPath = "claudio"
-	}
-	return GenerateClaudioHooks(prodFS, execPath)
+	memFS := factory.Memory()
+	// Use mock executable path to prevent config corruption during tests
+	mockExecPath := "/test/mock/claudio"
+	return GenerateClaudioHooks(memFS, mockExecPath)
 }
 
 func TestMergeHooksIdempotent(t *testing.T) {

@@ -55,11 +55,11 @@ claudio install --dry-run --scope user
 ```
 Shows what would be installed without making any changes. Perfect for testing.
 
-**Force Installation**
+**Standard Installation**
 ```bash
-claudio install --force --scope user
+claudio install --scope user
 ```
-Overwrites existing hooks without prompting. Use when you need to update your Claudio configuration.
+Installs or updates Claudio hooks (automatically overwrites existing Claudio hooks).
 
 **Quiet Mode**
 ```bash

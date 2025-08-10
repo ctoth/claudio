@@ -3,7 +3,6 @@ package install
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"testing"
 )
 
@@ -25,12 +24,9 @@ func TestGenerateClaudioHooks(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Test the GenerateClaudioHooks function
 			factory := GetFilesystemFactory()
-			prodFS := factory.Production()
+			memFS := factory.Memory()
 			execPath, _ := GetExecutablePath()
-			if execPath == "" {
-				execPath = "claudio"
-			}
-			hooks, err := GenerateClaudioHooks(prodFS, execPath)
+			hooks, err := GenerateClaudioHooks(memFS, execPath)
 
 			if err != nil {
 				t.Errorf("Unexpected error generating hooks: %v", err)
@@ -261,12 +257,10 @@ func getHookNames(hooks map[string]interface{}) []string {
 // Helper function for tests to generate hooks with test parameters
 func generateTestHooks() (interface{}, error) {
 	factory := GetFilesystemFactory()
-	prodFS := factory.Production()
-	execPath, _ := GetExecutablePath()
-	if execPath == "" {
-		execPath = "claudio"
-	}
-	return GenerateClaudioHooks(prodFS, execPath)
+	memFS := factory.Memory()
+	// Use mock executable path to prevent config corruption during tests
+	mockExecPath := "/test/mock/claudio"
+	return GenerateClaudioHooks(memFS, mockExecPath)
 }
 
 // Functions that will need to be implemented (currently undefined):
@@ -369,12 +363,8 @@ func TestGenerateClaudioHooksCorrectFormat(t *testing.T) {
 				return
 			}
 
-			// Get expected executable path for comparison with quotes
-			expectedPath, err := os.Executable()
-			if err != nil {
-				// If os.Executable() fails, we expect fallback to "claudio"
-				expectedPath = "claudio"
-			}
+			// Since generateTestHooks() uses mock path, expect mock path
+			expectedPath := "/test/mock/claudio"
 			
 			// The command should be quoted for shell safety
 			expectedQuotedPath := fmt.Sprintf(`"%s"`, expectedPath)
@@ -439,12 +429,8 @@ func TestGenerateClaudioHooksUsesExecutablePath(t *testing.T) {
 		t.Fatalf("Expected hooks to be HooksMap or map[string]interface{}, got %T", hooks)
 	}
 
-	// Get expected executable path for comparison with quotes
-	expectedPath, err := os.Executable()
-	if err != nil {
-		// If os.Executable() fails, we expect fallback to "claudio"
-		expectedPath = "claudio"
-	}
+	// Since generateTestHooks() uses mock path, expect mock path
+	expectedPath := "/test/mock/claudio"
 	
 	// The command should be quoted for shell safety
 	expectedQuotedPath := fmt.Sprintf(`"%s"`, expectedPath)

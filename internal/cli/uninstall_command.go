@@ -24,8 +24,6 @@ func newUninstallCommand() *cobra.Command {
 	// Add --dry-run flag
 	cmd.Flags().BoolP("dry-run", "d", false, "Show what would be removed without making changes (simulation mode)")
 
-	// Add --force flag
-	cmd.Flags().BoolP("force", "f", false, "Remove hooks without prompting")
 
 	// Add --quiet flag
 	cmd.Flags().BoolP("quiet", "q", false, "Suppress output (no progress messages)")
@@ -57,11 +55,6 @@ func runUninstallCommandE(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to get dry-run flag: %w", err)
 	}
 
-	// Get force flag
-	force, err := cmd.Flags().GetBool("force")
-	if err != nil {
-		return fmt.Errorf("failed to get force flag: %w", err)
-	}
 
 	// Get quiet flag
 	quiet, err := cmd.Flags().GetBool("quiet")
@@ -75,7 +68,7 @@ func runUninstallCommandE(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to get print flag: %w", err)
 	}
 
-	slog.Info("uninstall command executing", "scope", scope, "dry_run", dryRun, "force", force, "quiet", quiet, "print", print)
+	slog.Info("uninstall command executing", "scope", scope, "dry_run", dryRun, "quiet", quiet, "print", print)
 
 	// Find Claude Code settings paths for the specified scope
 	settingsPaths, err := install.FindClaudeSettingsPaths(scope.String())
@@ -93,7 +86,7 @@ func runUninstallCommandE(cmd *cobra.Command, args []string) error {
 
 	// Handle print flag - shows what hooks would be removed
 	if print {
-		return handlePrintUninstall(cmd, scope, settingsPath, dryRun, force, quiet)
+		return handlePrintUninstall(cmd, scope, settingsPath, dryRun, quiet)
 	}
 
 	// Handle dry-run mode - show what would be done without making changes
@@ -116,9 +109,6 @@ func runUninstallCommandE(cmd *cobra.Command, args []string) error {
 	if !quiet {
 		cmd.Printf("✅ Claudio uninstall completed successfully!\n")
 		cmd.Printf("Audio hooks have been removed from Claude Code settings.\n")
-		if force {
-			cmd.Printf("Force mode was used - hooks were removed without prompting.\n")
-		}
 	} else {
 		cmd.Printf("Uninstall: %s ✅\n", scope.String())
 	}
@@ -127,14 +117,10 @@ func runUninstallCommandE(cmd *cobra.Command, args []string) error {
 }
 
 // handlePrintUninstall shows configuration details about what would be removed
-func handlePrintUninstall(cmd *cobra.Command, scope InstallScope, settingsPath string, dryRun bool, force bool, quiet bool) error {
+func handlePrintUninstall(cmd *cobra.Command, scope InstallScope, settingsPath string, dryRun bool, quiet bool) error {
 	var configDetails string
-	if dryRun && force {
-		configDetails = "PRINT: DRY-RUN + FORCE uninstall configuration for scope: " + scope.String()
-	} else if dryRun {
+	if dryRun {
 		configDetails = "PRINT: DRY-RUN uninstall configuration for scope: " + scope.String()
-	} else if force {
-		configDetails = "PRINT: FORCE uninstall configuration for scope: " + scope.String()
 	} else {
 		configDetails = "PRINT: Uninstall configuration for scope: " + scope.String()
 	}
@@ -142,9 +128,6 @@ func handlePrintUninstall(cmd *cobra.Command, scope InstallScope, settingsPath s
 	cmd.Printf("%s\n", configDetails)
 	if dryRun {
 		cmd.Printf("  Mode: Simulation (no changes will be made)\n")
-	}
-	if force {
-		cmd.Printf("  Mode: Force (will remove without prompting)\n")
 	}
 	if quiet {
 		cmd.Printf("  Output: Quiet mode (minimal messages)\n")
