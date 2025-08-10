@@ -10,6 +10,8 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/spf13/afero"
 )
 
 // FileLoggingConfig represents file-based logging configuration
@@ -45,6 +47,7 @@ type XDGInterface interface {
 // ConfigManager handles loading, saving, and validating configuration
 type ConfigManager struct {
 	xdg XDGInterface
+	fs  afero.Fs
 }
 
 // NewConfigManager creates a new configuration manager
@@ -52,6 +55,16 @@ func NewConfigManager() *ConfigManager {
 	slog.Debug("creating new config manager")
 	return &ConfigManager{
 		xdg: NewXDGDirs(),
+		fs:  afero.NewOsFs(), // Production uses real filesystem
+	}
+}
+
+// NewConfigManagerWithFilesystem creates a new configuration manager with custom filesystem
+func NewConfigManagerWithFilesystem(fs afero.Fs) *ConfigManager {
+	slog.Debug("creating new config manager with custom filesystem")
+	return &ConfigManager{
+		xdg: NewXDGDirs(),
+		fs:  fs,
 	}
 }
 
@@ -92,7 +105,7 @@ func (cm *ConfigManager) GetDefaultConfig() *Config {
 func (cm *ConfigManager) LoadFromFile(filePath string) (*Config, error) {
 	slog.Debug("loading config from file", "file_path", filePath)
 
-	data, err := os.ReadFile(filePath)
+	data, err := afero.ReadFile(cm.fs, filePath)
 	if err != nil {
 		slog.Error("failed to read config file", "file_path", filePath, "error", err)
 		return nil, fmt.Errorf("failed to read config file: %w", err)
@@ -132,7 +145,7 @@ func (cm *ConfigManager) SaveToFile(config *Config, filePath string) error {
 
 	// Create directory if it doesn't exist
 	dir := filepath.Dir(filePath)
-	err = os.MkdirAll(dir, 0755)
+	err = cm.fs.MkdirAll(dir, 0755)
 	if err != nil {
 		slog.Error("failed to create config directory", "directory", dir, "error", err)
 		return fmt.Errorf("failed to create config directory: %w", err)
@@ -145,7 +158,7 @@ func (cm *ConfigManager) SaveToFile(config *Config, filePath string) error {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	err = os.WriteFile(filePath, data, 0644)
+	err = afero.WriteFile(cm.fs, filePath, data, 0644)
 	if err != nil {
 		slog.Error("failed to write config file", "file_path", filePath, "error", err)
 		return fmt.Errorf("failed to write config file: %w", err)
@@ -153,6 +166,11 @@ func (cm *ConfigManager) SaveToFile(config *Config, filePath string) error {
 
 	slog.Info("config saved successfully", "file_path", filePath)
 	return nil
+}
+
+// WriteConfig is an alias for SaveToFile for compatibility with tests
+func (cm *ConfigManager) WriteConfig(filePath string, config *Config) error {
+	return cm.SaveToFile(config, filePath)
 }
 
 // LoadConfig loads configuration using XDG path discovery

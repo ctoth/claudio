@@ -12,6 +12,7 @@ require (
 	github.com/gofrs/flock v0.12.1
 	github.com/gopxl/beep v1.4.1
 	github.com/hajimehoshi/go-mp3 v0.3.4
+	github.com/spf13/afero v1.14.0
 	github.com/spf13/cobra v1.9.1
 	github.com/youpy/go-wav v0.3.2
 	golang.org/x/term v0.33.0
@@ -27,4 +28,5 @@ require (
 	github.com/zaf/g711 v0.0.0-20190814101024-76a4a538f52b // indirect
 	golang.org/x/net v0.39.0 // indirect
 	golang.org/x/sys v0.34.0 // indirect
+	golang.org/x/text v0.24.0 // indirect
 )
