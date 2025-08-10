@@ -12,7 +12,7 @@ Spending hours watching Claude Code work gets mind-numbing. Claudio fixes that b
 The cool part is how smart it gets. When Claude runs `git commit -m "fix bug"`, Claudio doesn't just play a generic "bash command" sound. It knows Claude is doing git stuff, specifically a commit, and picks sounds accordingly. If that specific sound doesn't exist, it falls back through git → bash → generic success → default. Nobody wants silence when their AI assistant's code works.
 
 ```bash
-go install github.com/ctoth/claudio@latest
+go install claudio.click@latest
 ```
 
 Then tell Claude Code about it in your config:
