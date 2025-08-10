@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/spf13/afero"
 )
 
 func TestReadSettingsEmpty(t *testing.T) {
@@ -55,7 +57,8 @@ func TestReadSettingsEmpty(t *testing.T) {
 			}
 
 			// Test the ReadSettingsFile function
-			settings, err := ReadSettingsFile(settingsFile)
+			fs := afero.NewOsFs()
+			settings, err := ReadSettingsFile(fs, settingsFile)
 
 			if tc.expectError && err == nil {
 				t.Errorf("Expected error but got none")
@@ -146,7 +149,8 @@ func TestReadSettingsInvalidJSON(t *testing.T) {
 			}
 
 			// Test the ReadSettingsFile function
-			settings, err := ReadSettingsFile(settingsFile)
+			fs := afero.NewOsFs()
+			settings, err := ReadSettingsFile(fs, settingsFile)
 
 			if tc.expectError {
 				if err == nil {
@@ -197,7 +201,8 @@ func TestReadSettingsPermissionDenied(t *testing.T) {
 	}()
 
 	// Test the ReadSettingsFile function
-	settings, err := ReadSettingsFile(settingsFile)
+	fs := afero.NewOsFs()
+	settings, err := ReadSettingsFile(fs, settingsFile)
 
 	// On some systems (like WSL or when running as root), permission changes may not work
 	// Skip the test if we can still read the file
@@ -248,7 +253,8 @@ func TestReadSettingsFileNotFound(t *testing.T) {
 			os.RemoveAll(filepath.Dir(tc.filePath))
 
 			// Test the ReadSettingsFile function
-			settings, err := ReadSettingsFile(tc.filePath)
+			fs := afero.NewOsFs()
+			settings, err := ReadSettingsFile(fs, tc.filePath)
 
 			if tc.expectError && err == nil {
 				t.Errorf("Expected error but got none")
@@ -316,7 +322,8 @@ func TestReadSettingsValidJSON(t *testing.T) {
 			}
 
 			// Test the ReadSettingsFile function
-			settings, err := ReadSettingsFile(settingsFile)
+			fs := afero.NewOsFs()
+			settings, err := ReadSettingsFile(fs, settingsFile)
 
 			if err != nil {
 				t.Errorf("Unexpected error reading valid JSON: %v", err)
@@ -377,7 +384,8 @@ func TestReadSettingsLargeFile(t *testing.T) {
 	}
 
 	// Test the ReadSettingsFile function
-	settings, err := ReadSettingsFile(settingsFile)
+	fs := afero.NewOsFs()
+	settings, err := ReadSettingsFile(fs, settingsFile)
 
 	if err != nil {
 		t.Errorf("Unexpected error reading large file: %v", err)

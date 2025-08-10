@@ -24,7 +24,13 @@ func TestGenerateClaudioHooks(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Test the GenerateClaudioHooks function
-			hooks, err := GenerateClaudioHooks()
+			factory := GetFilesystemFactory()
+			prodFS := factory.Production()
+			execPath, _ := GetExecutablePath()
+			if execPath == "" {
+				execPath = "claudio"
+			}
+			hooks, err := GenerateClaudioHooks(prodFS, execPath)
 
 			if err != nil {
 				t.Errorf("Unexpected error generating hooks: %v", err)
@@ -79,7 +85,7 @@ func TestGenerateClaudioHooks(t *testing.T) {
 
 func TestGenerateClaudioHooksStructure(t *testing.T) {
 	// TDD RED: Test that generated hooks have correct JSON structure for Claude Code
-	hooks, err := GenerateClaudioHooks()
+	hooks, err := generateTestHooks()
 	if err != nil {
 		t.Fatalf("Failed to generate hooks: %v", err)
 	}
@@ -132,12 +138,12 @@ func TestGenerateClaudioHooksStructure(t *testing.T) {
 
 func TestGenerateClaudioHooksConsistency(t *testing.T) {
 	// TDD RED: Test that hook generation is consistent across multiple calls
-	hooks1, err1 := GenerateClaudioHooks()
+	hooks1, err1 := generateTestHooks()
 	if err1 != nil {
 		t.Fatalf("First hook generation failed: %v", err1)
 	}
 
-	hooks2, err2 := GenerateClaudioHooks()
+	hooks2, err2 := generateTestHooks()
 	if err2 != nil {
 		t.Fatalf("Second hook generation failed: %v", err2)
 	}
@@ -164,7 +170,7 @@ func TestGenerateClaudioHooksConsistency(t *testing.T) {
 
 func TestGenerateClaudioHooksValidJSON(t *testing.T) {
 	// TDD RED: Test that generated hooks produce valid JSON that Claude Code can parse
-	hooks, err := GenerateClaudioHooks()
+	hooks, err := generateTestHooks()
 	if err != nil {
 		t.Fatalf("Failed to generate hooks: %v", err)
 	}
@@ -203,7 +209,7 @@ func TestGenerateClaudioHooksValidJSON(t *testing.T) {
 
 func TestGenerateClaudioHooksIntegration(t *testing.T) {
 	// TDD RED: Test that generated hooks can be integrated into settings structure
-	hooks, err := GenerateClaudioHooks()
+	hooks, err := generateTestHooks()
 	if err != nil {
 		t.Fatalf("Failed to generate hooks: %v", err)
 	}
@@ -252,12 +258,23 @@ func getHookNames(hooks map[string]interface{}) []string {
 	return names
 }
 
+// Helper function for tests to generate hooks with test parameters
+func generateTestHooks() (interface{}, error) {
+	factory := GetFilesystemFactory()
+	prodFS := factory.Production()
+	execPath, _ := GetExecutablePath()
+	if execPath == "" {
+		execPath = "claudio"
+	}
+	return GenerateClaudioHooks(prodFS, execPath)
+}
+
 // Functions that will need to be implemented (currently undefined):
 // - GenerateClaudioHooks() (interface{}, error)
 
 func TestGenerateClaudioHooksCorrectFormat(t *testing.T) {
 	// TDD RED: Test that generated hooks follow Claude Code's required format
-	hooks, err := GenerateClaudioHooks()
+	hooks, err := generateTestHooks()
 	if err != nil {
 		t.Fatalf("Failed to generate hooks: %v", err)
 	}
@@ -371,7 +388,7 @@ func TestGenerateClaudioHooksCorrectFormat(t *testing.T) {
 
 func TestGenerateClaudioHooksHasMatcher(t *testing.T) {
 	// TDD RED: Test that all generated hooks have required matcher field
-	hooks, err := GenerateClaudioHooks()
+	hooks, err := generateTestHooks()
 	if err != nil {
 		t.Fatalf("Failed to generate hooks: %v", err)
 	}
@@ -406,7 +423,7 @@ func TestGenerateClaudioHooksHasMatcher(t *testing.T) {
 
 func TestGenerateClaudioHooksUsesExecutablePath(t *testing.T) {
 	// TDD RED: Test that generated hooks use current executable path, not hardcoded "claudio"
-	hooks, err := GenerateClaudioHooks()
+	hooks, err := generateTestHooks()
 	if err != nil {
 		t.Fatalf("Failed to generate hooks: %v", err)
 	}

@@ -12,13 +12,13 @@ import (
 // TDD RED: Test that GenerateClaudioHooks can accept filesystem abstraction
 // These tests will fail until we refactor to use afero.Fs instead of os.Executable
 
-func TestGenerateClaudioHooksWithFilesystem(t *testing.T) {
+func TestGenerateClaudioHooksWithAfero(t *testing.T) {
 	// TDD RED: This test expects GenerateClaudioHooks to accept filesystem parameter
 	factory := fs.NewDefaultFactory()
 	memFS := factory.Memory()
 	
 	// This function signature doesn't exist yet - will fail until we implement it
-	hooks, err := GenerateClaudioHooksWithFilesystem(memFS, "/mock/claudio")
+	hooks, err := GenerateClaudioHooks(memFS, "/mock/claudio")
 	
 	if err != nil {
 		t.Errorf("Expected successful hook generation with filesystem, got error: %v", err)
@@ -69,7 +69,7 @@ func TestGenerateClaudioHooksFilesystemIsolation(t *testing.T) {
 	memFS := factory.Memory()
 	
 	// Generate hooks using memory filesystem - should not interact with real filesystem
-	hooks, err := GenerateClaudioHooksWithFilesystem(memFS, "/isolated/claudio")
+	hooks, err := GenerateClaudioHooks(memFS, "/isolated/claudio")
 	if err != nil {
 		t.Errorf("Hook generation with isolated filesystem failed: %v", err)
 	}
@@ -136,7 +136,7 @@ func TestMergeHooksIntoSettingsWithFilesystem(t *testing.T) {
 	}
 	
 	// Generate Claudio hooks with filesystem support
-	claudioHooks, err := GenerateClaudioHooksWithFilesystem(memFS, "/memory/claudio")
+	claudioHooks, err := GenerateClaudioHooks(memFS, "/memory/claudio")
 	if err != nil {
 		t.Fatalf("Failed to generate hooks: %v", err)
 	}
@@ -174,7 +174,7 @@ func TestConfigCorruptionPrevention(t *testing.T) {
 	memFS := factory.Memory()
 	
 	// Generate hooks using memory filesystem with mock executable
-	hooks, err := GenerateClaudioHooksWithFilesystem(memFS, "/safe/claudio")
+	hooks, err := GenerateClaudioHooks(memFS, "/safe/claudio")
 	if err != nil {
 		t.Errorf("Safe hook generation failed: %v", err)
 	}

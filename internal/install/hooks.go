@@ -13,11 +13,12 @@ import (
 // HooksMap represents the hooks section of Claude Code settings
 type HooksMap map[string]interface{}
 
-// GenerateClaudioHooksWithFilesystem creates the hook configuration for Claudio installation with filesystem abstraction
+
+// GenerateClaudioHooks creates the hook configuration for Claudio installation with filesystem abstraction
 // Uses the central hook registry to generate all enabled hooks dynamically
 // Returns a hooks map that can be integrated into Claude Code settings.json
 // Accepts filesystem and executable path parameters to prevent config corruption during testing
-func GenerateClaudioHooksWithFilesystem(filesystem afero.Fs, executablePath string) (interface{}, error) {
+func GenerateClaudioHooks(filesystem afero.Fs, executablePath string) (interface{}, error) {
 	slog.Debug("generating Claudio hooks configuration using registry with filesystem abstraction",
 		"executable_path", executablePath)
 
@@ -59,29 +60,6 @@ func GenerateClaudioHooksWithFilesystem(filesystem afero.Fs, executablePath stri
 		"hooks", getHookNamesList(hooks))
 
 	return hooks, nil
-}
-
-// GenerateClaudioHooks creates the hook configuration for Claudio installation
-// Uses the central hook registry to generate all enabled hooks dynamically
-// Returns a hooks map that can be integrated into Claude Code settings.json
-// This is the production version that uses real filesystem
-func GenerateClaudioHooks() (interface{}, error) {
-	slog.Debug("generating Claudio hooks configuration using registry")
-
-	// Get current executable path using filesystem abstraction, fall back to "claudio" on error
-	execPath, err := fs.ExecutablePath()
-	if err != nil {
-		slog.Warn("failed to get executable path, falling back to 'claudio'", "error", err)
-		execPath = "claudio"
-	} else {
-		slog.Debug("using executable path for hook command", "path", execPath)
-	}
-
-	// Use filesystem-aware version with production filesystem
-	factory := fs.NewDefaultFactory()
-	prodFS := factory.Production()
-	
-	return GenerateClaudioHooksWithFilesystem(prodFS, execPath)
 }
 
 // getHookNamesList returns a list of hook names for logging
@@ -232,4 +210,14 @@ func IsClaudioHook(hookValue interface{}) bool {
 	}
 
 	return false
+}
+
+// GetExecutablePath returns the current executable path using filesystem abstraction
+func GetExecutablePath() (string, error) {
+	return fs.ExecutablePath()
+}
+
+// GetFilesystemFactory returns the default filesystem factory
+func GetFilesystemFactory() fs.Factory {
+	return fs.NewDefaultFactory()
 }

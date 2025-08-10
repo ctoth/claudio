@@ -12,12 +12,12 @@ import (
 // TDD RED: Test that settings I/O functions can use afero filesystem abstraction
 // These tests verify memory filesystem isolation to prevent real filesystem pollution
 
-func TestReadSettingsFileWithFilesystem(t *testing.T) {
+func TestReadSettingsFile(t *testing.T) {
 	factory := fs.NewDefaultFactory()
 	memFS := factory.Memory()
 	
 	// Test case 1: Non-existent file should return empty settings
-	settings, err := ReadSettingsFileWithFilesystem(memFS, "/non/existent/file.json")
+	settings, err := ReadSettingsFile(memFS, "/non/existent/file.json")
 	if err != nil {
 		t.Errorf("Expected no error for non-existent file, got: %v", err)
 	}
@@ -54,7 +54,7 @@ func TestReadSettingsFileWithFilesystem(t *testing.T) {
 	}
 	
 	// Read settings using filesystem abstraction
-	readSettings, err := ReadSettingsFileWithFilesystem(memFS, settingsPath)
+	readSettings, err := ReadSettingsFile(memFS, settingsPath)
 	if err != nil {
 		t.Errorf("Failed to read settings from memory filesystem: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestReadSettingsFileWithFilesystem(t *testing.T) {
 	}
 }
 
-func TestWriteSettingsFileWithFilesystem(t *testing.T) {
+func TestWriteSettingsFile(t *testing.T) {
 	factory := fs.NewDefaultFactory()
 	memFS := factory.Memory()
 	
@@ -92,7 +92,7 @@ func TestWriteSettingsFileWithFilesystem(t *testing.T) {
 	}
 	
 	// Write settings to memory filesystem
-	err := WriteSettingsFileWithFilesystem(memFS, settingsPath, &testSettings)
+	err := WriteSettingsFile(memFS, settingsPath, &testSettings)
 	if err != nil {
 		t.Errorf("Failed to write settings to memory filesystem: %v", err)
 	}
@@ -140,7 +140,7 @@ func TestSettingsFilesystemIsolation(t *testing.T) {
 	}
 	
 	// Write to memory filesystem
-	err := WriteSettingsFileWithFilesystem(memFS, dangerousPath, &testSettings)
+	err := WriteSettingsFile(memFS, dangerousPath, &testSettings)
 	if err != nil {
 		t.Errorf("Failed to write to memory filesystem: %v", err)
 	}
@@ -181,13 +181,13 @@ func TestReadWriteRoundTrip(t *testing.T) {
 	}
 	
 	// Write settings
-	err := WriteSettingsFileWithFilesystem(memFS, settingsPath, &originalSettings)
+	err := WriteSettingsFile(memFS, settingsPath, &originalSettings)
 	if err != nil {
 		t.Fatalf("Failed to write settings: %v", err)
 	}
 	
 	// Read settings back
-	readSettings, err := ReadSettingsFileWithFilesystem(memFS, settingsPath)
+	readSettings, err := ReadSettingsFile(memFS, settingsPath)
 	if err != nil {
 		t.Fatalf("Failed to read settings: %v", err)
 	}
@@ -228,12 +228,12 @@ func TestLockingWithFilesystem(t *testing.T) {
 	}
 	
 	// Test basic write/read without locking (which is filesystem-isolated)
-	err := WriteSettingsFileWithFilesystem(memFS, settingsPath, &testSettings)
+	err := WriteSettingsFile(memFS, settingsPath, &testSettings)
 	if err != nil {
 		t.Errorf("Failed to write settings: %v", err)
 	}
 	
-	readSettings, err := ReadSettingsFileWithFilesystem(memFS, settingsPath)
+	readSettings, err := ReadSettingsFile(memFS, settingsPath)
 	if err != nil {
 		t.Errorf("Failed to read settings: %v", err)
 	}

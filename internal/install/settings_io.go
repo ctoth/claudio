@@ -6,19 +6,18 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/spf13/afero"
-	"github.com/ctoth/claudio/internal/fs"
 )
 
 // SettingsMap represents a Claude Code settings JSON object
 type SettingsMap map[string]interface{}
 
-// ReadSettingsFileWithFilesystem reads and parses a Claude Code settings.json file using filesystem abstraction
+
+// ReadSettingsFile reads and parses a Claude Code settings.json file using filesystem abstraction
 // Returns default empty settings if file doesn't exist or is empty
 // Returns error for permission issues or malformed JSON
-func ReadSettingsFileWithFilesystem(filesystem afero.Fs, filePath string) (*SettingsMap, error) {
+func ReadSettingsFile(filesystem afero.Fs, filePath string) (*SettingsMap, error) {
 	// Check if file exists
 	if _, err := filesystem.Stat(filePath); os.IsNotExist(err) {
 		// File doesn't exist - return default empty settings
@@ -61,19 +60,10 @@ func ReadSettingsFileWithFilesystem(filesystem afero.Fs, filePath string) (*Sett
 	return &settings, nil
 }
 
-// ReadSettingsFile reads and parses a Claude Code settings.json file
-// Returns default empty settings if file doesn't exist or is empty
-// Returns error for permission issues or malformed JSON
-// This is the production version that uses real filesystem
-func ReadSettingsFile(filePath string) (*SettingsMap, error) {
-	factory := fs.NewDefaultFactory()
-	prodFS := factory.Production()
-	return ReadSettingsFileWithFilesystem(prodFS, filePath)
-}
 
-// WriteSettingsFileWithFilesystem writes settings to a file atomically using filesystem abstraction
+// WriteSettingsFile writes settings to a file atomically using filesystem abstraction
 // Creates directory structure if it doesn't exist
-func WriteSettingsFileWithFilesystem(filesystem afero.Fs, filePath string, settings *SettingsMap) error {
+func WriteSettingsFile(filesystem afero.Fs, filePath string, settings *SettingsMap) error {
 	// Ensure directory exists
 	dir := filepath.Dir(filePath)
 	err := filesystem.MkdirAll(dir, 0755)
@@ -105,15 +95,6 @@ func WriteSettingsFileWithFilesystem(filesystem afero.Fs, filePath string, setti
 	return nil
 }
 
-// WriteSettingsFile writes settings to a file atomically
-// Creates directory structure if it doesn't exist
-// This is the production version that uses real filesystem
-func WriteSettingsFile(filePath string, settings *SettingsMap) error {
-	factory := fs.NewDefaultFactory()
-	prodFS := factory.Production()
-	return WriteSettingsFileWithFilesystem(prodFS, filePath, settings)
-}
-
 // getJSONType returns a human-readable description of JSON data type
 func getJSONType(data []byte) string {
 	content := strings.TrimSpace(string(data))
@@ -139,128 +120,3 @@ func getJSONType(data []byte) string {
 	return "non-object value"
 }
 
-// SettingsLock interface for settings file locking with automatic cleanup
-type SettingsLock interface {
-	Release() error
-}
-
-// settingsLockWrapper wraps FileLockInterface to implement SettingsLock interface
-type settingsLockWrapper struct {
-	lock FileLockInterface
-}
-
-func (s *settingsLockWrapper) Release() error {
-	if s.lock == nil {
-		return nil // Already released or never acquired
-	}
-
-	err := s.lock.Unlock()
-	s.lock = nil // Mark as released
-	return err
-}
-
-// AcquireFileLock acquires an exclusive file lock with retry logic and timeout
-func AcquireFileLock(lockFile string) (SettingsLock, error) {
-	return AcquireFileLockWithTimeout(lockFile, 5*time.Second)
-}
-
-// AcquireFileLockWithTimeout acquires an exclusive file lock with timeout
-func AcquireFileLockWithTimeout(lockFile string, timeout time.Duration) (SettingsLock, error) {
-	fileLock := NewFileLock(lockFile)
-
-	// Use context for timeout handling
-	deadline := time.Now().Add(timeout)
-	retryDelay := 10 * time.Millisecond
-
-	for time.Now().Before(deadline) {
-		locked, err := fileLock.TryLock()
-		if err != nil {
-			return nil, fmt.Errorf("failed to try lock %s: %w", lockFile, err)
-		}
-
-		if locked {
-			return &settingsLockWrapper{lock: fileLock}, nil
-		}
-
-		// Wait before retrying, but don't exceed deadline
-		remaining := time.Until(deadline)
-		if remaining <= 0 {
-			break
-		}
-
-		sleepTime := retryDelay
-		if sleepTime > remaining {
-			sleepTime = remaining
-		}
-
-		time.Sleep(sleepTime)
-
-		// Exponential backoff, but cap at 100ms
-		retryDelay *= 2
-		if retryDelay > 100*time.Millisecond {
-			retryDelay = 100 * time.Millisecond
-		}
-	}
-
-	return nil, fmt.Errorf("timeout acquiring file lock %s after %v", lockFile, timeout)
-}
-
-// ReadSettingsFileWithLockAndFilesystem reads settings file with file locking using filesystem abstraction
-func ReadSettingsFileWithLockAndFilesystem(filesystem afero.Fs, filePath string) (*SettingsMap, error) {
-	lockFile := filePath + ".lock"
-
-	// Ensure directory exists for lock file
-	dir := filepath.Dir(lockFile)
-	err := filesystem.MkdirAll(dir, 0755)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create directory for lock file %s: %w", dir, err)
-	}
-
-	// Acquire file lock
-	lock, err := AcquireFileLock(lockFile)
-	if err != nil {
-		return nil, fmt.Errorf("failed to acquire read lock: %w", err)
-	}
-	defer lock.Release()
-
-	// Read settings with the lock held using filesystem abstraction
-	return ReadSettingsFileWithFilesystem(filesystem, filePath)
-}
-
-// ReadSettingsFileWithLock reads settings file with file locking for concurrent safety
-// This is the production version that uses real filesystem
-func ReadSettingsFileWithLock(filePath string) (*SettingsMap, error) {
-	factory := fs.NewDefaultFactory()
-	prodFS := factory.Production()
-	return ReadSettingsFileWithLockAndFilesystem(prodFS, filePath)
-}
-
-// WriteSettingsFileWithLockAndFilesystem writes settings file with file locking using filesystem abstraction
-func WriteSettingsFileWithLockAndFilesystem(filesystem afero.Fs, filePath string, settings *SettingsMap) error {
-	lockFile := filePath + ".lock"
-
-	// Ensure directory exists for lock file
-	dir := filepath.Dir(lockFile)
-	err := filesystem.MkdirAll(dir, 0755)
-	if err != nil {
-		return fmt.Errorf("failed to create directory for lock file %s: %w", dir, err)
-	}
-
-	// Acquire file lock
-	lock, err := AcquireFileLock(lockFile)
-	if err != nil {
-		return fmt.Errorf("failed to acquire write lock: %w", err)
-	}
-	defer lock.Release()
-
-	// Write settings with the lock held using filesystem abstraction
-	return WriteSettingsFileWithFilesystem(filesystem, filePath, settings)
-}
-
-// WriteSettingsFileWithLock writes settings file with file locking for concurrent safety
-// This is the production version that uses real filesystem
-func WriteSettingsFileWithLock(filePath string, settings *SettingsMap) error {
-	factory := fs.NewDefaultFactory()
-	prodFS := factory.Production()
-	return WriteSettingsFileWithLockAndFilesystem(prodFS, filePath, settings)
-}

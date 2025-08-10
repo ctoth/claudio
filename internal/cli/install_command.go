@@ -195,7 +195,9 @@ func runInstallWorkflow(scope string, settingsPath string) error {
 
 	// Step 2: Read existing settings (uses file locking for safety)
 	slog.Debug("reading existing settings", "path", settingsPath)
-	existingSettings, err := install.ReadSettingsFileWithLock(settingsPath)
+	factory := install.GetFilesystemFactory()
+	prodFS := factory.Production()
+	existingSettings, err := install.ReadSettingsFile(prodFS, settingsPath)
 	if err != nil {
 		return fmt.Errorf("failed to read existing settings from %s: %w", settingsPath, err)
 	}
@@ -206,7 +208,17 @@ func runInstallWorkflow(scope string, settingsPath string) error {
 
 	// Step 3: Generate Claudio hooks configuration
 	slog.Debug("generating Claudio hooks configuration")
-	claudioHooks, err := install.GenerateClaudioHooks()
+	
+	// Get current executable path, fall back to "claudio" on error
+	execPath, err := install.GetExecutablePath()
+	if err != nil {
+		slog.Warn("failed to get executable path, falling back to 'claudio'", "error", err)
+		execPath = "claudio"
+	}
+	
+	// Use production filesystem (reuse existing variables)
+	
+	claudioHooks, err := install.GenerateClaudioHooks(prodFS, execPath)
 	if err != nil {
 		return fmt.Errorf("failed to generate Claudio hooks: %w", err)
 	}
@@ -225,7 +237,7 @@ func runInstallWorkflow(scope string, settingsPath string) error {
 
 	// Step 5: Write merged settings back to file (uses file locking for safety)
 	slog.Debug("writing merged settings to file", "path", settingsPath)
-	err = install.WriteSettingsFileWithLock(settingsPath, mergedSettings)
+	err = install.WriteSettingsFile(prodFS, settingsPath, mergedSettings)
 	if err != nil {
 		return fmt.Errorf("failed to write merged settings to %s: %w", settingsPath, err)
 	}
@@ -234,7 +246,7 @@ func runInstallWorkflow(scope string, settingsPath string) error {
 
 	// Step 6: Verify installation by reading back and checking hooks
 	slog.Debug("verifying installation by reading back settings")
-	verifySettings, err := install.ReadSettingsFileWithLock(settingsPath)
+	verifySettings, err := install.ReadSettingsFile(prodFS, settingsPath)
 	if err != nil {
 		return fmt.Errorf("failed to verify installation by reading %s: %w", settingsPath, err)
 	}

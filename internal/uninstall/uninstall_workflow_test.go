@@ -57,7 +57,13 @@ func TestInstallUninstallWithExecutablePath(t *testing.T) {
 
 			if tc.installFirst {
 				// Step 1: Install claudio hooks (which should use executable path)
-				claudioHooks, err := install.GenerateClaudioHooks()
+				factory := install.GetFilesystemFactory()
+			prodFS := factory.Production()
+			execPath, _ := install.GetExecutablePath()
+			if execPath == "" {
+				execPath = "claudio"
+			}
+			claudioHooks, err := install.GenerateClaudioHooks(prodFS, execPath)
 				if err != nil {
 					t.Fatalf("Failed to generate claudio hooks: %v", err)
 				}
@@ -356,7 +362,9 @@ func TestRunUninstallWorkflow(t *testing.T) {
 			}
 
 			// 2. Settings file should be valid JSON
-			settings, err := install.ReadSettingsFile(settingsFile)
+			factory := install.GetFilesystemFactory()
+			prodFS := factory.Production()
+			settings, err := install.ReadSettingsFile(prodFS, settingsFile)
 			if err != nil {
 				t.Errorf("Failed to read settings after uninstall: %v", err)
 			}

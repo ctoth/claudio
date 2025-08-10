@@ -37,6 +37,17 @@ func isClaudioHook(hookValue interface{}) bool {
 	return false
 }
 
+// Helper function for merge tests to generate hooks with test parameters
+func generateTestHooksForMerge() (interface{}, error) {
+	factory := GetFilesystemFactory()
+	prodFS := factory.Production()
+	execPath, _ := GetExecutablePath()
+	if execPath == "" {
+		execPath = "claudio"
+	}
+	return GenerateClaudioHooks(prodFS, execPath)
+}
+
 func TestMergeHooksIdempotent(t *testing.T) {
 	// TDD RED: Test that merging hooks multiple times produces the same result
 	testCases := []struct {
@@ -87,7 +98,7 @@ func TestMergeHooksIdempotent(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Generate fresh Claudio hooks
-			claudioHooks, err := GenerateClaudioHooks()
+			claudioHooks, err := generateTestHooksForMerge()
 			if err != nil {
 				t.Fatalf("Failed to generate Claudio hooks: %v", err)
 			}
@@ -221,7 +232,7 @@ func TestMergeHooksPreservesExisting(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Generate Claudio hooks
-			claudioHooks, err := GenerateClaudioHooks()
+			claudioHooks, err := generateTestHooksForMerge()
 			if err != nil {
 				t.Fatalf("Failed to generate Claudio hooks: %v", err)
 			}
@@ -377,7 +388,7 @@ func TestMergeHooksDeepCopy(t *testing.T) {
 	}
 
 	// Generate Claudio hooks
-	claudioHooks, err := GenerateClaudioHooks()
+	claudioHooks, err := generateTestHooksForMerge()
 	if err != nil {
 		t.Fatalf("Failed to generate Claudio hooks: %v", err)
 	}

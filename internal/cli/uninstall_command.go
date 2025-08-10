@@ -153,7 +153,9 @@ func handlePrintUninstall(cmd *cobra.Command, scope InstallScope, settingsPath s
 	cmd.Printf("  Settings Path: %s\n", settingsPath)
 
 	// Try to read settings and show what hooks would be removed
-	settings, err := install.ReadSettingsFileWithLock(settingsPath)
+	factory := install.GetFilesystemFactory()
+	prodFS := factory.Production()
+	settings, err := install.ReadSettingsFile(prodFS, settingsPath)
 	if err != nil {
 		cmd.Printf("  Warning: Could not read settings file: %v\n", err)
 		return nil
@@ -177,7 +179,9 @@ func handleDryRunUninstall(cmd *cobra.Command, scope InstallScope, settingsPath 
 	}
 
 	// Try to read settings and show what would be removed
-	settings, err := install.ReadSettingsFileWithLock(settingsPath)
+	factory := install.GetFilesystemFactory()
+	prodFS := factory.Production()
+	settings, err := install.ReadSettingsFile(prodFS, settingsPath)
 	if err != nil {
 		if !quiet {
 			cmd.Printf("Would attempt to read settings, but got error: %v\n", err)

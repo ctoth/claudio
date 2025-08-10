@@ -29,7 +29,9 @@ func runUninstallWorkflow(scope string, settingsPath string) error {
 
 	// Step 2: Read existing settings (uses file locking for safety)
 	slog.Debug("reading existing settings", "path", settingsPath)
-	existingSettings, err := install.ReadSettingsFileWithLock(settingsPath)
+	factory := install.GetFilesystemFactory()
+	prodFS := factory.Production()
+	existingSettings, err := install.ReadSettingsFile(prodFS, settingsPath)
 	if err != nil {
 		return fmt.Errorf("failed to read existing settings from %s: %w", settingsPath, err)
 	}
@@ -60,7 +62,7 @@ func runUninstallWorkflow(scope string, settingsPath string) error {
 
 	// Step 6: Write updated settings back to file (uses file locking for safety)
 	slog.Debug("writing updated settings to file", "path", settingsPath)
-	err = install.WriteSettingsFileWithLock(settingsPath, existingSettings)
+	err = install.WriteSettingsFile(prodFS, settingsPath, existingSettings)
 	if err != nil {
 		return fmt.Errorf("failed to write updated settings to %s: %w", settingsPath, err)
 	}
@@ -69,7 +71,7 @@ func runUninstallWorkflow(scope string, settingsPath string) error {
 
 	// Step 7: Verify uninstall by reading back and checking for claudio hooks
 	slog.Debug("verifying uninstall by reading back settings")
-	verifySettings, err := install.ReadSettingsFileWithLock(settingsPath)
+	verifySettings, err := install.ReadSettingsFile(prodFS, settingsPath)
 	if err != nil {
 		return fmt.Errorf("failed to verify uninstall by reading %s: %w", settingsPath, err)
 	}

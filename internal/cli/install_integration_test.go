@@ -113,7 +113,9 @@ func TestInstallWorkflowUser(t *testing.T) {
 			}
 
 			// 2. Settings file should be valid JSON
-			settings, err := install.ReadSettingsFile(userSettingsFile)
+			factory := install.GetFilesystemFactory()
+			prodFS := factory.Production()
+			settings, err := install.ReadSettingsFile(prodFS, userSettingsFile)
 			if err != nil {
 				t.Errorf("Failed to read installed settings: %v", err)
 			}
@@ -244,7 +246,9 @@ func TestInstallWorkflowProject(t *testing.T) {
 			}
 
 			// Verify installation results (similar to user tests)
-			settings, err := install.ReadSettingsFile(projectSettingsFile)
+			factory := install.GetFilesystemFactory()
+			prodFS := factory.Production()
+			settings, err := install.ReadSettingsFile(prodFS, projectSettingsFile)
 			if err != nil {
 				t.Errorf("Failed to read installed settings: %v", err)
 			}
@@ -396,7 +400,9 @@ func TestInstallWorkflowConcurrency(t *testing.T) {
 	}
 
 	// Verify final state is consistent
-	finalSettings, err := install.ReadSettingsFile(settingsFile)
+	factory := install.GetFilesystemFactory()
+	prodFS := factory.Production()
+	finalSettings, err := install.ReadSettingsFile(prodFS, settingsFile)
 	if err != nil {
 		t.Fatalf("Failed to read final settings: %v", err)
 	}
