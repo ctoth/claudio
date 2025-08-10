@@ -11,6 +11,112 @@ import (
 	"github.com/ctoth/claudio/internal/tracking"
 )
 
+// TDD GREEN: Add data structures for tool-first grouping
+
+// ToolGroup represents a tool with its missing sounds grouped by category
+type ToolGroup struct {
+	Name       string          `json:"name"`
+	Total      int             `json:"total"`       // Total requests across all categories
+	Count      int             `json:"count"`       // Total missing sounds count
+	Categories []CategoryGroup `json:"categories"`
+}
+
+// CategoryGroup represents a category of missing sounds within a tool
+type CategoryGroup struct {
+	Name   string                     `json:"name"`
+	Total  int                        `json:"total"`  // Total requests for this category
+	Count  int                        `json:"count"`  // Number of missing sounds
+	Sounds []tracking.MissingSound    `json:"sounds"`
+}
+
+// Analysis represents the complete analysis of missing sounds grouped by tool
+type Analysis struct {
+	Tools []ToolGroup     `json:"tools"`  // Tool-specific missing sounds
+	Other []CategoryGroup `json:"other"`  // Non-tool-specific missing sounds (interactive, system, etc.)
+}
+
+// TDD REFACTOR: Actual groupByTool implementation with tool-first grouping logic
+func groupByTool(missingSounds []tracking.MissingSound) Analysis {
+	toolMap := make(map[string]map[string][]tracking.MissingSound) // tool -> category -> sounds
+	otherMap := make(map[string][]tracking.MissingSound)           // category -> sounds (for non-tool sounds)
+	
+	// Group sounds by tool and category
+	for _, sound := range missingSounds {
+		if sound.ToolName != "" {
+			// Tool-specific sound
+			if toolMap[sound.ToolName] == nil {
+				toolMap[sound.ToolName] = make(map[string][]tracking.MissingSound)
+			}
+			toolMap[sound.ToolName][sound.Category] = append(toolMap[sound.ToolName][sound.Category], sound)
+		} else {
+			// Non-tool sound (goes to Other section)
+			otherMap[sound.Category] = append(otherMap[sound.Category], sound)
+		}
+	}
+	
+	// Build tool groups
+	var tools []ToolGroup
+	for toolName, categoryMap := range toolMap {
+		var categories []CategoryGroup
+		toolTotal := 0
+		toolCount := 0
+		
+		for categoryName, sounds := range categoryMap {
+			categoryTotal := 0
+			for _, sound := range sounds {
+				categoryTotal += sound.RequestCount
+			}
+			
+			categories = append(categories, CategoryGroup{
+				Name:   categoryName,
+				Total:  categoryTotal,
+				Count:  len(sounds),
+				Sounds: sounds,
+			})
+			
+			toolTotal += categoryTotal
+			toolCount += len(sounds)
+		}
+		
+		tools = append(tools, ToolGroup{
+			Name:       toolName,
+			Total:      toolTotal,
+			Count:      toolCount,
+			Categories: categories,
+		})
+	}
+	
+	// Build other groups
+	var other []CategoryGroup
+	for categoryName, sounds := range otherMap {
+		categoryTotal := 0
+		for _, sound := range sounds {
+			categoryTotal += sound.RequestCount
+		}
+		
+		other = append(other, CategoryGroup{
+			Name:   categoryName,
+			Total:  categoryTotal,
+			Count:  len(sounds),
+			Sounds: sounds,
+		})
+	}
+	
+	// Sort tools by total requests (descending)
+	for i := 0; i < len(tools); i++ {
+		for j := i + 1; j < len(tools); j++ {
+			if tools[j].Total > tools[i].Total {
+				tools[i], tools[j] = tools[j], tools[i]
+			}
+		}
+	}
+	
+	return Analysis{
+		Tools: tools,
+		Other: other,
+	}
+}
+
 // TDD RED: Test analyze missing command functionality
 
 func TestAnalyzeMissingCommand(t *testing.T) {
@@ -372,5 +478,131 @@ func TestAnalyzeMissingCommandHelp(t *testing.T) {
 		if !strings.Contains(helpOutput, content) {
 			t.Errorf("Help output should contain '%s'", content)
 		}
+	}
+}
+
+// TDD RED: Test for grouping missing sounds by tool
+func TestGroupMissingSoundsByTool(t *testing.T) {
+	// Create test data with Category and ToolName populated
+	missingSounds := []tracking.MissingSound{
+		{
+			Path:         "success/git-commit-success.wav",
+			RequestCount: 50,
+			Tools:        []string{"git"},
+			Category:     "success",
+			ToolName:     "git",
+		},
+		{
+			Path:         "loading/git-start.wav",
+			RequestCount: 30,
+			Tools:        []string{"git"},
+			Category:     "loading", 
+			ToolName:     "git",
+		},
+		{
+			Path:         "success/npm-success.wav",
+			RequestCount: 25,
+			Tools:        []string{"npm"},
+			Category:     "success",
+			ToolName:     "npm",
+		},
+		{
+			Path:         "error/bash-error.wav",
+			RequestCount: 15,
+			Tools:        []string{"bash"},
+			Category:     "error",
+			ToolName:     "bash",
+		},
+		{
+			Path:         "interactive/notification.wav",
+			RequestCount: 10,
+			Tools:        []string{"Edit", "Read"},
+			Category:     "interactive",
+			ToolName:     "", // No specific tool
+		},
+	}
+
+	// TDD RED: Call grouping function that doesn't exist yet
+	analysis := groupByTool(missingSounds)
+
+	// Verify Analysis structure exists
+	if len(analysis.Tools) == 0 {
+		t.Error("Expected analysis.Tools to contain grouped tools")
+	}
+
+	// Verify git tool group (should have highest total)
+	var gitTool *ToolGroup
+	for i := range analysis.Tools {
+		if analysis.Tools[i].Name == "git" {
+			gitTool = &analysis.Tools[i]
+			break
+		}
+	}
+
+	if gitTool == nil {
+		t.Fatal("Expected to find git tool group")
+	}
+
+	// Git should have 80 total requests (50 + 30)
+	if gitTool.Total != 80 {
+		t.Errorf("Expected git tool total to be 80, got %d", gitTool.Total)
+	}
+
+	// Git should have 2 missing sounds
+	if gitTool.Count != 2 {
+		t.Errorf("Expected git tool count to be 2, got %d", gitTool.Count)
+	}
+
+	// Git should have success and loading categories
+	expectedCategories := map[string]bool{
+		"success": false,
+		"loading": false,
+	}
+
+	for _, category := range gitTool.Categories {
+		if _, exists := expectedCategories[category.Name]; exists {
+			expectedCategories[category.Name] = true
+		}
+	}
+
+	for catName, found := range expectedCategories {
+		if !found {
+			t.Errorf("Expected git tool to have %s category", catName)
+		}
+	}
+
+	// Verify tools are sorted by total requests (git=80, npm=25, bash=15)
+	if len(analysis.Tools) < 3 {
+		t.Fatal("Expected at least 3 tool groups")
+	}
+
+	if analysis.Tools[0].Name != "git" {
+		t.Errorf("Expected first tool to be 'git', got '%s'", analysis.Tools[0].Name)
+	}
+
+	if analysis.Tools[1].Name != "npm" {
+		t.Errorf("Expected second tool to be 'npm', got '%s'", analysis.Tools[1].Name)
+	}
+
+	if analysis.Tools[2].Name != "bash" {
+		t.Errorf("Expected third tool to be 'bash', got '%s'", analysis.Tools[2].Name)
+	}
+
+	// Verify Other category contains non-tool sounds
+	if len(analysis.Other) == 0 {
+		t.Error("Expected analysis.Other to contain non-tool sounds")
+	}
+
+	// Interactive category should be in Other
+	var interactiveOther *CategoryGroup
+	for i := range analysis.Other {
+		if analysis.Other[i].Name == "interactive" {
+			interactiveOther = &analysis.Other[i]
+			break
+		}
+	}
+
+	if interactiveOther == nil {
+		t.Error("Expected interactive category in Other section")
 	}
 }
