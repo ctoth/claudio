@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ctoth/claudio/internal/audio"
+	"claudio.click/internal/audio"
 )
 
 // TestEndToEndAIFFSupport validates the complete user journey for AIFF support

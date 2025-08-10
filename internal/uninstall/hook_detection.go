@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"path/filepath"
 
-	"github.com/ctoth/claudio/internal/install"
+	"claudio.click/internal/install"
 )
 
 // DetectClaudioHooks finds all hook names that reference claudio (public interface)

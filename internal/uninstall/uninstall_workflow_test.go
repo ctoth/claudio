@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ctoth/claudio/internal/install"
+	"claudio.click/internal/install"
 )
 
 func TestInstallUninstallWithExecutablePath(t *testing.T) {

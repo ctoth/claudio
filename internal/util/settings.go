@@ -1,6 +1,6 @@
 package util
 
-import "github.com/ctoth/claudio/internal/install"
+import "claudio.click/internal/install"
 
 // GetSettingsKeys returns a list of top-level keys in settings for logging
 func GetSettingsKeys(settings *install.SettingsMap) []string {

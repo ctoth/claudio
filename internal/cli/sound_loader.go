@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/ctoth/claudio/internal/audio"
+	"claudio.click/internal/audio"
 )
 
 // FileNotFoundError represents a sound file not found error

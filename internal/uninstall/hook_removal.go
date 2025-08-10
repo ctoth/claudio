@@ -3,7 +3,7 @@ package uninstall
 import (
 	"log/slog"
 
-	"github.com/ctoth/claudio/internal/install"
+	"claudio.click/internal/install"
 )
 
 // isSimpleClaudioArrayHook checks if an array hook contains only a single claudio command

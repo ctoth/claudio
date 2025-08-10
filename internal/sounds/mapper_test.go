@@ -3,7 +3,7 @@ package sounds
 import (
 	"testing"
 
-	"github.com/ctoth/claudio/internal/hooks"
+	"claudio.click/internal/hooks"
 )
 
 func TestSoundMapper(t *testing.T) {

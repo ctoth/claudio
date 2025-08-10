@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/ctoth/claudio/internal/install"
-	"github.com/ctoth/claudio/internal/util"
+	"claudio.click/internal/install"
+	"claudio.click/internal/util"
 )
 
 // RunUninstallWorkflow orchestrates the complete Claudio uninstall process (public interface)

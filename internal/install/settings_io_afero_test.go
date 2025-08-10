@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/spf13/afero"
-	"github.com/ctoth/claudio/internal/fs"
+	"claudio.click/internal/fs"
 )
 
 // TDD RED: Test that settings I/O functions can use afero filesystem abstraction

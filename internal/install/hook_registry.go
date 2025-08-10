@@ -3,7 +3,7 @@ package install
 import (
 	"log/slog"
 
-	"github.com/ctoth/claudio/internal/hooks"
+	"claudio.click/internal/hooks"
 )
 
 // HookDefinition represents a single hook configuration in the registry

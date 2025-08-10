@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/afero"
-	"github.com/ctoth/claudio/internal/fs"
+	"claudio.click/internal/fs"
 )
 
 // HooksMap represents the hooks section of Claude Code settings

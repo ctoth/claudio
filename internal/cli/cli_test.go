@@ -11,9 +11,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ctoth/claudio/internal/config"
-	"github.com/ctoth/claudio/internal/hooks"
-	"github.com/ctoth/claudio/internal/soundpack"
+	"claudio.click/internal/config"
+	"claudio.click/internal/hooks"
+	"claudio.click/internal/soundpack"
 )
 
 func TestCLI(t *testing.T) {

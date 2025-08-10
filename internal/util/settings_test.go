@@ -3,7 +3,7 @@ package util
 import (
 	"testing"
 
-	"github.com/ctoth/claudio/internal/install"
+	"claudio.click/internal/install"
 )
 
 func TestGetSettingsKeys(t *testing.T) {

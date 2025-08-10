@@ -10,11 +10,11 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/ctoth/claudio/internal/audio"
-	"github.com/ctoth/claudio/internal/config"
-	"github.com/ctoth/claudio/internal/hooks"
-	"github.com/ctoth/claudio/internal/soundpack"
-	"github.com/ctoth/claudio/internal/sounds"
+	"claudio.click/internal/audio"
+	"claudio.click/internal/config"
+	"claudio.click/internal/hooks"
+	"claudio.click/internal/soundpack"
+	"claudio.click/internal/sounds"
 	"github.com/spf13/cobra"
 	"gopkg.in/natefinch/lumberjack.v2"
 )

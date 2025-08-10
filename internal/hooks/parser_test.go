@@ -54,7 +54,7 @@ const (
 		"tool_name": "Grep",
 		"tool_input": {
 			"pattern": "func.*Decode",
-			"path": "/root/code/github.com/ctoth/claudio/internal/audio",
+			"path": "/root/code/claudio.click/internal/audio",
 			"output_mode": "content",
 			"-n": true
 		},
@@ -62,7 +62,7 @@ const (
 			"mode": "content",
 			"numFiles": 0,
 			"filenames": [],
-			"content": "/root/code/github.com/ctoth/claudio/internal/audio/registry.go:18:func NewDecoderRegistry()",
+			"content": "/root/code/claudio.click/internal/audio/registry.go:18:func NewDecoderRegistry()",
 			"numLines": 44
 		}
 	}`

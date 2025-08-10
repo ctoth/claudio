@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/ctoth/claudio/internal/install"
-	"github.com/ctoth/claudio/internal/uninstall"
+	"claudio.click/internal/install"
+	"claudio.click/internal/uninstall"
 	"github.com/spf13/cobra"
 )
 

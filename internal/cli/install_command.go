@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/ctoth/claudio/internal/install"
-	"github.com/ctoth/claudio/internal/util"
+	"claudio.click/internal/install"
+	"claudio.click/internal/util"
 	"github.com/spf13/cobra"
 )
 
