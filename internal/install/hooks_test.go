@@ -2,6 +2,7 @@ package install
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"testing"
 )
@@ -351,15 +352,18 @@ func TestGenerateClaudioHooksCorrectFormat(t *testing.T) {
 				return
 			}
 
-			// Get expected executable path for comparison
+			// Get expected executable path for comparison with quotes
 			expectedPath, err := os.Executable()
 			if err != nil {
 				// If os.Executable() fails, we expect fallback to "claudio"
 				expectedPath = "claudio"
 			}
+			
+			// The command should be quoted for shell safety
+			expectedQuotedPath := fmt.Sprintf(`"%s"`, expectedPath)
 
-			if commandStr != expectedPath {
-				t.Errorf("Hook %s command should be '%s', got '%s'", hookName, expectedPath, commandStr)
+			if commandStr != expectedQuotedPath {
+				t.Errorf("Hook %s command should be '%s', got '%s'", hookName, expectedQuotedPath, commandStr)
 			}
 		})
 	}
@@ -418,12 +422,15 @@ func TestGenerateClaudioHooksUsesExecutablePath(t *testing.T) {
 		t.Fatalf("Expected hooks to be HooksMap or map[string]interface{}, got %T", hooks)
 	}
 
-	// Get expected executable path for comparison
+	// Get expected executable path for comparison with quotes
 	expectedPath, err := os.Executable()
 	if err != nil {
 		// If os.Executable() fails, we expect fallback to "claudio"
 		expectedPath = "claudio"
 	}
+	
+	// The command should be quoted for shell safety
+	expectedQuotedPath := fmt.Sprintf(`"%s"`, expectedPath)
 
 	for hookName, hookValue := range hooksMap {
 		hookArray := hookValue.([]interface{})
@@ -457,14 +464,14 @@ func TestGenerateClaudioHooksUsesExecutablePath(t *testing.T) {
 			continue
 		}
 
-		// Verify command uses executable path, not hardcoded "claudio"
-		if commandStr != expectedPath {
-			t.Errorf("Hook %s command should be '%s', got '%s'", hookName, expectedPath, commandStr)
+		// Verify command uses executable path (with quotes), not hardcoded "claudio"
+		if commandStr != expectedQuotedPath {
+			t.Errorf("Hook %s command should be '%s', got '%s'", hookName, expectedQuotedPath, commandStr)
 		}
 
 		// Specifically check that it's NOT the hardcoded "claudio" (unless that's the fallback)
-		if commandStr == "claudio" && expectedPath != "claudio" {
-			t.Errorf("Hook %s using hardcoded 'claudio' instead of executable path '%s'", hookName, expectedPath)
+		if commandStr == `"claudio"` && expectedQuotedPath != `"claudio"` {
+			t.Errorf("Hook %s using hardcoded '\"claudio\"' instead of executable path '%s'", hookName, expectedQuotedPath)
 		}
 	}
 }

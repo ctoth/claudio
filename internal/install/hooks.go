@@ -4,18 +4,22 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"os"
 	"path/filepath"
+
+	"github.com/spf13/afero"
+	"github.com/ctoth/claudio/internal/fs"
 )
 
 // HooksMap represents the hooks section of Claude Code settings
 type HooksMap map[string]interface{}
 
-// GenerateClaudioHooks creates the hook configuration for Claudio installation
+// GenerateClaudioHooksWithFilesystem creates the hook configuration for Claudio installation with filesystem abstraction
 // Uses the central hook registry to generate all enabled hooks dynamically
 // Returns a hooks map that can be integrated into Claude Code settings.json
-func GenerateClaudioHooks() (interface{}, error) {
-	slog.Debug("generating Claudio hooks configuration using registry")
+// Accepts filesystem and executable path parameters to prevent config corruption during testing
+func GenerateClaudioHooksWithFilesystem(filesystem afero.Fs, executablePath string) (interface{}, error) {
+	slog.Debug("generating Claudio hooks configuration using registry with filesystem abstraction",
+		"executable_path", executablePath)
 
 	// Get enabled hooks from registry
 	enabledHooks := GetEnabledHooks()
@@ -25,14 +29,8 @@ func GenerateClaudioHooks() (interface{}, error) {
 
 	// Helper function to create hook config structure
 	createHookConfig := func() interface{} {
-		// Get current executable path, fall back to "claudio" on error
-		execPath, err := os.Executable()
-		if err != nil {
-			slog.Warn("failed to get executable path, falling back to 'claudio'", "error", err)
-			execPath = "claudio"
-		} else {
-			slog.Debug("using executable path for hook command", "path", execPath)
-		}
+		// Use provided executable path to prevent config corruption
+		slog.Debug("using provided executable path for hook command", "path", executablePath)
 
 		return []interface{}{
 			map[string]interface{}{
@@ -40,7 +38,7 @@ func GenerateClaudioHooks() (interface{}, error) {
 				"hooks": []interface{}{
 					map[string]interface{}{
 						"type":    "command",
-						"command": fmt.Sprintf(`"%s"`, execPath),
+						"command": fmt.Sprintf(`"%s"`, executablePath),
 					},
 				},
 			},
@@ -56,11 +54,34 @@ func GenerateClaudioHooks() (interface{}, error) {
 			"description", hookDef.Description)
 	}
 
-	slog.Info("generated Claudio hooks configuration from registry",
+	slog.Info("generated Claudio hooks configuration from registry with filesystem abstraction",
 		"hook_count", len(hooks),
 		"hooks", getHookNamesList(hooks))
 
 	return hooks, nil
+}
+
+// GenerateClaudioHooks creates the hook configuration for Claudio installation
+// Uses the central hook registry to generate all enabled hooks dynamically
+// Returns a hooks map that can be integrated into Claude Code settings.json
+// This is the production version that uses real filesystem
+func GenerateClaudioHooks() (interface{}, error) {
+	slog.Debug("generating Claudio hooks configuration using registry")
+
+	// Get current executable path using filesystem abstraction, fall back to "claudio" on error
+	execPath, err := fs.ExecutablePath()
+	if err != nil {
+		slog.Warn("failed to get executable path, falling back to 'claudio'", "error", err)
+		execPath = "claudio"
+	} else {
+		slog.Debug("using executable path for hook command", "path", execPath)
+	}
+
+	// Use filesystem-aware version with production filesystem
+	factory := fs.NewDefaultFactory()
+	prodFS := factory.Production()
+	
+	return GenerateClaudioHooksWithFilesystem(prodFS, execPath)
 }
 
 // getHookNamesList returns a list of hook names for logging
