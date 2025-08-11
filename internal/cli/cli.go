@@ -15,11 +15,12 @@ import (
 	"claudio.click/internal/hooks"
 	"claudio.click/internal/soundpack"
 	"claudio.click/internal/sounds"
+	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
-const Version = "1.8.2"
+const Version = "1.9.0"
 
 // CLI represents the command-line interface
 type CLI struct {
@@ -171,7 +172,7 @@ func loadAndValidateConfig(cmd *cobra.Command, cli *CLI) (*config.Config, error)
 
 // initializeAudioSystem sets up the soundpack resolver and audio backend
 func initializeAudioSystem(cmd *cobra.Command, cli *CLI, cfg *config.Config) error {
-	slog.Debug("configuration loaded",
+	slog.Debug("initializing audio system",
 		"volume", cfg.Volume,
 		"soundpack", cfg.DefaultSoundpack,
 		"audio_backend", cfg.AudioBackend,
@@ -182,18 +183,63 @@ func initializeAudioSystem(cmd *cobra.Command, cli *CLI, cfg *config.Config) err
 	soundpackPaths := xdgDirs.GetSoundpackPaths(cfg.DefaultSoundpack)
 	soundpackPaths = append(soundpackPaths, cfg.SoundpackPaths...)
 
-	// Use factory to create appropriate mapper with fallback to base paths
-	mapper, err := soundpack.CreateSoundpackMapperWithBasePaths(
-		cfg.DefaultSoundpack,
-		cfg.DefaultSoundpack, // Try exact path first
-		soundpackPaths,       // Fallback to base directory search
-	)
+	// Check if configured soundpack exists before trying to create mapper
+	var mapper soundpack.PathMapper
+	var err error
+	
+	// For absolute paths (like /usr/local/share/claudio/wsl.json), check if file exists
+	// If it doesn't exist, skip to platform JSON fallback immediately
+	if filepath.IsAbs(cfg.DefaultSoundpack) {
+		if _, statErr := os.Stat(cfg.DefaultSoundpack); statErr != nil {
+			slog.Info("configured soundpack not found, will try platform fallback",
+				"soundpack", cfg.DefaultSoundpack)
+			err = fmt.Errorf("configured soundpack path does not exist: %w", statErr)
+		}
+	}
+	
+	// Only try to create mapper if path exists or is relative
+	if err == nil {
+		// Use factory to create appropriate mapper with fallback to base paths
+		mapper, err = soundpack.CreateSoundpackMapperWithBasePaths(
+			cfg.DefaultSoundpack,
+			cfg.DefaultSoundpack, // Try exact path first
+			soundpackPaths,       // Fallback to base directory search
+		)
+	}
+	
 	if err != nil {
-		slog.Warn("failed to create soundpack mapper, using default empty mapper",
-			"soundpack", cfg.DefaultSoundpack,
-			"error", err)
-		// Create empty directory mapper as fallback to prevent crashes
-		mapper = soundpack.NewDirectoryMapper("fallback", []string{})
+		slog.Debug("configured soundpack unavailable, trying platform JSON fallback",
+			"soundpack", cfg.DefaultSoundpack)
+			
+		// Try platform JSON fallback (e.g., wsl.json, darwin.json, linux.json)
+		cfgMgr := config.NewConfigManager()
+		execDir := getPlatformExecutableDirectory()
+		platformSoundpack := cfgMgr.GetPlatformSoundpack(afero.NewOsFs(), execDir)
+		
+		if platformSoundpack != "default" {
+			slog.Info("using platform-specific soundpack", "path", platformSoundpack)
+			
+			// Try to create mapper for platform JSON
+			platformMapper, platformErr := soundpack.CreateSoundpackMapperWithBasePaths(
+				platformSoundpack,
+				platformSoundpack, // Platform JSON is already full path
+				[]string{},        // No additional paths needed
+			)
+			if platformErr == nil {
+				slog.Info("platform soundpack loaded successfully", "name", platformSoundpack)
+				mapper = platformMapper
+			} else {
+				slog.Warn("platform soundpack failed to load", 
+					"path", platformSoundpack, 
+					"error", platformErr)
+				// Create empty directory mapper as final fallback
+				mapper = soundpack.NewDirectoryMapper("fallback", []string{})
+			}
+		} else {
+			slog.Debug("no platform soundpack found, using empty mapper")
+			// Create empty directory mapper as fallback to prevent crashes
+			mapper = soundpack.NewDirectoryMapper("fallback", []string{})
+		}
 	}
 
 	cli.soundpackResolver = soundpack.NewSoundpackResolver(mapper)
@@ -599,4 +645,18 @@ func getStringPtr(ptr *string) string {
 		return ""
 	}
 	return *ptr
+}
+
+// getPlatformExecutableDirectory returns the directory containing the current executable for platform JSON detection
+func getPlatformExecutableDirectory() string {
+	executable, err := os.Executable()
+	if err != nil {
+		slog.Warn("failed to get executable directory for platform detection, using current directory", "error", err)
+		return "."
+	}
+	
+	execDir := filepath.Dir(executable)
+	slog.Debug("executable directory detected for platform detection", "executable", executable, "directory", execDir)
+	
+	return execDir
 }
