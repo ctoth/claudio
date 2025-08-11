@@ -39,7 +39,7 @@ func GenerateClaudioHooks(filesystem afero.Fs, executablePath string) (interface
 				"hooks": []interface{}{
 					map[string]interface{}{
 						"type":    "command",
-						"command": fmt.Sprintf(`"%s"`, executablePath),
+						"command": executablePath,
 					},
 				},
 			},

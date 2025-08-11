@@ -186,25 +186,25 @@ func initializeAudioSystem(cmd *cobra.Command, cli *CLI, cfg *config.Config) err
 	// Check if configured soundpack exists before trying to create mapper
 	var mapper soundpack.PathMapper
 	var err error
+	var shouldTryPlatformFallback bool
 	
-	// For absolute paths (like /usr/local/share/claudio/wsl.json), check if file exists
-	// If it doesn't exist, skip to platform JSON fallback immediately
-	if filepath.IsAbs(cfg.DefaultSoundpack) {
-		if _, statErr := os.Stat(cfg.DefaultSoundpack); statErr != nil {
-			slog.Info("configured soundpack not found, will try platform fallback",
-				"soundpack", cfg.DefaultSoundpack)
-			err = fmt.Errorf("configured soundpack path does not exist: %w", statErr)
-		}
+	// Check if primary soundpack path exists (both relative and absolute)
+	if _, statErr := os.Stat(cfg.DefaultSoundpack); statErr != nil {
+		slog.Info("configured soundpack not found, will try platform fallback",
+			"soundpack", cfg.DefaultSoundpack, "error", statErr)
+		shouldTryPlatformFallback = true
 	}
 	
-	// Only try to create mapper if path exists or is relative
-	if err == nil {
-		// Use factory to create appropriate mapper with fallback to base paths
-		mapper, err = soundpack.CreateSoundpackMapperWithBasePaths(
-			cfg.DefaultSoundpack,
-			cfg.DefaultSoundpack, // Try exact path first
-			soundpackPaths,       // Fallback to base directory search
-		)
+	// Always try to create mapper first
+	mapper, err = soundpack.CreateSoundpackMapperWithBasePaths(
+		cfg.DefaultSoundpack,
+		cfg.DefaultSoundpack, // Try exact path first
+		soundpackPaths,       // Fallback to base directory search
+	)
+	
+	// If the configured path doesn't exist, force platform fallback even if mapper creation succeeded
+	if shouldTryPlatformFallback && err == nil {
+		err = fmt.Errorf("configured soundpack path does not exist, trying platform fallback")
 	}
 	
 	if err != nil {

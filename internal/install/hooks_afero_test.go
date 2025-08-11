@@ -51,8 +51,8 @@ func TestGenerateClaudioHooksWithAfero(t *testing.T) {
 			continue
 		}
 		
-		// Should use mock path, not test executable path
-		if commandStr != `"/mock/claudio"` {
+		// Should use mock path, not test executable path (unquoted)
+		if commandStr != "/mock/claudio" {
 			t.Errorf("Hook %s should use mock executable path '/mock/claudio', got %s", hookName, commandStr)
 		}
 		
@@ -100,8 +100,8 @@ func TestGenerateClaudioHooksFilesystemIsolation(t *testing.T) {
 			continue
 		}
 		
-		// Should use isolated path
-		if commandStr != `"/isolated/claudio"` {
+		// Should use isolated path (unquoted)
+		if commandStr != "/isolated/claudio" {
 			t.Errorf("Hook %s should use isolated path, got %s", hookName, commandStr)
 		}
 	}
