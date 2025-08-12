@@ -46,10 +46,22 @@ func TestCLIUnconfiguredUsePlatformSoundpack(t *testing.T) {
 		// Prepare CLI test input
 		testInput := `{"session_id":"test","transcript_path":"/test","cwd":"/test","hook_event_name":"PostToolUse","tool_name":"Bash","tool_response":{"stdout":"success","stderr":"","interrupted":false}}`
 		
+		// Change to temp directory so current working directory check finds wsl.json
+		originalDir, err := os.Getwd()
+		if err != nil {
+			t.Fatalf("Failed to get current directory: %v", err)
+		}
+		defer os.Chdir(originalDir)
+		
+		err = os.Chdir(tempDir)
+		if err != nil {
+			t.Fatalf("Failed to change to temp directory: %v", err)
+		}
+		
 		// Create CLI with no config file - should fall back to platform detection
 		cli := NewCLI()
 		
-		// Run CLI - this should fail because current implementation doesn't auto-detect platform JSON
+		// Run CLI - this should now work with platform JSON auto-detection
 		stdin := strings.NewReader(testInput)
 		var stdout, stderr strings.Builder
 		
@@ -143,6 +155,18 @@ func TestCLIConfiguredWithPlatformFallback(t *testing.T) {
 			t.Fatalf("Failed to create fallback wsl.json: %v", err)
 		}
 		
+		// Change to execDir so current working directory check finds wsl.json  
+		originalDir, err := os.Getwd()
+		if err != nil {
+			t.Fatalf("Failed to get current directory: %v", err)
+		}
+		defer os.Chdir(originalDir)
+		
+		err = os.Chdir(execDir)
+		if err != nil {
+			t.Fatalf("Failed to change to exec directory: %v", err)
+		}
+		
 		// Test with the config that points to nonexistent soundpack
 		testInput := `{"session_id":"test","transcript_path":"/test","cwd":"/test","hook_event_name":"PostToolUse","tool_name":"Bash","tool_response":{"stdout":"success","stderr":"","interrupted":false}}`
 		
@@ -150,7 +174,7 @@ func TestCLIConfiguredWithPlatformFallback(t *testing.T) {
 		stdin := strings.NewReader(testInput)
 		var stdout, stderr strings.Builder
 		
-		// This should fail because current implementation doesn't have platform JSON fallback
+		// This should now work with platform JSON fallback
 		exitCode := cli.Run([]string{"claudio", "--config", configPath, "--silent"}, stdin, &stdout, &stderr)
 		
 		t.Logf("Configured CLI with fallback test - Exit code: %d", exitCode)
