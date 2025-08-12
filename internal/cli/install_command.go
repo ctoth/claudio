@@ -193,11 +193,10 @@ func runInstallWorkflow(scope string, settingsPath string) error {
 	// Step 3: Generate Claudio hooks configuration
 	slog.Debug("generating Claudio hooks configuration")
 	
-	// Get current executable path, fall back to "claudio" on error
+	// Get current executable path - must succeed
 	execPath, err := install.GetExecutablePath()
 	if err != nil {
-		slog.Warn("failed to get executable path, falling back to 'claudio'", "error", err)
-		execPath = "claudio"
+		return fmt.Errorf("failed to get executable path: %w", err)
 	}
 	
 	// Use production filesystem (reuse existing variables)
