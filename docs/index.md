@@ -81,7 +81,16 @@ The parsing is pretty clever. It knows that `npm install express` should trigger
 
 ## Sounds Go Here
 
-Default soundpack lives in `/usr/local/share/claudio/default/`:
+**By default, Claudio just works.** It automatically detects your platform and uses system sounds:
+
+- **macOS:** Uses built-in system sounds like Glass.aiff, Purr.aiff, Hero.aiff
+- **Windows:** Uses Windows Media sounds (Windows Ding.wav, Windows Error.wav, etc.)  
+- **WSL:** Maps to Windows sounds via `/mnt/c/Windows/Media/`
+- **Linux:** Falls back to basic directory soundpack
+
+No setup required - install and sounds work immediately.
+
+If you want custom sounds, the default directory structure is:
 
 ```
 loading/     # stuff that's about to happen
