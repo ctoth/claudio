@@ -91,7 +91,27 @@ interactive/ # you did something
 default.wav  # the sound of giving up
 ```
 
-You can make your own soundpack. Just organize files the same way and point to it in the config.
+You can make your own soundpack two ways:
+
+**Directory soundpack:** Organize files the same way and point to it in the config.
+
+**JSON soundpack:** Map virtual sound paths to any actual files on your system:
+
+```json
+{
+  "name": "my-custom-sounds",
+  "description": "Maps to my favorite sounds",
+  "mappings": {
+    "success/git-commit-success.wav": "/System/Library/Sounds/Glass.aiff",
+    "success/bash-success.wav": "/usr/share/sounds/alsa/Front_Right.wav", 
+    "error/bash-error.wav": "/mnt/c/Windows/Media/Windows Error.wav",
+    "loading/loading.wav": "/home/user/my-sounds/thinking.mp3",
+    "default.wav": "/usr/share/sounds/alsa/Front_Center.wav"
+  }
+}
+```
+
+This way your sounds can be anywhere on the filesystem - no need to copy or reorganize files.
 
 ## Config
 
