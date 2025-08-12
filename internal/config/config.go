@@ -1,6 +1,7 @@
 package config
 
 import (
+	"embed"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,6 +16,9 @@ import (
 
 	"claudio.click/internal/audio"
 )
+
+//go:embed windows.json wsl.json darwin.json
+var platformSoundpacks embed.FS
 
 // FileLoggingConfig represents file-based logging configuration
 type FileLoggingConfig struct {
@@ -470,6 +474,21 @@ func (cm *ConfigManager) IsValidAudioBackend(backend string) bool {
 	return false
 }
 
+// hasEmbeddedPlatformFile checks if an embedded platform soundpack file exists
+func hasEmbeddedPlatformFile(filename string) bool {
+	_, err := platformSoundpacks.Open(filename)
+	return err == nil
+}
+
+// GetEmbeddedPlatformSoundpackData reads embedded platform soundpack data
+func GetEmbeddedPlatformSoundpackData(filename string) ([]byte, error) {
+	data, err := platformSoundpacks.ReadFile(filename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read embedded platform soundpack file '%s': %w", filename, err)
+	}
+	return data, nil
+}
+
 // GetPlatformSoundpack returns platform-specific soundpack if it exists, otherwise "default"
 // Enhanced version that:
 // 1. Checks WSL first (prefers wsl.json over linux.json)
@@ -497,29 +516,27 @@ func (cm *ConfigManager) GetPlatformSoundpack(fs afero.Fs, executableDir string)
 		return platformPath
 	}
 	
-	// Also check current working directory as fallback
-	if cwd, err := os.Getwd(); err == nil {
-		slog.Debug("checking current working directory for platform soundpack", "cwd", cwd)
-		
-		// WSL detection in current directory 
-		if audio.IsWSL() {
-			if wslPath := checkPlatformFile(fs, cwd, "wsl.json"); wslPath != "" {
-				slog.Debug("WSL platform soundpack found in current directory", "path", wslPath)
-				return wslPath
-			}
-		}
-		
-		// Regular OS-specific detection in current directory
-		if platformPath := checkPlatformFile(fs, cwd, platformFile); platformPath != "" {
-			slog.Debug("platform soundpack found in current directory", "platform", runtime.GOOS, "path", platformPath)
-			return platformPath
-		}
+	// Check embedded platform files as fallback
+	var embeddedPlatformFile string
+	if audio.IsWSL() {
+		embeddedPlatformFile = "wsl.json"
+	} else {
+		embeddedPlatformFile = runtime.GOOS + ".json"
 	}
 	
-	slog.Debug("no platform soundpack found, using default", 
+	if hasEmbeddedPlatformFile(embeddedPlatformFile) {
+		slog.Debug("using embedded platform soundpack", 
+			"platform_file", embeddedPlatformFile,
+			"is_wsl", audio.IsWSL(),
+			"runtime_goos", runtime.GOOS)
+		return "embedded:" + embeddedPlatformFile
+	}
+	
+	slog.Debug("no platform soundpack found (file or embedded), using default", 
 		"platform", runtime.GOOS, 
 		"wsl_detection", audio.IsWSL(),
-		"exec_dir", executableDir)
+		"exec_dir", executableDir,
+		"embedded_file_checked", embeddedPlatformFile)
 	return "default"
 }
 
