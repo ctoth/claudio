@@ -497,6 +497,25 @@ func (cm *ConfigManager) GetPlatformSoundpack(fs afero.Fs, executableDir string)
 		return platformPath
 	}
 	
+	// Also check current working directory as fallback
+	if cwd, err := os.Getwd(); err == nil {
+		slog.Debug("checking current working directory for platform soundpack", "cwd", cwd)
+		
+		// WSL detection in current directory 
+		if audio.IsWSL() {
+			if wslPath := checkPlatformFile(fs, cwd, "wsl.json"); wslPath != "" {
+				slog.Debug("WSL platform soundpack found in current directory", "path", wslPath)
+				return wslPath
+			}
+		}
+		
+		// Regular OS-specific detection in current directory
+		if platformPath := checkPlatformFile(fs, cwd, platformFile); platformPath != "" {
+			slog.Debug("platform soundpack found in current directory", "platform", runtime.GOOS, "path", platformPath)
+			return platformPath
+		}
+	}
+	
 	slog.Debug("no platform soundpack found, using default", 
 		"platform", runtime.GOOS, 
 		"wsl_detection", audio.IsWSL(),
