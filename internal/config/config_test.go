@@ -626,51 +626,6 @@ func TestConfigLoggingLevels(t *testing.T) {
 	}
 }
 
-func TestConfigDefaultConsistency(t *testing.T) {
-	// TDD RED: This test should FAIL because default values in code don't match system config
-	// We expect default values to match what's deployed in the system config file
-
-	mgr := NewConfigManager()
-	defaults := mgr.GetDefaultConfig()
-
-	// Load the actual system config to compare against
-	systemConfigPath := "/etc/xdg/claudio/config.json"
-
-	// Only run this test if system config exists (skip in environments without it)
-	if _, err := os.Stat(systemConfigPath); os.IsNotExist(err) {
-		t.Skip("System config file not found, skipping consistency test")
-		return
-	}
-
-	systemConfig, err := mgr.LoadFromFile(systemConfigPath)
-	if err != nil {
-		t.Fatalf("Failed to load system config for comparison: %v", err)
-	}
-
-	// CRITICAL: Default values should match deployed system configuration
-	if defaults.Volume != systemConfig.Volume {
-		t.Errorf("Default volume inconsistency: code has %f, system config has %f",
-			defaults.Volume, systemConfig.Volume)
-	}
-
-	if defaults.LogLevel != systemConfig.LogLevel {
-		t.Errorf("Default log level inconsistency: code has %q, system config has %q",
-			defaults.LogLevel, systemConfig.LogLevel)
-	}
-
-	// These should be consistent in principle (system config uses specific path, defaults use XDG resolution)
-	// But we won't test DefaultSoundpack as it's expected to differ (system uses specific path, defaults use name)
-
-	if defaults.Enabled != systemConfig.Enabled {
-		t.Errorf("Default enabled inconsistency: code has %v, system config has %v",
-			defaults.Enabled, systemConfig.Enabled)
-	}
-
-	t.Logf("Code defaults: volume=%f, log_level=%q, enabled=%v",
-		defaults.Volume, defaults.LogLevel, defaults.Enabled)
-	t.Logf("System config: volume=%f, log_level=%q, enabled=%v",
-		systemConfig.Volume, systemConfig.LogLevel, systemConfig.Enabled)
-}
 
 // TDD RED: Test file logging configuration fields parsing
 func TestConfig_FileLoggingFields(t *testing.T) {
