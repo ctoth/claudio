@@ -195,4 +195,4 @@ Every `git push` deserves a victory sound. Every failed test deserves a sad trom
 
 ---
 
-*Built with TDD because tests matter and structured logging because debugging matters.*
+*Built with comprehensive test coverage and structured logging.*
