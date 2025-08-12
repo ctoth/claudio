@@ -191,6 +191,9 @@ Common issues and solutions for Claudio installation and usage.
    aplay -l
    pulseaudio --check
    
+   # WSL: Install audio utilities if missing
+   sudo apt update && sudo apt install pulseaudio-utils
+   
    # macOS: Check system preferences
    system_profiler SPAudioDataType
    ```
