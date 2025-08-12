@@ -1,6 +1,24 @@
 ---
 layout: default
-title: "Home"
+title: "Claudio - Audio Feedback for Claude Code"
+description: "Add contextual sound effects to your Claude Code sessions. Hear git commits, bash commands, and tool operations with intelligent audio feedback."
+keywords: "Claude Code, audio feedback, sound effects, developer tools, AI assistant, command line interface"
+
+# Open Graph / Facebook
+og:type: "website"
+og:title: "Claudio - Audio Feedback for Claude Code"
+og:description: "Add contextual sound effects to your Claude Code sessions. Hear git commits, bash commands, and tool operations with intelligent audio feedback."
+og:url: "https://claudio.click"
+og:image: "https://claudio.click/assets/claudio-preview.png"
+
+# Twitter Card
+twitter:card: "summary_large_image"
+twitter:title: "Claudio - Audio Feedback for Claude Code"
+twitter:description: "Add contextual sound effects to your Claude Code sessions. Hear git commits, bash commands, and tool operations with intelligent audio feedback."
+twitter:image: "https://claudio.click/assets/claudio-preview.png"
+
+# Additional Meta
+canonical_url: "https://claudio.click"
 ---
 
 # Claudio
