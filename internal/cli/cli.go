@@ -20,7 +20,7 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
-const Version = "1.9.1"
+const Version = "1.9.2"
 
 // CLI represents the command-line interface
 type CLI struct {
