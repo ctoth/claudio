@@ -9,7 +9,6 @@ require (
 	github.com/gen2brain/malgo v0.11.23
 	github.com/go-audio/aiff v1.1.0
 	github.com/go-audio/audio v1.0.0
-	github.com/gofrs/flock v0.12.1
 	github.com/gopxl/beep v1.4.1
 	github.com/hajimehoshi/go-mp3 v0.3.4
 	github.com/spf13/afero v1.14.0
