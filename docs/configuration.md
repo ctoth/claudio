@@ -21,17 +21,26 @@ Claudio follows XDG Base Directory specifications for configuration:
 
 ```json
 {
-  "volume": 0.7,
+  "volume": 0.5,
   "default_soundpack": "default",
-  "soundpack_paths": ["/usr/local/share/claudio/default"],
+  "soundpack_paths": [],
   "enabled": true,
-  "log_level": "warn"
+  "log_level": "warn",
+  "audio_backend": "auto",
+  "file_logging": {
+    "enabled": true,
+    "filename": "",
+    "max_size_mb": 10,
+    "max_backups": 5,
+    "max_age_days": 30,
+    "compress": true
+  }
 }
 ```
 
 ### Configuration Options
 
-**volume** `float` (default: 0.7)
+**volume** `float` (default: 0.5)
 : Audio playback volume from 0.0 (silent) to 1.0 (maximum)
 : Values outside this range are clamped to valid limits
 
@@ -52,6 +61,20 @@ Claudio follows XDG Base Directory specifications for configuration:
 : Logging verbosity level
 : Options: `debug`, `info`, `warn`, `error`
 : `debug` provides extensive logging for troubleshooting
+
+**audio_backend** `string` (default: "auto")
+: Audio backend to use for playback
+: Options: `auto`, `malgo`, `system_command`
+: `auto` automatically selects the best available backend
+
+**file_logging** `object` (optional)
+: Configuration for file-based logging
+: **enabled** `boolean` (default: true) - Whether file logging is active
+: **filename** `string` (default: "") - Custom log file path (empty = XDG cache path)
+: **max_size_mb** `integer` (default: 10) - Max file size before rotation
+: **max_backups** `integer` (default: 5) - Max number of backup files
+: **max_age_days** `integer` (default: 30) - Max age before deletion
+: **compress** `boolean` (default: true) - Whether to compress rotated files
 
 ## Environment Variables
 

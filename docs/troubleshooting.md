@@ -81,7 +81,7 @@ Common issues and solutions for Claudio installation and usage.
    echo '{}' > ~/.config/claude-code/settings.json
    
    # Try installation again
-   claudio install --scope user
+   claudio install
    ```
 
 ### Installation Permission Errors
@@ -104,7 +104,7 @@ Common issues and solutions for Claudio installation and usage.
 3. **Run with correct user:**
    ```bash
    # Don't use sudo for user-scope installation
-   claudio install --scope user
+   claudio install
    ```
 
 ## Audio Issues
@@ -223,10 +223,10 @@ Common issues and solutions for Claudio installation and usage.
 1. **Verify hook installation:**
    ```bash
    # Check what's installed
-   claudio install --dry-run --scope user
+   claudio install --dry-run
    
    # Print current configuration
-   claudio install --print --scope user
+   claudio install --print
    ```
 
 2. **Check Claude Code settings:**
@@ -245,7 +245,7 @@ Common issues and solutions for Claudio installation and usage.
 3. **Reinstall hooks:**
    ```bash
    # Reinstall hooks (overwrites existing Claudio hooks)
-   claudio install --scope user
+   claudio install
    ```
 
 4. **Test hook execution manually:**
@@ -431,7 +431,7 @@ pulseaudio --dump-conf
 system_profiler SPAudioDataType
 
 # Claudio configuration
-claudio install --print --scope user
+claudio install --print
 find /usr/local/share/claudio -name "*.wav" | head -10
 env | grep CLAUDIO
 ```

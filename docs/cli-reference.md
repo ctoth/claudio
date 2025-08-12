@@ -42,12 +42,12 @@ claudio install [flags]
 
 **Basic installation:**
 ```bash
-claudio install --scope user
+claudio install
 ```
 
 **Test what would be installed:**
 ```bash
-claudio install --dry-run --scope user
+claudio install --dry-run
 ```
 
 **Standard installation (overwrites existing Claudio hooks):**
