@@ -12,7 +12,7 @@ Claudio installation is a two-step process: install the binary, then configure C
 Install Claudio using Go's package manager:
 
 ```bash
-go install github.com/ctoth/claudio@latest
+go install claudio.click/cmd/claudio@latest
 ```
 
 This downloads and builds Claudio, placing the binary in your `$GOPATH/bin` directory (usually `~/go/bin`). Make sure this directory is in your system PATH.
