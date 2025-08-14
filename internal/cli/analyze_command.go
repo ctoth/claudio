@@ -1,11 +1,12 @@
 package cli
 
 import (
+	"database/sql"
 	"fmt"
 	"io"
 	"log/slog"
 
-	"github.com/ctoth/claudio/internal/tracking"
+	"claudio.click/internal/tracking"
 	"github.com/spf13/cobra"
 )
 
@@ -43,6 +44,9 @@ func newAnalyzeCommand() *cobra.Command {
 
 	// Add missing subcommand
 	analyzeCmd.AddCommand(newAnalyzeMissingCommand())
+	
+	// Add usage subcommand
+	analyzeCmd.AddCommand(newAnalyzeUsageCommand())
 
 	return analyzeCmd
 }
@@ -477,4 +481,232 @@ func formatTools(tools []string) string {
 	}
 	// For 3+ tools, show first two and count
 	return fmt.Sprintf("%s, %s + %d more", tools[0], tools[1], len(tools)-2)
+}
+
+// TDD RED: New analyze usage command implementation
+
+// newAnalyzeUsageCommand creates the analyze usage subcommand
+func newAnalyzeUsageCommand() *cobra.Command {
+	var days int
+	var tool string
+	var category string
+	var limit int
+	var preset string
+	var showFallbacks bool
+	var showSummary bool
+
+	usageCmd := &cobra.Command{
+		Use:   "usage",
+		Short: "Show actual sound usage patterns and statistics",
+		Long: `Show actual sound usage patterns and statistics from the tracking database.
+
+This command analyzes which sounds were actually played, how often they were used,
+and what fallback levels were reached. This helps you understand your soundpack
+effectiveness and identify optimization opportunities.
+
+The results show:
+- Most frequently played sounds
+- Fallback level statistics (lower levels = better sound coverage)  
+- Tool usage patterns
+- Category distribution
+
+Examples:
+  claudio analyze usage                    # Show recent usage
+  claudio analyze usage --days 30         # Last 30 days
+  claudio analyze usage --preset today    # Today only
+  claudio analyze usage --tool Edit       # Edit tool only
+  claudio analyze usage --category success # Success sounds only
+  claudio analyze usage --show-fallbacks  # Include fallback statistics
+  claudio analyze usage --show-summary    # Show summary statistics`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runAnalyzeUsage(cmd, days, tool, category, limit, preset, showFallbacks, showSummary)
+		},
+	}
+
+	// Add flags
+	usageCmd.Flags().IntVar(&days, "days", 7, "Number of days to analyze (0 = all time)")
+	usageCmd.Flags().StringVar(&tool, "tool", "", "Filter by specific tool name")
+	usageCmd.Flags().StringVar(&category, "category", "", "Filter by category (success, error, loading, interactive)")
+	usageCmd.Flags().IntVar(&limit, "limit", 20, "Maximum number of results to show")
+	usageCmd.Flags().StringVar(&preset, "preset", "", "Date preset (today, yesterday, last-week, this-month, all-time)")
+	usageCmd.Flags().BoolVar(&showFallbacks, "show-fallbacks", false, "Show fallback level statistics")
+	usageCmd.Flags().BoolVar(&showSummary, "show-summary", false, "Show usage summary statistics")
+
+	return usageCmd
+}
+
+// runAnalyzeUsage executes the analyze usage command
+func runAnalyzeUsage(cmd *cobra.Command, days int, tool, category string, limit int, preset string, showFallbacks, showSummary bool) error {
+	slog.Debug("running analyze usage command", "days", days, "tool", tool, "category", category, "limit", limit, "preset", preset)
+
+	// Extract CLI instance from context
+	cli := cliFromContext(cmd.Context())
+	if cli == nil {
+		return fmt.Errorf("CLI instance not found in context")
+	}
+
+	// Ensure tracking database is initialized
+	cli.initializeTracking()
+
+	// Check if tracking database is available
+	if cli.trackingDB == nil {
+		fmt.Fprintln(cmd.OutOrStdout(), "Sound tracking is not enabled or database not available.")
+		fmt.Fprintln(cmd.OutOrStdout(), "Enable tracking with CLAUDIO_SOUND_TRACKING=true")
+		return nil
+	}
+
+	// Build query filter
+	filter := tracking.QueryFilter{
+		Days:      days,
+		Tool:      tool,
+		Category:  category,
+		Limit:     limit,
+		DatePreset: preset,
+		OrderBy:   "frequency",
+		OrderDesc: true,
+	}
+
+	// Get sound usage statistics
+	usage, err := tracking.GetSoundUsage(cli.trackingDB, filter)
+	if err != nil {
+		return fmt.Errorf("failed to get sound usage: %w", err)
+	}
+
+	// Output results
+	if err := outputUsageStatistics(cmd.OutOrStdout(), usage, filter, showFallbacks, showSummary, cli.trackingDB); err != nil {
+		return fmt.Errorf("failed to output usage statistics: %w", err)
+	}
+
+	return nil
+}
+
+// outputUsageStatistics formats and outputs usage statistics
+func outputUsageStatistics(w io.Writer, usage []tracking.SoundUsage, filter tracking.QueryFilter, showFallbacks, showSummary bool, db interface{}) error {
+	if len(usage) == 0 {
+		fmt.Fprintln(w, "No sound usage data found for the specified criteria.")
+		
+		// Provide helpful suggestions
+		if filter.Days > 0 {
+			fmt.Fprintf(w, "Try expanding the time range with --days 0 (all time) or --preset all-time\n")
+		}
+		if filter.Tool != "" {
+			fmt.Fprintf(w, "Try removing the --tool filter to see all tools\n")
+		}
+		if filter.Category != "" {
+			fmt.Fprintf(w, "Try removing the --category filter to see all categories\n")
+		}
+		
+		return nil
+	}
+
+	// Show header with filter info
+	fmt.Fprintln(w, "Sound Usage Statistics")
+	fmt.Fprintln(w, "=====================")
+	
+	// Show filter details
+	if filter.DatePreset != "" {
+		fmt.Fprintf(w, "Time Range: %s\n", filter.DatePreset)
+	} else if filter.Days > 0 {
+		fmt.Fprintf(w, "Time Range: Last %d days\n", filter.Days)
+	} else {
+		fmt.Fprintln(w, "Time Range: All time")
+	}
+	
+	if filter.Tool != "" {
+		fmt.Fprintf(w, "Tool Filter: %s\n", filter.Tool)
+	}
+	if filter.Category != "" {
+		fmt.Fprintf(w, "Category Filter: %s\n", filter.Category)
+	}
+	fmt.Fprintln(w)
+
+	// Show summary if requested
+	if showSummary {
+		if dbConn, ok := db.(*sql.DB); ok {
+			summary, err := tracking.GetUsageSummary(dbConn, filter)
+			if err == nil {
+				fmt.Fprintf(w, "Summary: %d total events, %d unique sounds, avg fallback %.1f\n\n", 
+					summary.TotalEvents, summary.UniqueSounds, summary.AvgFallbackLevel)
+			}
+		}
+	}
+
+	// Show most used sounds
+	fmt.Fprintln(w, "Most Frequently Used Sounds:")
+	fmt.Fprintln(w, "----------------------------")
+	
+	for i, sound := range usage {
+		if i >= filter.Limit {
+			break
+		}
+
+		// Format: rank. path (play_count times, fallback level X) - tool/category
+		rank := i + 1
+		fallbackDesc := getFallbackLevelDescription(sound.FallbackLevel)
+		
+		fmt.Fprintf(w, "%2d. %s (%d times, %s)",
+			rank, sound.Path, sound.PlayCount, fallbackDesc)
+		
+		// Add tool/category info if available
+		if sound.ToolName != "" || sound.Category != "" {
+			fmt.Fprintf(w, " - ")
+			if sound.ToolName != "" {
+				fmt.Fprintf(w, "%s", sound.ToolName)
+			}
+			if sound.Category != "" {
+				if sound.ToolName != "" {
+					fmt.Fprintf(w, "/%s", sound.Category)
+				} else {
+					fmt.Fprintf(w, "%s", sound.Category)
+				}
+			}
+		}
+		fmt.Fprintln(w)
+	}
+
+	// Show fallback statistics if requested
+	if showFallbacks {
+		if dbConn, ok := db.(*sql.DB); ok {
+			fmt.Fprintln(w, "\nFallback Level Statistics:")
+			fmt.Fprintln(w, "--------------------------")
+			
+			fallbackStats, err := tracking.GetFallbackStatistics(dbConn, filter)
+			if err == nil {
+				for _, stat := range fallbackStats {
+					fmt.Fprintf(w, "Level %d: %d events (%.1f%%) - %s\n",
+						stat.FallbackLevel, stat.Count, stat.Percentage, stat.Description)
+				}
+			}
+		}
+	}
+
+	// Footer with actionable advice
+	fmt.Fprintln(w, "\nTo improve your sound coverage:")
+	fmt.Fprintln(w, "  1. Focus on sounds with higher fallback levels")
+	fmt.Fprintln(w, "  2. Create specific sounds for frequently used tools")
+	fmt.Fprintln(w, "  3. Use --show-fallbacks to see detailed fallback statistics")
+	
+	if !showSummary {
+		fmt.Fprintln(w, "  4. Use --show-summary to see overall statistics")
+	}
+
+	return nil
+}
+
+// getFallbackLevelDescription returns a short description for fallback levels
+func getFallbackLevelDescription(level int) string {
+	switch level {
+	case 1:
+		return "exact match"
+	case 2:
+		return "tool-specific"
+	case 3:
+		return "operation-specific" 
+	case 4:
+		return "category-specific"
+	case 5:
+		return "default fallback"
+	default:
+		return fmt.Sprintf("level %d", level)
+	}
 }

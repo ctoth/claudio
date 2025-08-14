@@ -118,7 +118,7 @@ func TestQueryFilter_BuildWhereClause(t *testing.T) {
 				StartTime: timePtr(time.Date(2024, 1, 10, 0, 0, 0, 0, time.UTC)),
 				EndTime:   timePtr(time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)),
 			},
-			wantClause: "timestamp >= ? AND timestamp < ?",
+			wantClause: "timestamp >= ? AND timestamp <= ?",
 			wantArgCount: 2,
 		},
 		{
@@ -138,7 +138,7 @@ func TestQueryFilter_BuildWhereClause(t *testing.T) {
 				Category:  "error",
 				SessionID: "session-456",
 			},
-			wantClause: "timestamp >= ? AND timestamp < ? AND tool_name = ? AND JSON_EXTRACT(context, '$.Category') = ? AND session_id = ?",
+			wantClause: "timestamp >= ? AND timestamp <= ? AND tool_name = ? AND JSON_EXTRACT(context, '$.Category') = ? AND session_id = ?",
 			wantArgCount: 5,
 		},
 	}

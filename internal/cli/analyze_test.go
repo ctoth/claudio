@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -513,5 +514,498 @@ func TestGroupMissingSoundsByTool(t *testing.T) {
 
 	if interactiveOther == nil {
 		t.Error("Expected interactive category in Other section")
+	}
+}
+
+// TDD RED: Test analyze usage command functionality
+
+func TestAnalyzeUsageCommand(t *testing.T) {
+	// Create temporary directory for test database
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "usage_test.db")
+
+	// Set up test database with sample usage data
+	db, err := tracking.NewDatabase(dbPath)
+	if err != nil {
+		t.Fatalf("Failed to create test database: %v", err)
+	}
+	defer db.Close()
+
+	// Insert test data - simulate actual sound playback events
+	now := time.Now().Unix()
+	testData := []struct {
+		timestamp     int64
+		sessionID     string
+		toolName      string
+		soundPath     string
+		fallbackLevel int
+		contextJSON   string
+	}{
+		{
+			timestamp:     now,
+			sessionID:     "session-1",
+			toolName:      "Edit", 
+			soundPath:     "success/edit-success.wav",
+			fallbackLevel: 1, // Exact match
+			contextJSON:   `{"Category":1,"ToolName":"Edit","IsSuccess":true}`,
+		},
+		{
+			timestamp:     now - 1800,
+			sessionID:     "session-1",
+			toolName:      "Edit",
+			soundPath:     "success/edit-success.wav", 
+			fallbackLevel: 1,
+			contextJSON:   `{"Category":1,"ToolName":"Edit","IsSuccess":true}`,
+		},
+		{
+			timestamp:     now - 3600,
+			sessionID:     "session-2",
+			toolName:      "Bash",
+			soundPath:     "loading/bash-thinking.wav",
+			fallbackLevel: 2, // Tool-specific
+			contextJSON:   `{"Category":0,"ToolName":"Bash","IsLoading":true}`,
+		},
+		{
+			timestamp:     now - 7200, 
+			sessionID:     "session-3",
+			toolName:      "Read",
+			soundPath:     "default.wav",
+			fallbackLevel: 5, // Complete fallback
+			contextJSON:   `{"Category":2,"ToolName":"Read","HasError":true}`,
+		},
+	}
+
+	for _, data := range testData {
+		// Insert hook event
+		_, err = db.Exec(`
+			INSERT INTO hook_events (timestamp, session_id, tool_name, selected_path, fallback_level, context)
+			VALUES (?, ?, ?, ?, ?, ?)`,
+			data.timestamp, data.sessionID, data.toolName, data.soundPath, data.fallbackLevel, data.contextJSON)
+		if err != nil {
+			t.Fatalf("Failed to insert test event: %v", err)
+		}
+	}
+
+	// Set environment to use our test database
+	os.Setenv("CLAUDIO_SOUND_TRACKING", "true")
+	os.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
+	defer func() {
+		os.Unsetenv("CLAUDIO_SOUND_TRACKING")
+		os.Unsetenv("CLAUDIO_SOUND_TRACKING_DB")
+	}()
+
+	// Test the analyze usage command
+	cli := NewCLI()
+	stdin := strings.NewReader("")
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	// Run: claudio analyze usage
+	exitCode := cli.Run([]string{"claudio", "analyze", "usage"}, stdin, stdout, stderr)
+
+	if exitCode != 0 {
+		t.Errorf("Expected exit code 0, got %d", exitCode)
+		t.Logf("Stderr: %s", stderr.String())
+	}
+
+	output := stdout.String()
+
+	// Verify output contains expected elements
+	expectedContent := []string{
+		"Sound Usage Statistics",
+		"Most Frequently Used Sounds:",
+		"success/edit-success.wav", // Should appear with count 2
+		"loading/bash-thinking.wav", // Should appear with count 1
+		"default.wav",              // Should appear with count 1
+		"2 times",                  // Edit sound played twice
+		"exact match",              // Fallback description
+		"tool-specific",            // Fallback description  
+		"default fallback",         // Fallback description
+		"To improve your sound coverage:", // Footer advice
+	}
+
+	for _, content := range expectedContent {
+		if !strings.Contains(output, content) {
+			t.Errorf("Expected output to contain '%s', got: %s", content, output)
+		}
+	}
+
+	// Verify ordering (edit-success should be first with 2 times)
+	editIndex := strings.Index(output, "success/edit-success.wav")
+	bashIndex := strings.Index(output, "loading/bash-thinking.wav")
+	defaultIndex := strings.Index(output, "default.wav")
+
+	if editIndex == -1 || bashIndex == -1 || defaultIndex == -1 {
+		t.Fatal("Expected all sounds to appear in output")
+	}
+
+	// Edit should appear first (highest count)
+	if editIndex > bashIndex || editIndex > defaultIndex {
+		t.Error("Expected success/edit-success.wav to appear first (highest frequency)")
+	}
+}
+
+func TestAnalyzeUsageCommandWithFilters(t *testing.T) {
+	// Create temporary directory for test database
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "usage_filter_test.db")
+
+	// Set up test database
+	db, err := tracking.NewDatabase(dbPath)
+	if err != nil {
+		t.Fatalf("Failed to create test database: %v", err)
+	}
+	defer db.Close()
+
+	// Insert test data with different tools and timestamps
+	now := time.Now().Unix()
+	oneWeekAgo := now - (7 * 24 * 60 * 60)
+	twoWeeksAgo := now - (14 * 24 * 60 * 60)
+
+	testEvents := []struct {
+		timestamp int64
+		toolName  string
+		soundPath string
+		category  int
+	}{
+		{now, "Edit", "success/edit-success.wav", 1},         // Recent, should be included
+		{oneWeekAgo, "Bash", "success/bash-success.wav", 1}, // Week old, should be included with --days 7
+		{twoWeeksAgo, "Read", "success/read-success.wav", 1}, // Too old, should be filtered out
+		{now, "Edit", "error/edit-error.wav", 2},            // Recent but different category
+	}
+
+	for i, event := range testEvents {
+		contextJSON := fmt.Sprintf(`{"Category":%d,"ToolName":"%s"}`, event.category, event.toolName)
+		_, err = db.Exec(`
+			INSERT INTO hook_events (timestamp, session_id, tool_name, selected_path, fallback_level, context)
+			VALUES (?, ?, ?, ?, ?, ?)`,
+			event.timestamp, fmt.Sprintf("session-%d", i), event.toolName, event.soundPath, 1, contextJSON)
+		if err != nil {
+			t.Fatalf("Failed to insert test event: %v", err)
+		}
+	}
+
+	// Set environment to use our test database
+	os.Setenv("CLAUDIO_SOUND_TRACKING", "true")
+	os.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
+	defer func() {
+		os.Unsetenv("CLAUDIO_SOUND_TRACKING")
+		os.Unsetenv("CLAUDIO_SOUND_TRACKING_DB")
+	}()
+
+	// Test with --days filter
+	cli := NewCLI()
+	stdin := strings.NewReader("")
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	// Run: claudio analyze usage --days 7 --tool Edit --category success
+	exitCode := cli.Run([]string{"claudio", "analyze", "usage", "--days", "7", "--tool", "Edit", "--category", "success"}, stdin, stdout, stderr)
+
+	if exitCode != 0 {
+		t.Errorf("Expected exit code 0, got %d", exitCode)
+		t.Logf("Stderr: %s", stderr.String())
+	}
+
+	output := stdout.String()
+
+	// Should include recent Edit success sound
+	if !strings.Contains(output, "success/edit-success.wav") {
+		t.Error("Expected output to include recent Edit success sound")
+	}
+
+	// Should show filter information
+	if !strings.Contains(output, "Tool Filter: Edit") {
+		t.Error("Expected output to show tool filter")
+	}
+	if !strings.Contains(output, "Category Filter: success") {
+		t.Error("Expected output to show category filter")
+	}
+
+	// Should NOT include other sounds due to filters
+	if strings.Contains(output, "success/bash-success.wav") {
+		t.Error("Expected output to exclude Bash sound due to tool filter")
+	}
+	if strings.Contains(output, "success/read-success.wav") {
+		t.Error("Expected output to exclude Read sound due to time filter")
+	}
+	if strings.Contains(output, "error/edit-error.wav") {
+		t.Error("Expected output to exclude error sound due to category filter")
+	}
+}
+
+func TestAnalyzeUsageCommandWithSummaryAndFallbacks(t *testing.T) {
+	// Create temporary directory for test database
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "usage_summary_test.db")
+
+	// Set up test database
+	db, err := tracking.NewDatabase(dbPath)
+	if err != nil {
+		t.Fatalf("Failed to create test database: %v", err)
+	}
+	defer db.Close()
+
+	// Insert test data with various fallback levels
+	now := time.Now().Unix()
+	testEvents := []struct {
+		soundPath     string
+		fallbackLevel int
+		count         int
+	}{
+		{"success/exact-match.wav", 1, 10},       // Exact matches
+		{"success/tool-specific.wav", 2, 5},      // Tool-specific
+		{"default.wav", 5, 2},                    // Default fallback
+	}
+
+	for _, event := range testEvents {
+		for i := 0; i < event.count; i++ {
+			contextJSON := `{"Category":1,"ToolName":"Test"}`
+			_, err = db.Exec(`
+				INSERT INTO hook_events (timestamp, session_id, tool_name, selected_path, fallback_level, context)
+				VALUES (?, ?, ?, ?, ?, ?)`,
+				now-int64(i*60), "session-test", "Test", event.soundPath, event.fallbackLevel, contextJSON)
+			if err != nil {
+				t.Fatalf("Failed to insert test event: %v", err)
+			}
+		}
+	}
+
+	// Set environment to use our test database
+	os.Setenv("CLAUDIO_SOUND_TRACKING", "true")
+	os.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
+	defer func() {
+		os.Unsetenv("CLAUDIO_SOUND_TRACKING")
+		os.Unsetenv("CLAUDIO_SOUND_TRACKING_DB")
+	}()
+
+	// Test with --show-summary and --show-fallbacks
+	cli := NewCLI()
+	stdin := strings.NewReader("")
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	// Run: claudio analyze usage --show-summary --show-fallbacks
+	exitCode := cli.Run([]string{"claudio", "analyze", "usage", "--show-summary", "--show-fallbacks"}, stdin, stdout, stderr)
+
+	if exitCode != 0 {
+		t.Errorf("Expected exit code 0, got %d", exitCode)
+		t.Logf("Stderr: %s", stderr.String())
+	}
+
+	output := stdout.String()
+
+	// Should include summary statistics
+	if !strings.Contains(output, "Summary:") {
+		t.Error("Expected output to include summary statistics")
+	}
+	if !strings.Contains(output, "17 total events") { // 10+5+2=17
+		t.Error("Expected summary to show correct total events")
+	}
+	if !strings.Contains(output, "3 unique sounds") {
+		t.Error("Expected summary to show correct unique sounds count")
+	}
+
+	// Should include fallback statistics
+	if !strings.Contains(output, "Fallback Level Statistics:") {
+		t.Error("Expected output to include fallback statistics")
+	}
+	if !strings.Contains(output, "Level 1:") {
+		t.Error("Expected fallback stats to include Level 1")
+	}
+	if !strings.Contains(output, "Exact hint match") {
+		t.Error("Expected fallback stats to include level descriptions")
+	}
+}
+
+func TestAnalyzeUsageCommandWithPresets(t *testing.T) {
+	// Create temporary directory for test database
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "usage_preset_test.db")
+
+	// Set up test database
+	db, err := tracking.NewDatabase(dbPath)
+	if err != nil {
+		t.Fatalf("Failed to create test database: %v", err)
+	}
+	defer db.Close()
+
+	// Insert test data with different timestamps
+	now := time.Now()
+	testEvents := []struct {
+		timestamp time.Time
+		soundPath string
+	}{
+		{now, "today.wav"},                          // Today
+		{now.AddDate(0, 0, -1), "yesterday.wav"},    // Yesterday
+		{now.AddDate(0, 0, -8), "last-week.wav"},    // Over a week ago
+	}
+
+	for i, event := range testEvents {
+		contextJSON := `{"Category":1,"ToolName":"Test"}`
+		_, err = db.Exec(`
+			INSERT INTO hook_events (timestamp, session_id, tool_name, selected_path, fallback_level, context)
+			VALUES (?, ?, ?, ?, ?, ?)`,
+			event.timestamp.Unix(), fmt.Sprintf("session-%d", i), "Test", event.soundPath, 1, contextJSON)
+		if err != nil {
+			t.Fatalf("Failed to insert test event: %v", err)
+		}
+	}
+
+	// Set environment to use our test database
+	os.Setenv("CLAUDIO_SOUND_TRACKING", "true")
+	os.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
+	defer func() {
+		os.Unsetenv("CLAUDIO_SOUND_TRACKING")
+		os.Unsetenv("CLAUDIO_SOUND_TRACKING_DB")
+	}()
+
+	// Test with --preset today
+	cli := NewCLI()
+	stdin := strings.NewReader("")
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	// Run: claudio analyze usage --preset today
+	exitCode := cli.Run([]string{"claudio", "analyze", "usage", "--preset", "today"}, stdin, stdout, stderr)
+
+	if exitCode != 0 {
+		t.Errorf("Expected exit code 0, got %d", exitCode)
+		t.Logf("Stderr: %s", stderr.String())
+	}
+
+	output := stdout.String()
+
+	// Should show preset information
+	if !strings.Contains(output, "Time Range: today") {
+		t.Error("Expected output to show today preset")
+	}
+
+	// Should include today's sound
+	if !strings.Contains(output, "today.wav") {
+		t.Error("Expected output to include today's sound")
+	}
+
+	// Should NOT include older sounds
+	if strings.Contains(output, "yesterday.wav") {
+		t.Error("Expected output to exclude yesterday's sound with today preset")
+	}
+	if strings.Contains(output, "last-week.wav") {
+		t.Error("Expected output to exclude last week's sound with today preset")
+	}
+}
+
+func TestAnalyzeUsageCommandNoDatabase(t *testing.T) {
+	// Test behavior when tracking is disabled
+	os.Setenv("CLAUDIO_SOUND_TRACKING", "false")
+	defer os.Unsetenv("CLAUDIO_SOUND_TRACKING")
+
+	cli := NewCLI()
+	stdin := strings.NewReader("")
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	// Run: claudio analyze usage
+	exitCode := cli.Run([]string{"claudio", "analyze", "usage"}, stdin, stdout, stderr)
+
+	// Should handle gracefully
+	if exitCode != 0 {
+		t.Errorf("Expected exit code 0 when tracking disabled, got %d", exitCode)
+	}
+
+	// Should contain helpful message
+	output := stdout.String()
+	if !strings.Contains(output, "Sound tracking is not enabled") {
+		t.Error("Expected helpful message when tracking is disabled")
+	}
+	if !strings.Contains(output, "CLAUDIO_SOUND_TRACKING=true") {
+		t.Error("Expected instruction to enable tracking")
+	}
+}
+
+func TestAnalyzeUsageCommandNoData(t *testing.T) {
+	// Create empty database
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "empty_test.db")
+
+	// Set up empty test database
+	db, err := tracking.NewDatabase(dbPath)
+	if err != nil {
+		t.Fatalf("Failed to create test database: %v", err)
+	}
+	defer db.Close()
+
+	// Set environment to use our empty test database
+	os.Setenv("CLAUDIO_SOUND_TRACKING", "true")
+	os.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
+	defer func() {
+		os.Unsetenv("CLAUDIO_SOUND_TRACKING")
+		os.Unsetenv("CLAUDIO_SOUND_TRACKING_DB")
+	}()
+
+	// Test the analyze usage command with no data
+	cli := NewCLI()
+	stdin := strings.NewReader("")
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	// Run: claudio analyze usage --tool Edit
+	exitCode := cli.Run([]string{"claudio", "analyze", "usage", "--tool", "Edit"}, stdin, stdout, stderr)
+
+	if exitCode != 0 {
+		t.Errorf("Expected exit code 0 for empty database, got %d", exitCode)
+	}
+
+	output := stdout.String()
+
+	// Should contain helpful message about no data
+	if !strings.Contains(output, "No sound usage data found") {
+		t.Error("Expected message about no data found")
+	}
+
+	// Should provide helpful suggestions 
+	if !strings.Contains(output, "Try removing the --tool filter") {
+		t.Error("Expected suggestion to remove tool filter")
+	}
+}
+
+func TestAnalyzeUsageCommandHelp(t *testing.T) {
+	// Test help output for analyze usage command
+	cli := NewCLI()
+	stdin := strings.NewReader("")
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	// Run: claudio analyze usage --help
+	exitCode := cli.Run([]string{"claudio", "analyze", "usage", "--help"}, stdin, stdout, stderr)
+
+	if exitCode != 0 {
+		t.Errorf("Expected exit code 0 for help command, got %d", exitCode)
+	}
+
+	helpOutput := stdout.String()
+
+	// Should contain command description and flags
+	expectedHelpContent := []string{
+		"usage",
+		"Show actual sound usage patterns",
+		"--days",
+		"--tool",
+		"--category",
+		"--preset",
+		"--show-fallbacks",
+		"--show-summary",
+		"--limit",
+		"Examples:",
+		"claudio analyze usage --days 30",
+		"claudio analyze usage --preset today",
+		"fallback levels",
+		"optimization opportunities",
+	}
+
+	for _, content := range expectedHelpContent {
+		if !strings.Contains(helpOutput, content) {
+			t.Errorf("Help output should contain '%s'", content)
+		}
 	}
 }
