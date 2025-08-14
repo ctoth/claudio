@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ctoth/claudio/internal/audio"
+	"claudio.click/internal/audio"
 )
 
 // TestCLIBackendIntegration tests that CLI properly integrates with audio backend system

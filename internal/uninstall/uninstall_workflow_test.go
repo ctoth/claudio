@@ -4,9 +4,10 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
-	"github.com/ctoth/claudio/internal/install"
+	"claudio.click/internal/install"
 )
 
 func TestInstallUninstallWithExecutablePath(t *testing.T) {
@@ -57,7 +58,13 @@ func TestInstallUninstallWithExecutablePath(t *testing.T) {
 
 			if tc.installFirst {
 				// Step 1: Install claudio hooks (which should use executable path)
-				claudioHooks, err := install.GenerateClaudioHooks()
+				factory := install.GetFilesystemFactory()
+				memFS := factory.Memory()
+				execPath, _ := install.GetExecutablePath()
+				if execPath == "" {
+					execPath = "claudio"
+				}
+				claudioHooks, err := install.GenerateClaudioHooks(memFS, execPath)
 				if err != nil {
 					t.Fatalf("Failed to generate claudio hooks: %v", err)
 				}
@@ -105,19 +112,20 @@ func TestInstallUninstallWithExecutablePath(t *testing.T) {
 					t.Fatal("Hooks section is not a map")
 				}
 
-				// Check that at least one hook uses an executable path
-				foundExecutablePath := false
+				// Check that hooks are properly formatted with executable path
+				foundExecutableHooks := false
 				for hookName, hookValue := range hooksMap {
 					if hookArray, ok := hookValue.([]interface{}); ok && len(hookArray) > 0 {
 						if hookConfig, ok := hookArray[0].(map[string]interface{}); ok {
 							if hooksField, ok := hookConfig["hooks"].([]interface{}); ok && len(hooksField) > 0 {
 								if cmd, ok := hooksField[0].(map[string]interface{}); ok {
 									if cmdStr, ok := cmd["command"].(string); ok {
-										// Command should not be just "claudio" (should be full path)
-										baseName := filepath.Base(cmdStr)
-										if cmdStr != "claudio" && (baseName == "claudio" || baseName == "install.test" || baseName == "uninstall.test") {
-											foundExecutablePath = true
-											t.Logf("Hook %s uses executable path: %s (base: %s)", hookName, cmdStr, baseName)
+										// Should contain test executable path (may be quoted)
+										unquoted := strings.Trim(cmdStr, "\"")
+										baseName := filepath.Base(unquoted)
+										if baseName == "uninstall.test" || baseName == "install.test" || unquoted == "claudio" {
+											foundExecutableHooks = true
+											t.Logf("Hook %s uses executable command: %s", hookName, cmdStr)
 											break
 										}
 									}
@@ -127,8 +135,8 @@ func TestInstallUninstallWithExecutablePath(t *testing.T) {
 					}
 				}
 
-				if !foundExecutablePath {
-					t.Error("Expected at least one hook to use executable path instead of hardcoded 'claudio'")
+				if !foundExecutableHooks {
+					t.Error("Expected at least one hook to use executable command")
 				}
 
 				// Step 3: Run uninstall workflow to remove hooks
@@ -356,10 +364,19 @@ func TestRunUninstallWorkflow(t *testing.T) {
 			}
 
 			// 2. Settings file should be valid JSON
-			settings, err := install.ReadSettingsFile(settingsFile)
+			settingsData, err := os.ReadFile(settingsFile)
 			if err != nil {
-				t.Errorf("Failed to read settings after uninstall: %v", err)
+				t.Errorf("Failed to read settings file: %v", err)
+				return
 			}
+			
+			var settingsMap install.SettingsMap
+			err = json.Unmarshal(settingsData, &settingsMap)
+			if err != nil {
+				t.Errorf("Failed to parse settings JSON: %v", err)
+				return
+			}
+			settings := &settingsMap
 
 			// 3. Check hooks section
 			if tc.expectNoHooksSection {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -586,6 +587,149 @@ func TestSoundpackFactory(t *testing.T) {
 		expectedPath := filepath.Join(tempDir, "fallback-test", "default.wav")
 		if resolved != expectedPath {
 			t.Errorf("Expected resolved path %s, got %s", expectedPath, resolved)
+		}
+	})
+}
+
+func TestLoadJSONSoundpackFromBytes(t *testing.T) {
+	// TDD Test: Load JSON soundpack from byte data with validation
+
+	t.Run("loads valid JSON soundpack from bytes", func(t *testing.T) {
+		// Create temporary sound files that the JSON will reference
+		tempDir := t.TempDir()
+		soundFile1 := filepath.Join(tempDir, "success-sound.wav")
+		soundFile2 := filepath.Join(tempDir, "error-sound.wav")
+
+		err := os.WriteFile(soundFile1, []byte("fake wav data"), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create test sound file: %v", err)
+		}
+		err = os.WriteFile(soundFile2, []byte("fake wav data"), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create test sound file: %v", err)
+		}
+
+		// Create JSON soundpack content as bytes
+		// Use forward slashes to avoid Windows path escaping issues in JSON
+		soundFile1JSON := strings.ReplaceAll(soundFile1, "\\", "/")
+		soundFile2JSON := strings.ReplaceAll(soundFile2, "\\", "/")
+		
+		jsonContent := fmt.Sprintf(`{
+			"name": "test-soundpack-from-bytes",
+			"description": "Test soundpack for LoadJSONSoundpackFromBytes",
+			"version": "1.0.0",
+			"mappings": {
+				"success/bash.wav": "%s",
+				"error/bash.wav": "%s"
+			}
+		}`, soundFile1JSON, soundFile2JSON)
+
+		// Load the JSON soundpack from bytes
+		mapper, err := LoadJSONSoundpackFromBytes([]byte(jsonContent))
+		if err != nil {
+			t.Errorf("Expected to load JSON soundpack from bytes, got error: %v", err)
+		}
+
+		// Verify mapper properties
+		if mapper == nil {
+			t.Fatal("Expected mapper to be created, got nil")
+		}
+
+		if mapper.GetName() != "test-soundpack-from-bytes" {
+			t.Errorf("Expected name 'test-soundpack-from-bytes', got '%s'", mapper.GetName())
+		}
+
+		// Test sound mapping
+		candidates, err := mapper.MapPath("success/bash.wav")
+		if err != nil {
+			t.Errorf("Expected to map sound path, got error: %v", err)
+		}
+
+		// The JSON contains forward slashes, but we expect the path to work
+		expectedPath := strings.ReplaceAll(soundFile1, "\\", "/")
+		if len(candidates) != 1 || candidates[0] != expectedPath {
+			t.Errorf("Expected candidates [%s], got %v", expectedPath, candidates)
+		}
+	})
+
+	t.Run("rejects invalid JSON", func(t *testing.T) {
+		invalidJSON := `{
+			"name": "test-soundpack",
+			"mappings": {
+				"invalid": "json" // Missing closing quote
+			}
+		`
+
+		_, err := LoadJSONSoundpackFromBytes([]byte(invalidJSON))
+		if err == nil {
+			t.Error("Expected error for invalid JSON, got nil")
+		}
+
+		if !strings.Contains(err.Error(), "failed to parse JSON soundpack from bytes") {
+			t.Errorf("Expected JSON parse error message, got: %v", err)
+		}
+	})
+
+	t.Run("rejects soundpack missing name field", func(t *testing.T) {
+		jsonContent := `{
+			"description": "Missing name field",
+			"mappings": {
+				"success/test.wav": "/tmp/test.wav"
+			}
+		}`
+
+		_, err := LoadJSONSoundpackFromBytes([]byte(jsonContent))
+		if err == nil {
+			t.Error("Expected error for missing name field, got nil")
+		}
+
+		if !strings.Contains(err.Error(), "missing required 'name' field") {
+			t.Errorf("Expected missing name error message, got: %v", err)
+		}
+	})
+
+	t.Run("rejects soundpack with empty mappings", func(t *testing.T) {
+		jsonContent := `{
+			"name": "empty-mappings-test",
+			"mappings": {}
+		}`
+
+		_, err := LoadJSONSoundpackFromBytes([]byte(jsonContent))
+		if err == nil {
+			t.Error("Expected error for empty mappings, got nil")
+		}
+
+		if !strings.Contains(err.Error(), "missing or empty 'mappings' field") {
+			t.Errorf("Expected empty mappings error message, got: %v", err)
+		}
+	})
+
+	t.Run("rejects soundpack with missing sound files", func(t *testing.T) {
+		jsonContent := `{
+			"name": "missing-files-test",
+			"mappings": {
+				"success/test.wav": "/nonexistent/file.wav"
+			}
+		}`
+
+		_, err := LoadJSONSoundpackFromBytes([]byte(jsonContent))
+		if err == nil {
+			t.Error("Expected error for missing sound files, got nil")
+		}
+
+		if !strings.Contains(err.Error(), "sound file not found") {
+			t.Errorf("Expected missing file error message, got: %v", err)
+		}
+	})
+
+	t.Run("handles empty byte data", func(t *testing.T) {
+		_, err := LoadJSONSoundpackFromBytes([]byte(""))
+		if err == nil {
+			t.Error("Expected error for empty byte data, got nil")
+		}
+
+		if !strings.Contains(err.Error(), "failed to parse JSON soundpack from bytes") {
+			t.Errorf("Expected JSON parse error for empty data, got: %v", err)
 		}
 	})
 }

@@ -12,7 +12,7 @@ Claudio installation is a two-step process: install the binary, then configure C
 Install Claudio using Go's package manager:
 
 ```bash
-go install github.com/ctoth/claudio@latest
+go install claudio.click/cmd/claudio@latest
 ```
 
 This downloads and builds Claudio, placing the binary in your `$GOPATH/bin` directory (usually `~/go/bin`). Make sure this directory is in your system PATH.
@@ -55,11 +55,11 @@ claudio install --dry-run --scope user
 ```
 Shows what would be installed without making any changes. Perfect for testing.
 
-**Force Installation**
+**Standard Installation**
 ```bash
-claudio install --force --scope user
+claudio install --scope user
 ```
-Overwrites existing hooks without prompting. Use when you need to update your Claudio configuration.
+Installs or updates Claudio hooks (automatically overwrites existing Claudio hooks).
 
 **Quiet Mode**
 ```bash

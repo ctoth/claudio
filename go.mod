@@ -1,4 +1,4 @@
-module github.com/ctoth/claudio
+module claudio.click
 
 go 1.23.4
 
@@ -9,9 +9,9 @@ require (
 	github.com/gen2brain/malgo v0.11.23
 	github.com/go-audio/aiff v1.1.0
 	github.com/go-audio/audio v1.0.0
-	github.com/gofrs/flock v0.12.1
 	github.com/gopxl/beep v1.4.1
 	github.com/hajimehoshi/go-mp3 v0.3.4
+	github.com/spf13/afero v1.14.0
 	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.9.0
 	github.com/youpy/go-wav v0.3.2
@@ -39,6 +39,7 @@ require (
 	golang.org/x/exp v0.0.0-20250620022241-b7579e27df2b // indirect
 	golang.org/x/net v0.39.0 // indirect
 	golang.org/x/sys v0.34.0 // indirect
+	golang.org/x/text v0.24.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	modernc.org/libc v1.66.3 // indirect
 	modernc.org/mathutil v1.7.1 // indirect

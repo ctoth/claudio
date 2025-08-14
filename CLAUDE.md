@@ -10,7 +10,7 @@ Claudio is a hook-based audio plugin for Claude Code that plays contextual sound
 
 ```bash
 # Build the main binary
-go build .
+go build -o claudio .
 
 # Install to system PATH
 sudo cp claudio /usr/local/bin/
@@ -38,6 +38,45 @@ cat ~/.cache/claudio/logs/claudio.log
 # Test with debug logging to see file creation
 CLAUDIO_LOG_LEVEL=debug echo '...' | claudio --config /dev/null --silent
 ```
+
+## Release Process
+
+When releasing a new version of Claudio, follow this standardized process:
+
+### Pre-Release Checklist
+1. **Version Update**: Ensure `Version` constant in `internal/cli/cli.go` is updated
+2. **Clean Workspace**: Ensure no uncommitted changes that shouldn't be released
+3. **Remove Old Binaries**: Delete any existing binaries to ensure fresh build
+
+### Release Steps
+```bash
+# 1. Clean build environment
+rm -f claudio
+
+# 2. Run full test suite
+go test ./...
+
+# 3. Build fresh binary
+go build -o claudio .
+
+# 4. Test binary works
+./claudio --version
+
+# 5. Functional smoke test
+echo '{"session_id":"test","transcript_path":"/test","cwd":"/test","hook_event_name":"PostToolUse","tool_name":"Bash","tool_response":{"stdout":"success","stderr":"","interrupted":false}}' | ./claudio --silent
+
+# 6. Create and push git tag
+git tag v$(grep 'const Version' internal/cli/cli.go | cut -d'"' -f2)
+git push origin v$(grep 'const Version' internal/cli/cli.go | cut -d'"' -f2)
+
+# 7. Clean up build artifacts
+rm -f claudio
+```
+
+### Post-Release
+- Verify tag appears on GitHub
+- Test `go install claudio.click/cmd/claudio@latest` works
+- Update any documentation referencing version numbers
 
 ## Architecture Overview
 

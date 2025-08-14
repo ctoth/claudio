@@ -3,7 +3,7 @@ package uninstall
 import (
 	"testing"
 
-	"github.com/ctoth/claudio/internal/install"
+	"claudio.click/internal/install"
 )
 
 func TestDetectClaudioHooksWithFullPaths(t *testing.T) {

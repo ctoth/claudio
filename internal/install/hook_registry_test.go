@@ -3,7 +3,7 @@ package install
 import (
 	"testing"
 
-	"github.com/ctoth/claudio/internal/hooks"
+	"claudio.click/internal/hooks"
 )
 
 func TestGetAllHooks(t *testing.T) {

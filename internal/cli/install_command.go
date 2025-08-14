@@ -5,7 +5,8 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/ctoth/claudio/internal/install"
+	"claudio.click/internal/install"
+	"claudio.click/internal/util"
 	"github.com/spf13/cobra"
 )
 
@@ -42,8 +43,6 @@ func newInstallCommand() *cobra.Command {
 	// Add --dry-run flag
 	cmd.Flags().BoolP("dry-run", "d", false, "Show what would be done without making changes (simulation mode)")
 
-	// Add --force flag
-	cmd.Flags().BoolP("force", "f", false, "Overwrite existing hooks without prompting")
 
 	// Add --quiet flag
 	cmd.Flags().BoolP("quiet", "q", false, "Suppress output (no progress messages)")
@@ -75,11 +74,6 @@ func runInstallCommandE(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to get dry-run flag: %w", err)
 	}
 
-	// Get force flag
-	force, err := cmd.Flags().GetBool("force")
-	if err != nil {
-		return fmt.Errorf("failed to get force flag: %w", err)
-	}
 
 	// Get quiet flag
 	quiet, err := cmd.Flags().GetBool("quiet")
@@ -93,7 +87,7 @@ func runInstallCommandE(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to get print flag: %w", err)
 	}
 
-	slog.Info("install command executing", "scope", scope, "dry_run", dryRun, "force", force, "quiet", quiet, "print", print)
+	slog.Info("install command executing", "scope", scope, "dry_run", dryRun, "quiet", quiet, "print", print)
 
 	// Find Claude Code settings paths for the specified scope
 	settingsPaths, err := install.FindClaudeSettingsPaths(scope.String())
@@ -112,12 +106,8 @@ func runInstallCommandE(cmd *cobra.Command, args []string) error {
 	// Handle print flag - shows configuration details
 	if print {
 		var configDetails string
-		if dryRun && force {
-			configDetails = "PRINT: DRY-RUN + FORCE configuration for scope: " + scope.String()
-		} else if dryRun {
+		if dryRun {
 			configDetails = "PRINT: DRY-RUN configuration for scope: " + scope.String()
-		} else if force {
-			configDetails = "PRINT: FORCE configuration for scope: " + scope.String()
 		} else {
 			configDetails = "PRINT: Install configuration for scope: " + scope.String()
 		}
@@ -125,9 +115,6 @@ func runInstallCommandE(cmd *cobra.Command, args []string) error {
 		cmd.Printf("%s\n", configDetails)
 		if dryRun {
 			cmd.Printf("  Mode: Simulation (no changes will be made)\n")
-		}
-		if force {
-			cmd.Printf("  Mode: Force (will overwrite without prompting)\n")
 		}
 		if quiet {
 			cmd.Printf("  Output: Quiet mode (minimal messages)\n")
@@ -169,9 +156,6 @@ func runInstallCommandE(cmd *cobra.Command, args []string) error {
 	if !quiet {
 		cmd.Printf("✅ Claudio installation completed successfully!\n")
 		cmd.Printf("Audio hooks have been added to Claude Code settings.\n")
-		if force {
-			cmd.Printf("Force mode was used - existing hooks were overwritten.\n")
-		}
 	} else {
 		cmd.Printf("Install: %s ✅\n", scope.String())
 	}
@@ -193,20 +177,31 @@ func runInstallWorkflow(scope string, settingsPath string) error {
 
 	slog.Debug("validated installation scope", "scope", scope)
 
-	// Step 2: Read existing settings (uses file locking for safety)
+	// Step 2: Read existing settings
 	slog.Debug("reading existing settings", "path", settingsPath)
-	existingSettings, err := install.ReadSettingsFileWithLock(settingsPath)
+	factory := install.GetFilesystemFactory()
+	prodFS := factory.Production()
+	existingSettings, err := install.ReadSettingsFile(prodFS, settingsPath)
 	if err != nil {
 		return fmt.Errorf("failed to read existing settings from %s: %w", settingsPath, err)
 	}
 
 	slog.Info("loaded existing settings",
 		"path", settingsPath,
-		"settings_keys", getSettingsKeys(existingSettings))
+		"settings_keys", util.GetSettingsKeys(existingSettings))
 
 	// Step 3: Generate Claudio hooks configuration
 	slog.Debug("generating Claudio hooks configuration")
-	claudioHooks, err := install.GenerateClaudioHooks()
+	
+	// Get current executable path - must succeed
+	execPath, err := install.GetExecutablePath()
+	if err != nil {
+		return fmt.Errorf("failed to get executable path: %w", err)
+	}
+	
+	// Use production filesystem (reuse existing variables)
+	
+	claudioHooks, err := install.GenerateClaudioHooks(prodFS, execPath)
 	if err != nil {
 		return fmt.Errorf("failed to generate Claudio hooks: %w", err)
 	}
@@ -221,11 +216,11 @@ func runInstallWorkflow(scope string, settingsPath string) error {
 	}
 
 	slog.Info("merged Claudio hooks into settings",
-		"merged_settings_keys", getSettingsKeys(mergedSettings))
+		"merged_settings_keys", util.GetSettingsKeys(mergedSettings))
 
-	// Step 5: Write merged settings back to file (uses file locking for safety)
+	// Step 5: Write merged settings back to file
 	slog.Debug("writing merged settings to file", "path", settingsPath)
-	err = install.WriteSettingsFileWithLock(settingsPath, mergedSettings)
+	err = install.WriteSettingsFile(prodFS, settingsPath, mergedSettings)
 	if err != nil {
 		return fmt.Errorf("failed to write merged settings to %s: %w", settingsPath, err)
 	}
@@ -234,7 +229,7 @@ func runInstallWorkflow(scope string, settingsPath string) error {
 
 	// Step 6: Verify installation by reading back and checking hooks
 	slog.Debug("verifying installation by reading back settings")
-	verifySettings, err := install.ReadSettingsFileWithLock(settingsPath)
+	verifySettings, err := install.ReadSettingsFile(prodFS, settingsPath)
 	if err != nil {
 		return fmt.Errorf("failed to verify installation by reading %s: %w", settingsPath, err)
 	}
@@ -268,15 +263,3 @@ func runInstallWorkflow(scope string, settingsPath string) error {
 	return nil
 }
 
-// getSettingsKeys returns a list of top-level keys in settings for logging
-func getSettingsKeys(settings *install.SettingsMap) []string {
-	if settings == nil {
-		return []string{}
-	}
-
-	keys := make([]string, 0, len(*settings))
-	for key := range *settings {
-		keys = append(keys, key)
-	}
-	return keys
-}

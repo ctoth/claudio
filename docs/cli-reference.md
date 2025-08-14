@@ -29,9 +29,6 @@ claudio install [flags]
 : Show what would be done without making changes (simulation mode)
 : Useful for testing installation before committing changes
 
-**--force, -f** `boolean` (default: false)
-: Overwrite existing hooks without prompting
-: Use when updating Claudio configuration or fixing broken installs
 
 **--quiet, -q** `boolean` (default: false)
 : Suppress output (no progress messages)
@@ -45,17 +42,17 @@ claudio install [flags]
 
 **Basic installation:**
 ```bash
-claudio install --scope user
+claudio install
 ```
 
 **Test what would be installed:**
 ```bash
-claudio install --dry-run --scope user
+claudio install --dry-run
 ```
 
-**Force reinstall (overwrite existing):**
+**Standard installation (overwrites existing Claudio hooks):**
 ```bash
-claudio install --force --scope user
+claudio install --scope user
 ```
 
 **Project-specific installation:**
@@ -106,9 +103,6 @@ claudio uninstall [flags]
 : Show what would be removed without making changes (simulation mode)
 : Lists hooks that would be removed
 
-**--force, -f** `boolean` (default: false)
-: Remove hooks without prompting
-: Bypasses confirmation dialogs
 
 **--quiet, -q** `boolean` (default: false)
 : Suppress output (no progress messages)
@@ -130,9 +124,9 @@ claudio uninstall --scope user
 claudio uninstall --dry-run --scope user
 ```
 
-**Force removal:**
+**Standard removal:**
 ```bash
-claudio uninstall --force --scope user
+claudio uninstall --scope user
 ```
 
 **Project-specific removal:**

@@ -2,7 +2,6 @@ package install
 
 import (
 	"encoding/json"
-	"os"
 	"testing"
 )
 
@@ -23,7 +22,10 @@ func TestGenerateClaudioHooks(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Test the GenerateClaudioHooks function
-			hooks, err := GenerateClaudioHooks()
+			factory := GetFilesystemFactory()
+			memFS := factory.Memory()
+			execPath, _ := GetExecutablePath()
+			hooks, err := GenerateClaudioHooks(memFS, execPath)
 
 			if err != nil {
 				t.Errorf("Unexpected error generating hooks: %v", err)
@@ -78,7 +80,7 @@ func TestGenerateClaudioHooks(t *testing.T) {
 
 func TestGenerateClaudioHooksStructure(t *testing.T) {
 	// TDD RED: Test that generated hooks have correct JSON structure for Claude Code
-	hooks, err := GenerateClaudioHooks()
+	hooks, err := generateTestHooks()
 	if err != nil {
 		t.Fatalf("Failed to generate hooks: %v", err)
 	}
@@ -131,12 +133,12 @@ func TestGenerateClaudioHooksStructure(t *testing.T) {
 
 func TestGenerateClaudioHooksConsistency(t *testing.T) {
 	// TDD RED: Test that hook generation is consistent across multiple calls
-	hooks1, err1 := GenerateClaudioHooks()
+	hooks1, err1 := generateTestHooks()
 	if err1 != nil {
 		t.Fatalf("First hook generation failed: %v", err1)
 	}
 
-	hooks2, err2 := GenerateClaudioHooks()
+	hooks2, err2 := generateTestHooks()
 	if err2 != nil {
 		t.Fatalf("Second hook generation failed: %v", err2)
 	}
@@ -163,7 +165,7 @@ func TestGenerateClaudioHooksConsistency(t *testing.T) {
 
 func TestGenerateClaudioHooksValidJSON(t *testing.T) {
 	// TDD RED: Test that generated hooks produce valid JSON that Claude Code can parse
-	hooks, err := GenerateClaudioHooks()
+	hooks, err := generateTestHooks()
 	if err != nil {
 		t.Fatalf("Failed to generate hooks: %v", err)
 	}
@@ -202,7 +204,7 @@ func TestGenerateClaudioHooksValidJSON(t *testing.T) {
 
 func TestGenerateClaudioHooksIntegration(t *testing.T) {
 	// TDD RED: Test that generated hooks can be integrated into settings structure
-	hooks, err := GenerateClaudioHooks()
+	hooks, err := generateTestHooks()
 	if err != nil {
 		t.Fatalf("Failed to generate hooks: %v", err)
 	}
@@ -251,12 +253,21 @@ func getHookNames(hooks map[string]interface{}) []string {
 	return names
 }
 
+// Helper function for tests to generate hooks with test parameters
+func generateTestHooks() (interface{}, error) {
+	factory := GetFilesystemFactory()
+	memFS := factory.Memory()
+	// Use mock executable path to prevent config corruption during tests
+	mockExecPath := "/test/mock/claudio"
+	return GenerateClaudioHooks(memFS, mockExecPath)
+}
+
 // Functions that will need to be implemented (currently undefined):
 // - GenerateClaudioHooks() (interface{}, error)
 
 func TestGenerateClaudioHooksCorrectFormat(t *testing.T) {
 	// TDD RED: Test that generated hooks follow Claude Code's required format
-	hooks, err := GenerateClaudioHooks()
+	hooks, err := generateTestHooks()
 	if err != nil {
 		t.Fatalf("Failed to generate hooks: %v", err)
 	}
@@ -351,13 +362,10 @@ func TestGenerateClaudioHooksCorrectFormat(t *testing.T) {
 				return
 			}
 
-			// Get expected executable path for comparison
-			expectedPath, err := os.Executable()
-			if err != nil {
-				// If os.Executable() fails, we expect fallback to "claudio"
-				expectedPath = "claudio"
-			}
-
+			// Since generateTestHooks() uses mock path, expect mock path
+			expectedPath := "/test/mock/claudio"
+			
+			// The command should be unquoted (quotes are handled by JSON marshaling)
 			if commandStr != expectedPath {
 				t.Errorf("Hook %s command should be '%s', got '%s'", hookName, expectedPath, commandStr)
 			}
@@ -367,7 +375,7 @@ func TestGenerateClaudioHooksCorrectFormat(t *testing.T) {
 
 func TestGenerateClaudioHooksHasMatcher(t *testing.T) {
 	// TDD RED: Test that all generated hooks have required matcher field
-	hooks, err := GenerateClaudioHooks()
+	hooks, err := generateTestHooks()
 	if err != nil {
 		t.Fatalf("Failed to generate hooks: %v", err)
 	}
@@ -402,7 +410,7 @@ func TestGenerateClaudioHooksHasMatcher(t *testing.T) {
 
 func TestGenerateClaudioHooksUsesExecutablePath(t *testing.T) {
 	// TDD RED: Test that generated hooks use current executable path, not hardcoded "claudio"
-	hooks, err := GenerateClaudioHooks()
+	hooks, err := generateTestHooks()
 	if err != nil {
 		t.Fatalf("Failed to generate hooks: %v", err)
 	}
@@ -418,12 +426,8 @@ func TestGenerateClaudioHooksUsesExecutablePath(t *testing.T) {
 		t.Fatalf("Expected hooks to be HooksMap or map[string]interface{}, got %T", hooks)
 	}
 
-	// Get expected executable path for comparison
-	expectedPath, err := os.Executable()
-	if err != nil {
-		// If os.Executable() fails, we expect fallback to "claudio"
-		expectedPath = "claudio"
-	}
+	// Since generateTestHooks() uses mock path, expect mock path
+	expectedPath := "/test/mock/claudio"
 
 	for hookName, hookValue := range hooksMap {
 		hookArray := hookValue.([]interface{})
@@ -457,7 +461,7 @@ func TestGenerateClaudioHooksUsesExecutablePath(t *testing.T) {
 			continue
 		}
 
-		// Verify command uses executable path, not hardcoded "claudio"
+		// Verify command uses executable path (unquoted), not hardcoded "claudio"
 		if commandStr != expectedPath {
 			t.Errorf("Hook %s command should be '%s', got '%s'", hookName, expectedPath, commandStr)
 		}

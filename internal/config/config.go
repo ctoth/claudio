@@ -1,6 +1,7 @@
 package config
 
 import (
+	"embed"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,7 +11,14 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/spf13/afero"
+
+	"claudio.click/internal/audio"
 )
+
+//go:embed windows.json wsl.json darwin.json
+var platformSoundpacks embed.FS
 
 // FileLoggingConfig represents file-based logging configuration
 type FileLoggingConfig struct {
@@ -46,6 +54,7 @@ type XDGInterface interface {
 // ConfigManager handles loading, saving, and validating configuration
 type ConfigManager struct {
 	xdg XDGInterface
+	fs  afero.Fs
 }
 
 // NewConfigManager creates a new configuration manager
@@ -53,13 +62,28 @@ func NewConfigManager() *ConfigManager {
 	slog.Debug("creating new config manager")
 	return &ConfigManager{
 		xdg: NewXDGDirs(),
+		fs:  afero.NewOsFs(), // Production uses real filesystem
+	}
+}
+
+// NewConfigManagerWithFilesystem creates a new configuration manager with custom filesystem
+func NewConfigManagerWithFilesystem(fs afero.Fs) *ConfigManager {
+	slog.Debug("creating new config manager with custom filesystem")
+	return &ConfigManager{
+		xdg: NewXDGDirs(),
+		fs:  fs,
 	}
 }
 
 // GetDefaultConfig returns the default configuration
 func (cm *ConfigManager) GetDefaultConfig() *Config {
+	slog.Debug("GetDefaultConfig called - starting platform detection")
 	// Use platform-specific soundpack if it exists, otherwise default
-	defaultSoundpack := cm.GetPlatformSoundpack()
+	// For default config, use real filesystem and current executable directory
+	executableDir := getExecutableDirectoryForDefault()
+	slog.Debug("GetDefaultConfig got executable directory", "executableDir", executableDir)
+	defaultSoundpack := cm.GetPlatformSoundpack(afero.NewOsFs(), executableDir)
+	slog.Debug("GetDefaultConfig platform detection result", "defaultSoundpack", defaultSoundpack)
 
 	defaultConfig := &Config{
 		Volume:           0.5,
@@ -94,7 +118,7 @@ func (cm *ConfigManager) GetDefaultConfig() *Config {
 func (cm *ConfigManager) LoadFromFile(filePath string) (*Config, error) {
 	slog.Debug("loading config from file", "file_path", filePath)
 
-	data, err := os.ReadFile(filePath)
+	data, err := afero.ReadFile(cm.fs, filePath)
 	if err != nil {
 		slog.Error("failed to read config file", "file_path", filePath, "error", err)
 		return nil, fmt.Errorf("failed to read config file: %w", err)
@@ -134,7 +158,7 @@ func (cm *ConfigManager) SaveToFile(config *Config, filePath string) error {
 
 	// Create directory if it doesn't exist
 	dir := filepath.Dir(filePath)
-	err = os.MkdirAll(dir, 0755)
+	err = cm.fs.MkdirAll(dir, 0755)
 	if err != nil {
 		slog.Error("failed to create config directory", "directory", dir, "error", err)
 		return fmt.Errorf("failed to create config directory: %w", err)
@@ -147,7 +171,7 @@ func (cm *ConfigManager) SaveToFile(config *Config, filePath string) error {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	err = os.WriteFile(filePath, data, 0644)
+	err = afero.WriteFile(cm.fs, filePath, data, 0644)
 	if err != nil {
 		slog.Error("failed to write config file", "file_path", filePath, "error", err)
 		return fmt.Errorf("failed to write config file: %w", err)
@@ -155,6 +179,11 @@ func (cm *ConfigManager) SaveToFile(config *Config, filePath string) error {
 
 	slog.Info("config saved successfully", "file_path", filePath)
 	return nil
+}
+
+// WriteConfig is an alias for SaveToFile for compatibility with tests
+func (cm *ConfigManager) WriteConfig(filePath string, config *Config) error {
+	return cm.SaveToFile(config, filePath)
 }
 
 // LoadConfig loads configuration using XDG path discovery
@@ -453,15 +482,113 @@ func (cm *ConfigManager) IsValidAudioBackend(backend string) bool {
 	return false
 }
 
-// GetPlatformSoundpack returns platform-specific soundpack if it exists, otherwise "default"
-func (cm *ConfigManager) GetPlatformSoundpack() string {
-	platformFile := runtime.GOOS + ".json"
+// hasEmbeddedPlatformFile checks if an embedded platform soundpack file exists
+func hasEmbeddedPlatformFile(filename string) bool {
+	_, err := platformSoundpacks.Open(filename)
+	return err == nil
+}
 
-	if _, err := os.Stat(platformFile); err == nil {
-		slog.Debug("platform soundpack found", "platform", runtime.GOOS, "file", platformFile)
-		return platformFile
+// GetEmbeddedPlatformSoundpackData reads embedded platform soundpack data
+func GetEmbeddedPlatformSoundpackData(filename string) ([]byte, error) {
+	data, err := platformSoundpacks.ReadFile(filename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read embedded platform soundpack file '%s': %w", filename, err)
 	}
+	return data, nil
+}
 
-	slog.Debug("platform soundpack not found, using default", "platform", runtime.GOOS, "file", platformFile)
+// GetPlatformSoundpack returns platform-specific soundpack if it exists, otherwise "default"
+// Enhanced version that:
+// 1. Checks WSL first (prefers wsl.json over linux.json)
+// 2. Looks in provided executable directory
+// 3. Returns full path to JSON file when found
+func (cm *ConfigManager) GetPlatformSoundpack(fs afero.Fs, executableDir string) string {
+	slog.Debug("detecting platform soundpack with enhanced detection", 
+		"executable_dir", executableDir, 
+		"is_wsl", audio.IsWSL(), 
+		"runtime_goos", runtime.GOOS)
+	
+	// WSL detection first - prefer wsl.json over linux.json when in WSL
+	if audio.IsWSL() {
+		if wslPath := checkPlatformFile(fs, executableDir, "wsl.json"); wslPath != "" {
+			slog.Debug("WSL platform soundpack found", "path", wslPath)
+			return wslPath
+		}
+		slog.Debug("WSL detected but wsl.json not found in executable directory", "exec_dir", executableDir)
+	}
+	
+	// Regular OS-specific detection
+	platformFile := runtime.GOOS + ".json"
+	if platformPath := checkPlatformFile(fs, executableDir, platformFile); platformPath != "" {
+		slog.Debug("platform soundpack found", "platform", runtime.GOOS, "path", platformPath)
+		return platformPath
+	}
+	
+	// Check embedded platform files as fallback
+	var embeddedPlatformFile string
+	if audio.IsWSL() {
+		embeddedPlatformFile = "wsl.json"
+	} else {
+		embeddedPlatformFile = runtime.GOOS + ".json"
+	}
+	
+	if hasEmbeddedPlatformFile(embeddedPlatformFile) {
+		slog.Debug("using embedded platform soundpack", 
+			"platform_file", embeddedPlatformFile,
+			"is_wsl", audio.IsWSL(),
+			"runtime_goos", runtime.GOOS)
+		return "embedded:" + embeddedPlatformFile
+	}
+	
+	slog.Debug("no platform soundpack found (file or embedded), using default", 
+		"platform", runtime.GOOS, 
+		"wsl_detection", audio.IsWSL(),
+		"exec_dir", executableDir,
+		"embedded_file_checked", embeddedPlatformFile)
 	return "default"
+}
+
+// checkPlatformFile checks if a platform JSON file exists in the specified directory
+// Returns full path if found, empty string if not found
+func checkPlatformFile(fs afero.Fs, dir, filename string) string {
+	fullPath := filepath.Join(dir, filename)
+	
+	if info, err := fs.Stat(fullPath); err == nil && !info.IsDir() {
+		slog.Debug("platform file found", "path", fullPath, "size", info.Size())
+		return fullPath
+	}
+	
+	slog.Debug("platform file not found", "path", fullPath)
+	return ""
+}
+
+// getExecutableDirectoryForDefault returns the directory containing the current executable for default config
+func getExecutableDirectoryForDefault() string {
+	executable, err := os.Executable()
+	if err != nil {
+		slog.Warn("failed to get executable directory for default config, using current directory", "error", err)
+		return "."
+	}
+	
+	execDir := filepath.Dir(executable)
+	slog.Debug("executable directory detected for default config", "executable", executable, "directory", execDir)
+	
+	// If executable is in a temp build directory (like /tmp/go-buildXXX), 
+	// also check current working directory for platform JSON files
+	if strings.Contains(executable, "/tmp/go-build") {
+		cwd, err := os.Getwd()
+		if err == nil {
+			slog.Debug("executable appears to be temp build, also checking current working directory", "cwd", cwd, "temp_exec", executable)
+			// Check if platform JSON exists in current directory
+			if cm := NewConfigManager(); cm != nil {
+				cwdResult := cm.GetPlatformSoundpack(afero.NewOsFs(), cwd)
+				if cwdResult != "default" {
+					slog.Debug("found platform JSON in current working directory, using that", "cwd_result", cwdResult)
+					return cwd
+				}
+			}
+		}
+	}
+	
+	return execDir
 }

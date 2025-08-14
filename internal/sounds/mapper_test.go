@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/ctoth/claudio/internal/hooks"
-	"github.com/ctoth/claudio/internal/tracking"
+	"claudio.click/internal/hooks"
+	"claudio.click/internal/tracking"
 )
 
 func TestSoundMapper(t *testing.T) {
