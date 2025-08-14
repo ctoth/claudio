@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/ctoth/claudio/internal/hooks"
+	"claudio.click/internal/hooks"
 )
 
 func TestNewSoundChecker(t *testing.T) {

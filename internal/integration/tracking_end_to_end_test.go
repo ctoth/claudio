@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ctoth/claudio/internal/cli"
-	"github.com/ctoth/claudio/internal/hooks"
+	"claudio.click/internal/cli"
+	"claudio.click/internal/hooks"
 )
 
 // TDD Cycle 9 RED: End-to-End Integration Tests

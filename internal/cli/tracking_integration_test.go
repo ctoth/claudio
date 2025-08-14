@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ctoth/claudio/internal/hooks"
+	"claudio.click/internal/hooks"
 )
 
 // TDD Cycle 7 RED: CLI Integration Tests

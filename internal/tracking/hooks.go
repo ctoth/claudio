@@ -3,7 +3,7 @@ package tracking
 import (
 	"log/slog"
 
-	"github.com/ctoth/claudio/internal/hooks"
+	"claudio.click/internal/hooks"
 )
 
 // SlogHook provides structured logging of path checks for debugging

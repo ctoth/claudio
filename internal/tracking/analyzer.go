@@ -273,3 +273,418 @@ func categoryToString(categoryInt int) string {
 		return "unknown"
 	}
 }
+
+// TDD GREEN: New usage analysis data structures
+
+// SoundUsage represents actual sound playback statistics
+type SoundUsage struct {
+	Path          string  `json:"path"`
+	PlayCount     int     `json:"play_count"`
+	FallbackLevel int     `json:"fallback_level"`
+	Category      string  `json:"category,omitempty"`
+	ToolName      string  `json:"tool_name,omitempty"`
+	LastPlayed    int64   `json:"last_played"`           // Unix timestamp
+	AvgFallback   float64 `json:"avg_fallback"`          // Average fallback level
+}
+
+// UsageSummary provides overall usage statistics
+type UsageSummary struct {
+	TotalEvents          int            `json:"total_events"`
+	UniqueSounds         int            `json:"unique_sounds"`
+	AvgFallbackLevel     float64        `json:"avg_fallback_level"`
+	FallbackDistribution map[int]int    `json:"fallback_distribution"` // Level -> count
+	TimeRange            string         `json:"time_range,omitempty"`  // Human readable
+}
+
+// ToolUsageStats represents tool-specific usage statistics
+type ToolUsageStats struct {
+	ToolName         string  `json:"tool_name"`
+	UsageCount       int     `json:"usage_count"`
+	AvgFallbackLevel float64 `json:"avg_fallback_level"`
+	LastUsed         int64   `json:"last_used"`
+	Categories       []string `json:"categories,omitempty"` // Categories this tool uses
+}
+
+// CategoryDistribution represents category usage statistics
+type CategoryDistribution struct {
+	Category   string  `json:"category"`
+	Count      int     `json:"count"`
+	Percentage float64 `json:"percentage"`
+}
+
+// FallbackStatistic represents fallback level statistics
+type FallbackStatistic struct {
+	FallbackLevel int     `json:"fallback_level"`
+	Count         int     `json:"count"`
+	Percentage    float64 `json:"percentage"`
+	Description   string  `json:"description"`
+}
+
+// TDD GREEN: Usage analysis functions
+
+// GetSoundUsage returns statistics about actual sound playback
+func GetSoundUsage(db *sql.DB, filter QueryFilter) ([]SoundUsage, error) {
+	if db == nil {
+		return nil, fmt.Errorf("database connection is nil")
+	}
+
+	// Build query to get sound usage statistics
+	baseQuery := `
+		SELECT 
+			he.selected_path,
+			COUNT(*) as play_count,
+			AVG(he.fallback_level) as avg_fallback,
+			MIN(he.fallback_level) as min_fallback, 
+			MAX(he.timestamp) as last_played,
+			(SELECT context FROM hook_events he2 WHERE he2.selected_path = he.selected_path LIMIT 1) as context
+		FROM hook_events he
+		WHERE he.selected_path != ''`
+
+	// Apply filters using common QueryFilter
+	whereClause, args := filter.BuildWhereClause()
+	if whereClause != "" {
+		baseQuery += " AND " + whereClause
+	}
+
+	baseQuery += `
+		GROUP BY he.selected_path
+		ORDER BY play_count DESC`
+
+	// Apply limit
+	if filter.Limit > 0 {
+		baseQuery += fmt.Sprintf(" LIMIT %d", filter.Limit)
+	}
+
+	rows, err := db.Query(baseQuery, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query sound usage: %w", err)
+	}
+	defer rows.Close()
+
+	var results []SoundUsage
+	for rows.Next() {
+		var usage SoundUsage
+		var contextStr sql.NullString
+		var avgFallback float64
+
+		err := rows.Scan(&usage.Path, &usage.PlayCount, &avgFallback, &usage.FallbackLevel, &usage.LastPlayed, &contextStr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan sound usage row: %w", err)
+		}
+
+		usage.AvgFallback = avgFallback
+
+		// Extract category and tool name from context JSON
+		if contextStr.Valid && contextStr.String != "" {
+			category, toolName := extractFromContextJSON(contextStr.String)
+			usage.Category = category
+			usage.ToolName = toolName
+		}
+
+		results = append(results, usage)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating sound usage rows: %w", err)
+	}
+
+	return results, nil
+}
+
+// GetUsageSummary returns overall usage statistics
+func GetUsageSummary(db *sql.DB, filter QueryFilter) (*UsageSummary, error) {
+	if db == nil {
+		return nil, fmt.Errorf("database connection is nil")
+	}
+
+	// Build query for summary statistics
+	summaryQuery := `
+		SELECT 
+			COUNT(*) as total_events,
+			COUNT(DISTINCT he.selected_path) as unique_sounds,
+			AVG(he.fallback_level) as avg_fallback_level
+		FROM hook_events he
+		WHERE he.selected_path != ''`
+
+	// Apply filters using common QueryFilter
+	whereClause, args := filter.BuildWhereClause()
+	if whereClause != "" {
+		summaryQuery += " AND " + whereClause
+	}
+
+	var summary UsageSummary
+	err := db.QueryRow(summaryQuery, args...).Scan(&summary.TotalEvents, &summary.UniqueSounds, &summary.AvgFallbackLevel)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query usage summary: %w", err)
+	}
+
+	// Get fallback distribution
+	distributionQuery := `
+		SELECT 
+			he.fallback_level,
+			COUNT(*) as count
+		FROM hook_events he
+		WHERE he.selected_path != ''`
+
+	if whereClause != "" {
+		distributionQuery += " AND " + whereClause
+	}
+
+	distributionQuery += `
+		GROUP BY he.fallback_level
+		ORDER BY he.fallback_level`
+
+	rows, err := db.Query(distributionQuery, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query fallback distribution: %w", err)
+	}
+	defer rows.Close()
+
+	summary.FallbackDistribution = make(map[int]int)
+	for rows.Next() {
+		var level, count int
+		if err := rows.Scan(&level, &count); err != nil {
+			return nil, fmt.Errorf("failed to scan fallback distribution: %w", err)
+		}
+		summary.FallbackDistribution[level] = count
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating fallback distribution rows: %w", err)
+	}
+
+	return &summary, nil
+}
+
+// GetToolUsageStats returns tool-specific usage statistics
+func GetToolUsageStats(db *sql.DB, filter QueryFilter) ([]ToolUsageStats, error) {
+	if db == nil {
+		return nil, fmt.Errorf("database connection is nil")
+	}
+
+	// Build query to get tool usage statistics
+	baseQuery := `
+		SELECT 
+			JSON_EXTRACT(he.context, '$.ToolName') as tool_name,
+			COUNT(*) as usage_count,
+			AVG(he.fallback_level) as avg_fallback_level,
+			MAX(he.timestamp) as last_used,
+			GROUP_CONCAT(DISTINCT JSON_EXTRACT(he.context, '$.Category')) as categories
+		FROM hook_events he
+		WHERE he.context != '' AND JSON_EXTRACT(he.context, '$.ToolName') IS NOT NULL`
+
+	// Apply filters using common QueryFilter
+	whereClause, args := filter.BuildWhereClause()
+	if whereClause != "" {
+		baseQuery += " AND " + whereClause
+	}
+
+	baseQuery += `
+		GROUP BY JSON_EXTRACT(he.context, '$.ToolName')
+		ORDER BY usage_count DESC`
+
+	// Apply limit
+	if filter.Limit > 0 {
+		baseQuery += fmt.Sprintf(" LIMIT %d", filter.Limit)
+	}
+
+	rows, err := db.Query(baseQuery, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query tool usage stats: %w", err)
+	}
+	defer rows.Close()
+
+	var results []ToolUsageStats
+	for rows.Next() {
+		var stats ToolUsageStats
+		var toolName, categoriesStr sql.NullString
+
+		err := rows.Scan(&toolName, &stats.UsageCount, &stats.AvgFallbackLevel, &stats.LastUsed, &categoriesStr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan tool usage stats row: %w", err)
+		}
+
+		if toolName.Valid {
+			stats.ToolName = toolName.String
+		}
+
+		// Parse categories (comma-separated category integers)
+		if categoriesStr.Valid && categoriesStr.String != "" {
+			categoryMap := make(map[string]bool)
+			for _, categoryStr := range parseCommaSeparated(categoriesStr.String) {
+				// Convert category integer strings to category names
+				if categoryStr != "" && categoryStr != "null" {
+					// Parse the integer string to int
+					var categoryInt int
+					_, err := fmt.Sscanf(categoryStr, "%d", &categoryInt)
+					if err == nil {
+						categoryName := categoryToString(categoryInt)
+						if categoryName != "unknown" {
+							categoryMap[categoryName] = true
+						}
+					}
+				}
+			}
+
+			// Convert map to slice
+			for category := range categoryMap {
+				stats.Categories = append(stats.Categories, category)
+			}
+		}
+
+		results = append(results, stats)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating tool usage stats rows: %w", err)
+	}
+
+	return results, nil
+}
+
+// GetCategoryDistribution returns category usage distribution
+func GetCategoryDistribution(db *sql.DB, filter QueryFilter) ([]CategoryDistribution, error) {
+	if db == nil {
+		return nil, fmt.Errorf("database connection is nil")
+	}
+
+	// Build query to get category distribution
+	baseQuery := `
+		SELECT 
+			JSON_EXTRACT(he.context, '$.Category') as category_int,
+			COUNT(*) as count
+		FROM hook_events he
+		WHERE he.context != '' AND JSON_EXTRACT(he.context, '$.Category') IS NOT NULL`
+
+	// Apply filters using common QueryFilter
+	whereClause, args := filter.BuildWhereClause()
+	if whereClause != "" {
+		baseQuery += " AND " + whereClause
+	}
+
+	baseQuery += `
+		GROUP BY JSON_EXTRACT(he.context, '$.Category')
+		ORDER BY count DESC`
+
+	rows, err := db.Query(baseQuery, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query category distribution: %w", err)
+	}
+	defer rows.Close()
+
+	var results []CategoryDistribution
+	var totalCount int
+
+	// First pass: collect data and calculate total
+	for rows.Next() {
+		var categoryInt sql.NullFloat64
+		var count int
+
+		if err := rows.Scan(&categoryInt, &count); err != nil {
+			return nil, fmt.Errorf("failed to scan category distribution row: %w", err)
+		}
+
+		if categoryInt.Valid {
+			categoryName := categoryToString(int(categoryInt.Float64))
+			results = append(results, CategoryDistribution{
+				Category: categoryName,
+				Count:    count,
+			})
+			totalCount += count
+		}
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating category distribution rows: %w", err)
+	}
+
+	// Second pass: calculate percentages
+	for i := range results {
+		if totalCount > 0 {
+			results[i].Percentage = float64(results[i].Count) / float64(totalCount) * 100.0
+		}
+	}
+
+	return results, nil
+}
+
+// GetFallbackStatistics returns fallback level statistics
+func GetFallbackStatistics(db *sql.DB, filter QueryFilter) ([]FallbackStatistic, error) {
+	if db == nil {
+		return nil, fmt.Errorf("database connection is nil")
+	}
+
+	// Build query to get fallback statistics
+	baseQuery := `
+		SELECT 
+			he.fallback_level,
+			COUNT(*) as count
+		FROM hook_events he
+		WHERE he.selected_path != ''`
+
+	// Apply filters using common QueryFilter
+	whereClause, args := filter.BuildWhereClause()
+	if whereClause != "" {
+		baseQuery += " AND " + whereClause
+	}
+
+	baseQuery += `
+		GROUP BY he.fallback_level
+		ORDER BY he.fallback_level`
+
+	rows, err := db.Query(baseQuery, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query fallback statistics: %w", err)
+	}
+	defer rows.Close()
+
+	var results []FallbackStatistic
+	var totalCount int
+
+	// First pass: collect data and calculate total
+	for rows.Next() {
+		var level, count int
+
+		if err := rows.Scan(&level, &count); err != nil {
+			return nil, fmt.Errorf("failed to scan fallback statistics row: %w", err)
+		}
+
+		results = append(results, FallbackStatistic{
+			FallbackLevel: level,
+			Count:         count,
+			Description:   getFallbackDescription(level),
+		})
+		totalCount += count
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating fallback statistics rows: %w", err)
+	}
+
+	// Second pass: calculate percentages
+	for i := range results {
+		if totalCount > 0 {
+			results[i].Percentage = float64(results[i].Count) / float64(totalCount) * 100.0
+		}
+	}
+
+	return results, nil
+}
+
+// getFallbackDescription returns human-readable description for fallback levels
+func getFallbackDescription(level int) string {
+	switch level {
+	case 1:
+		return "Exact hint match"
+	case 2:
+		return "Tool-specific sound"
+	case 3:
+		return "Operation-specific sound"
+	case 4:
+		return "Category-specific sound"
+	case 5:
+		return "Default fallback sound"
+	default:
+		return "Unknown fallback level"
+	}
+}

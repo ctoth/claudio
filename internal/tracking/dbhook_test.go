@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ctoth/claudio/internal/hooks"
+	"claudio.click/internal/hooks"
 )
 
 func TestNewDBHook(t *testing.T) {

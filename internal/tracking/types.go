@@ -3,7 +3,7 @@ package tracking
 import (
 	"os"
 
-	"github.com/ctoth/claudio/internal/hooks"
+	"claudio.click/internal/hooks"
 )
 
 // SoundpackResolver interface for resolving logical paths to physical paths

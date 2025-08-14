@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ctoth/claudio/internal/tracking"
+	"claudio.click/internal/tracking"
 )
 
 // TDD Step 3 GREEN: Data structures and functions moved to analyze_command.go
