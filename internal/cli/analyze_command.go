@@ -55,7 +55,9 @@ func newAnalyzeCommand() *cobra.Command {
 func newAnalyzeMissingCommand() *cobra.Command {
 	var days int
 	var tool string
+	var category string
 	var limit int
+	var preset string
 
 	missingCmd := &cobra.Command{
 		Use:   "missing",
@@ -67,23 +69,32 @@ were requested but didn't exist in your soundpack. This helps you understand
 what sounds you could create to improve your audio experience.
 
 The results are ordered by frequency (most requested first) to help you
-prioritize which sounds to create.`,
+prioritize which sounds to create.
+
+Examples:
+  claudio analyze missing                    # Show recent missing sounds
+  claudio analyze missing --days 30         # Last 30 days
+  claudio analyze missing --preset today    # Today only
+  claudio analyze missing --tool Edit       # Edit tool only
+  claudio analyze missing --category error  # Error sounds only`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runAnalyzeMissing(cmd, days, tool, limit)
+			return runAnalyzeMissing(cmd, days, tool, category, limit, preset)
 		},
 	}
 
-	// Add flags
+	// Add flags - now consistent with analyze usage
 	missingCmd.Flags().IntVar(&days, "days", 7, "Number of days to analyze (0 = all time)")
 	missingCmd.Flags().StringVar(&tool, "tool", "", "Filter by specific tool name")
+	missingCmd.Flags().StringVar(&category, "category", "", "Filter by category (success, error, loading, interactive)")
 	missingCmd.Flags().IntVar(&limit, "limit", 20, "Maximum number of results to show")
+	missingCmd.Flags().StringVar(&preset, "preset", "", "Date preset (today, yesterday, last-week, this-month, all-time)")
 
 	return missingCmd
 }
 
 // runAnalyzeMissing executes the analyze missing command
-func runAnalyzeMissing(cmd *cobra.Command, days int, tool string, limit int) error {
-	slog.Debug("running analyze missing command", "days", days, "tool", tool, "limit", limit)
+func runAnalyzeMissing(cmd *cobra.Command, days int, tool, category string, limit int, preset string) error {
+	slog.Debug("running analyze missing command", "days", days, "tool", tool, "category", category, "limit", limit, "preset", preset)
 
 	// Extract CLI instance from context
 	cli := cliFromContext(cmd.Context())
@@ -99,29 +110,33 @@ func runAnalyzeMissing(cmd *cobra.Command, days int, tool string, limit int) err
 		return fmt.Errorf("sound tracking is not enabled or database is not available")
 	}
 
-	// Build query parameters
-	query := tracking.MissingSoundQuery{
-		Days:  days,
-		Tool:  tool,
-		Limit: limit,
+	// Build query filter using new common infrastructure
+	filter := tracking.QueryFilter{
+		Days:      days,
+		Tool:      tool,
+		Category:  category,
+		Limit:     limit,
+		DatePreset: preset,
+		OrderBy:   "frequency",
+		OrderDesc: true,
 	}
 
 	// Get missing sounds data
-	missingSounds, err := tracking.GetMissingSounds(cli.trackingDB, query)
+	missingSounds, err := tracking.GetMissingSounds(cli.trackingDB, filter)
 	if err != nil {
 		slog.Error("failed to get missing sounds", "error", err)
 		return fmt.Errorf("failed to analyze missing sounds: %w", err)
 	}
 
 	// Get summary statistics
-	summary, err := tracking.GetMissingSoundsSummary(cli.trackingDB, query)
+	summary, err := tracking.GetMissingSoundsSummary(cli.trackingDB, filter)
 	if err != nil {
 		slog.Warn("failed to get missing sounds summary", "error", err)
 		// Continue without summary - not critical
 	}
 
 	// TDD Step 3 GREEN: Replace flat output with hierarchical tool-grouped output
-	return outputMissingSoundsHierarchical(cmd.OutOrStdout(), missingSounds, summary, query)
+	return outputMissingSoundsHierarchical(cmd.OutOrStdout(), missingSounds, summary, filter)
 }
 
 // TDD Step 3 GREEN: groupByTool groups missing sounds by tool and category
@@ -207,16 +222,16 @@ func groupByTool(missingSounds []tracking.MissingSound) Analysis {
 }
 
 // TDD Step 3 GREEN: outputMissingSoundsHierarchical displays missing sounds grouped by tool
-func outputMissingSoundsHierarchical(w io.Writer, sounds []tracking.MissingSound, summary map[string]interface{}, query tracking.MissingSoundQuery) error {
+func outputMissingSoundsHierarchical(w io.Writer, sounds []tracking.MissingSound, summary map[string]interface{}, filter tracking.QueryFilter) error {
 	if len(sounds) == 0 {
 		// No missing sounds found
-		if query.Days > 0 {
-			fmt.Fprintf(w, "No missing sounds found in the last %d days", query.Days)
+		if filter.Days > 0 {
+			fmt.Fprintf(w, "No missing sounds found in the last %d days", filter.Days)
 		} else {
 			fmt.Fprint(w, "No missing sounds found")
 		}
-		if query.Tool != "" {
-			fmt.Fprintf(w, " for tool '%s'", query.Tool)
+		if filter.Tool != "" {
+			fmt.Fprintf(w, " for tool '%s'", filter.Tool)
 		}
 		fmt.Fprintln(w, ".")
 		fmt.Fprintln(w, "\nThis means either:")
@@ -230,8 +245,12 @@ func outputMissingSoundsHierarchical(w io.Writer, sounds []tracking.MissingSound
 	analysis := groupByTool(sounds)
 
 	// Header with hierarchical context
-	timeContext := fmt.Sprintf("last %d days", query.Days)
-	if query.Days == 0 {
+	var timeContext string
+	if filter.DatePreset != "" {
+		timeContext = filter.DatePreset
+	} else if filter.Days > 0 {
+		timeContext = fmt.Sprintf("last %d days", filter.Days)
+	} else {
 		timeContext = "all time"
 	}
 
@@ -320,7 +339,7 @@ func outputMissingSoundsHierarchical(w io.Writer, sounds []tracking.MissingSound
 	fmt.Fprintln(w, "  2. Add them to your soundpack directory")
 	fmt.Fprintln(w, "  3. Use the exact file names shown above")
 
-	if query.Tool == "" && len(sounds) > 3 {
+	if filter.Tool == "" && len(sounds) > 3 {
 		fmt.Fprintln(w, "  4. Use --tool <name> to focus on specific tools")
 	}
 
@@ -397,16 +416,16 @@ func sortSoundsByRequestCount(sounds []tracking.MissingSound) []tracking.Missing
 }
 
 // outputMissingSounds formats and displays the missing sounds analysis
-func outputMissingSounds(w io.Writer, sounds []tracking.MissingSound, summary map[string]interface{}, query tracking.MissingSoundQuery) error {
+func outputMissingSounds(w io.Writer, sounds []tracking.MissingSound, summary map[string]interface{}, filter tracking.QueryFilter) error {
 	if len(sounds) == 0 {
 		// No missing sounds found
-		if query.Days > 0 {
-			fmt.Fprintf(w, "No missing sounds found in the last %d days", query.Days)
+		if filter.Days > 0 {
+			fmt.Fprintf(w, "No missing sounds found in the last %d days", filter.Days)
 		} else {
 			fmt.Fprint(w, "No missing sounds found")
 		}
-		if query.Tool != "" {
-			fmt.Fprintf(w, " for tool '%s'", query.Tool)
+		if filter.Tool != "" {
+			fmt.Fprintf(w, " for tool '%s'", filter.Tool)
 		}
 		fmt.Fprintln(w, ".")
 		fmt.Fprintln(w, "\nThis means either:")
@@ -417,8 +436,12 @@ func outputMissingSounds(w io.Writer, sounds []tracking.MissingSound, summary ma
 	}
 
 	// Header with context
-	timeContext := fmt.Sprintf("last %d days", query.Days)
-	if query.Days == 0 {
+	var timeContext string
+	if filter.DatePreset != "" {
+		timeContext = filter.DatePreset
+	} else if filter.Days > 0 {
+		timeContext = fmt.Sprintf("last %d days", filter.Days)
+	} else {
 		timeContext = "all time"
 	}
 
@@ -444,7 +467,7 @@ func outputMissingSounds(w io.Writer, sounds []tracking.MissingSound, summary ma
 		fmt.Fprintf(w, "  %-30s %d requests", sound.Path, sound.RequestCount)
 		
 		// Add tool information if available and not filtering by tool
-		if len(sound.Tools) > 0 && query.Tool == "" {
+		if len(sound.Tools) > 0 && filter.Tool == "" {
 			fmt.Fprintf(w, " (%s)", formatTools(sound.Tools))
 		}
 		fmt.Fprintln(w)
@@ -461,7 +484,7 @@ func outputMissingSounds(w io.Writer, sounds []tracking.MissingSound, summary ma
 	fmt.Fprintln(w, "  2. Add them to your soundpack directory")
 	fmt.Fprintln(w, "  3. Use the exact file names shown above")
 
-	if query.Tool == "" && len(sounds) > 3 {
+	if filter.Tool == "" && len(sounds) > 3 {
 		fmt.Fprintln(w, "  4. Use --tool <name> to focus on specific tools")
 	}
 

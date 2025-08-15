@@ -82,13 +82,13 @@ func TestGetMissingSoundsWithContext(t *testing.T) {
 	}
 
 	// Test the GetMissingSounds function with context extraction
-	query := MissingSoundQuery{
+	filter := QueryFilter{
 		Days:  0,    // All time
 		Tool:  "",   // All tools
 		Limit: 20,   // Limit results
 	}
 
-	missingSounds, err := GetMissingSounds(db, query)
+	missingSounds, err := GetMissingSounds(db, filter)
 	if err != nil {
 		t.Fatalf("GetMissingSounds failed: %v", err)
 	}
