@@ -81,6 +81,95 @@ The install command performs these steps:
 5. **Write updated settings** - Saves merged configuration with file locking
 6. **Verify installation** - Confirms all hooks were installed correctly
 
+## claudio analyze
+
+Analyze sound usage patterns and identify missing sounds from tracking database.
+
+### claudio analyze usage
+
+Show actual sound playback statistics and patterns.
+
+```bash
+claudio analyze usage [flags]
+```
+
+#### Flags
+
+**--days** `int` (default: 7)
+: Number of days to analyze (0 = all time)
+
+**--preset** `string`
+: Date range preset: `today`, `yesterday`, `last-week`, `this-month`, `all-time`
+
+**--tool** `string`
+: Filter by specific tool name (e.g., `Edit`, `Bash`)
+
+**--category** `string`
+: Filter by sound category: `success`, `error`, `loading`, `interactive`
+
+**--limit** `int` (default: 20)
+: Maximum results to show
+
+**--show-summary**
+: Display usage summary statistics
+
+**--show-fallbacks**
+: Show fallback level distribution (sound coverage quality)
+
+#### Examples
+
+```bash
+# Recent usage overview
+claudio analyze usage
+
+# Detailed analysis with fallback stats
+claudio analyze usage --show-summary --show-fallbacks
+
+# Check Edit tool performance last week
+claudio analyze usage --tool Edit --preset last-week
+
+# Error sound usage this month
+claudio analyze usage --category error --preset this-month
+```
+
+### claudio analyze missing
+
+Show sounds that were requested but not found in soundpack.
+
+```bash
+claudio analyze missing [flags]
+```
+
+#### Flags
+
+**--days** `int` (default: 7)
+: Number of days to analyze (0 = all time)
+
+**--preset** `string`
+: Date range preset: `today`, `yesterday`, `last-week`, `this-month`, `all-time`
+
+**--tool** `string`
+: Filter by specific tool name
+
+**--category** `string`
+: Filter by sound category
+
+**--limit** `int` (default: 20)
+: Maximum results to show
+
+#### Examples
+
+```bash
+# Find missing sounds from last week
+claudio analyze missing --preset last-week
+
+# Missing error sounds for Bash tool
+claudio analyze missing --tool Bash --category error
+
+# All missing sounds ever
+claudio analyze missing --preset all-time --limit 50
+```
+
 ## claudio uninstall
 
 Removes Claudio hooks from Claude Code settings to disable audio feedback.
