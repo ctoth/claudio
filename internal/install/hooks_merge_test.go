@@ -463,5 +463,307 @@ func findSubstring(s, substr string) bool {
 	return false
 }
 
+func TestMergeHookValues(t *testing.T) {
+	// TDD RED: Test the mergeHookValues function in isolation
+	testCases := []struct {
+		name           string
+		existingValue  interface{}
+		claudioValue   interface{}
+		expectedCount  int // expected number of commands in result
+		expectError    bool
+	}{
+		{
+			name:          "merge string hook with claudio array",
+			existingValue: "git add .",
+			claudioValue: []interface{}{
+				map[string]interface{}{
+					"matcher": ".*",
+					"hooks": []interface{}{
+						map[string]interface{}{
+							"type":    "command",
+							"command": "claudio",
+						},
+					},
+				},
+			},
+			expectedCount: 2, // existing + claudio
+			expectError:   false,
+		},
+		{
+			name: "merge array hook with claudio array",
+			existingValue: []interface{}{
+				map[string]interface{}{
+					"matcher": ".*",
+					"hooks": []interface{}{
+						map[string]interface{}{
+							"type":    "command",
+							"command": "existing-cmd",
+						},
+					},
+				},
+			},
+			claudioValue: []interface{}{
+				map[string]interface{}{
+					"matcher": ".*",
+					"hooks": []interface{}{
+						map[string]interface{}{
+							"type":    "command",
+							"command": "claudio",
+						},
+					},
+				},
+			},
+			expectedCount: 2, // existing + claudio
+			expectError:   false,
+		},
+		{
+			name:          "claudio hook with claudio hook should not duplicate",
+			existingValue: "claudio",
+			claudioValue: []interface{}{
+				map[string]interface{}{
+					"matcher": ".*",
+					"hooks": []interface{}{
+						map[string]interface{}{
+							"type":    "command",
+							"command": "claudio",
+						},
+					},
+				},
+			},
+			expectedCount: 1, // just claudio (no duplication)
+			expectError:   false,
+		},
+		{
+			name: "complex existing array with multiple commands",
+			existingValue: []interface{}{
+				map[string]interface{}{
+					"matcher": ".*",
+					"hooks": []interface{}{
+						map[string]interface{}{
+							"type":    "command",
+							"command": "cmd1",
+						},
+						map[string]interface{}{
+							"type":    "command",
+							"command": "cmd2",
+						},
+					},
+				},
+			},
+			claudioValue: []interface{}{
+				map[string]interface{}{
+					"matcher": ".*",
+					"hooks": []interface{}{
+						map[string]interface{}{
+							"type":    "command",
+							"command": "claudio",
+						},
+					},
+				},
+			},
+			expectedCount: 3, // cmd1 + cmd2 + claudio
+			expectError:   false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Call the function we're about to implement
+			result := mergeHookValues(tc.existingValue, tc.claudioValue)
+
+			// Result should always be in array format
+			resultArray, ok := result.([]interface{})
+			if !ok {
+				t.Errorf("mergeHookValues should return array format, got: %T", result)
+				return
+			}
+
+			// Count total commands in the result
+			totalCommands := 0
+			for _, item := range resultArray {
+				if config, ok := item.(map[string]interface{}); ok {
+					if hooksInItem, ok := config["hooks"].([]interface{}); ok {
+						totalCommands += len(hooksInItem)
+					}
+				}
+			}
+
+			if totalCommands != tc.expectedCount {
+				t.Errorf("Expected %d commands, got %d. Result: %v", 
+					tc.expectedCount, totalCommands, result)
+			}
+
+			t.Logf("mergeHookValues test passed for %s", tc.name)
+		})
+	}
+}
+
+func TestMergeHooksWithExistingNonClaudioHooks(t *testing.T) {
+	// TDD RED: Test that existing non-Claudio hooks are merged with Claudio hooks in array format
+	testCases := []struct {
+		name             string
+		existingSettings *SettingsMap
+		expectMerged     map[string]int // hook name -> expected number of commands
+		expectError      bool
+	}{
+		{
+			name: "merge single existing string hook with claudio",
+			existingSettings: &SettingsMap{
+				"hooks": map[string]interface{}{
+					"PostToolUse": "git add .",
+				},
+			},
+			expectMerged: map[string]int{
+				"PostToolUse": 2, // existing + claudio command
+			},
+			expectError: false,
+		},
+		{
+			name: "merge multiple existing hooks with claudio",
+			existingSettings: &SettingsMap{
+				"hooks": map[string]interface{}{
+					"PostToolUse": "custom-script.sh",
+					"PreToolUse":  "echo 'starting'",
+				},
+			},
+			expectMerged: map[string]int{
+				"PostToolUse": 2, // existing + claudio
+				"PreToolUse":  2, // existing + claudio
+			},
+			expectError: false,
+		},
+		{
+			name: "merge existing array hook with claudio",
+			existingSettings: &SettingsMap{
+				"hooks": map[string]interface{}{
+					"PostToolUse": []interface{}{
+						map[string]interface{}{
+							"matcher": ".*",
+							"hooks": []interface{}{
+								map[string]interface{}{
+									"type":    "command",
+									"command": "existing-command",
+								},
+							},
+						},
+					},
+				},
+			},
+			expectMerged: map[string]int{
+				"PostToolUse": 2, // existing array + claudio command
+			},
+			expectError: false,
+		},
+		{
+			name: "existing claudio hook should not duplicate",
+			existingSettings: &SettingsMap{
+				"hooks": map[string]interface{}{
+					"PostToolUse": "claudio",
+				},
+			},
+			expectMerged: map[string]int{
+				"PostToolUse": 1, // just claudio (no duplication)
+			},
+			expectError: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Generate mock Claudio hooks with known structure
+			mockClaudioHooks := map[string]interface{}{
+				"PostToolUse": []interface{}{
+					map[string]interface{}{
+						"matcher": ".*",
+						"hooks": []interface{}{
+							map[string]interface{}{
+								"type":    "command",
+								"command": "/test/mock/claudio",
+							},
+						},
+					},
+				},
+				"PreToolUse": []interface{}{
+					map[string]interface{}{
+						"matcher": ".*",
+						"hooks": []interface{}{
+							map[string]interface{}{
+								"type":    "command",
+								"command": "/test/mock/claudio",
+							},
+						},
+					},
+				},
+			}
+
+			// Perform merge
+			result, err := MergeHooksIntoSettings(tc.existingSettings, mockClaudioHooks)
+
+			if tc.expectError {
+				if err == nil {
+					t.Errorf("Expected error but got none")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("Unexpected error: %v", err)
+				return
+			}
+
+			if result == nil {
+				t.Errorf("Expected result but got nil")
+				return
+			}
+
+			// Verify merged hooks structure
+			hooks, exists := (*result)["hooks"]
+			if !exists {
+				t.Errorf("No hooks section in result")
+				return
+			}
+
+			hooksMap, ok := hooks.(map[string]interface{})
+			if !ok {
+				t.Errorf("Hooks should be a map, got: %T", hooks)
+				return
+			}
+
+			// Check each expected merged hook
+			for hookName, expectedCount := range tc.expectMerged {
+				hookValue, exists := hooksMap[hookName]
+				if !exists {
+					t.Errorf("Expected hook '%s' missing from result", hookName)
+					continue
+				}
+
+				// Hook should be in array format after merging
+				hookArray, ok := hookValue.([]interface{})
+				if !ok {
+					t.Errorf("Hook '%s' should be array format after merge, got: %T", hookName, hookValue)
+					continue
+				}
+
+				// Count total commands in the array
+				totalCommands := 0
+				for _, item := range hookArray {
+					if config, ok := item.(map[string]interface{}); ok {
+						if hooksInItem, ok := config["hooks"].([]interface{}); ok {
+							totalCommands += len(hooksInItem)
+						}
+					}
+				}
+
+				if totalCommands != expectedCount {
+					t.Errorf("Hook '%s' expected %d commands, got %d. Hook value: %v", 
+						hookName, expectedCount, totalCommands, hookValue)
+				}
+			}
+
+			t.Logf("Merge test passed for %s", tc.name)
+		})
+	}
+}
+
 // Functions that will need to be implemented (currently undefined):
 // - MergeHooksIntoSettings(existing *SettingsMap, claudioHooks interface{}) (*SettingsMap, error)
