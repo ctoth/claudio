@@ -131,21 +131,24 @@ func MergeHooksIntoSettings(existingSettings *SettingsMap, claudioHooks interfac
 		slog.Debug("preserved existing hook", "hook_name", hookName, "hook_value", hookValue)
 	}
 
-	// Then, add/update Claudio hooks
-	for hookName, hookValue := range claudioHooksMap {
-		if _, exists := mergedHooks[hookName]; exists {
-			// Hook already exists - for arrays/objects we can't directly compare
-			// so we'll just log and update
-			slog.Info("updating existing hook",
-				"hook_name", hookName,
-				"action", "replacing")
+	// Then, add/update Claudio hooks with proper merging
+	for hookName, claudioValue := range claudioHooksMap {
+		if existingValue, exists := mergedHooks[hookName]; exists {
+			if !IsClaudioHook(existingValue) {
+				// Merge existing non-Claudio hook with Claudio hook
+				mergedHooks[hookName] = mergeHookValues(existingValue, claudioValue)
+				slog.Info("merged existing non-Claudio hook with Claudio",
+					"hook_name", hookName, "action", "merging")
+			} else {
+				// Existing is Claudio - idempotent update
+				mergedHooks[hookName] = claudioValue
+				slog.Debug("updated existing Claudio hook", "hook_name", hookName)
+			}
 		} else {
-			slog.Debug("adding new Claudio hook",
-				"hook_name", hookName)
+			// No conflict - add new Claudio hook
+			mergedHooks[hookName] = claudioValue
+			slog.Debug("adding new Claudio hook", "hook_name", hookName)
 		}
-
-		// Update/add the Claudio hook
-		mergedHooks[hookName] = hookValue
 	}
 
 	// Update the hooks section in the settings copy
@@ -175,6 +178,78 @@ func deepCopySettings(original *SettingsMap) (*SettingsMap, error) {
 	}
 
 	return &copy, nil
+}
+
+// mergeHookValues merges an existing hook value with a Claudio hook value
+// Returns the merged result in array format, preserving existing commands and adding Claudio commands
+// Handles deduplication when the existing hook is already a Claudio hook
+func mergeHookValues(existingValue, claudioValue interface{}) interface{} {
+	slog.Debug("merging hook values", "existing_type", fmt.Sprintf("%T", existingValue), "claudio_type", fmt.Sprintf("%T", claudioValue))
+
+	// If existing value is already a Claudio hook, don't duplicate - return Claudio value (idempotent)
+	if IsClaudioHook(existingValue) {
+		slog.Debug("existing value is Claudio hook, returning Claudio value (idempotent)")
+		return claudioValue
+	}
+
+	// Convert Claudio value to array format (it should already be, but be safe)
+	claudioArray, ok := claudioValue.([]interface{})
+	if !ok {
+		slog.Warn("claudio value is not array format, returning as-is", "type", fmt.Sprintf("%T", claudioValue))
+		return claudioValue
+	}
+
+	// Convert existing value to array format
+	var existingArray []interface{}
+	if existingStr, ok := existingValue.(string); ok {
+		// Convert string hook to array format
+		existingArray = []interface{}{
+			map[string]interface{}{
+				"matcher": ".*",
+				"hooks": []interface{}{
+					map[string]interface{}{
+						"type":    "command",
+						"command": existingStr,
+					},
+				},
+			},
+		}
+		slog.Debug("converted existing string hook to array format", "command", existingStr)
+	} else if existingArr, ok := existingValue.([]interface{}); ok {
+		// Already in array format
+		existingArray = existingArr
+		slog.Debug("existing hook already in array format")
+	} else {
+		slog.Warn("unknown existing hook format, treating as string", "type", fmt.Sprintf("%T", existingValue))
+		// Fallback: treat as string
+		existingArray = []interface{}{
+			map[string]interface{}{
+				"matcher": ".*",
+				"hooks": []interface{}{
+					map[string]interface{}{
+						"type":    "command",
+						"command": fmt.Sprintf("%v", existingValue),
+					},
+				},
+			},
+		}
+	}
+
+	// Merge arrays: existing commands first, then Claudio commands
+	var mergedArray []interface{}
+
+	// Add all existing array elements
+	mergedArray = append(mergedArray, existingArray...)
+
+	// Add Claudio array elements
+	mergedArray = append(mergedArray, claudioArray...)
+
+	slog.Debug("completed hook value merge", 
+		"existing_elements", len(existingArray),
+		"claudio_elements", len(claudioArray),
+		"merged_elements", len(mergedArray))
+
+	return mergedArray
 }
 
 // IsClaudioHook checks if a hook value represents a claudio hook,
