@@ -427,10 +427,8 @@ func (c *CLI) Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 	}
 
 	// Initialize systems only when actually needed (not for version flag)
-	fmt.Fprintf(stderr, "DEBUG: about to call initializeSystems()\n")
 	slog.Debug("about to call initializeSystems()")
 	c.initializeSystems()
-	fmt.Fprintf(stderr, "DEBUG: initializeSystems() completed\n")
 	slog.Debug("initializeSystems() completed")
 
 	// Ensure resources are cleaned up on exit
@@ -495,9 +493,9 @@ func (c *CLI) initializeSystems() {
 	// Config manager should already be initialized
 	c.initializeConfigManager()
 
-	// Initialize tracking first
-	c.initializeTracking()
-	
+	// Note: Tracking initialization is done later in runStdinModeE after logging is configured
+	// to avoid log messages appearing before the dual-level handler is set up
+
 	// Don't create global SoundMapper - it will be created per-request with session-specific SoundChecker
 	if c.backendFactory == nil {
 		c.backendFactory = audio.NewBackendFactory()
@@ -629,12 +627,14 @@ func (c *CLI) printVersion(w io.Writer) {
 	fmt.Fprintf(w, "claudio version %s (Version %s)\nClaude Code Audio Plugin - Hook-based sound system\n", Version, Version)
 }
 
-// setupLogging configures slog with file logging when enabled
+// setupLogging configures slog with dual-level logging:
+// - stderr: ERROR level only (for genuine user-facing errors)
+// - file: configured level (for full debugging history)
 func setupLogging(cfg *config.Config, stderrWriter io.Writer) {
-	// Parse log level
-	var level slog.Level
-	if err := level.UnmarshalText([]byte(cfg.LogLevel)); err != nil {
-		level = slog.LevelInfo // Default level if parsing fails
+	// Parse configured log level for file logging
+	var fileLevel slog.Level
+	if err := fileLevel.UnmarshalText([]byte(cfg.LogLevel)); err != nil {
+		fileLevel = slog.LevelInfo // Default level if parsing fails
 	}
 
 	// Check if current logger is already more verbose than config specifies
@@ -642,18 +642,23 @@ func setupLogging(cfg *config.Config, stderrWriter io.Writer) {
 	currentHandler := slog.Default().Handler()
 	if textHandler, ok := currentHandler.(*slog.TextHandler); ok {
 		// Check if current handler allows DEBUG level but config wants higher level
-		if textHandler.Enabled(context.Background(), slog.LevelDebug) && level > slog.LevelDebug {
+		if textHandler.Enabled(context.Background(), slog.LevelDebug) && fileLevel > slog.LevelDebug {
 			// Current handler allows DEBUG but config wants higher level - preserve current handler
-			slog.Debug("preserving existing verbose logger setup", "config_level", level.String(), "current_allows", "DEBUG")
+			slog.Debug("preserving existing verbose logger setup", "config_level", fileLevel.String(), "current_allows", "DEBUG")
 			return
 		}
 	}
 
-	// Always include stderr
-	var writers []io.Writer
-	writers = append(writers, stderrWriter)
+	var handlers []slog.Handler
 
-	// Add file logging if enabled
+	// Always create stderr handler with ERROR level only
+	// This ensures users only see genuine errors, not debug/info/warn spam
+	stderrHandler := slog.NewTextHandler(stderrWriter, &slog.HandlerOptions{
+		Level: slog.LevelError,
+	})
+	handlers = append(handlers, stderrHandler)
+
+	// Add file logging handler if enabled
 	if cfg.FileLogging != nil && cfg.FileLogging.Enabled {
 		// Resolve log file path using config manager
 		configManager := config.NewConfigManager()
@@ -662,8 +667,8 @@ func setupLogging(cfg *config.Config, stderrWriter io.Writer) {
 		// Create log file directory if needed
 		logDir := filepath.Dir(logFilePath)
 		if err := os.MkdirAll(logDir, 0755); err != nil {
+			// Log error to stderr handler, but continue
 			slog.Error("failed to create log directory", "path", logDir, "error", err)
-			// Continue without file logging rather than failing
 		} else {
 			// Create lumberjack logger for file rotation
 			fileWriter := &lumberjack.Logger{
@@ -673,25 +678,30 @@ func setupLogging(cfg *config.Config, stderrWriter io.Writer) {
 				MaxAge:     cfg.FileLogging.MaxAgeDays,
 				Compress:   cfg.FileLogging.Compress,
 			}
-			writers = append(writers, fileWriter)
+
+			// File handler uses the configured log level (can be debug, info, warn, error)
+			fileHandler := slog.NewTextHandler(fileWriter, &slog.HandlerOptions{
+				Level: fileLevel,
+			})
+			handlers = append(handlers, fileHandler)
+
+			// Use the stderr handler we already created to log this
+			// (won't show to user since it's DEBUG level and stderr is ERROR only)
 			slog.Debug("file logging enabled", "path", logFilePath)
 		}
 	}
 
-	// Create MultiWriter to combine all writers
-	multiWriter := io.MultiWriter(writers...)
-
-	// Create slog handler with combined writer
-	handler := slog.NewTextHandler(multiWriter, &slog.HandlerOptions{
-		Level: level,
-	})
+	// Combine handlers using multi-level handler
+	multiHandler := NewMultiLevelHandler(handlers...)
 
 	// Set as default logger
-	slog.SetDefault(slog.New(handler))
+	slog.SetDefault(slog.New(multiHandler))
 
+	// This debug log will only go to file, not stderr (since stderr is ERROR only)
 	slog.Debug("logging setup completed",
-		"level", level.String(),
-		"writers", len(writers),
+		"file_level", fileLevel.String(),
+		"stderr_level", "error",
+		"handlers", len(handlers),
 		"file_enabled", cfg.FileLogging != nil && cfg.FileLogging.Enabled)
 }
 
