@@ -533,6 +533,8 @@ func TestEventCategorization_All7Events(t *testing.T) {
 		{"SubagentStop maps to Completion", "SubagentStop", Completion, "Subagent finishing should use completion category (currently fails)"},
 		{"PreCompact maps to System", "PreCompact", System, "Context compacting should use system category (currently fails)"},
 		{"SessionStart maps to System", "SessionStart", System, "Session start should use system category (currently fails)"},
+		{"PermissionRequest maps to Interactive", "PermissionRequest", Interactive, "Permission dialog should use interactive category"},
+		{"SessionEnd maps to Interactive", "SessionEnd", Interactive, "Session termination should use interactive category"},
 	}
 
 	for _, tt := range tests {
@@ -602,6 +604,20 @@ func TestEventCategorization_All7Events(t *testing.T) {
 					"transcript_path": "/test",
 					"cwd": "/test",
 					"hook_event_name": "SessionStart"
+				}`
+			case "PermissionRequest":
+				testJSON = `{
+					"session_id": "test",
+					"transcript_path": "/test",
+					"cwd": "/test",
+					"hook_event_name": "PermissionRequest"
+				}`
+			case "SessionEnd":
+				testJSON = `{
+					"session_id": "test",
+					"transcript_path": "/test",
+					"cwd": "/test",
+					"hook_event_name": "SessionEnd"
 				}`
 			}
 
@@ -813,6 +829,22 @@ func TestEnhancedEventContextExtraction(t *testing.T) {
 			System,
 			"compact",
 			"PreCompact events should generate compacting hint for context organization",
+		},
+		{
+			"PermissionRequest event context",
+			"PermissionRequest",
+			"permission-request",
+			Interactive,
+			"permission-request",
+			"PermissionRequest events should generate permission-request hint when permission dialog is shown",
+		},
+		{
+			"SessionEnd event context",
+			"SessionEnd",
+			"session-end",
+			Interactive,
+			"session-end",
+			"SessionEnd events should generate session-end hint when session terminates",
 		},
 	}
 

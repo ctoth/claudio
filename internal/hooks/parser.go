@@ -282,6 +282,18 @@ func (e *HookEvent) GetContext() *EventContext {
 		context.Operation = "session-start"
 		slog.Debug("categorizing SessionStart event as System", "hint", context.SoundHint, "operation", context.Operation)
 
+	case "PermissionRequest":
+		context.Category = Interactive
+		context.SoundHint = "permission-request"
+		context.Operation = "permission-request"
+		slog.Debug("categorizing PermissionRequest event as Interactive", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "SessionEnd":
+		context.Category = Interactive
+		context.SoundHint = "session-end"
+		context.Operation = "session-end"
+		slog.Debug("categorizing SessionEnd event as Interactive", "hint", context.SoundHint, "operation", context.Operation)
+
 	default:
 		slog.Warn("unknown hook event type", "event_name", e.EventName)
 		context.Category = Interactive
