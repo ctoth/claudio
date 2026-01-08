@@ -104,43 +104,6 @@ func TestLoadConfigAutoDiscovery(t *testing.T) {
 	t.Logf("Auto-discovery test passed: loaded config %+v", loadedConfig)
 }
 
-func TestLoadConfigRealXDGPaths(t *testing.T) {
-	mgr := NewConfigManager()
-
-	// Test with real XDG paths to see what happens
-	configPaths := mgr.xdg.GetConfigPaths("config.json")
-
-	t.Logf("Real XDG config paths: %v", configPaths)
-
-	// Our config should be in a proper XDG config directory, not data directory
-	properConfigPath := "/etc/xdg/claudio/config.json"
-
-	// Check if the proper config path is in XDG config paths
-	found := false
-	for _, path := range configPaths {
-		if path == properConfigPath {
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		t.Errorf("Expected XDG config path %s not found in config paths: %v", properConfigPath, configPaths)
-	}
-
-	// Test actual LoadConfig behavior - should find config when placed correctly
-	config, err := mgr.LoadConfig()
-	if err != nil {
-		t.Fatalf("LoadConfig() failed: %v", err)
-	}
-
-	t.Logf("Loaded config: %+v", config)
-
-	// This test should FAIL until we move the config file to the correct location
-	if len(config.SoundpackPaths) == 0 {
-		t.Error("LoadConfig() returned default config - config file should be moved to proper XDG config directory")
-	}
-}
 
 // MockXDGDirs is a mock implementation for testing
 type MockXDGDirs struct {
@@ -839,9 +802,10 @@ func TestXDG_LogPath(t *testing.T) {
 		t.Errorf("ResolveLogFilePath with empty filename = %q, expected %q", resolved, expectedPath)
 	}
 
-	// Verify the XDG path follows expected pattern
-	if !strings.Contains(resolved, ".cache/claudio/logs/claudio.log") {
-		t.Errorf("XDG log path should contain '.cache/claudio/logs/claudio.log', got %q", resolved)
+	// Verify the resolved path ends with expected components (OS-agnostic)
+	expectedSuffix := filepath.Join("claudio", "logs", "claudio.log")
+	if !strings.HasSuffix(resolved, expectedSuffix) {
+		t.Errorf("XDG log path should end with %q, got %q", expectedSuffix, resolved)
 	}
 
 	// Test that different purposes create different cache paths

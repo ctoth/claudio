@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"strings"
+	"runtime"
 	"testing"
 
 	"claudio.click/internal/install"
@@ -120,10 +120,8 @@ func TestInstallUninstallWithExecutablePath(t *testing.T) {
 							if hooksField, ok := hookConfig["hooks"].([]interface{}); ok && len(hooksField) > 0 {
 								if cmd, ok := hooksField[0].(map[string]interface{}); ok {
 									if cmdStr, ok := cmd["command"].(string); ok {
-										// Should contain test executable path (may be quoted)
-										unquoted := strings.Trim(cmdStr, "\"")
-										baseName := filepath.Base(unquoted)
-										if baseName == "uninstall.test" || baseName == "install.test" || unquoted == "claudio" {
+										// Use the same detection logic as production code
+										if isClaudioCommand(cmdStr) {
 											foundExecutableHooks = true
 											t.Logf("Hook %s uses executable command: %s", hookName, cmdStr)
 											break
@@ -486,9 +484,14 @@ func TestUninstallWorkflowErrorHandling(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Skip permission test when running as root
-			if tc.name == "permission denied directory" && os.Getuid() == 0 {
-				t.Skip("Skipping permission test when running as root")
+			// Skip permission test on Windows (different permission model) or when running as root
+			if tc.name == "permission denied directory" {
+				if runtime.GOOS == "windows" {
+					t.Skip("Skipping permission test on Windows - Unix permission semantics don't apply")
+				}
+				if os.Getuid() == 0 {
+					t.Skip("Skipping permission test when running as root")
+				}
 			}
 
 			settingsPath, cleanup := tc.setupFunc()

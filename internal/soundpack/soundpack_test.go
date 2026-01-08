@@ -1,7 +1,7 @@
 package soundpack
 
 import (
-	"fmt"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -162,7 +162,12 @@ func TestDirectoryMapper(t *testing.T) {
 	// TDD Test: Verify DirectoryMapper specific functionality
 
 	t.Run("maps paths correctly", func(t *testing.T) {
-		mapper := NewDirectoryMapper("test", []string{"/path1", "/path2"})
+		// Use temp dirs for OS-agnostic absolute paths
+		tempDir := t.TempDir()
+		path1 := filepath.Join(tempDir, "path1")
+		path2 := filepath.Join(tempDir, "path2")
+
+		mapper := NewDirectoryMapper("test", []string{path1, path2})
 
 		candidates, err := mapper.MapPath("success/bash.wav")
 		if err != nil {
@@ -170,8 +175,8 @@ func TestDirectoryMapper(t *testing.T) {
 		}
 
 		expected := []string{
-			"/path1/success/bash.wav",
-			"/path2/success/bash.wav",
+			filepath.Join(path1, "success", "bash.wav"),
+			filepath.Join(path2, "success", "bash.wav"),
 		}
 
 		if len(candidates) != len(expected) {
@@ -272,18 +277,22 @@ func TestJSONSoundpackLoading(t *testing.T) {
 			t.Fatalf("Failed to create test sound file: %v", err)
 		}
 
-		// Create JSON soundpack content
-		jsonContent := fmt.Sprintf(`{
-			"name": "test-soundpack",
+		// Build JSON properly using encoding/json to handle path escaping
+		soundpackData := map[string]interface{}{
+			"name":        "test-soundpack",
 			"description": "Test soundpack for unit tests",
-			"mappings": {
-				"success/bash.wav": "%s",
-				"error/error.wav": "%s",
-				"default.wav": "%s"
-			}
-		}`, soundFile1, soundFile2, soundFile1)
+			"mappings": map[string]string{
+				"success/bash.wav": soundFile1,
+				"error/error.wav":  soundFile2,
+				"default.wav":      soundFile1,
+			},
+		}
+		jsonContent, err := json.MarshalIndent(soundpackData, "", "\t")
+		if err != nil {
+			t.Fatalf("Failed to marshal JSON: %v", err)
+		}
 
-		err = os.WriteFile(jsonFile, []byte(jsonContent), 0644)
+		err = os.WriteFile(jsonFile, jsonContent, 0644)
 		if err != nil {
 			t.Fatalf("Failed to create JSON file: %v", err)
 		}
@@ -379,19 +388,23 @@ func TestJSONSoundpackLoading(t *testing.T) {
 			}
 		}
 
-		// Create JSON with 5-level mappings
-		jsonContent := fmt.Sprintf(`{
+		// Build JSON properly using encoding/json to handle path escaping
+		soundpackData := map[string]interface{}{
 			"name": "fallback-test",
-			"mappings": {
-				"success/bash-specific.wav": "%s",
-				"success/bash.wav": "%s",
-				"success/tool-complete.wav": "%s",
-				"success/success.wav": "%s",
-				"default.wav": "%s"
-			}
-		}`, bashSpecific, bashGeneral, successCategory, successCategory, defaultSound)
+			"mappings": map[string]string{
+				"success/bash-specific.wav": bashSpecific,
+				"success/bash.wav":          bashGeneral,
+				"success/tool-complete.wav": successCategory,
+				"success/success.wav":       successCategory,
+				"default.wav":               defaultSound,
+			},
+		}
+		jsonContent, err := json.MarshalIndent(soundpackData, "", "\t")
+		if err != nil {
+			t.Fatalf("Failed to marshal JSON: %v", err)
+		}
 
-		err := os.WriteFile(jsonFile, []byte(jsonContent), 0644)
+		err = os.WriteFile(jsonFile, jsonContent, 0644)
 		if err != nil {
 			t.Fatalf("Failed to create JSON file: %v", err)
 		}
@@ -478,15 +491,19 @@ func TestSoundpackFactory(t *testing.T) {
 			t.Fatalf("Failed to create test sound file: %v", err)
 		}
 
-		// Create JSON soundpack content
-		jsonContent := fmt.Sprintf(`{
+		// Build JSON properly using encoding/json to handle path escaping
+		soundpackData := map[string]interface{}{
 			"name": "json-test-soundpack",
-			"mappings": {
-				"success/bash.wav": "%s"
-			}
-		}`, soundFile)
+			"mappings": map[string]string{
+				"success/bash.wav": soundFile,
+			},
+		}
+		jsonContent, err := json.MarshalIndent(soundpackData, "", "\t")
+		if err != nil {
+			t.Fatalf("Failed to marshal JSON: %v", err)
+		}
 
-		err = os.WriteFile(jsonFile, []byte(jsonContent), 0644)
+		err = os.WriteFile(jsonFile, jsonContent, 0644)
 		if err != nil {
 			t.Fatalf("Failed to create JSON file: %v", err)
 		}
@@ -526,14 +543,19 @@ func TestSoundpackFactory(t *testing.T) {
 			t.Fatalf("Failed to create sound file: %v", err)
 		}
 
-		jsonContent := fmt.Sprintf(`{
+		// Build JSON properly using encoding/json to handle path escaping
+		soundpackData := map[string]interface{}{
 			"name": "extension-test",
-			"mappings": {
-				"default.wav": "%s"
-			}
-		}`, soundFile)
+			"mappings": map[string]string{
+				"default.wav": soundFile,
+			},
+		}
+		jsonContent, err := json.MarshalIndent(soundpackData, "", "\t")
+		if err != nil {
+			t.Fatalf("Failed to marshal JSON: %v", err)
+		}
 
-		err = os.WriteFile(jsonFile, []byte(jsonContent), 0644)
+		err = os.WriteFile(jsonFile, jsonContent, 0644)
 		if err != nil {
 			t.Fatalf("Failed to create JSON file: %v", err)
 		}
@@ -609,20 +631,20 @@ func TestLoadJSONSoundpackFromBytes(t *testing.T) {
 			t.Fatalf("Failed to create test sound file: %v", err)
 		}
 
-		// Create JSON soundpack content as bytes
-		// Use forward slashes to avoid Windows path escaping issues in JSON
-		soundFile1JSON := strings.ReplaceAll(soundFile1, "\\", "/")
-		soundFile2JSON := strings.ReplaceAll(soundFile2, "\\", "/")
-		
-		jsonContent := fmt.Sprintf(`{
-			"name": "test-soundpack-from-bytes",
+		// Build JSON properly using encoding/json to handle path escaping
+		soundpackData := map[string]interface{}{
+			"name":        "test-soundpack-from-bytes",
 			"description": "Test soundpack for LoadJSONSoundpackFromBytes",
-			"version": "1.0.0",
-			"mappings": {
-				"success/bash.wav": "%s",
-				"error/bash.wav": "%s"
-			}
-		}`, soundFile1JSON, soundFile2JSON)
+			"version":     "1.0.0",
+			"mappings": map[string]string{
+				"success/bash.wav": soundFile1,
+				"error/bash.wav":   soundFile2,
+			},
+		}
+		jsonContent, err := json.MarshalIndent(soundpackData, "", "\t")
+		if err != nil {
+			t.Fatalf("Failed to marshal JSON: %v", err)
+		}
 
 		// Load the JSON soundpack from bytes
 		mapper, err := LoadJSONSoundpackFromBytes([]byte(jsonContent))
@@ -645,10 +667,9 @@ func TestLoadJSONSoundpackFromBytes(t *testing.T) {
 			t.Errorf("Expected to map sound path, got error: %v", err)
 		}
 
-		// The JSON contains forward slashes, but we expect the path to work
-		expectedPath := strings.ReplaceAll(soundFile1, "\\", "/")
-		if len(candidates) != 1 || candidates[0] != expectedPath {
-			t.Errorf("Expected candidates [%s], got %v", expectedPath, candidates)
+		// Compare paths using filepath.Clean for OS-agnostic comparison
+		if len(candidates) != 1 || filepath.Clean(candidates[0]) != filepath.Clean(soundFile1) {
+			t.Errorf("Expected candidates [%s], got %v", soundFile1, candidates)
 		}
 	})
 

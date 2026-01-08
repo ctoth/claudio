@@ -187,12 +187,25 @@ func TestFindClaudeSettingsExistingFiles(t *testing.T) {
 				}
 			}
 
-			// Set up environment for the scope
+			// Set up environment for the scope - must mock ALL home-related env vars
 			var cleanup func()
 			if tc.scope == "user" {
 				originalHome := os.Getenv("HOME")
+				originalUserProfile := os.Getenv("USERPROFILE")
+				originalHomeDrive := os.Getenv("HOMEDRIVE")
+				originalHomePath := os.Getenv("HOMEPATH")
+
 				os.Setenv("HOME", tempDir)
-				cleanup = func() { os.Setenv("HOME", originalHome) }
+				os.Setenv("USERPROFILE", tempDir)
+				os.Setenv("HOMEDRIVE", "")
+				os.Setenv("HOMEPATH", "")
+
+				cleanup = func() {
+					os.Setenv("HOME", originalHome)
+					os.Setenv("USERPROFILE", originalUserProfile)
+					os.Setenv("HOMEDRIVE", originalHomeDrive)
+					os.Setenv("HOMEPATH", originalHomePath)
+				}
 			} else {
 				originalDir, _ := os.Getwd()
 				os.Chdir(tempDir)

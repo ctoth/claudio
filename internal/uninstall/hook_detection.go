@@ -3,6 +3,7 @@ package uninstall
 import (
 	"log/slog"
 	"path/filepath"
+	"strings"
 
 	"claudio.click/internal/install"
 )
@@ -70,10 +71,23 @@ func isClaudioCommand(cmdStr string) bool {
 	if len(cmdStr) >= 2 && cmdStr[0] == '"' && cmdStr[len(cmdStr)-1] == '"' {
 		unquoted = cmdStr[1 : len(cmdStr)-1]
 	}
-	
+
 	baseName := filepath.Base(unquoted)
-	// Handle production "claudio" and test executables "install.test", "uninstall.test"
-	return baseName == "claudio" || baseName == "install.test" || baseName == "uninstall.test"
+
+	// Strip .exe suffix for cross-platform comparison
+	name := strings.TrimSuffix(baseName, ".exe")
+
+	// Production executable
+	if name == "claudio" {
+		return true
+	}
+
+	// Go test binaries end with .test (e.g., "install.test", "uninstall.test", "test.test")
+	if strings.HasSuffix(name, ".test") {
+		return true
+	}
+
+	return false
 }
 
 // containsClaudioCommand checks if an array contains a claudio command

@@ -88,24 +88,24 @@ func TestXDGCachePaths(t *testing.T) {
 	xdg := NewXDGDirs()
 
 	testCases := []struct {
-		name         string
-		purpose      string
-		expectedPath string // should contain this pattern
+		name     string
+		purpose  string
+		expected []string // expected path components at the end
 	}{
 		{
-			name:         "soundpack cache",
-			purpose:      "soundpacks",
-			expectedPath: "claudio/soundpacks",
+			name:     "soundpack cache",
+			purpose:  "soundpacks",
+			expected: []string{"claudio", "soundpacks"},
 		},
 		{
-			name:         "web cache",
-			purpose:      "web",
-			expectedPath: "claudio/web",
+			name:     "web cache",
+			purpose:  "web",
+			expected: []string{"claudio", "web"},
 		},
 		{
-			name:         "empty purpose",
-			purpose:      "",
-			expectedPath: "claudio",
+			name:     "empty purpose",
+			purpose:  "",
+			expected: []string{"claudio"},
 		},
 	}
 
@@ -122,8 +122,10 @@ func TestXDGCachePaths(t *testing.T) {
 				t.Errorf("Cache path %s is not absolute", path)
 			}
 
-			if !strings.HasSuffix(path, tc.expectedPath) {
-				t.Errorf("Cache path %s does not end with expected pattern %s", path, tc.expectedPath)
+			// Check path ends with expected components (OS-agnostic)
+			expectedSuffix := filepath.Join(tc.expected...)
+			if !strings.HasSuffix(path, expectedSuffix) {
+				t.Errorf("Cache path %s does not end with expected components %v", path, tc.expected)
 			}
 
 			t.Logf("Cache path for %s: %s", tc.purpose, path)
