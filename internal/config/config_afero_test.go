@@ -9,6 +9,11 @@ import (
 	"claudio.click/internal/fs"
 )
 
+// Helper to create float64 pointer
+func ptrFloat(v float64) *float64 {
+	return &v
+}
+
 // TDD RED: Test that ConfigManager uses afero filesystem abstraction
 // These tests will fail until we refactor the code to accept afero.Fs
 
@@ -62,8 +67,8 @@ func TestLoadFromFileWithMemoryFilesystem(t *testing.T) {
 		t.Fatal("Expected config to be loaded")
 	}
 	
-	if config.Volume != 0.8 {
-		t.Errorf("Expected volume 0.8, got %f", config.Volume)
+	if config.Volume == nil || *config.Volume != 0.8 {
+		t.Errorf("Expected volume 0.8, got %v", config.Volume)
 	}
 	
 	if config.DefaultSoundpack != "test" {
@@ -78,7 +83,7 @@ func TestWriteConfigWithMemoryFilesystem(t *testing.T) {
 	
 	cm := NewConfigManagerWithFilesystem(memFS)
 	config := &Config{
-		Volume:           0.3,
+		Volume:           ptrFloat(0.3),
 		DefaultSoundpack: "memory-test",
 		Enabled:          false,
 		LogLevel:         "info",

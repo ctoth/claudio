@@ -32,7 +32,7 @@ type FileLoggingConfig struct {
 
 // Config represents Claudio configuration
 type Config struct {
-	Volume           float64              `json:"volume"`                  // Audio volume (0.0 to 1.0)
+	Volume           *float64             `json:"volume,omitempty"`        // Audio volume (0.0 to 1.0), nil means use default
 	DefaultSoundpack string               `json:"default_soundpack"`       // Default soundpack to use
 	SoundpackPaths   []string             `json:"soundpack_paths"`         // Additional paths to search for soundpacks
 	Enabled          bool                 `json:"enabled"`                 // Whether Claudio is enabled
@@ -85,8 +85,9 @@ func (cm *ConfigManager) GetDefaultConfig() *Config {
 	defaultSoundpack := cm.GetPlatformSoundpack(afero.NewOsFs(), executableDir)
 	slog.Debug("GetDefaultConfig platform detection result", "defaultSoundpack", defaultSoundpack)
 
+	defaultVolume := 0.5
 	defaultConfig := &Config{
-		Volume:           0.5,
+		Volume:           &defaultVolume,
 		DefaultSoundpack: defaultSoundpack,
 		SoundpackPaths:   []string{}, // XDG paths will be used
 		Enabled:          true,
@@ -104,7 +105,7 @@ func (cm *ConfigManager) GetDefaultConfig() *Config {
 	}
 
 	slog.Debug("generated default config",
-		"volume", defaultConfig.Volume,
+		"volume", *defaultConfig.Volume,
 		"default_soundpack", defaultConfig.DefaultSoundpack,
 		"enabled", defaultConfig.Enabled,
 		"log_level", defaultConfig.LogLevel,
@@ -139,7 +140,7 @@ func (cm *ConfigManager) LoadFromFile(filePath string) (*Config, error) {
 
 	slog.Debug("config loaded successfully",
 		"file_path", filePath,
-		"volume", config.Volume,
+		"volume", config.Volume, // nil-safe: slog handles pointers
 		"default_soundpack", config.DefaultSoundpack,
 		"enabled", config.Enabled)
 
@@ -214,9 +215,9 @@ func (cm *ConfigManager) LoadConfig() (*Config, error) {
 func (cm *ConfigManager) ValidateConfig(config *Config) error {
 	var errors []string
 
-	// Validate volume
-	if config.Volume < 0.0 || config.Volume > 1.0 {
-		errors = append(errors, fmt.Sprintf("volume must be between 0.0 and 1.0, got %f", config.Volume))
+	// Validate volume (nil is valid - means use default)
+	if config.Volume != nil && (*config.Volume < 0.0 || *config.Volume > 1.0) {
+		errors = append(errors, fmt.Sprintf("volume must be between 0.0 and 1.0, got %f", *config.Volume))
 	}
 
 	// Validate default soundpack
@@ -281,10 +282,10 @@ func (cm *ConfigManager) MergeConfigs(base, override *Config) *Config {
 	// Start with a copy of base
 	merged := *base
 
-	// Apply overrides (only non-zero values)
-	if override.Volume != 0.0 {
+	// Apply overrides (only if explicitly set)
+	if override.Volume != nil {
 		merged.Volume = override.Volume
-		slog.Debug("merged volume override", "value", override.Volume)
+		slog.Debug("merged volume override", "value", *override.Volume)
 	}
 
 	if override.DefaultSoundpack != "" {
@@ -325,7 +326,7 @@ func (cm *ConfigManager) ApplyEnvironmentOverrides(config *Config) *Config {
 	// CLAUDIO_VOLUME
 	if volStr := os.Getenv("CLAUDIO_VOLUME"); volStr != "" {
 		if vol, err := strconv.ParseFloat(volStr, 64); err == nil {
-			result.Volume = vol
+			result.Volume = &vol
 			slog.Debug("applied volume override from environment", "value", vol)
 		} else {
 			slog.Warn("invalid CLAUDIO_VOLUME environment variable", "value", volStr, "error", err)

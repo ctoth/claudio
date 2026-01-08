@@ -23,8 +23,10 @@ func TestLoadDefaultConfig(t *testing.T) {
 	config := mgr.GetDefaultConfig()
 
 	// Verify default values
-	if config.Volume < 0.0 || config.Volume > 1.0 {
-		t.Errorf("Default volume %f should be between 0.0 and 1.0", config.Volume)
+	if config.Volume == nil {
+		t.Error("Default volume should not be nil")
+	} else if *config.Volume < 0.0 || *config.Volume > 1.0 {
+		t.Errorf("Default volume %f should be between 0.0 and 1.0", *config.Volume)
 	}
 
 	if config.DefaultSoundpack == "" {
@@ -54,7 +56,7 @@ func TestLoadConfigAutoDiscovery(t *testing.T) {
 	// Create a test config file
 	configFile := filepath.Join(configDir, "config.json")
 	testConfig := &Config{
-		Volume:           0.8,
+		Volume:           ptrFloat64(0.8),
 		DefaultSoundpack: "test-pack",
 		SoundpackPaths:   []string{"/test/path"},
 		Enabled:          true,
@@ -86,8 +88,10 @@ func TestLoadConfigAutoDiscovery(t *testing.T) {
 	}
 
 	// Verify the config was loaded correctly
-	if loadedConfig.Volume != testConfig.Volume {
-		t.Errorf("Expected volume %f, got %f", testConfig.Volume, loadedConfig.Volume)
+	if loadedConfig.Volume == nil || testConfig.Volume == nil {
+		t.Error("Volume should not be nil")
+	} else if *loadedConfig.Volume != *testConfig.Volume {
+		t.Errorf("Expected volume %f, got %f", *testConfig.Volume, *loadedConfig.Volume)
 	}
 
 	if loadedConfig.DefaultSoundpack != testConfig.DefaultSoundpack {
@@ -138,7 +142,7 @@ func TestLoadConfigFromFile(t *testing.T) {
 	configFile := filepath.Join(tempDir, "test-config.json")
 
 	testConfig := &Config{
-		Volume:           0.75,
+		Volume:           ptrFloat64(0.75),
 		DefaultSoundpack: "mechanical",
 		SoundpackPaths:   []string{"/custom/path"},
 		Enabled:          false,
@@ -163,8 +167,8 @@ func TestLoadConfigFromFile(t *testing.T) {
 	}
 
 	// Verify loaded config matches
-	if loadedConfig.Volume != testConfig.Volume {
-		t.Errorf("Volume = %f, expected %f", loadedConfig.Volume, testConfig.Volume)
+	if loadedConfig.Volume == nil || *loadedConfig.Volume != *testConfig.Volume {
+		t.Errorf("Volume = %v, expected %v", loadedConfig.Volume, testConfig.Volume)
 	}
 
 	if loadedConfig.DefaultSoundpack != testConfig.DefaultSoundpack {
@@ -192,7 +196,7 @@ func TestLoadConfigWithValidation(t *testing.T) {
 		{
 			name: "valid config",
 			config: &Config{
-				Volume:           0.5,
+				Volume:           ptrFloat64(0.5),
 				DefaultSoundpack: "default",
 				SoundpackPaths:   []string{"/valid/path"},
 				Enabled:          true,
@@ -203,7 +207,7 @@ func TestLoadConfigWithValidation(t *testing.T) {
 		{
 			name: "volume too high",
 			config: &Config{
-				Volume:           1.5,
+				Volume:           ptrFloat64(1.5),
 				DefaultSoundpack: "default",
 				Enabled:          true,
 			},
@@ -213,7 +217,7 @@ func TestLoadConfigWithValidation(t *testing.T) {
 		{
 			name: "volume too low",
 			config: &Config{
-				Volume:           -0.1,
+				Volume:           ptrFloat64(-0.1),
 				DefaultSoundpack: "default",
 				Enabled:          true,
 			},
@@ -223,7 +227,7 @@ func TestLoadConfigWithValidation(t *testing.T) {
 		{
 			name: "empty soundpack",
 			config: &Config{
-				Volume:           0.5,
+				Volume:           ptrFloat64(0.5),
 				DefaultSoundpack: "",
 				Enabled:          true,
 			},
@@ -233,7 +237,7 @@ func TestLoadConfigWithValidation(t *testing.T) {
 		{
 			name: "invalid log level",
 			config: &Config{
-				Volume:           0.5,
+				Volume:           ptrFloat64(0.5),
 				DefaultSoundpack: "default",
 				Enabled:          true,
 				LogLevel:         "invalid",
@@ -269,7 +273,7 @@ func TestSaveConfig(t *testing.T) {
 	configFile := filepath.Join(tempDir, "save-test.json")
 
 	testConfig := &Config{
-		Volume:           0.8,
+		Volume:           ptrFloat64(0.8),
 		DefaultSoundpack: "test-pack",
 		SoundpackPaths:   []string{"/test/path1", "/test/path2"},
 		Enabled:          true,
@@ -296,8 +300,8 @@ func TestSaveConfig(t *testing.T) {
 	}
 
 	// Verify content matches
-	if savedConfig.Volume != testConfig.Volume {
-		t.Errorf("Saved volume = %f, expected %f", savedConfig.Volume, testConfig.Volume)
+	if savedConfig.Volume == nil || *savedConfig.Volume != *testConfig.Volume {
+		t.Errorf("Saved volume = %v, expected %v", savedConfig.Volume, testConfig.Volume)
 	}
 
 	if savedConfig.DefaultSoundpack != testConfig.DefaultSoundpack {
@@ -328,8 +332,10 @@ func TestAutoDiscoverConfig(t *testing.T) {
 	}
 
 	// Should have reasonable defaults
-	if config.Volume < 0 || config.Volume > 1 {
-		t.Errorf("Auto-discovered config has invalid volume: %f", config.Volume)
+	if config.Volume == nil {
+		t.Error("Auto-discovered config should have non-nil volume")
+	} else if *config.Volume < 0 || *config.Volume > 1 {
+		t.Errorf("Auto-discovered config has invalid volume: %f", *config.Volume)
 	}
 
 	t.Logf("Auto-discovered config: %+v", config)
@@ -339,7 +345,7 @@ func TestConfigMerging(t *testing.T) {
 	mgr := NewConfigManager()
 
 	baseConfig := &Config{
-		Volume:           0.5,
+		Volume:           ptrFloat64(0.5),
 		DefaultSoundpack: "base",
 		SoundpackPaths:   []string{"/base/path"},
 		Enabled:          true,
@@ -347,7 +353,7 @@ func TestConfigMerging(t *testing.T) {
 	}
 
 	overrideConfig := &Config{
-		Volume:           0.8,
+		Volume:           ptrFloat64(0.8),
 		DefaultSoundpack: "override",
 		// SoundpackPaths intentionally omitted
 		// Enabled intentionally omitted
@@ -357,8 +363,8 @@ func TestConfigMerging(t *testing.T) {
 	merged := mgr.MergeConfigs(baseConfig, overrideConfig)
 
 	// Overridden values
-	if merged.Volume != 0.8 {
-		t.Errorf("Merged volume = %f, expected 0.8", merged.Volume)
+	if merged.Volume == nil || *merged.Volume != 0.8 {
+		t.Errorf("Merged volume = %v, expected 0.8", merged.Volume)
 	}
 
 	if merged.DefaultSoundpack != "override" {
@@ -393,7 +399,7 @@ func TestConfigEnvironmentOverrides(t *testing.T) {
 	}()
 
 	baseConfig := &Config{
-		Volume:           0.5,
+		Volume:           ptrFloat64(0.5),
 		DefaultSoundpack: "base",
 		Enabled:          true,
 		LogLevel:         "info",
@@ -402,8 +408,8 @@ func TestConfigEnvironmentOverrides(t *testing.T) {
 	finalConfig := mgr.ApplyEnvironmentOverrides(baseConfig)
 
 	// Environment overrides should take effect
-	if finalConfig.Volume != 0.9 {
-		t.Errorf("Volume = %f, expected 0.9 from env", finalConfig.Volume)
+	if finalConfig.Volume == nil || *finalConfig.Volume != 0.9 {
+		t.Errorf("Volume = %v, expected 0.9 from env", finalConfig.Volume)
 	}
 
 	if finalConfig.DefaultSoundpack != "env-pack" {
@@ -530,7 +536,7 @@ func TestConfigLoggingLevels(t *testing.T) {
 	configFile := filepath.Join(tempDir, "test-config.json")
 
 	testConfig := &Config{
-		Volume:           0.8,
+		Volume:           ptrFloat64(0.8),
 		DefaultSoundpack: "test-pack",
 		SoundpackPaths:   []string{"/test/path"},
 		Enabled:          true,
@@ -556,7 +562,7 @@ func TestConfigLoggingLevels(t *testing.T) {
 
 	// Test environment overrides - should be DEBUG level
 	baseConfig := &Config{
-		Volume:           0.5,
+		Volume:           ptrFloat64(0.5),
 		DefaultSoundpack: "base",
 		Enabled:          true,
 		LogLevel:         "info",
@@ -699,7 +705,7 @@ func TestConfig_FileLoggingValidation(t *testing.T) {
 		{
 			name: "valid file logging config",
 			config: &Config{
-				Volume:           0.5,
+				Volume:           ptrFloat64(0.5),
 				DefaultSoundpack: "default",
 				Enabled:          true,
 				LogLevel:         "info",
@@ -717,7 +723,7 @@ func TestConfig_FileLoggingValidation(t *testing.T) {
 		{
 			name: "negative max size",
 			config: &Config{
-				Volume:           0.5,
+				Volume:           ptrFloat64(0.5),
 				DefaultSoundpack: "default",
 				Enabled:          true,
 				FileLogging: &FileLoggingConfig{
@@ -733,7 +739,7 @@ func TestConfig_FileLoggingValidation(t *testing.T) {
 		{
 			name: "negative max backups",
 			config: &Config{
-				Volume:           0.5,
+				Volume:           ptrFloat64(0.5),
 				DefaultSoundpack: "default",
 				Enabled:          true,
 				FileLogging: &FileLoggingConfig{
@@ -749,7 +755,7 @@ func TestConfig_FileLoggingValidation(t *testing.T) {
 		{
 			name: "negative max age",
 			config: &Config{
-				Volume:           0.5,
+				Volume:           ptrFloat64(0.5),
 				DefaultSoundpack: "default",
 				Enabled:          true,
 				FileLogging: &FileLoggingConfig{
@@ -814,6 +820,76 @@ func TestXDG_LogPath(t *testing.T) {
 	if otherCachePath == logCachePath {
 		t.Error("Different cache purposes should create different paths")
 	}
+}
+
+// TDD RED: Test that volume=0.0 can be explicitly set in merge
+func TestConfigMerging_VolumeZero(t *testing.T) {
+	mgr := NewConfigManager()
+
+	baseConfig := &Config{
+		Volume:           ptrFloat64(0.5),
+		DefaultSoundpack: "base",
+		Enabled:          true,
+	}
+
+	// User explicitly wants to mute (volume=0.0)
+	zeroVolume := 0.0
+	overrideConfig := &Config{
+		Volume:           &zeroVolume,
+		DefaultSoundpack: "",  // Don't override soundpack
+	}
+
+	merged := mgr.MergeConfigs(baseConfig, overrideConfig)
+
+	// Volume should be 0.0 because user explicitly set it
+	if merged.Volume == nil {
+		t.Fatal("Merged volume should not be nil")
+	}
+	if *merged.Volume != 0.0 {
+		t.Errorf("Merged volume = %f, expected 0.0 (mute)", *merged.Volume)
+	}
+
+	// Soundpack should remain from base (override was empty)
+	if merged.DefaultSoundpack != "base" {
+		t.Errorf("Merged soundpack = %s, expected 'base'", merged.DefaultSoundpack)
+	}
+}
+
+// TDD RED: Test that nil volume doesn't override base
+func TestConfigMerging_VolumeNilDoesNotOverride(t *testing.T) {
+	mgr := NewConfigManager()
+
+	baseConfig := &Config{
+		Volume:           ptrFloat64(0.7),
+		DefaultSoundpack: "base",
+		Enabled:          true,
+	}
+
+	// Override config doesn't specify volume
+	overrideConfig := &Config{
+		Volume:           nil,  // Not set
+		DefaultSoundpack: "override",
+	}
+
+	merged := mgr.MergeConfigs(baseConfig, overrideConfig)
+
+	// Volume should remain 0.7 from base (override was nil)
+	if merged.Volume == nil {
+		t.Fatal("Merged volume should not be nil")
+	}
+	if *merged.Volume != 0.7 {
+		t.Errorf("Merged volume = %f, expected 0.7 (from base)", *merged.Volume)
+	}
+
+	// Soundpack should be overridden
+	if merged.DefaultSoundpack != "override" {
+		t.Errorf("Merged soundpack = %s, expected 'override'", merged.DefaultSoundpack)
+	}
+}
+
+// Helper to create float64 pointer
+func ptrFloat64(v float64) *float64 {
+	return &v
 }
 
 // Helper function

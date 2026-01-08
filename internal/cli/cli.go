@@ -152,7 +152,7 @@ func loadAndValidateConfig(cmd *cobra.Command, cli *CLI) (*config.Config, error)
 	if volumeStr != "" {
 		// Volume already validated above, just parse and apply
 		vol, _ := strconv.ParseFloat(volumeStr, 64)
-		cfg.Volume = vol
+		cfg.Volume = &vol
 		slog.Debug("volume override applied", "value", vol)
 	}
 
@@ -309,16 +309,20 @@ func (c *CLI) initializeAudioSystemWithBackend(cfg *config.Config) error {
 		return fmt.Errorf("failed to start audio backend: %w", err)
 	}
 
-	// Set volume on backend
-	err = c.audioBackend.SetVolume(float32(cfg.Volume))
+	// Set volume on backend (use default 0.5 if not set)
+	volume := 0.5
+	if cfg.Volume != nil {
+		volume = *cfg.Volume
+	}
+	err = c.audioBackend.SetVolume(float32(volume))
 	if err != nil {
-		slog.Error("failed to set volume on backend", "volume", cfg.Volume, "error", err)
+		slog.Error("failed to set volume on backend", "volume", volume, "error", err)
 		return fmt.Errorf("failed to set volume on backend: %w", err)
 	}
 
 	slog.Debug("audio backend initialized successfully",
 		"backend_type", fmt.Sprintf("%T", c.audioBackend),
-		"volume", cfg.Volume)
+		"volume", volume)
 
 	return nil
 }
@@ -547,7 +551,11 @@ func (c *CLI) processHookEvent(hookEvent *hooks.HookEvent, cfg *config.Config, s
 
 	// Play sound if audio is enabled
 	if cfg.Enabled && c.audioBackend != nil {
-		err := c.playSoundWithBackend(result.SelectedPath, cfg.Volume)
+		playVolume := 0.5
+		if cfg.Volume != nil {
+			playVolume = *cfg.Volume
+		}
+		err := c.playSoundWithBackend(result.SelectedPath, playVolume)
 		if err != nil {
 			fmt.Fprintf(stderr, "Error playing sound: %v\n", err)
 			slog.Error("sound playback failed", "sound_path", result.SelectedPath, "error", err)

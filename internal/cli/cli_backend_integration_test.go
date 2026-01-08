@@ -111,7 +111,11 @@ func TestCLIPlaySoundWithBackend(t *testing.T) {
 	defer cli.audioBackend.Close()
 
 	// Test that playSound uses backend instead of hardcoded paplay
-	err = cli.playSoundWithBackend("/test/nonexistent.wav", cfg.Volume)
+	volume := 0.5
+	if cfg.Volume != nil {
+		volume = *cfg.Volume
+	}
+	err = cli.playSoundWithBackend("/test/nonexistent.wav", volume)
 
 	// We should get a "file not found" type error, but no panic
 	// The important thing is that it doesn't crash and uses the backend system
@@ -189,7 +193,8 @@ func TestCLIVolumeControlWithBackend(t *testing.T) {
 
 	cfg := cli.configManager.GetDefaultConfig()
 	cfg.AudioBackend = "malgo"
-	cfg.Volume = 0.7
+	testVolume := 0.7
+	cfg.Volume = &testVolume
 
 	err := cli.initializeAudioSystemWithBackend(cfg)
 	if err != nil {
@@ -199,8 +204,8 @@ func TestCLIVolumeControlWithBackend(t *testing.T) {
 
 	// Test that volume is set on backend
 	volume := cli.audioBackend.GetVolume()
-	if volume != float32(cfg.Volume) {
-		t.Errorf("expected volume %f, got %f", cfg.Volume, volume)
+	if volume != float32(*cfg.Volume) {
+		t.Errorf("expected volume %f, got %f", *cfg.Volume, volume)
 	}
 
 	// Test volume update
