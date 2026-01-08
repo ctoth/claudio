@@ -580,10 +580,3 @@ func (e *HookEvent) detectNotificationType() string {
 	slog.Debug("detectNotificationType: using generic notification fallback")
 	return "notification"
 }
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
