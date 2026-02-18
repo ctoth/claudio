@@ -208,20 +208,39 @@ func initializeAudioSystem(cmd *cobra.Command, cli *CLI, cfg *config.Config) err
 				"identifier", cfg.DefaultSoundpack, "error", err)
 		}
 	} else {
-		// Check if primary soundpack path exists (both relative and absolute)
-		if _, statErr := os.Stat(cfg.DefaultSoundpack); statErr != nil {
+		// Resolve soundpack name to path: if default_soundpack is a name (not a path),
+		// search soundpack_paths for a matching entry
+		resolvedPath := cfg.DefaultSoundpack
+		if _, statErr := os.Stat(resolvedPath); statErr != nil {
+			// Not a direct path — try to find it in soundpack_paths
+			for _, sp := range cfg.SoundpackPaths {
+				if _, spErr := os.Stat(sp); spErr == nil {
+					base := filepath.Base(sp)
+					name := strings.TrimSuffix(base, filepath.Ext(base))
+					if name == cfg.DefaultSoundpack {
+						slog.Info("resolved soundpack name to path",
+							"name", cfg.DefaultSoundpack, "path", sp)
+						resolvedPath = sp
+						break
+					}
+				}
+			}
+		}
+
+		// Check if resolved soundpack path exists
+		if _, statErr := os.Stat(resolvedPath); statErr != nil {
 			slog.Info("configured soundpack not found, will try platform fallback",
-				"soundpack", cfg.DefaultSoundpack, "error", statErr)
+				"soundpack", cfg.DefaultSoundpack, "resolved", resolvedPath, "error", statErr)
 			shouldTryPlatformFallback = true
 		}
-		
+
 		// Always try to create mapper first
 		mapper, err = soundpack.CreateSoundpackMapperWithBasePaths(
 			cfg.DefaultSoundpack,
-			cfg.DefaultSoundpack, // Try exact path first
+			resolvedPath,         // Try resolved path first
 			soundpackPaths,       // Fallback to base directory search
 		)
-		
+
 		// If the configured path doesn't exist, force platform fallback even if mapper creation succeeded
 		if shouldTryPlatformFallback && err == nil {
 			err = fmt.Errorf("configured soundpack path does not exist, trying platform fallback")
