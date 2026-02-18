@@ -10,7 +10,9 @@ import (
 	"strings"
 	"testing"
 
+	"claudio.click/internal/config"
 	"claudio.click/internal/soundpack"
+	"github.com/adrg/xdg"
 )
 
 func TestSoundpackInit_CreatesValidJSON(t *testing.T) {
@@ -653,5 +655,235 @@ func TestExtractAllSoundKeys(t *testing.T) {
 		if !catFound {
 			t.Errorf("expected keys to contain at least one with prefix %q", prefix)
 		}
+	}
+}
+
+// --- Soundpack Install Tests ---
+
+// setupInstallTestEnv sets XDG_DATA_HOME and XDG_CONFIG_HOME to temp dirs,
+// calls xdg.Reload() so the library picks up the new values, and returns
+// a cleanup function that restores the original env vars and reloads.
+func setupInstallTestEnv(t *testing.T) (dataDir, configDir string, cleanup func()) {
+	t.Helper()
+	dataDir = filepath.Join(t.TempDir(), "data")
+	configDir = filepath.Join(t.TempDir(), "config")
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatalf("failed to create data dir: %v", err)
+	}
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("failed to create config dir: %v", err)
+	}
+
+	oldDataHome := os.Getenv("XDG_DATA_HOME")
+	oldConfigHome := os.Getenv("XDG_CONFIG_HOME")
+	os.Setenv("XDG_DATA_HOME", dataDir)
+	os.Setenv("XDG_CONFIG_HOME", configDir)
+	xdg.Reload()
+
+	cleanup = func() {
+		os.Setenv("XDG_DATA_HOME", oldDataHome)
+		os.Setenv("XDG_CONFIG_HOME", oldConfigHome)
+		xdg.Reload()
+	}
+	return dataDir, configDir, cleanup
+}
+
+// createTestJSONSoundpack creates a minimal valid JSON soundpack file in the given directory.
+func createTestJSONSoundpack(t *testing.T, dir, name string) string {
+	t.Helper()
+	spFile := soundpack.JSONSoundpackFile{
+		Name:        name,
+		Description: "Test soundpack for install",
+		Version:     "1.0.0",
+		Mappings:    map[string]string{},
+	}
+	jsonData, err := json.MarshalIndent(spFile, "", "  ")
+	if err != nil {
+		t.Fatalf("failed to marshal JSON: %v", err)
+	}
+	jsonPath := filepath.Join(dir, name+".json")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatalf("failed to create dir: %v", err)
+	}
+	if err := os.WriteFile(jsonPath, jsonData, 0644); err != nil {
+		t.Fatalf("failed to write JSON: %v", err)
+	}
+	return jsonPath
+}
+
+func TestSoundpackInstall_CopiesJSONToDataDir(t *testing.T) {
+	dataDir, _, cleanup := setupInstallTestEnv(t)
+	defer cleanup()
+
+	// Create a valid JSON soundpack in a separate temp dir
+	srcDir := t.TempDir()
+	jsonPath := createTestJSONSoundpack(t, srcDir, "my-test-pack")
+
+	cli := NewCLI()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	exitCode := cli.Run([]string{"claudio", "soundpack", "install", jsonPath, "--skip-validate"}, nil, stdout, stderr)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d, stdout: %s, stderr: %s", exitCode, stdout.String(), stderr.String())
+	}
+
+	// Assert file exists at expected XDG data path: <dataDir>/claudio/<name>.json
+	expectedPath := filepath.Join(dataDir, "claudio", "my-test-pack.json")
+	if _, err := os.Stat(expectedPath); err != nil {
+		t.Errorf("expected installed file at %s, got error: %v", expectedPath, err)
+	}
+
+	// Assert stdout contains "Installed"
+	if !strings.Contains(stdout.String(), "Installed") {
+		t.Errorf("expected stdout to contain 'Installed', got: %s", stdout.String())
+	}
+}
+
+func TestSoundpackInstall_CopiesDirectoryToDataDir(t *testing.T) {
+	dataDir, _, cleanup := setupInstallTestEnv(t)
+	defer cleanup()
+
+	// Create a directory soundpack with a dummy loading/loading.wav file
+	srcDir := filepath.Join(t.TempDir(), "test-dir-pack")
+	createDummyWAV(t, filepath.Join(srcDir, "loading", "loading.wav"))
+
+	cli := NewCLI()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	exitCode := cli.Run([]string{"claudio", "soundpack", "install", srcDir, "--skip-validate"}, nil, stdout, stderr)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d, stdout: %s, stderr: %s", exitCode, stdout.String(), stderr.String())
+	}
+
+	// Assert directory + file exist at expected XDG data path
+	expectedDir := filepath.Join(dataDir, "claudio", "soundpacks", "test-dir-pack")
+	expectedFile := filepath.Join(expectedDir, "loading", "loading.wav")
+	if _, err := os.Stat(expectedDir); err != nil {
+		t.Errorf("expected installed directory at %s, got error: %v", expectedDir, err)
+	}
+	if _, err := os.Stat(expectedFile); err != nil {
+		t.Errorf("expected installed file at %s, got error: %v", expectedFile, err)
+	}
+}
+
+func TestSoundpackInstall_UpdatesConfig(t *testing.T) {
+	_, configDir, cleanup := setupInstallTestEnv(t)
+	defer cleanup()
+
+	// Create a valid JSON soundpack
+	srcDir := t.TempDir()
+	jsonPath := createTestJSONSoundpack(t, srcDir, "config-test-pack")
+
+	cli := NewCLI()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	exitCode := cli.Run([]string{"claudio", "soundpack", "install", jsonPath, "--skip-validate"}, nil, stdout, stderr)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d, stdout: %s, stderr: %s", exitCode, stdout.String(), stderr.String())
+	}
+
+	// Load config from the temp config dir and verify soundpack_paths
+	configPath := filepath.Join(configDir, "claudio", "config.json")
+	cm := config.NewConfigManager()
+	cfg, err := cm.LoadFromFile(configPath)
+	if err != nil {
+		t.Fatalf("failed to load config from %s: %v", configPath, err)
+	}
+
+	found := false
+	for _, p := range cfg.SoundpackPaths {
+		if strings.Contains(p, "config-test-pack") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected soundpack_paths to contain installed path, got: %v", cfg.SoundpackPaths)
+	}
+}
+
+func TestSoundpackInstall_DefaultFlag(t *testing.T) {
+	_, configDir, cleanup := setupInstallTestEnv(t)
+	defer cleanup()
+
+	// Create a valid JSON soundpack
+	srcDir := t.TempDir()
+	jsonPath := createTestJSONSoundpack(t, srcDir, "default-flag-pack")
+
+	cli := NewCLI()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	exitCode := cli.Run([]string{"claudio", "soundpack", "install", jsonPath, "--skip-validate", "--default"}, nil, stdout, stderr)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d, stdout: %s, stderr: %s", exitCode, stdout.String(), stderr.String())
+	}
+
+	// Load config and verify default_soundpack
+	configPath := filepath.Join(configDir, "claudio", "config.json")
+	cm := config.NewConfigManager()
+	cfg, err := cm.LoadFromFile(configPath)
+	if err != nil {
+		t.Fatalf("failed to load config from %s: %v", configPath, err)
+	}
+
+	if cfg.DefaultSoundpack != "default-flag-pack" {
+		t.Errorf("expected default_soundpack == 'default-flag-pack', got %q", cfg.DefaultSoundpack)
+	}
+}
+
+func TestSoundpackInstall_IdempotentPathAddition(t *testing.T) {
+	_, configDir, cleanup := setupInstallTestEnv(t)
+	defer cleanup()
+
+	// Create a valid JSON soundpack
+	srcDir := t.TempDir()
+	jsonPath := createTestJSONSoundpack(t, srcDir, "idempotent-pack")
+
+	// Install twice
+	for i := 0; i < 2; i++ {
+		cli := NewCLI()
+		stdout := &bytes.Buffer{}
+		stderr := &bytes.Buffer{}
+		exitCode := cli.Run([]string{"claudio", "soundpack", "install", jsonPath, "--skip-validate"}, nil, stdout, stderr)
+
+		if exitCode != 0 {
+			t.Fatalf("install #%d: expected exit code 0, got %d, stdout: %s, stderr: %s", i+1, exitCode, stdout.String(), stderr.String())
+		}
+	}
+
+	// Load config and verify path appears exactly once
+	configPath := filepath.Join(configDir, "claudio", "config.json")
+	cm := config.NewConfigManager()
+	cfg, err := cm.LoadFromFile(configPath)
+	if err != nil {
+		t.Fatalf("failed to load config from %s: %v", configPath, err)
+	}
+
+	count := 0
+	for _, p := range cfg.SoundpackPaths {
+		if strings.Contains(p, "idempotent-pack") {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Errorf("expected soundpack_paths to contain path exactly once, found %d times in: %v", count, cfg.SoundpackPaths)
+	}
+}
+
+func TestSoundpackInstall_FailsOnInvalidPath(t *testing.T) {
+	_, _, cleanup := setupInstallTestEnv(t)
+	defer cleanup()
+
+	cli := NewCLI()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	exitCode := cli.Run([]string{"claudio", "soundpack", "install", "/nonexistent/path/that/does/not/exist"}, nil, stdout, stderr)
+
+	if exitCode == 0 {
+		t.Error("expected non-zero exit code for non-existent path")
 	}
 }
