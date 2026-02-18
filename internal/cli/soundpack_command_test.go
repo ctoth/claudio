@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -284,6 +285,330 @@ func TestSoundpackList_ExitsCleanly(t *testing.T) {
 	// stdout should have content (at least the headers + 3 embedded packs)
 	if stdout.Len() == 0 {
 		t.Error("expected non-empty stdout")
+	}
+}
+
+// createDummyWAV creates a minimal non-empty file with .wav extension for testing
+func createDummyWAV(t *testing.T, path string) {
+	t.Helper()
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatalf("failed to create directory %s: %v", dir, err)
+	}
+	// Write minimal data - just needs to be non-empty with .wav extension
+	if err := os.WriteFile(path, []byte("RIFF\x00\x00\x00\x00WAVEfmt "), 0644); err != nil {
+		t.Fatalf("failed to create dummy WAV %s: %v", path, err)
+	}
+}
+
+func TestSoundpackValidate_ValidJSON(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a few dummy WAV files
+	wav1 := filepath.Join(tmpDir, "sounds", "click.wav")
+	wav2 := filepath.Join(tmpDir, "sounds", "beep.wav")
+	createDummyWAV(t, wav1)
+	createDummyWAV(t, wav2)
+
+	// Create a valid JSON soundpack with some mappings pointing to real files
+	spFile := soundpack.JSONSoundpackFile{
+		Name:        "test-valid",
+		Description: "Test soundpack",
+		Version:     "1.0.0",
+		Mappings:    make(map[string]string),
+	}
+
+	// Get all known keys to populate mappings
+	keys, err := ExtractAllSoundKeys()
+	if err != nil {
+		t.Fatalf("ExtractAllSoundKeys() failed: %v", err)
+	}
+	for _, key := range keys {
+		spFile.Mappings[key] = ""
+	}
+	// Set a few to real files
+	spFile.Mappings["loading/bash-start.wav"] = wav1
+	spFile.Mappings["success/bash-success.wav"] = wav2
+
+	jsonData, err := json.MarshalIndent(spFile, "", "  ")
+	if err != nil {
+		t.Fatalf("failed to marshal JSON: %v", err)
+	}
+
+	jsonPath := filepath.Join(tmpDir, "test-valid.json")
+	if err := os.WriteFile(jsonPath, jsonData, 0644); err != nil {
+		t.Fatalf("failed to write JSON: %v", err)
+	}
+
+	cli := NewCLI()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	exitCode := cli.Run([]string{"claudio", "soundpack", "validate", jsonPath}, nil, stdout, stderr)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d, stderr: %s, stdout: %s", exitCode, stderr.String(), stdout.String())
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "Coverage Summary") {
+		t.Error("expected output to contain 'Coverage Summary'")
+	}
+	if !strings.Contains(output, "test-valid") {
+		t.Error("expected output to contain soundpack name 'test-valid'")
+	}
+	// 2 out of 107 mapped
+	if !strings.Contains(output, "2/107") {
+		t.Errorf("expected output to contain '2/107', got: %s", output)
+	}
+}
+
+func TestSoundpackValidate_MissingFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create JSON with mappings pointing to non-existent files
+	spFile := soundpack.JSONSoundpackFile{
+		Name:        "broken-pack",
+		Description: "Pack with broken references",
+		Version:     "1.0.0",
+		Mappings: map[string]string{
+			"loading/bash-start.wav":   filepath.Join(tmpDir, "nonexistent", "missing.wav"),
+			"success/bash-success.wav": filepath.Join(tmpDir, "also", "missing.wav"),
+			"default.wav":              "",
+		},
+	}
+
+	jsonData, err := json.MarshalIndent(spFile, "", "  ")
+	if err != nil {
+		t.Fatalf("failed to marshal JSON: %v", err)
+	}
+
+	jsonPath := filepath.Join(tmpDir, "broken.json")
+	if err := os.WriteFile(jsonPath, jsonData, 0644); err != nil {
+		t.Fatalf("failed to write JSON: %v", err)
+	}
+
+	cli := NewCLI()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	exitCode := cli.Run([]string{"claudio", "soundpack", "validate", jsonPath}, nil, stdout, stderr)
+
+	if exitCode == 0 {
+		t.Error("expected non-zero exit code when soundpack has broken references")
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "Broken References") && !strings.Contains(output, "not found") {
+		t.Errorf("expected output to mention broken references, got: %s", output)
+	}
+}
+
+func TestSoundpackValidate_EmptyMappings(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create JSON with all empty mapping values (like init output)
+	spFile := soundpack.JSONSoundpackFile{
+		Name:        "empty-pack",
+		Description: "Empty soundpack template",
+		Version:     "1.0.0",
+		Mappings:    make(map[string]string),
+	}
+
+	keys, err := ExtractAllSoundKeys()
+	if err != nil {
+		t.Fatalf("ExtractAllSoundKeys() failed: %v", err)
+	}
+	for _, key := range keys {
+		spFile.Mappings[key] = ""
+	}
+
+	jsonData, err := json.MarshalIndent(spFile, "", "  ")
+	if err != nil {
+		t.Fatalf("failed to marshal JSON: %v", err)
+	}
+
+	jsonPath := filepath.Join(tmpDir, "empty.json")
+	if err := os.WriteFile(jsonPath, jsonData, 0644); err != nil {
+		t.Fatalf("failed to write JSON: %v", err)
+	}
+
+	cli := NewCLI()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	exitCode := cli.Run([]string{"claudio", "soundpack", "validate", jsonPath}, nil, stdout, stderr)
+
+	// Empty mappings are not errors — exit code should be 0
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0 for empty mappings, got %d, stderr: %s, stdout: %s", exitCode, stderr.String(), stdout.String())
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "0/107") && !strings.Contains(output, "0.0%") {
+		t.Errorf("expected output to contain '0/107' or '0.0%%', got: %s", output)
+	}
+}
+
+func TestSoundpackValidate_CoverageCalculation(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create exactly 10 dummy WAV files
+	wavFiles := make([]string, 10)
+	for i := 0; i < 10; i++ {
+		wavFiles[i] = filepath.Join(tmpDir, "sounds", fmt.Sprintf("sound%d.wav", i))
+		createDummyWAV(t, wavFiles[i])
+	}
+
+	// Get all keys and fill exactly 10
+	keys, err := ExtractAllSoundKeys()
+	if err != nil {
+		t.Fatalf("ExtractAllSoundKeys() failed: %v", err)
+	}
+
+	spFile := soundpack.JSONSoundpackFile{
+		Name:        "coverage-test",
+		Description: "Coverage test pack",
+		Version:     "1.0.0",
+		Mappings:    make(map[string]string),
+	}
+	for _, key := range keys {
+		spFile.Mappings[key] = ""
+	}
+
+	// Fill first 10 keys with real files
+	for i := 0; i < 10 && i < len(keys); i++ {
+		spFile.Mappings[keys[i]] = wavFiles[i]
+	}
+
+	jsonData, err := json.MarshalIndent(spFile, "", "  ")
+	if err != nil {
+		t.Fatalf("failed to marshal JSON: %v", err)
+	}
+
+	jsonPath := filepath.Join(tmpDir, "coverage.json")
+	if err := os.WriteFile(jsonPath, jsonData, 0644); err != nil {
+		t.Fatalf("failed to write JSON: %v", err)
+	}
+
+	cli := NewCLI()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	exitCode := cli.Run([]string{"claudio", "soundpack", "validate", jsonPath}, nil, stdout, stderr)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d, stderr: %s, stdout: %s", exitCode, stderr.String(), stdout.String())
+	}
+
+	output := stdout.String()
+
+	// Should show 10/107
+	if !strings.Contains(output, "10/107") {
+		t.Errorf("expected output to contain '10/107', got: %s", output)
+	}
+
+	// Per-category breakdown should appear
+	if !strings.Contains(output, "loading:") {
+		t.Errorf("expected output to contain 'loading:' category, got: %s", output)
+	}
+	if !strings.Contains(output, "success:") {
+		t.Errorf("expected output to contain 'success:' category, got: %s", output)
+	}
+}
+
+func TestSoundpackValidate_DirectorySoundpack(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create directory structure with some audio files
+	createDummyWAV(t, filepath.Join(tmpDir, "mypack", "loading", "loading.wav"))
+	createDummyWAV(t, filepath.Join(tmpDir, "mypack", "success", "success.wav"))
+
+	cli := NewCLI()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	exitCode := cli.Run([]string{"claudio", "soundpack", "validate", filepath.Join(tmpDir, "mypack")}, nil, stdout, stderr)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d, stderr: %s, stdout: %s", exitCode, stderr.String(), stdout.String())
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "Coverage Summary") {
+		t.Errorf("expected output to contain 'Coverage Summary', got: %s", output)
+	}
+	// Should detect some coverage in loading and success categories
+	if !strings.Contains(output, "loading:") {
+		t.Errorf("expected output to contain 'loading:' category, got: %s", output)
+	}
+	if !strings.Contains(output, "success:") {
+		t.Errorf("expected output to contain 'success:' category, got: %s", output)
+	}
+}
+
+func TestSoundpackValidate_InvalidJSON(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a file with malformed JSON
+	badPath := filepath.Join(tmpDir, "bad.json")
+	if err := os.WriteFile(badPath, []byte(`{this is not valid JSON`), 0644); err != nil {
+		t.Fatalf("failed to write bad JSON: %v", err)
+	}
+
+	cli := NewCLI()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	exitCode := cli.Run([]string{"claudio", "soundpack", "validate", badPath}, nil, stdout, stderr)
+
+	if exitCode == 0 {
+		t.Error("expected non-zero exit code for invalid JSON")
+	}
+
+	combined := stdout.String() + stderr.String()
+	if !strings.Contains(strings.ToLower(combined), "json") && !strings.Contains(strings.ToLower(combined), "parse") {
+		t.Errorf("expected error to mention JSON parse error, got stdout=%q stderr=%q", stdout.String(), stderr.String())
+	}
+}
+
+func TestSoundpackValidate_FormatCheck(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create files with non-audio extensions
+	txtFile := filepath.Join(tmpDir, "sounds", "oops.txt")
+	if err := os.MkdirAll(filepath.Dir(txtFile), 0755); err != nil {
+		t.Fatalf("failed to create dir: %v", err)
+	}
+	if err := os.WriteFile(txtFile, []byte("not audio"), 0644); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+
+	spFile := soundpack.JSONSoundpackFile{
+		Name:        "format-test",
+		Description: "Format check test",
+		Version:     "1.0.0",
+		Mappings: map[string]string{
+			"loading/bash-start.wav": txtFile,
+			"default.wav":            "",
+		},
+	}
+
+	jsonData, err := json.MarshalIndent(spFile, "", "  ")
+	if err != nil {
+		t.Fatalf("failed to marshal JSON: %v", err)
+	}
+
+	jsonPath := filepath.Join(tmpDir, "format.json")
+	if err := os.WriteFile(jsonPath, jsonData, 0644); err != nil {
+		t.Fatalf("failed to write JSON: %v", err)
+	}
+
+	cli := NewCLI()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	exitCode := cli.Run([]string{"claudio", "soundpack", "validate", jsonPath}, nil, stdout, stderr)
+
+	// Format issues should be warnings, not necessarily failures
+	// but output should mention the format issue
+	output := stdout.String()
+	_ = exitCode // format warnings may or may not affect exit code
+	if !strings.Contains(strings.ToLower(output), "format") {
+		t.Errorf("expected output to mention format issues for .txt file, got: %s", output)
 	}
 }
 
