@@ -68,6 +68,10 @@ func NewCLI() *CLI {
 	rootCmd.PersistentFlags().String("volume", "", "Set volume (0.0 to 1.0)")
 	rootCmd.PersistentFlags().String("soundpack", "", "Set soundpack to use")
 	rootCmd.PersistentFlags().Bool("silent", false, "Silent mode - no audio playback")
+	rootCmd.PersistentFlags().Bool("daemon-child", false, "Internal: run as detached hook worker")
+	rootCmd.PersistentFlags().String("hook-input-file", "", "Internal: hook payload file for detached worker")
+	_ = rootCmd.PersistentFlags().MarkHidden("daemon-child")
+	_ = rootCmd.PersistentFlags().MarkHidden("hook-input-file")
 
 	// Add version flag
 	rootCmd.Flags().BoolP("version", "v", false, "Show version information")
@@ -198,13 +202,13 @@ func initializeAudioSystem(cmd *cobra.Command, cli *CLI, cfg *config.Config) err
 	var mapper soundpack.PathMapper
 	var err error
 	var shouldTryPlatformFallback bool
-	
+
 	// Check for embedded soundpack identifiers first
 	if strings.HasPrefix(cfg.DefaultSoundpack, "embedded:") {
 		// Load embedded soundpack directly
 		mapper, err = loadEmbeddedPlatformSoundpack(cfg.DefaultSoundpack)
 		if err != nil {
-			slog.Warn("failed to load embedded platform soundpack from config", 
+			slog.Warn("failed to load embedded platform soundpack from config",
 				"identifier", cfg.DefaultSoundpack, "error", err)
 		}
 	} else {
@@ -237,8 +241,8 @@ func initializeAudioSystem(cmd *cobra.Command, cli *CLI, cfg *config.Config) err
 		// Always try to create mapper first
 		mapper, err = soundpack.CreateSoundpackMapperWithBasePaths(
 			cfg.DefaultSoundpack,
-			resolvedPath,         // Try resolved path first
-			soundpackPaths,       // Fallback to base directory search
+			resolvedPath,   // Try resolved path first
+			soundpackPaths, // Fallback to base directory search
 		)
 
 		// If the configured path doesn't exist, force platform fallback even if mapper creation succeeded
@@ -246,22 +250,22 @@ func initializeAudioSystem(cmd *cobra.Command, cli *CLI, cfg *config.Config) err
 			err = fmt.Errorf("configured soundpack path does not exist, trying platform fallback")
 		}
 	}
-	
+
 	if err != nil {
 		slog.Debug("configured soundpack unavailable, trying platform JSON fallback",
 			"soundpack", cfg.DefaultSoundpack)
-			
+
 		// Try platform JSON fallback (e.g., wsl.json, darwin.json, linux.json)
 		cfgMgr := config.NewConfigManager()
 		execDir := getPlatformExecutableDirectory()
 		platformSoundpack := cfgMgr.GetPlatformSoundpack(afero.NewOsFs(), execDir)
-		
+
 		if platformSoundpack != "default" {
 			slog.Info("using platform-specific soundpack", "path", platformSoundpack)
-			
+
 			var platformMapper soundpack.PathMapper
 			var platformErr error
-			
+
 			if strings.HasPrefix(platformSoundpack, "embedded:") {
 				// Load from embedded content
 				platformMapper, platformErr = loadEmbeddedPlatformSoundpack(platformSoundpack)
@@ -273,13 +277,13 @@ func initializeAudioSystem(cmd *cobra.Command, cli *CLI, cfg *config.Config) err
 					[]string{},        // No additional paths needed
 				)
 			}
-			
+
 			if platformErr == nil {
 				slog.Info("platform soundpack loaded successfully", "identifier", platformSoundpack)
 				mapper = platformMapper
 			} else {
-				slog.Warn("platform soundpack failed to load", 
-					"identifier", platformSoundpack, 
+				slog.Warn("platform soundpack failed to load",
+					"identifier", platformSoundpack,
 					"error", platformErr)
 				// Create empty directory mapper as final fallback
 				mapper = soundpack.NewDirectoryMapper("fallback", []string{})
@@ -350,16 +354,32 @@ func (c *CLI) initializeAudioSystemWithBackend(cfg *config.Config) error {
 	return nil
 }
 
-// processHookInput reads hook JSON from stdin and processes it
-func processHookInput(cmd *cobra.Command, cli *CLI, cfg *config.Config) error {
-	// Read hook JSON from stdin
-	inputData, err := io.ReadAll(cmd.InOrStdin())
-	if err != nil {
-		cmd.PrintErrf("Error reading from stdin: %v\n", err)
-		slog.Error("stdin read failed", "error", err)
-		return fmt.Errorf("error reading from stdin: %w", err)
+// readHookInput reads hook JSON from stdin or an internal payload file.
+func readHookInput(cmd *cobra.Command) ([]byte, error) {
+	hookInputFile, _ := cmd.Flags().GetString("hook-input-file")
+	if hookInputFile != "" {
+		inputData, err := os.ReadFile(hookInputFile)
+		if err != nil {
+			return nil, fmt.Errorf("error reading hook input file: %w", err)
+		}
+
+		if removeErr := os.Remove(hookInputFile); removeErr != nil {
+			slog.Warn("failed to remove hook input file", "file", hookInputFile, "error", removeErr)
+		}
+
+		return inputData, nil
 	}
 
+	inputData, err := io.ReadAll(cmd.InOrStdin())
+	if err != nil {
+		return nil, fmt.Errorf("error reading from stdin: %w", err)
+	}
+
+	return inputData, nil
+}
+
+// processHookInput processes parsed hook JSON payload.
+func processHookInput(cmd *cobra.Command, cli *CLI, cfg *config.Config, inputData []byte) error {
 	// If no input and we're just testing flags/config, return success
 	if len(inputData) == 0 {
 		slog.Info("no input data received - configuration test mode")
@@ -368,7 +388,7 @@ func processHookInput(cmd *cobra.Command, cli *CLI, cfg *config.Config) error {
 
 	// Parse hook JSON
 	var hookEvent hooks.HookEvent
-	err = json.Unmarshal(inputData, &hookEvent)
+	err := json.Unmarshal(inputData, &hookEvent)
 	if err != nil {
 		cmd.PrintErrf("Error parsing hook JSON: %v\n", err)
 		slog.Error("hook JSON parsing failed", "error", err)
@@ -393,7 +413,7 @@ func processHookInput(cmd *cobra.Command, cli *CLI, cfg *config.Config) error {
 		"session_id", hookEvent.SessionID,
 		"tool_name", getStringPtr(hookEvent.ToolName))
 
-	// Process hook event
+	// Process hook event.
 	cli.processHookEvent(&hookEvent, cfg, cmd.OutOrStdout(), cmd.ErrOrStderr())
 
 	return nil
@@ -426,19 +446,35 @@ func runStdinModeE(cmd *cobra.Command, args []string) error {
 	// Setup logging with file logging support
 	setupLogging(cfg, cmd.ErrOrStderr())
 
-	// No need for additional initialization - systems already initialized
+	// Read hook input payload once so we can optionally detach.
+	inputData, err := readHookInput(cmd)
+	if err != nil {
+		cmd.PrintErrf("Error reading hook input: %v\n", err)
+		slog.Error("hook input read failed", "error", err)
+		return err
+	}
+
+	// Default behavior: detach hook processing so the invoking hook returns immediately.
+	if shouldDetachHookProcessing(cmd, cfg, inputData) {
+		if err := spawnDetachedHookWorker(cmd, inputData); err != nil {
+			cmd.PrintErrf("Error starting detached hook worker: %v\n", err)
+			slog.Error("detached hook worker start failed", "error", err)
+			return err
+		}
+		return nil
+	}
 
 	// Initialize tracking (before audio system initialization)
 	cli.initializeTracking()
-	
+
 	// Initialize audio and soundpack systems
 	err = initializeAudioSystem(cmd, cli, cfg)
 	if err != nil {
 		return err
 	}
 
-	// Process hook input from stdin
-	return processHookInput(cmd, cli, cfg)
+	// Process hook input payload.
+	return processHookInput(cmd, cli, cfg, inputData)
 }
 
 // Run executes the CLI with the given arguments and I/O streams
@@ -503,7 +539,7 @@ func (c *CLI) initializeConfigManager() {
 func (c *CLI) initializeRemainingSystemsAfterConfig() {
 	// Initialize tracking first
 	c.initializeTracking()
-	
+
 	// Don't create global SoundMapper - it will be created per-request with session-specific SoundChecker
 	if c.backendFactory == nil {
 		c.backendFactory = audio.NewBackendFactory()
@@ -739,23 +775,23 @@ func setupLogging(cfg *config.Config, stderrWriter io.Writer) {
 // initializeTracking initializes the tracking database if enabled in configuration
 func (c *CLI) initializeTracking() {
 	slog.Debug("initializeTracking() called", "trackingDB_nil", c.trackingDB == nil)
-	
+
 	if c.trackingDB != nil {
 		slog.Debug("tracking database already initialized, skipping")
 		return // Already initialized
 	}
-	
+
 	// Load config to check if tracking is enabled
 	cfg, err := c.configManager.LoadConfig()
 	if err != nil {
 		slog.Debug("failed to load config for tracking initialization, using defaults", "error", err)
 		cfg = c.configManager.GetDefaultConfig()
 	}
-	
+
 	// Apply environment overrides
 	cfg = c.configManager.ApplyEnvironmentOverrides(cfg)
-	
-	slog.Debug("tracking config loaded", 
+
+	slog.Debug("tracking config loaded",
 		"tracking_nil", cfg.SoundTracking == nil,
 		"enabled", cfg.SoundTracking != nil && cfg.SoundTracking.Enabled,
 		"db_path", func() string {
@@ -764,7 +800,7 @@ func (c *CLI) initializeTracking() {
 			}
 			return ""
 		}())
-	
+
 	// Check if tracking is enabled
 	if cfg.SoundTracking == nil || !cfg.SoundTracking.Enabled {
 		slog.Debug("sound tracking disabled, skipping database initialization",
@@ -772,7 +808,7 @@ func (c *CLI) initializeTracking() {
 			"enabled", cfg.SoundTracking != nil && cfg.SoundTracking.Enabled)
 		return
 	}
-	
+
 	// Determine database path
 	var dbPath string
 	if cfg.SoundTracking.DatabasePath != "" {
@@ -788,17 +824,17 @@ func (c *CLI) initializeTracking() {
 		}
 		slog.Debug("using default XDG database path", "path", dbPath)
 	}
-	
+
 	slog.Debug("attempting to initialize tracking database", "path", dbPath)
-	
+
 	// Initialize database with graceful degradation
 	db, err := tracking.NewDatabase(dbPath)
 	if err != nil {
-		slog.Error("failed to initialize tracking database, continuing without tracking", 
+		slog.Error("failed to initialize tracking database, continuing without tracking",
 			"path", dbPath, "error", err)
 		return // Graceful degradation - continue without tracking
 	}
-	
+
 	c.trackingDB = db
 	slog.Info("tracking database initialized successfully", "path", dbPath)
 }
@@ -818,10 +854,10 @@ func getPlatformExecutableDirectory() string {
 		slog.Warn("failed to get executable directory for platform detection, using current directory", "error", err)
 		return "."
 	}
-	
+
 	execDir := filepath.Dir(executable)
 	slog.Debug("executable directory detected for platform detection", "executable", executable, "directory", execDir)
-	
+
 	return execDir
 }
 
@@ -830,20 +866,20 @@ func loadEmbeddedPlatformSoundpack(identifier string) (soundpack.PathMapper, err
 	if !strings.HasPrefix(identifier, "embedded:") {
 		return nil, fmt.Errorf("invalid embedded soundpack identifier: %s", identifier)
 	}
-	
+
 	filename := strings.TrimPrefix(identifier, "embedded:")
 	slog.Debug("loading embedded platform soundpack", "filename", filename)
-	
+
 	data, err := config.GetEmbeddedPlatformSoundpackData(filename)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read embedded platform soundpack: %w", err)
 	}
-	
+
 	mapper, err := soundpack.LoadJSONSoundpackFromBytes(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load embedded platform soundpack: %w", err)
 	}
-	
+
 	slog.Info("embedded platform soundpack loaded successfully", "filename", filename)
 	return mapper, nil
 }
