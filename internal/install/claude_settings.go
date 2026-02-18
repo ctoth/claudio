@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 // FindClaudeSettingsPaths finds potential Claude Code settings file paths based on scope
@@ -50,6 +51,29 @@ func findUserScopePaths() ([]string, error) {
 	return paths, nil
 }
 
+// FindBestSettingsPath returns the first settings path where the file actually exists,
+// or the first path in the list if no file exists yet (for creation).
+// This prevents silent success when the primary path is wrong (e.g. MSYS path on Windows).
+func FindBestSettingsPath(scope string) (string, error) {
+	paths, err := FindClaudeSettingsPaths(scope)
+	if err != nil {
+		return "", err
+	}
+	if len(paths) == 0 {
+		return "", fmt.Errorf("no settings paths found for scope: %s", scope)
+	}
+
+	// Return the first path where the file actually exists
+	for _, path := range paths {
+		if _, err := os.Stat(path); err == nil {
+			return path, nil
+		}
+	}
+
+	// No existing file found — return the first path for creation
+	return paths[0], nil
+}
+
 // findProjectScopePaths returns potential project-scope Claude settings paths
 func findProjectScopePaths() ([]string, error) {
 	var paths []string
@@ -66,23 +90,42 @@ func findProjectScopePaths() ([]string, error) {
 
 // getHomeDirectory returns the user's home directory using multiple fallback methods
 func getHomeDirectory() string {
-	// Try HOME first (Unix/Linux/macOS standard)
+	if runtime.GOOS == "windows" {
+		// On Windows, prefer USERPROFILE (canonical Windows home directory).
+		// HOME may contain MSYS/Git Bash-style paths (e.g. /c/Users/Q)
+		// that are not valid native Windows paths for Go's filepath operations.
+		if userProfile := os.Getenv("USERPROFILE"); userProfile != "" {
+			return userProfile
+		}
+		// Fall back to HOME with MSYS path normalization
+		if home := os.Getenv("HOME"); home != "" {
+			return normalizeMSYSPath(home)
+		}
+		// Try HOMEDRIVE + HOMEPATH combination (Windows alternative)
+		if homeDrive := os.Getenv("HOMEDRIVE"); homeDrive != "" {
+			if homePath := os.Getenv("HOMEPATH"); homePath != "" {
+				return homeDrive + homePath
+			}
+		}
+		return ""
+	}
+
+	// Unix/Linux/macOS: HOME is the standard
 	if home := os.Getenv("HOME"); home != "" {
 		return home
 	}
-
-	// Try USERPROFILE (Windows standard)
-	if userProfile := os.Getenv("USERPROFILE"); userProfile != "" {
-		return userProfile
-	}
-
-	// Try HOMEDRIVE + HOMEPATH combination (Windows alternative)
-	if homeDrive := os.Getenv("HOMEDRIVE"); homeDrive != "" {
-		if homePath := os.Getenv("HOMEPATH"); homePath != "" {
-			return homeDrive + homePath
-		}
-	}
-
-	// No home directory found
 	return ""
+}
+
+// normalizeMSYSPath converts MSYS/Git Bash-style paths (e.g. /c/Users/Q) to
+// native Windows paths (e.g. C:\Users\Q). Returns the path unchanged if it
+// doesn't match the MSYS pattern.
+func normalizeMSYSPath(path string) string {
+	// MSYS pattern: /X/... where X is a single drive letter
+	if len(path) >= 3 && path[0] == '/' && path[2] == '/' &&
+		((path[1] >= 'a' && path[1] <= 'z') || (path[1] >= 'A' && path[1] <= 'Z')) {
+		drive := strings.ToUpper(string(path[1]))
+		return drive + ":" + filepath.FromSlash(path[2:])
+	}
+	return path
 }

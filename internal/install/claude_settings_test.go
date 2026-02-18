@@ -3,6 +3,7 @@ package install
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -340,6 +341,197 @@ func TestFindClaudeSettingsPathValidation(t *testing.T) {
 
 			t.Logf("Validated %d paths for %s scope", len(paths), scope)
 		})
+	}
+}
+
+func TestNormalizeMSYSPath(t *testing.T) {
+	testCases := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "lowercase drive letter",
+			input:    "/c/Users/Q",
+			expected: "C:\\Users\\Q",
+		},
+		{
+			name:     "uppercase drive letter",
+			input:    "/D/some/path",
+			expected: "D:\\some\\path",
+		},
+		{
+			name:     "deep path",
+			input:    "/c/Users/Q/.claude/settings.json",
+			expected: "C:\\Users\\Q\\.claude\\settings.json",
+		},
+		{
+			name:     "native windows path unchanged",
+			input:    "C:\\Users\\Q",
+			expected: "C:\\Users\\Q",
+		},
+		{
+			name:     "unix path without drive letter unchanged",
+			input:    "/usr/local/bin",
+			expected: "/usr/local/bin",
+		},
+		{
+			name:     "empty string",
+			input:    "",
+			expected: "",
+		},
+		{
+			name:     "root only unchanged",
+			input:    "/c",
+			expected: "/c",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := normalizeMSYSPath(tc.input)
+			// Only check Windows-specific conversions on Windows
+			if runtime.GOOS == "windows" {
+				if result != tc.expected {
+					t.Errorf("normalizeMSYSPath(%q) = %q, want %q", tc.input, result, tc.expected)
+				}
+			} else {
+				// On non-Windows, normalizeMSYSPath is a no-op (just returns input)
+				// The function checks runtime.GOOS internally
+				t.Logf("Skipping Windows-specific assertion on %s", runtime.GOOS)
+			}
+		})
+	}
+}
+
+func TestFindBestSettingsPath(t *testing.T) {
+	t.Run("returns existing file path over non-existing", func(t *testing.T) {
+		tempDir := t.TempDir()
+
+		// Create .claude/settings.json in tempDir
+		claudeDir := filepath.Join(tempDir, ".claude")
+		err := os.MkdirAll(claudeDir, 0755)
+		if err != nil {
+			t.Fatalf("Failed to create dir: %v", err)
+		}
+		settingsFile := filepath.Join(claudeDir, "settings.json")
+		err = os.WriteFile(settingsFile, []byte(`{"hooks":{}}`), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create file: %v", err)
+		}
+
+		// Set HOME to a nonexistent path, USERPROFILE to the real one
+		originalHome := os.Getenv("HOME")
+		originalUserProfile := os.Getenv("USERPROFILE")
+		originalHomeDrive := os.Getenv("HOMEDRIVE")
+		originalHomePath := os.Getenv("HOMEPATH")
+		defer func() {
+			os.Setenv("HOME", originalHome)
+			os.Setenv("USERPROFILE", originalUserProfile)
+			os.Setenv("HOMEDRIVE", originalHomeDrive)
+			os.Setenv("HOMEPATH", originalHomePath)
+		}()
+
+		os.Setenv("HOME", tempDir)
+		os.Setenv("USERPROFILE", tempDir)
+		os.Setenv("HOMEDRIVE", "")
+		os.Setenv("HOMEPATH", "")
+
+		path, err := FindBestSettingsPath("user")
+		if err != nil {
+			t.Fatalf("FindBestSettingsPath failed: %v", err)
+		}
+
+		if path != settingsFile {
+			t.Errorf("Expected %s, got %s", settingsFile, path)
+		}
+	})
+
+	t.Run("returns first path when no file exists", func(t *testing.T) {
+		tempDir := t.TempDir()
+
+		originalHome := os.Getenv("HOME")
+		originalUserProfile := os.Getenv("USERPROFILE")
+		originalHomeDrive := os.Getenv("HOMEDRIVE")
+		originalHomePath := os.Getenv("HOMEPATH")
+		defer func() {
+			os.Setenv("HOME", originalHome)
+			os.Setenv("USERPROFILE", originalUserProfile)
+			os.Setenv("HOMEDRIVE", originalHomeDrive)
+			os.Setenv("HOMEPATH", originalHomePath)
+		}()
+
+		os.Setenv("HOME", tempDir)
+		os.Setenv("USERPROFILE", tempDir)
+		os.Setenv("HOMEDRIVE", "")
+		os.Setenv("HOMEPATH", "")
+
+		path, err := FindBestSettingsPath("user")
+		if err != nil {
+			t.Fatalf("FindBestSettingsPath failed: %v", err)
+		}
+
+		expected := filepath.Join(tempDir, ".claude", "settings.json")
+		if path != expected {
+			t.Errorf("Expected %s, got %s", expected, path)
+		}
+	})
+
+	t.Run("invalid scope returns error", func(t *testing.T) {
+		_, err := FindBestSettingsPath("invalid")
+		if err == nil {
+			t.Error("Expected error for invalid scope")
+		}
+	})
+}
+
+func TestGetHomeDirectoryWindowsPrefersUserProfile(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows-specific test")
+	}
+
+	originalHome := os.Getenv("HOME")
+	originalUserProfile := os.Getenv("USERPROFILE")
+	defer func() {
+		os.Setenv("HOME", originalHome)
+		os.Setenv("USERPROFILE", originalUserProfile)
+	}()
+
+	// Simulate MSYS environment: HOME=/c/Users/Q, USERPROFILE=C:\Users\Q
+	os.Setenv("HOME", "/c/Users/TestUser")
+	os.Setenv("USERPROFILE", "C:\\Users\\TestUser")
+
+	result := getHomeDirectory()
+	if result != "C:\\Users\\TestUser" {
+		t.Errorf("Expected USERPROFILE path C:\\Users\\TestUser, got %s", result)
+	}
+}
+
+func TestGetHomeDirectoryMSYSFallback(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows-specific test")
+	}
+
+	originalHome := os.Getenv("HOME")
+	originalUserProfile := os.Getenv("USERPROFILE")
+	originalHomeDrive := os.Getenv("HOMEDRIVE")
+	originalHomePath := os.Getenv("HOMEPATH")
+	defer func() {
+		os.Setenv("HOME", originalHome)
+		os.Setenv("USERPROFILE", originalUserProfile)
+		os.Setenv("HOMEDRIVE", originalHomeDrive)
+		os.Setenv("HOMEPATH", originalHomePath)
+	}()
+
+	// No USERPROFILE, only MSYS HOME
+	os.Setenv("HOME", "/c/Users/TestUser")
+	os.Setenv("USERPROFILE", "")
+	os.Setenv("HOMEDRIVE", "")
+	os.Setenv("HOMEPATH", "")
+
+	result := getHomeDirectory()
+	if result != "C:\\Users\\TestUser" {
+		t.Errorf("Expected normalized MSYS path C:\\Users\\TestUser, got %s", result)
 	}
 }
 

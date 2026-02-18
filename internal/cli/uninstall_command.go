@@ -70,18 +70,12 @@ func runUninstallCommandE(cmd *cobra.Command, args []string) error {
 
 	slog.Info("uninstall command executing", "scope", scope, "dry_run", dryRun, "quiet", quiet, "print", print)
 
-	// Find Claude Code settings paths for the specified scope
-	settingsPaths, err := install.FindClaudeSettingsPaths(scope.String())
+	// Find the best Claude Code settings path for the specified scope
+	settingsPath, err := install.FindBestSettingsPath(scope.String())
 	if err != nil {
-		return fmt.Errorf("failed to find Claude Code settings paths: %w", err)
+		return fmt.Errorf("failed to find Claude Code settings path: %w", err)
 	}
 
-	if len(settingsPaths) == 0 {
-		return fmt.Errorf("no Claude Code settings paths found for scope: %s", scope)
-	}
-
-	// Use the first available path
-	settingsPath := settingsPaths[0]
 	slog.Debug("using settings path", "path", settingsPath, "scope", scope)
 
 	// Handle print flag - shows what hooks would be removed
