@@ -335,6 +335,16 @@ func TestCLISilentMode(t *testing.T) {
 	t.Logf("Silent mode output: %s", stdout.String())
 }
 
+func TestShouldDetachHookProcessing_DisabledInTests(t *testing.T) {
+	cli := NewCLI()
+	cfg := &config.Config{Enabled: true}
+	inputData := []byte(`{"session_id":"test","hook_event_name":"PostToolUse"}`)
+
+	if shouldDetachHookProcessing(cli.rootCmd, cfg, inputData) {
+		t.Fatal("shouldDetachHookProcessing should be disabled when running under go test")
+	}
+}
+
 func TestCLIEnvironmentVariables(t *testing.T) {
 	cli := NewCLI()
 
