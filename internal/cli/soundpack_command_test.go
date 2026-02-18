@@ -181,6 +181,112 @@ func TestSoundpackInit_OverwriteProtection(t *testing.T) {
 	}
 }
 
+func TestSoundpackList_ShowsEmbeddedPacks(t *testing.T) {
+	cli := NewCLI()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	exitCode := cli.Run([]string{"claudio", "soundpack", "list"}, nil, stdout, stderr)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d, stderr: %s", exitCode, stderr.String())
+	}
+
+	output := stdout.String()
+
+	// All three embedded platform packs must appear
+	if !strings.Contains(output, "windows") {
+		t.Error("expected output to contain 'windows'")
+	}
+	if !strings.Contains(output, "wsl") {
+		t.Error("expected output to contain 'wsl'")
+	}
+	if !strings.Contains(output, "darwin") {
+		t.Error("expected output to contain 'darwin'")
+	}
+
+	// All should be marked as embedded type
+	if !strings.Contains(output, "embedded") {
+		t.Error("expected output to contain 'embedded' type marker")
+	}
+}
+
+func TestSoundpackList_OutputFormat(t *testing.T) {
+	cli := NewCLI()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	exitCode := cli.Run([]string{"claudio", "soundpack", "list"}, nil, stdout, stderr)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d, stderr: %s", exitCode, stderr.String())
+	}
+
+	output := stdout.String()
+
+	// Check column headers
+	if !strings.Contains(output, "NAME") {
+		t.Error("expected output to contain 'NAME' header")
+	}
+	if !strings.Contains(output, "TYPE") {
+		t.Error("expected output to contain 'TYPE' header")
+	}
+	if !strings.Contains(output, "SOUNDS") {
+		t.Error("expected output to contain 'SOUNDS' header")
+	}
+}
+
+func TestSoundpackList_ShowsEmbeddedSoundCounts(t *testing.T) {
+	cli := NewCLI()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	exitCode := cli.Run([]string{"claudio", "soundpack", "list"}, nil, stdout, stderr)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d, stderr: %s", exitCode, stderr.String())
+	}
+
+	output := stdout.String()
+	lines := strings.Split(output, "\n")
+
+	// Find lines containing embedded packs and verify they have non-zero sound counts
+	// The output format is: NAME TYPE SOUNDS PATH
+	// We look for lines with "embedded" and verify they don't show "0" sounds
+	foundEmbedded := false
+	for _, line := range lines {
+		if strings.Contains(line, "embedded") {
+			foundEmbedded = true
+			// The line should not contain "0" as the sound count
+			// We split by whitespace and check the SOUNDS column
+			fields := strings.Fields(line)
+			if len(fields) >= 3 {
+				soundCount := fields[2]
+				if soundCount == "0" {
+					t.Errorf("expected non-zero sound count for embedded pack, got line: %s", line)
+				}
+			}
+		}
+	}
+
+	if !foundEmbedded {
+		t.Error("expected at least one embedded pack in output")
+	}
+}
+
+func TestSoundpackList_ExitsCleanly(t *testing.T) {
+	cli := NewCLI()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	exitCode := cli.Run([]string{"claudio", "soundpack", "list"}, nil, stdout, stderr)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d, stderr: %s", exitCode, stderr.String())
+	}
+
+	// stdout should have content (at least the headers + 3 embedded packs)
+	if stdout.Len() == 0 {
+		t.Error("expected non-empty stdout")
+	}
+}
+
 func TestExtractAllSoundKeys(t *testing.T) {
 	keys, err := ExtractAllSoundKeys()
 	if err != nil {
