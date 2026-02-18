@@ -59,6 +59,10 @@ func NewCLI() *CLI {
 	analyzeCmd := newAnalyzeCommand()
 	rootCmd.AddCommand(analyzeCmd)
 
+	// Add soundpack subcommand
+	soundpackCmd := newSoundpackCommand()
+	rootCmd.AddCommand(soundpackCmd)
+
 	// Add persistent flags to root command for backward compatibility
 	rootCmd.PersistentFlags().String("config", "", "Path to config file")
 	rootCmd.PersistentFlags().String("volume", "", "Set volume (0.0 to 1.0)")
