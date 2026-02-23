@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
+	"runtime"
 
-	"github.com/spf13/afero"
 	"claudio.click/internal/fs"
+	"github.com/spf13/afero"
 )
 
 // HooksMap represents the hooks section of Claude Code settings
@@ -287,9 +288,18 @@ func IsClaudioHook(hookValue interface{}) bool {
 	return false
 }
 
-// GetExecutablePath returns the current executable path using filesystem abstraction
+// GetExecutablePath returns the current executable path using filesystem abstraction.
+// On Windows the result is converted to forward slashes so that the path works
+// when Claude Code invokes the hook command through bash.
 func GetExecutablePath() (string, error) {
-	return fs.ExecutablePath()
+	p, err := fs.ExecutablePath()
+	if err != nil {
+		return "", err
+	}
+	if runtime.GOOS == "windows" {
+		p = filepath.ToSlash(p)
+	}
+	return p, nil
 }
 
 // GetFilesystemFactory returns the default filesystem factory
