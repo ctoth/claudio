@@ -2,6 +2,7 @@ package fs
 
 import (
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/afero"
 )
@@ -35,7 +36,13 @@ func (f *DefaultFactory) Memory() afero.Fs {
 // ExecutablePath returns the current executable path with filesystem abstraction support
 // This is a utility function that can be easily mocked in tests
 func ExecutablePath() (string, error) {
-	return os.Executable()
+	p, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	// Convert to forward slashes so the path works in bash (Claude Code
+	// passes hook commands through /usr/bin/bash on all platforms).
+	return filepath.ToSlash(p), nil
 }
 
 // MockExecutablePath can be used in tests to override the executable path
