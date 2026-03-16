@@ -887,3 +887,97 @@ func TestSoundpackInstall_FailsOnInvalidPath(t *testing.T) {
 		t.Error("expected non-zero exit code for non-existent path")
 	}
 }
+
+// --- Soundpack Use Tests ---
+
+func TestSoundpackUseUpdatesConfig(t *testing.T) {
+	_, configDir, cleanup := setupInstallTestEnv(t)
+	defer cleanup()
+
+	// Use an embedded pack name (always available)
+	cli := NewCLI()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	exitCode := cli.Run([]string{"claudio", "soundpack", "use", "windows"}, nil, stdout, stderr)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d, stdout: %s, stderr: %s", exitCode, stdout.String(), stderr.String())
+	}
+
+	// Load config and verify default_soundpack was updated
+	configPath := filepath.Join(configDir, "claudio", "config.json")
+	cm := config.NewConfigManager()
+	cfg, err := cm.LoadFromFile(configPath)
+	if err != nil {
+		t.Fatalf("failed to load config from %s: %v", configPath, err)
+	}
+
+	if cfg.DefaultSoundpack != "windows" {
+		t.Errorf("expected default_soundpack == 'windows', got %q", cfg.DefaultSoundpack)
+	}
+
+	// Stdout should contain confirmation
+	output := stdout.String()
+	if !strings.Contains(output, "windows") {
+		t.Errorf("expected stdout to mention 'windows', got: %s", output)
+	}
+}
+
+func TestSoundpackUseNotFound(t *testing.T) {
+	_, _, cleanup := setupInstallTestEnv(t)
+	defer cleanup()
+
+	cli := NewCLI()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	exitCode := cli.Run([]string{"claudio", "soundpack", "use", "nonexistent-pack-that-does-not-exist"}, nil, stdout, stderr)
+
+	if exitCode == 0 {
+		t.Error("expected non-zero exit code for non-existent soundpack name")
+	}
+
+	combined := stdout.String() + stderr.String()
+	if !strings.Contains(strings.ToLower(combined), "not found") && !strings.Contains(strings.ToLower(combined), "available") {
+		t.Errorf("expected error to mention 'not found' or 'available', got: %s", combined)
+	}
+}
+
+func TestSoundpackUseRequiresArg(t *testing.T) {
+	cli := NewCLI()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	exitCode := cli.Run([]string{"claudio", "soundpack", "use"}, nil, stdout, stderr)
+
+	if exitCode == 0 {
+		t.Error("expected non-zero exit code when name argument is missing")
+	}
+}
+
+func TestSoundpackUseAlreadyActive(t *testing.T) {
+	_, configDir, cleanup := setupInstallTestEnv(t)
+	defer cleanup()
+
+	// Use "windows" twice — second time should still succeed (idempotent)
+	for i := 0; i < 2; i++ {
+		cli := NewCLI()
+		stdout := &bytes.Buffer{}
+		stderr := &bytes.Buffer{}
+		exitCode := cli.Run([]string{"claudio", "soundpack", "use", "windows"}, nil, stdout, stderr)
+
+		if exitCode != 0 {
+			t.Fatalf("use #%d: expected exit code 0, got %d, stdout: %s, stderr: %s", i+1, exitCode, stdout.String(), stderr.String())
+		}
+	}
+
+	// Verify config still shows windows
+	configPath := filepath.Join(configDir, "claudio", "config.json")
+	cm := config.NewConfigManager()
+	cfg, err := cm.LoadFromFile(configPath)
+	if err != nil {
+		t.Fatalf("failed to load config from %s: %v", configPath, err)
+	}
+
+	if cfg.DefaultSoundpack != "windows" {
+		t.Errorf("expected default_soundpack == 'windows', got %q", cfg.DefaultSoundpack)
+	}
+}
