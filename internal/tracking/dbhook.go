@@ -23,9 +23,8 @@ type DBHook struct {
 
 // pathCheckEntry represents a single path check
 type pathCheckEntry struct {
-	path     string
-	exists   bool
-	sequence int
+	path   string
+	exists bool
 }
 
 // NewDBHook creates a new database hook for the specified session

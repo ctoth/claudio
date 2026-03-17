@@ -223,22 +223,3 @@ func categoryStringToInt(category string) int {
 	}
 }
 
-// categoryIntToString converts category integer to string representation  
-func categoryIntToString(categoryInt int) string {
-	switch categoryInt {
-	case 0:
-		return "loading"
-	case 1:
-		return "success"
-	case 2:
-		return "error"
-	case 3:
-		return "interactive"
-	case 4:
-		return "completion"
-	case 5:
-		return "system"
-	default:
-		return "unknown"
-	}
-}
