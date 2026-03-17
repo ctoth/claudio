@@ -51,7 +51,7 @@ func TestCLIUnconfiguredUsePlatformSoundpack(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to get current directory: %v", err)
 		}
-		defer os.Chdir(originalDir)
+		defer func() { _ = os.Chdir(originalDir) }()
 		
 		err = os.Chdir(tempDir)
 		if err != nil {
@@ -160,7 +160,7 @@ func TestCLIConfiguredWithPlatformFallback(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to get current directory: %v", err)
 		}
-		defer os.Chdir(originalDir)
+		defer func() { _ = os.Chdir(originalDir) }()
 		
 		err = os.Chdir(execDir)
 		if err != nil {

@@ -223,7 +223,7 @@ func validateJSONSoundpack(soundpack JSONSoundpackFile) error {
 		return fmt.Errorf("JSON soundpack missing required 'name' field")
 	}
 
-	if soundpack.Mappings == nil || len(soundpack.Mappings) == 0 {
+	if len(soundpack.Mappings) == 0 {
 		return fmt.Errorf("JSON soundpack missing or empty 'mappings' field")
 	}
 

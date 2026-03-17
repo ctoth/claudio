@@ -886,8 +886,8 @@ func TestMapSoundFallbackLevelBasedOnFileExistence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get current directory: %v", err)
 	}
-	defer os.Chdir(originalDir)
-	
+	defer func() { _ = os.Chdir(originalDir) }()
+
 	err = os.Chdir(tempDir)
 	if err != nil {
 		t.Fatalf("Failed to change to temp directory: %v", err)
@@ -1001,11 +1001,11 @@ func TestMapSoundWithoutTrackingSkipsPathChecking(t *testing.T) {
 
 	// Should still return valid result
 	if result == nil {
-		t.Error("Expected valid result even without tracking")
+		t.Fatal("Expected valid result even without tracking")
 	}
 
 	if len(result.AllPaths) == 0 {
-		t.Error("Expected paths to be generated even without tracking")
+		t.Fatal("Expected paths to be generated even without tracking")
 	}
 
 	// Fallback level should be 1 (default behavior without actual checking)

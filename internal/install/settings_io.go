@@ -94,21 +94,21 @@ func WriteSettingsFile(filesystem afero.Fs, filePath string, settings *SettingsM
 	_, err = tempFile.Write(data)
 	if err != nil {
 		tempFile.Close()
-		filesystem.Remove(tempFileName)
+		_ = filesystem.Remove(tempFileName)
 		return fmt.Errorf("failed to write to temp file: %w", err)
 	}
 
 	// Close temp file
 	err = tempFile.Close()
 	if err != nil {
-		filesystem.Remove(tempFileName)
+		_ = filesystem.Remove(tempFileName)
 		return fmt.Errorf("failed to close temp file: %w", err)
 	}
 
 	// Set permissions after closing
 	err = filesystem.Chmod(tempFileName, fileMode)
 	if err != nil {
-		filesystem.Remove(tempFileName)
+		_ = filesystem.Remove(tempFileName)
 		return fmt.Errorf("failed to set temp file permissions: %w", err)
 	}
 
@@ -116,7 +116,7 @@ func WriteSettingsFile(filesystem afero.Fs, filePath string, settings *SettingsM
 	err = filesystem.Rename(tempFileName, filePath)
 	if err != nil {
 		// Clean up temp file on failure
-		filesystem.Remove(tempFileName)
+		_ = filesystem.Remove(tempFileName)
 		return fmt.Errorf("failed to rename temp settings file: %w", err)
 	}
 

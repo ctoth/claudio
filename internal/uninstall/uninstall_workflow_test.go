@@ -454,10 +454,10 @@ func TestUninstallWorkflowErrorHandling(t *testing.T) {
 			setupFunc: func() (string, func()) {
 				tempDir := t.TempDir()
 				settingsDir := filepath.Join(tempDir, "restricted")
-				os.MkdirAll(settingsDir, 0000) // No permissions
+				_ = os.MkdirAll(settingsDir, 0000) // No permissions
 
 				return filepath.Join(settingsDir, "settings.json"), func() {
-					os.Chmod(settingsDir, 0755) // Restore permissions for cleanup
+					_ = os.Chmod(settingsDir, 0755) // Restore permissions for cleanup
 				}
 			},
 			expectError: true,
@@ -469,11 +469,11 @@ func TestUninstallWorkflowErrorHandling(t *testing.T) {
 			setupFunc: func() (string, func()) {
 				tempDir := t.TempDir()
 				settingsDir := filepath.Join(tempDir, ".claude")
-				os.MkdirAll(settingsDir, 0755)
+				_ = os.MkdirAll(settingsDir, 0755)
 
 				settingsFile := filepath.Join(settingsDir, "settings.json")
 				// Write invalid JSON
-				os.WriteFile(settingsFile, []byte("{invalid json"), 0644)
+				_ = os.WriteFile(settingsFile, []byte("{invalid json"), 0644)
 
 				return settingsFile, func() {}
 			},

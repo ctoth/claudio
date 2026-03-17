@@ -197,7 +197,7 @@ func TestReadSettingsPermissionDenied(t *testing.T) {
 
 	// Restore permissions after test for cleanup
 	defer func() {
-		os.Chmod(settingsFile, 0644)
+		_ = os.Chmod(settingsFile, 0644)
 	}()
 
 	// Test the ReadSettingsFile function
