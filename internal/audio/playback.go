@@ -342,7 +342,7 @@ func (p *AudioPlayer) PlaySoundWithContext(ctx context.Context, soundID string) 
 	}
 	
 	// Cleanup device
-	device.Stop()
+	_ = device.Stop()
 	device.Uninit()
 	
 	p.deviceMutex.Lock()
@@ -388,7 +388,7 @@ func (p *AudioPlayer) StopAll() error {
 	
 	// Stop and cleanup all devices
 	for _, device := range devices {
-		device.Stop()
+		_ = device.Stop()
 		device.Uninit()
 	}
 	

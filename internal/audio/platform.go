@@ -83,11 +83,6 @@ func detectOptimalBackendWithChecker(isWSL bool, commandChecker func(string) boo
 	return "malgo"
 }
 
-// getPreferredSystemCommand finds the best available system audio command
-func getPreferredSystemCommand() string {
-	return getPreferredSystemCommandWithChecker(CommandExists)
-}
-
 // getPreferredSystemCommandWithChecker allows dependency injection for testing
 func getPreferredSystemCommandWithChecker(commandChecker func(string) bool) string {
 	// Priority order: paplay (PulseAudio) > ffplay (FFmpeg) > aplay (ALSA) > afplay (macOS)
