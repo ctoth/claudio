@@ -137,23 +137,24 @@ func (mb *MalgoBackend) Play(ctx context.Context, source AudioSource) error {
 	var err error
 
 	// Try file path first (most efficient)
-	if filePath, err := source.AsFilePath(); err == nil {
-		audioData, err = mb.loadAudioFile(filePath)
+	var loadErr error
+	if filePath, fpErr := source.AsFilePath(); fpErr == nil {
+		audioData, loadErr = mb.loadAudioFile(filePath)
 	} else {
 		// Use reader
-		reader, format, err := source.AsReader()
-		if err != nil {
-			slog.Error("failed to get reader from source", "error", err)
-			return fmt.Errorf("failed to get audio data from source: %w", err)
+		reader, format, rErr := source.AsReader()
+		if rErr != nil {
+			slog.Error("failed to get reader from source", "error", rErr)
+			return fmt.Errorf("failed to get audio data from source: %w", rErr)
 		}
 		defer reader.Close()
 
-		audioData, err = mb.loadAudioFromReader(reader, format)
+		audioData, loadErr = mb.loadAudioFromReader(reader, format)
 	}
 
-	if err != nil {
-		slog.Error("failed to load audio data", "error", err)
-		return fmt.Errorf("failed to load audio data: %w", err)
+	if loadErr != nil {
+		slog.Error("failed to load audio data", "error", loadErr)
+		return fmt.Errorf("failed to load audio data: %w", loadErr)
 	}
 
 	if audioData == nil {
@@ -174,7 +175,7 @@ func (mb *MalgoBackend) Play(ctx context.Context, source AudioSource) error {
 	err = mb.audioPlayer.PlaySoundWithContext(ctx, soundID)
 	if err != nil {
 		// Clean up on error
-		mb.audioPlayer.UnloadSound(soundID)
+		_ = mb.audioPlayer.UnloadSound(soundID)
 		slog.Error("failed to play sound", "sound_id", soundID, "error", err)
 		return fmt.Errorf("failed to play sound: %w", err)
 	}
@@ -182,7 +183,7 @@ func (mb *MalgoBackend) Play(ctx context.Context, source AudioSource) error {
 	// Clean up after playback
 	go func() {
 		<-ctx.Done()
-		mb.audioPlayer.UnloadSound(soundID)
+		_ = mb.audioPlayer.UnloadSound(soundID)
 		slog.Debug("sound cleanup completed", "sound_id", soundID)
 	}()
 
