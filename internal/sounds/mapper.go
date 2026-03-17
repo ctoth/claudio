@@ -601,7 +601,7 @@ func (m *SoundMapper) mapLegacySound(context *hooks.EventContext) *SoundMappingR
 	}
 
 	// Determine chain type for result metadata using same logic as main mapper
-	chainType := ChainTypeLegacy
+	var chainType string
 	if m.isEnhancedChainEvent(context) {
 		chainType = ChainTypeEnhanced // Will be properly implemented in Phase 2.2
 	} else if m.isPostToolChainEvent(context) {

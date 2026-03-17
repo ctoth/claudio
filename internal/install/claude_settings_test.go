@@ -59,10 +59,10 @@ func TestFindClaudeSettings(t *testing.T) {
 
 				// Change to temp directory for testing
 				originalDir, _ := os.Getwd()
-				os.Chdir(tempDir)
+				_ = os.Chdir(tempDir)
 
 				return tempDir, func() {
-					os.Chdir(originalDir)
+					_ = os.Chdir(originalDir)
 				}
 			},
 		},
@@ -209,8 +209,8 @@ func TestFindClaudeSettingsExistingFiles(t *testing.T) {
 				}
 			} else {
 				originalDir, _ := os.Getwd()
-				os.Chdir(tempDir)
-				cleanup = func() { os.Chdir(originalDir) }
+				_ = os.Chdir(tempDir)
+				cleanup = func() { _ = os.Chdir(originalDir) }
 			}
 			defer cleanup()
 

@@ -11,6 +11,20 @@ import (
 	"github.com/gen2brain/malgo"
 )
 
+// skipIfNoAudioDevice skips the test if the error indicates no audio device
+// is available (e.g. CI runners without sound hardware).
+func skipIfNoAudioDevice(t *testing.T, err error) {
+	t.Helper()
+	if err == nil {
+		return
+	}
+	msg := err.Error()
+	if strings.Contains(msg, "Failed to open backend device") ||
+		strings.Contains(msg, "failed to initialize playback device") {
+		t.Skip("no audio device available")
+	}
+}
+
 func TestAudioPlayer(t *testing.T) {
 	player := NewAudioPlayer()
 
@@ -160,6 +174,7 @@ func TestAudioPlayerPlaySound(t *testing.T) {
 
 		// Play the sound
 		err = player.PlaySound(soundID)
+		skipIfNoAudioDevice(t, err)
 		if err != nil {
 			t.Fatalf("PlaySound failed: %v", err)
 		}
@@ -207,6 +222,7 @@ func TestAudioPlayerPlaySoundWithTimeout(t *testing.T) {
 		defer cancel()
 
 		err := player.PlaySoundWithContext(ctx, soundID)
+		skipIfNoAudioDevice(t, err)
 		if err != nil {
 			t.Fatalf("PlaySoundWithContext failed: %v", err)
 		}
@@ -256,6 +272,7 @@ func TestAudioPlayerConcurrentPlayback(t *testing.T) {
 		// Collect results
 		for i := 0; i < len(sounds); i++ {
 			err := <-errChan
+			skipIfNoAudioDevice(t, err)
 			if err != nil {
 				t.Errorf("Concurrent playback failed: %v", err)
 			}

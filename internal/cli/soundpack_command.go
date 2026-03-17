@@ -458,7 +458,7 @@ func discoverConfigSoundpacks() []soundpackInfo {
 // countAudioFiles recursively counts audio files in a directory
 func countAudioFiles(dir string) int {
 	count := 0
-	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+	_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil // Skip errors, continue walking
 		}
@@ -696,7 +696,7 @@ func validateDirectorySoundpack(dirPath string) (validateResult, error) {
 	}
 
 	// Walk directory to find audio files
-	filepath.Walk(dirPath, func(path string, info os.FileInfo, walkErr error) error {
+	_ = filepath.Walk(dirPath, func(path string, info os.FileInfo, walkErr error) error {
 		if walkErr != nil {
 			return nil
 		}

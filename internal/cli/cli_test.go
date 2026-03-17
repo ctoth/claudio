@@ -923,9 +923,7 @@ func TestCLILoggingLevels(t *testing.T) {
 
 	cli := NewCLI()
 	defer func() {
-		if err := cli.rootCmd.Context(); err == nil {
-			// CLI cleanup if needed
-		}
+		_ = cli.rootCmd.Context()
 	}()
 
 	// Test CLI with hook processing - triggers system initialization

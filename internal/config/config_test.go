@@ -328,7 +328,7 @@ func TestAutoDiscoverConfig(t *testing.T) {
 	}
 
 	if config == nil {
-		t.Error("LoadConfig returned nil config")
+		t.Fatal("LoadConfig returned nil config")
 	}
 
 	// Should have reasonable defaults

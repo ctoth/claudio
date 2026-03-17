@@ -9,12 +9,6 @@ import (
 	_ "modernc.org/sqlite" // SQLite driver
 )
 
-// Database represents a SQLite database connection for sound tracking
-type Database struct {
-	*sql.DB
-	path string
-}
-
 // NewDatabase creates a new SQLite database with the specified path and applies the schema
 func NewDatabase(dbPath string) (*sql.DB, error) {
 	// Ensure directory exists if not in-memory

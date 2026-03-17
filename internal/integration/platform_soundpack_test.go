@@ -51,10 +51,3 @@ func TestPlatformSoundpackBasic(t *testing.T) {
 	})
 }
 
-// truncateString helper for log output
-func truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen] + "...[truncated]"
-}

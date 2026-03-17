@@ -1007,14 +1007,14 @@ func TestPreToolUseStartSuffixInsteadOfThinking(t *testing.T) {
 			var testJSON string
 			if tt.name == "Non-Bash tool should use -start suffix" {
 				// Test with Read tool instead of Bash
-				testJSON = fmt.Sprintf(`{
+				testJSON = `{
 					"session_id": "test",
 					"transcript_path": "/test",
 					"cwd": "/test",
 					"hook_event_name": "PreToolUse",
 					"tool_name": "Read",
 					"tool_input": {"file_path": "/test/file.txt"}
-				}`)
+				}`
 			} else {
 				// Test with Bash tool
 				testJSON = fmt.Sprintf(`{
