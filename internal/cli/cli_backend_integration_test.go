@@ -265,23 +265,6 @@ func getType(v interface{}) string {
 	}
 }
 
-func containsSubstring(s, substr string) bool {
-	return len(s) >= len(substr) &&
-		(s == substr ||
-			(len(s) > len(substr) &&
-				(s[:len(substr)] == substr ||
-					s[len(s)-len(substr):] == substr ||
-					containsSubstringMiddle(s, substr))))
-}
-
-func containsSubstringMiddle(s, substr string) bool {
-	for i := 1; i < len(s)-len(substr)+1; i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}
 
 // TestCLIAIFFSupportViaUnifiedSystem verifies AIFF support works through CLI
 func TestCLIAIFFSupportViaUnifiedSystem(t *testing.T) {
