@@ -70,6 +70,9 @@ func TestCLIInitializeAudioSystemWithBackend(t *testing.T) {
 				t.Errorf("expected error for backend '%s' but got none", tt.audioBackend)
 			}
 			if !tt.expectError && err != nil {
+				if strings.Contains(err.Error(), "no system audio commands found") {
+					t.Skipf("no system audio commands available on this system")
+				}
 				t.Errorf("unexpected error for backend '%s': %v", tt.audioBackend, err)
 			}
 

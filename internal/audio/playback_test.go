@@ -15,7 +15,12 @@ import (
 // is available (e.g. CI runners without sound hardware).
 func skipIfNoAudioDevice(t *testing.T, err error) {
 	t.Helper()
-	if err != nil && strings.Contains(err.Error(), "Failed to open backend device") {
+	if err == nil {
+		return
+	}
+	msg := err.Error()
+	if strings.Contains(msg, "Failed to open backend device") ||
+		strings.Contains(msg, "failed to initialize playback device") {
 		t.Skip("no audio device available")
 	}
 }
