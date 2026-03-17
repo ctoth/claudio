@@ -98,13 +98,19 @@ func saveHookData(data []byte, eventName string) error {
 // saveRawData saves invalid JSON for debugging
 func saveRawData(data []byte, suffix string) {
 	logsDir := "/tmp/claudio-hook-logs"
-	os.MkdirAll(logsDir, 0755)
+	if err := os.MkdirAll(logsDir, 0755); err != nil {
+		slog.Error("failed to create logs directory", "error", err)
+		return
+	}
 
 	timestamp := time.Now().Format("2006-01-02_15-04-05.000")
 	filename := fmt.Sprintf("%s_%s.raw", timestamp, suffix)
 	filepath := filepath.Join(logsDir, filename)
 
-	os.WriteFile(filepath, data, 0644)
+	if err := os.WriteFile(filepath, data, 0644); err != nil {
+		slog.Error("failed to write raw data", "file", filepath, "error", err)
+		return
+	}
 	slog.Info("raw data saved", "file", filepath)
 }
 
