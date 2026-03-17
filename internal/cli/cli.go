@@ -87,14 +87,19 @@ func NewCLI() *CLI {
 	}
 }
 
+// contextKey is a private type for context keys to avoid collisions (SA1029).
+type contextKey string
+
+const cliContextKey contextKey = "cli"
+
 // contextWithCLI stores CLI instance in context for command handlers
 func contextWithCLI(cli *CLI) context.Context {
-	return context.WithValue(context.Background(), "cli", cli)
+	return context.WithValue(context.Background(), cliContextKey, cli)
 }
 
 // cliFromContext extracts CLI instance from context
 func cliFromContext(ctx context.Context) *CLI {
-	if cli, ok := ctx.Value("cli").(*CLI); ok {
+	if cli, ok := ctx.Value(cliContextKey).(*CLI); ok {
 		return cli
 	}
 	return nil
@@ -535,21 +540,6 @@ func (c *CLI) initializeConfigManager() {
 	}
 }
 
-// initializeRemainingSystemsAfterConfig initializes systems that can wait until after log level is configured
-func (c *CLI) initializeRemainingSystemsAfterConfig() {
-	// Initialize tracking first
-	c.initializeTracking()
-
-	// Don't create global SoundMapper - it will be created per-request with session-specific SoundChecker
-	if c.backendFactory == nil {
-		c.backendFactory = audio.NewBackendFactory()
-	}
-	if c.terminalDetector == nil {
-		c.terminalDetector = &DefaultTerminalDetector{}
-	}
-	// soundpackResolver and audioBackend are initialized in initializeAudioSystem when needed
-}
-
 // initializeSystems lazily initializes remaining CLI components when actually needed
 func (c *CLI) initializeSystems() {
 	slog.Debug("initializeSystems() called")
@@ -653,45 +643,6 @@ func (c *CLI) playSoundWithBackend(soundPath string, volume float64) error {
 
 	slog.Info("sound playback completed successfully", "path", soundPath, "backend_type", fmt.Sprintf("%T", c.audioBackend))
 	return nil
-}
-
-// printHelp prints help information
-func (c *CLI) printHelp(w io.Writer) {
-	help := `claudio - Claude Code Audio Plugin
-
-usage: claudio [flags]
-
-Usage:
-  claudio [flags]
-
-Reads Claude Code hook JSON from stdin and plays appropriate sounds.
-
-Flags:
-  --help              Show this help message
-  --version           Show version information
-  --config FILE       Path to config file
-  --volume FLOAT      Set volume (0.0 to 1.0)
-  --soundpack NAME    Set soundpack to use
-  --silent            Silent mode - no audio playback
-
-Environment Variables:
-  CLAUDIO_VOLUME        Override volume setting
-  CLAUDIO_SOUNDPACK     Override soundpack setting
-  CLAUDIO_ENABLED       Override enabled setting (true/false)
-  CLAUDIO_LOG_LEVEL     Override log level (debug/info/warn/error)
-  CLAUDIO_AUDIO_BACKEND Override audio backend (auto/system_command/malgo)
-
-Examples:
-  echo '{"hook_event_name":"PostToolUse","session_id":"test","tool_name":"Bash"}' | claudio
-  claudio --volume 0.8 --soundpack mechanical < hook.json
-  claudio --silent < hook.json
-`
-	fmt.Fprint(w, help)
-}
-
-// printVersion prints version information
-func (c *CLI) printVersion(w io.Writer) {
-	fmt.Fprintf(w, "claudio version %s (Version %s)\nClaude Code Audio Plugin - Hook-based sound system\n", Version, Version)
 }
 
 // setupLogging configures slog with dual-level logging:
