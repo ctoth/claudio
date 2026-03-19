@@ -149,13 +149,15 @@ func TestPathCheckedHookSignature(t *testing.T) {
 }
 
 func TestSoundChecker_LogicalPathsAlwaysFail(t *testing.T) {
-	// This test reproduces the bug: SoundChecker checks logical paths directly
-	// instead of resolving them through soundpack first
-	
+	// Without a resolver, SoundChecker checks logical paths directly against the filesystem.
+	// Logical paths like "success/bash-success.wav" are never real files on disk, so they
+	// always return false. A resolver must be provided (via NewSoundCheckerWithResolver) to
+	// map logical paths to physical ones before checking existence.
+
 	var checkedPaths []string
 	hook := func(path string, exists bool, sequence int, context *hooks.EventContext) {
 		checkedPaths = append(checkedPaths, path)
-		// This will always be false because logical paths like "success/bash-success.wav" don't exist
+		// Expected: logical paths never exist on disk without a resolver
 		if exists {
 			t.Errorf("Expected path %s to not exist (logical path), but it was reported as existing", path)
 		}
@@ -180,9 +182,10 @@ func TestSoundChecker_LogicalPathsAlwaysFail(t *testing.T) {
 		}
 	}
 	
-	// This demonstrates the bug - all logical paths fail, so fallback always goes to last level
+	// All logical paths fail without a resolver, confirming that NewSoundCheckerWithResolver
+	// is required for soundpack-aware path checking.
 	if len(results) > 0 && !results[len(results)-1] {
-		t.Log("BUG DEMONSTRATED: Even default.wav fails because we're checking logical path, not resolved path")
+		t.Log("Confirmed: logical paths always fail without a resolver - use NewSoundCheckerWithResolver")
 	}
 }
 
@@ -210,8 +213,9 @@ func (m *MockSoundpackResolver) ResolveSoundWithFallback(paths []string) (string
 func (m *MockSoundpackResolver) GetName() string { return "mock" }
 func (m *MockSoundpackResolver) GetType() string { return "mock" }
 
-func TestSoundChecker_WithResolver_SHOULD_FAIL(t *testing.T) {
-	// This test should FAIL until we implement the resolver integration
+func TestSoundChecker_WithResolver(t *testing.T) {
+	// Verifies that NewSoundCheckerWithResolver correctly resolves logical paths to
+	// physical paths before checking existence on disk.
 	
 	// Create temporary test files
 	tempDir := t.TempDir()
