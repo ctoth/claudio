@@ -139,7 +139,7 @@ func (d *WavDecoder) Decode(reader io.Reader) (*AudioData, error) {
 		Format:     malgoFormat,
 	}
 
-	slog.Info("WAV decode completed successfully",
+	slog.Debug("WAV decode completed successfully",
 		"total_bytes", len(rawBytes),
 		"total_samples", len(allSamples),
 		"channels", audioData.Channels,

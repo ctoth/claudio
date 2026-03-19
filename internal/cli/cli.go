@@ -227,7 +227,7 @@ func initializeAudioSystem(cmd *cobra.Command, cli *CLI, cfg *config.Config) err
 					base := filepath.Base(sp)
 					name := strings.TrimSuffix(base, filepath.Ext(base))
 					if name == cfg.DefaultSoundpack {
-						slog.Info("resolved soundpack name to path",
+						slog.Debug("resolved soundpack name to path",
 							"name", cfg.DefaultSoundpack, "path", sp)
 						resolvedPath = sp
 						break
@@ -238,7 +238,7 @@ func initializeAudioSystem(cmd *cobra.Command, cli *CLI, cfg *config.Config) err
 
 		// Check if resolved soundpack path exists
 		if _, statErr := os.Stat(resolvedPath); statErr != nil {
-			slog.Info("configured soundpack not found, will try platform fallback",
+			slog.Debug("configured soundpack not found, will try platform fallback",
 				"soundpack", cfg.DefaultSoundpack, "resolved", resolvedPath, "error", statErr)
 			shouldTryPlatformFallback = true
 		}
@@ -266,7 +266,7 @@ func initializeAudioSystem(cmd *cobra.Command, cli *CLI, cfg *config.Config) err
 		platformSoundpack := cfgMgr.GetPlatformSoundpack(afero.NewOsFs(), execDir)
 
 		if platformSoundpack != "default" {
-			slog.Info("using platform-specific soundpack", "path", platformSoundpack)
+			slog.Debug("using platform-specific soundpack", "path", platformSoundpack)
 
 			var platformMapper soundpack.PathMapper
 			var platformErr error
@@ -284,7 +284,7 @@ func initializeAudioSystem(cmd *cobra.Command, cli *CLI, cfg *config.Config) err
 			}
 
 			if platformErr == nil {
-				slog.Info("platform soundpack loaded successfully", "identifier", platformSoundpack)
+				slog.Debug("platform soundpack loaded successfully", "identifier", platformSoundpack)
 				mapper = platformMapper
 			} else {
 				slog.Warn("platform soundpack failed to load",
@@ -566,7 +566,7 @@ func (c *CLI) processHookEvent(hookEvent *hooks.HookEvent, cfg *config.Config, s
 	// Extract hook context directly from event
 	context := hookEvent.GetContext()
 
-	slog.Info("hook context parsed",
+	slog.Debug("hook context parsed",
 		"category", context.Category.String(),
 		"operation", context.Operation,
 		"tool", context.ToolName,
@@ -593,7 +593,7 @@ func (c *CLI) processHookEvent(hookEvent *hooks.HookEvent, cfg *config.Config, s
 		return
 	}
 
-	slog.Info("sound mapped",
+	slog.Debug("sound mapped",
 		"fallback_level", result.FallbackLevel,
 		"total_paths", result.TotalPaths,
 		"selected_path", result.SelectedPath)
@@ -610,7 +610,7 @@ func (c *CLI) processHookEvent(hookEvent *hooks.HookEvent, cfg *config.Config, s
 			slog.Error("sound playback failed", "sound_path", result.SelectedPath, "error", err)
 			return
 		}
-		slog.Info("sound played successfully", "sound_path", result.SelectedPath)
+		slog.Debug("sound played successfully", "sound_path", result.SelectedPath)
 	} else {
 		slog.Debug("audio disabled, skipping sound playback")
 	}
@@ -641,7 +641,7 @@ func (c *CLI) playSoundWithBackend(soundPath string, volume float64) error {
 		return fmt.Errorf("failed to play sound with backend: %w", err)
 	}
 
-	slog.Info("sound playback completed successfully", "path", soundPath, "backend_type", fmt.Sprintf("%T", c.audioBackend))
+	slog.Debug("sound playback completed successfully", "path", soundPath, "backend_type", fmt.Sprintf("%T", c.audioBackend))
 	return nil
 }
 
@@ -831,6 +831,6 @@ func loadEmbeddedPlatformSoundpack(identifier string) (soundpack.PathMapper, err
 		return nil, fmt.Errorf("failed to load embedded platform soundpack: %w", err)
 	}
 
-	slog.Info("embedded platform soundpack loaded successfully", "filename", filename)
+	slog.Debug("embedded platform soundpack loaded successfully", "filename", filename)
 	return mapper, nil
 }

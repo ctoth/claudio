@@ -89,7 +89,7 @@ func (d *Mp3Decoder) Decode(reader io.Reader) (*AudioData, error) {
 		durationMs = (len(samples) * 1000) / bytesPerSecond
 	}
 
-	slog.Info("MP3 decode completed successfully",
+	slog.Debug("MP3 decode completed successfully",
 		"total_bytes", len(samples),
 		"channels", audioData.Channels,
 		"sample_rate", audioData.SampleRate,
