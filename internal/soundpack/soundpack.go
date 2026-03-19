@@ -72,7 +72,7 @@ func (u *UnifiedSoundpackResolver) ResolveSound(relativePath string) (string, er
 		slog.Debug("checking candidate", "index", i, "candidate", candidate)
 
 		if _, err := os.Stat(candidate); err == nil {
-			slog.Info("sound path resolved successfully",
+			slog.Debug("sound path resolved successfully",
 				"relative_path", relativePath,
 				"resolved_path", candidate,
 				"mapper_type", u.mapper.GetType(),
@@ -116,7 +116,7 @@ func (u *UnifiedSoundpackResolver) ResolveSoundWithFallback(paths []string) (str
 
 		resolved, err := u.ResolveSound(path)
 		if err == nil {
-			slog.Info("fallback resolution successful",
+			slog.Debug("fallback resolution successful",
 				"resolved_path", resolved,
 				"fallback_index", i,
 				"fallback_path", path,
@@ -210,7 +210,7 @@ func LoadJSONSoundpack(filePath string) (PathMapper, error) {
 		"name", soundpack.Name,
 		"mappings_count", len(soundpack.Mappings))
 
-	slog.Info("JSON soundpack loaded successfully",
+	slog.Debug("JSON soundpack loaded successfully",
 		"file_path", filePath,
 		"name", soundpack.Name,
 		"valid_mappings", len(soundpack.Mappings))
@@ -286,7 +286,7 @@ func LoadJSONSoundpackFromBytes(data []byte) (PathMapper, error) {
 		"name", soundpack.Name,
 		"mappings_count", len(soundpack.Mappings))
 
-	slog.Info("JSON soundpack loaded successfully from bytes",
+	slog.Debug("JSON soundpack loaded successfully from bytes",
 		"name", soundpack.Name,
 		"valid_mappings", len(soundpack.Mappings))
 
@@ -350,7 +350,7 @@ func CreateSoundpackMapperWithBasePaths(name, primaryPath string, basePaths []st
 	}
 
 	// Create directory mapper with base paths for fallback
-	slog.Info("creating directory mapper with base paths",
+	slog.Debug("creating directory mapper with base paths",
 		"name", name,
 		"base_paths", basePaths)
 

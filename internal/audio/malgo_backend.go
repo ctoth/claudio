@@ -209,7 +209,7 @@ func (mb *MalgoBackend) loadAudioFile(filePath string) (*AudioData, error) {
 		return nil, fmt.Errorf("decode failed: %w", err)
 	}
 
-	slog.Info("audio file loaded successfully via registry",
+	slog.Debug("audio file loaded successfully via registry",
 		"file", filePath,
 		"channels", audioData.Channels,
 		"sample_rate", audioData.SampleRate,
@@ -232,7 +232,7 @@ func (mb *MalgoBackend) loadAudioFromReader(reader io.Reader, format string) (*A
 		return nil, fmt.Errorf("decode from reader failed: %w", err)
 	}
 
-	slog.Info("audio reader loaded successfully via registry",
+	slog.Debug("audio reader loaded successfully via registry",
 		"format", format,
 		"channels", audioData.Channels,
 		"sample_rate", audioData.SampleRate,

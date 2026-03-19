@@ -211,7 +211,7 @@ func (m *SoundMapper) mapEnhancedSound(context *hooks.EventContext) *SoundMappin
 		ChainType:     ChainTypeEnhanced,
 	}
 
-	slog.Info("enhanced sound mapping completed",
+	slog.Debug("enhanced sound mapping completed",
 		"selected_path", result.SelectedPath,
 		"fallback_level", result.FallbackLevel,
 		"total_paths", result.TotalPaths,
@@ -462,7 +462,7 @@ func (m *SoundMapper) mapPostToolSound(context *hooks.EventContext) *SoundMappin
 		ChainType:     ChainTypePostTool,
 	}
 
-	slog.Info("PostToolUse sound mapping completed",
+	slog.Debug("PostToolUse sound mapping completed",
 		"selected_path", result.SelectedPath,
 		"fallback_level", result.FallbackLevel,
 		"total_paths", result.TotalPaths,
@@ -531,7 +531,7 @@ func (m *SoundMapper) mapSimpleSound(context *hooks.EventContext) *SoundMappingR
 		ChainType:     ChainTypeSimple,
 	}
 
-	slog.Info("simple sound mapping completed",
+	slog.Debug("simple sound mapping completed",
 		"selected_path", result.SelectedPath,
 		"fallback_level", result.FallbackLevel,
 		"total_paths", result.TotalPaths,
@@ -625,7 +625,7 @@ func (m *SoundMapper) mapLegacySound(context *hooks.EventContext) *SoundMappingR
 		ChainType:     chainType,
 	}
 
-	slog.Info("legacy sound mapping completed",
+	slog.Debug("legacy sound mapping completed",
 		"selected_path", result.SelectedPath,
 		"fallback_level", result.FallbackLevel,
 		"total_paths", result.TotalPaths,

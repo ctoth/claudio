@@ -132,12 +132,12 @@ func (p *AudioPlayer) PreloadSound(soundID string, audioData *AudioData) error {
 	
 	// Check if we're overwriting an existing sound
 	if _, exists := p.sounds[soundID]; exists {
-		slog.Info("overwriting existing preloaded sound", "sound_id", soundID)
+		slog.Debug("overwriting existing preloaded sound", "sound_id", soundID)
 	}
 	
 	p.sounds[soundID] = audioData
 	
-	slog.Info("sound preloaded successfully", 
+	slog.Debug("sound preloaded successfully",
 		"sound_id", soundID,
 		"total_preloaded", len(p.sounds))
 	
@@ -160,7 +160,7 @@ func (p *AudioPlayer) UnloadSound(soundID string) error {
 	
 	delete(p.sounds, soundID)
 	
-	slog.Info("sound unloaded successfully", 
+	slog.Debug("sound unloaded successfully",
 		"sound_id", soundID,
 		"remaining_preloaded", len(p.sounds))
 	
@@ -358,7 +358,7 @@ func (p *AudioPlayer) PlaySoundWithContext(ctx context.Context, soundID string) 
 	p.isPlaying = stillPlaying
 	p.mutex.Unlock()
 	
-	slog.Info("sound playback cleanup completed", "sound_id", soundID, "still_playing", stillPlaying)
+	slog.Debug("sound playback cleanup completed", "sound_id", soundID, "still_playing", stillPlaying)
 	return nil
 }
 
@@ -370,7 +370,7 @@ func (p *AudioPlayer) Stop() error {
 	p.isPlaying = false
 	p.mutex.Unlock()
 	
-	slog.Info("sound playback stopped")
+	slog.Debug("sound playback stopped")
 	return nil
 }
 
