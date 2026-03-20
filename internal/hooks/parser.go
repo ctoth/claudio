@@ -178,6 +178,10 @@ func (e *HookEvent) GetContext() *EventContext {
 				// Fallback to original behavior
 				context.SoundHint = strings.ToLower(context.ToolName) + "-start"
 			}
+		} else if strings.HasPrefix(context.ToolName, "mcp__") {
+			context.OriginalTool = context.ToolName
+			context.ToolName = "mcp"
+			context.SoundHint = "mcp-start"
 		} else if context.ToolName != "" {
 			context.SoundHint = strings.ToLower(context.ToolName) + "-start"
 		} else {
@@ -216,6 +220,10 @@ func (e *HookEvent) GetContext() *EventContext {
 						context.SoundHint = strings.ToLower(context.ToolName) + "-error"
 					}
 				}
+			} else if strings.HasPrefix(context.ToolName, "mcp__") {
+				context.OriginalTool = context.ToolName
+				context.ToolName = "mcp"
+				context.SoundHint = "mcp-error"
 			} else {
 				// Original logic for non-Bash tools
 				if errorType != "" {
@@ -246,6 +254,10 @@ func (e *HookEvent) GetContext() *EventContext {
 					// Fallback to original behavior
 					context.SoundHint = strings.ToLower(context.ToolName) + "-success"
 				}
+			} else if strings.HasPrefix(context.ToolName, "mcp__") {
+				context.OriginalTool = context.ToolName
+				context.ToolName = "mcp"
+				context.SoundHint = "mcp-success"
 			} else {
 				// Original logic for non-Bash tools
 				if context.ToolName != "" {
@@ -340,6 +352,12 @@ func (e *HookEvent) analyzeToolResponse() (success bool, hasError bool, errorTyp
 	if interrupted, ok := response["interrupted"].(bool); ok && interrupted {
 		slog.Debug("tool was interrupted")
 		return false, true, "tool-interrupted"
+	}
+
+	// Check for MCP-style isError field
+	if isError, ok := response["isError"].(bool); ok && isError {
+		slog.Debug("tool response has isError=true (MCP error)")
+		return false, true, ""
 	}
 
 	// Check for common error indicators
