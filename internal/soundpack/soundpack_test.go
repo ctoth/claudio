@@ -347,6 +347,47 @@ func TestJSONSoundpackLoading(t *testing.T) {
 		}
 	})
 
+	t.Run("resolves relative mappings from JSON file directory", func(t *testing.T) {
+		tempDir := t.TempDir()
+		jsonFile := filepath.Join(tempDir, "relative-soundpack.json")
+		soundFile := filepath.Join(tempDir, "sounds", "success.wav")
+
+		if err := os.MkdirAll(filepath.Dir(soundFile), 0755); err != nil {
+			t.Fatalf("Failed to create sound directory: %v", err)
+		}
+		if err := os.WriteFile(soundFile, []byte("fake wav data"), 0644); err != nil {
+			t.Fatalf("Failed to create test sound file: %v", err)
+		}
+
+		soundpackData := map[string]interface{}{
+			"name": "relative-soundpack",
+			"mappings": map[string]string{
+				"success/success.wav": filepath.Join("sounds", "success.wav"),
+			},
+		}
+		jsonContent, err := json.MarshalIndent(soundpackData, "", "\t")
+		if err != nil {
+			t.Fatalf("Failed to marshal JSON: %v", err)
+		}
+		if err := os.WriteFile(jsonFile, jsonContent, 0644); err != nil {
+			t.Fatalf("Failed to create JSON file: %v", err)
+		}
+
+		mapper, err := LoadJSONSoundpack(jsonFile)
+		if err != nil {
+			t.Fatalf("Expected to load JSON soundpack with relative mappings, got error: %v", err)
+		}
+
+		candidates, err := mapper.MapPath("success/success.wav")
+		if err != nil {
+			t.Errorf("MapPath should not error: %v", err)
+		}
+
+		if len(candidates) != 1 || candidates[0] != soundFile {
+			t.Errorf("Expected [%s], got %v", soundFile, candidates)
+		}
+	})
+
 	t.Run("handles malformed JSON gracefully", func(t *testing.T) {
 		tempDir := t.TempDir()
 		jsonFile := filepath.Join(tempDir, "malformed.json")

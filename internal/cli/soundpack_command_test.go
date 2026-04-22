@@ -364,6 +364,44 @@ func TestSoundpackValidate_ValidJSON(t *testing.T) {
 	}
 }
 
+func TestSoundpackValidate_RelativeJSONMappings(t *testing.T) {
+	tmpDir := t.TempDir()
+	wavPath := filepath.Join(tmpDir, "sounds", "click.wav")
+	createDummyWAV(t, wavPath)
+
+	spFile := soundpack.JSONSoundpackFile{
+		Name:        "relative-valid",
+		Description: "Test soundpack with relative mappings",
+		Version:     "1.0.0",
+		Mappings: map[string]string{
+			"loading/bash-start.wav": filepath.Join("sounds", "click.wav"),
+		},
+	}
+
+	jsonData, err := json.MarshalIndent(spFile, "", "  ")
+	if err != nil {
+		t.Fatalf("failed to marshal JSON: %v", err)
+	}
+
+	jsonPath := filepath.Join(tmpDir, "relative-valid.json")
+	if err := os.WriteFile(jsonPath, jsonData, 0644); err != nil {
+		t.Fatalf("failed to write JSON: %v", err)
+	}
+
+	cli := NewCLI()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	exitCode := cli.Run([]string{"claudio", "soundpack", "validate", jsonPath}, nil, stdout, stderr)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d, stderr: %s, stdout: %s", exitCode, stderr.String(), stdout.String())
+	}
+
+	if !strings.Contains(stdout.String(), "1/107") {
+		t.Errorf("expected output to contain '1/107', got: %s", stdout.String())
+	}
+}
+
 func TestSoundpackValidate_MissingFiles(t *testing.T) {
 	tmpDir := t.TempDir()
 

@@ -41,7 +41,7 @@ Want to use existing system sounds without copying files around? JSON soundpacks
 
 ### How They Work
 
-Instead of organizing actual sound files in directories, you create a JSON file that maps relative paths to absolute file paths:
+Instead of organizing actual sound files in directories, you create a JSON file that maps Claudio sound keys to audio file paths. Mapped paths can be absolute, or relative to the JSON soundpack file:
 
 ```json
 {
@@ -49,7 +49,7 @@ Instead of organizing actual sound files in directories, you create a JSON file 
   "description": "Uses existing system sounds",
   "version": "1.0.0",
   "mappings": {
-    "success/bash-success.wav": "/usr/share/sounds/alsa/Front_Right.wav",
+    "success/bash-success.wav": "sounds/bash-success.wav",
     "success/git-success.wav": "/usr/share/sounds/alsa/Front_Left.wav", 
     "error/bash-error.wav": "/usr/share/sounds/alsa/Side_Right.wav",
     "error/error.wav": "/usr/share/sounds/alsa/Side_Left.wav",
@@ -72,7 +72,7 @@ Save this as `/path/to/my-sounds.json` and reference it in your config:
 
 **Required fields:**
 - `name` - Identifier for the soundpack
-- `mappings` - Object mapping relative paths to absolute file paths
+- `mappings` - Object mapping Claudio sound keys to absolute paths or paths relative to the JSON file
 
 **Optional fields:**
 - `description` - Human-readable description  

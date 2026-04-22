@@ -570,14 +570,14 @@ Examples:
 
 // validateResult holds the results of soundpack validation
 type validateResult struct {
-	Name             string
-	Version          string
-	Mappings         map[string]string // all mappings from the soundpack
-	AllKeys          []string          // all known keys
-	MappedKeys       map[string]string // keys with non-empty values
-	BrokenRefs       map[string]string // key -> path for files that don't exist
-	FormatWarnings   map[string]string // key -> path for files with non-audio extensions
-	IsDirectory      bool
+	Name           string
+	Version        string
+	Mappings       map[string]string // all mappings from the soundpack
+	AllKeys        []string          // all known keys
+	MappedKeys     map[string]string // keys with non-empty values
+	BrokenRefs     map[string]string // key -> path for files that don't exist
+	FormatWarnings map[string]string // key -> path for files with non-audio extensions
+	IsDirectory    bool
 }
 
 // runSoundpackValidate executes the soundpack validate command
@@ -627,6 +627,7 @@ func validateJSONSoundpackFile(path string) (validateResult, error) {
 		slog.Error("failed to parse JSON", "path", path, "error", err)
 		return validateResult{}, fmt.Errorf("failed to parse JSON: %w", err)
 	}
+	soundpack.ResolveJSONSoundpackMappings(&spFile, filepath.Dir(path))
 
 	slog.Info("parsed JSON soundpack", "name", spFile.Name, "mappings", len(spFile.Mappings))
 

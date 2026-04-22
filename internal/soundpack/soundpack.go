@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -196,6 +197,8 @@ func LoadJSONSoundpack(filePath string) (PathMapper, error) {
 		return nil, fmt.Errorf("failed to parse JSON soundpack: %w", err)
 	}
 
+	ResolveJSONSoundpackMappings(&soundpack, filepath.Dir(filePath))
+
 	// Validate soundpack structure and content
 	if err := validateJSONSoundpack(soundpack); err != nil {
 		slog.Error("JSON soundpack validation failed", "file_path", filePath, "error", err)
@@ -214,6 +217,21 @@ func LoadJSONSoundpack(filePath string) (PathMapper, error) {
 
 	// Create and return JSONMapper
 	return NewJSONMapper(soundpack.Name, soundpack.Mappings), nil
+}
+
+// ResolveJSONSoundpackMappings converts non-empty relative mapping values to
+// absolute paths rooted at baseDir. Absolute values are preserved.
+func ResolveJSONSoundpackMappings(soundpack *JSONSoundpackFile, baseDir string) {
+	if soundpack == nil || baseDir == "" {
+		return
+	}
+
+	for relativePath, mappedPath := range soundpack.Mappings {
+		if mappedPath == "" || filepath.IsAbs(mappedPath) {
+			continue
+		}
+		soundpack.Mappings[relativePath] = filepath.Clean(filepath.Join(baseDir, mappedPath))
+	}
 }
 
 // validateJSONSoundpack validates the structure and content of a JSON soundpack
