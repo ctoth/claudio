@@ -221,6 +221,13 @@ func initializeAudioSystem(cmd *cobra.Command, cli *CLI, cfg *config.Config) err
 		// search soundpack_paths for a matching entry
 		resolvedPath := cfg.DefaultSoundpack
 		if _, statErr := os.Stat(resolvedPath); statErr != nil {
+			if managedPath := findManagedGitSoundpackPath(cfg.DefaultSoundpack); managedPath != "" {
+				slog.Info("resolved managed git soundpack name to path",
+					"name", cfg.DefaultSoundpack, "path", managedPath)
+				resolvedPath = managedPath
+			}
+		}
+		if _, statErr := os.Stat(resolvedPath); statErr != nil {
 			// Not a direct path — try to find it in soundpack_paths
 			for _, sp := range cfg.SoundpackPaths {
 				if _, spErr := os.Stat(sp); spErr == nil {

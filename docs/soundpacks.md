@@ -419,6 +419,36 @@ EOF
 echo '{"hook_event_name":"PostToolUse","tool_name":"Bash","tool_response":{"stdout":"success"}}' | claudio
 ```
 
+## Git Soundpacks
+
+Soundpacks can also be managed directly from git repositories. Claudio clones
+managed repositories into its data directory, records them in
+`soundpacks.json`, and adds the playable directory or JSON file to
+`soundpack_paths`.
+
+```bash
+# Add from a normal git URL
+claudio soundpack add https://github.com/ctoth/whatever --name whatever
+
+# Add with the GitHub shorthand alias
+claudio soundpack add gh:ctoth/whatever
+
+# Use a branch, tag, commit, or a subdirectory/file inside the repo
+claudio soundpack add gh:ctoth/whatever --ref main --subdir soundpack.json --default
+```
+
+Managed git soundpacks can be updated and removed:
+
+```bash
+claudio soundpack update whatever
+claudio soundpack update --all
+claudio soundpack status whatever
+claudio soundpack remove whatever
+```
+
+Use `--force` with `update` to discard local changes in the managed clone, and
+`--keep-files` with `remove` to leave the clone on disk.
+
 ## Advanced Soundpack Techniques
 
 ### Tool-Specific Customization

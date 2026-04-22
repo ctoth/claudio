@@ -30,6 +30,10 @@ func newSoundpackCommand() *cobra.Command {
 	soundpackCmd.AddCommand(newSoundpackValidateCommand())
 	soundpackCmd.AddCommand(newSoundpackInstallCommand())
 	soundpackCmd.AddCommand(newSoundpackUseCommand())
+	soundpackCmd.AddCommand(newSoundpackAddCommand())
+	soundpackCmd.AddCommand(newSoundpackUpdateCommand())
+	soundpackCmd.AddCommand(newSoundpackRemoveCommand())
+	soundpackCmd.AddCommand(newSoundpackStatusCommand())
 	return soundpackCmd
 }
 
@@ -247,7 +251,17 @@ func discoverSoundpacks() ([]soundpackInfo, error) {
 		}
 	}
 
-	// 3. Config soundpack_paths entries
+	// 3. Managed git soundpacks
+	gitPacks := discoverManagedGitSoundpacks()
+	for _, p := range gitPacks {
+		key := p.Name + "|" + p.Path
+		if _, exists := seen[key]; !exists {
+			seen[key] = struct{}{}
+			packs = append(packs, p)
+		}
+	}
+
+	// 4. Config soundpack_paths entries
 	configPacks := discoverConfigSoundpacks()
 	for _, p := range configPacks {
 		key := p.Name + "|" + p.Path
