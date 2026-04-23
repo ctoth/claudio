@@ -2,8 +2,12 @@ package soundpack
 
 import (
 	"log/slog"
+	"os"
 	"path/filepath"
+	"strings"
 )
+
+var directoryAudioExtensions = []string{".wav", ".mp3", ".aiff", ".aif", ".mpeg"}
 
 // DirectoryMapper maps relative paths to directory-based candidates
 type DirectoryMapper struct {
@@ -45,6 +49,16 @@ func (d *DirectoryMapper) MapPath(relativePath string) ([]string, error) {
 			"base_path", basePath,
 			"relative_path", relativePath,
 			"candidate", candidate)
+
+		for _, alternateCandidate := range existingAlternateAudioPaths(basePath, relativePath) {
+			candidates = append(candidates, alternateCandidate)
+
+			slog.Debug("generated alternate directory candidate",
+				"index", i,
+				"base_path", basePath,
+				"relative_path", relativePath,
+				"candidate", alternateCandidate)
+		}
 	}
 
 	slog.Debug("directory mapping completed",
@@ -53,6 +67,45 @@ func (d *DirectoryMapper) MapPath(relativePath string) ([]string, error) {
 		"mapper_name", d.name)
 
 	return candidates, nil
+}
+
+func existingAlternateAudioPaths(basePath, relativePath string) []string {
+	ext := strings.ToLower(filepath.Ext(relativePath))
+	if ext == "" {
+		return nil
+	}
+
+	isAudioPath := false
+	for _, audioExt := range directoryAudioExtensions {
+		if ext == audioExt {
+			isAudioPath = true
+			break
+		}
+	}
+	if !isAudioPath {
+		return nil
+	}
+
+	stem := strings.TrimSuffix(relativePath, filepath.Ext(relativePath))
+	seen := map[string]struct{}{
+		strings.ToLower(filepath.Join(basePath, relativePath)): {},
+	}
+	var alternates []string
+
+	for _, audioExt := range directoryAudioExtensions {
+		alternate := filepath.Join(basePath, stem+audioExt)
+		key := strings.ToLower(alternate)
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+
+		if _, err := os.Stat(alternate); err == nil {
+			alternates = append(alternates, alternate)
+		}
+	}
+
+	return alternates
 }
 
 // GetName returns the name of this directory mapper
