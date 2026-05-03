@@ -26,7 +26,7 @@ func NewContext() (*Context, error) {
 		return nil, err
 	}
 
-	slog.Info("audio context initialized successfully")
+	slog.Debug("audio context initialized successfully")
 	return &Context{ctx: ctx}, nil
 }
 
@@ -49,7 +49,7 @@ func (c *Context) Close() error {
 	c.ctx.Free()
 	c.ctx = nil
 
-	slog.Info("audio context closed successfully")
+	slog.Debug("audio context closed successfully")
 	return nil
 }
 

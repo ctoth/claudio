@@ -127,7 +127,7 @@ func (p *HookEventParser) Parse(data []byte) (*HookEvent, error) {
 		return nil, err
 	}
 
-	slog.Info("hook event parsed successfully",
+	slog.Debug("hook event parsed successfully",
 		"event_name", event.EventName,
 		"session_id", event.SessionID,
 		"tool_name", getStringPtr(event.ToolName),
@@ -306,7 +306,7 @@ func (e *HookEvent) GetContext() *EventContext {
 		context.FileType = e.extractFileType()
 	}
 
-	slog.Info("event context extracted",
+	slog.Debug("event context extracted",
 		"event_name", e.EventName,
 		"category", context.Category.String(),
 		"sound_hint", context.SoundHint,
