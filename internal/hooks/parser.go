@@ -280,6 +280,18 @@ func (e *HookEvent) GetContext() *EventContext {
 		context.Operation = "subagent-stop"
 		slog.Debug("categorizing SubagentStop event as Completion", "hint", context.SoundHint, "operation", context.Operation)
 
+	case "SubagentStart":
+		context.Category = Loading
+		context.SoundHint = "subagent-start"
+		context.Operation = "subagent-start"
+		slog.Debug("categorizing SubagentStart event as Loading", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "PostCompact":
+		context.Category = System
+		context.SoundHint = "post-compact"
+		context.Operation = "post-compact"
+		slog.Debug("categorizing PostCompact event as System", "hint", context.SoundHint, "operation", context.Operation)
+
 	case "PreCompact":
 		context.Category = System
 		context.SoundHint = "compacting"

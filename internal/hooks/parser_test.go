@@ -1340,3 +1340,31 @@ func TestParseStillRequiresSessionIDAndEventAndCwd(t *testing.T) {
 		})
 	}
 }
+
+func TestGetContextSubagentStart(t *testing.T) {
+	event := &HookEvent{SessionID: "a", CWD: "/tmp", EventName: "SubagentStart"}
+	ctx := event.GetContext()
+	if ctx.Category != Loading {
+		t.Errorf("expected Loading, got %v", ctx.Category)
+	}
+	if ctx.SoundHint != "subagent-start" {
+		t.Errorf("expected subagent-start, got %q", ctx.SoundHint)
+	}
+	if ctx.Operation != "subagent-start" {
+		t.Errorf("expected operation subagent-start, got %q", ctx.Operation)
+	}
+}
+
+func TestGetContextPostCompact(t *testing.T) {
+	event := &HookEvent{SessionID: "a", CWD: "/tmp", EventName: "PostCompact"}
+	ctx := event.GetContext()
+	if ctx.Category != System {
+		t.Errorf("expected System, got %v", ctx.Category)
+	}
+	if ctx.SoundHint != "post-compact" {
+		t.Errorf("expected post-compact, got %q", ctx.SoundHint)
+	}
+	if ctx.Operation != "post-compact" {
+		t.Errorf("expected operation post-compact, got %q", ctx.Operation)
+	}
+}
