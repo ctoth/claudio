@@ -1,6 +1,7 @@
 package install
 
 import (
+	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -10,8 +11,8 @@ import (
 
 func TestNormalizeMSYSPathCoverage(t *testing.T) {
 	cases := map[string]string{
-		"/c/Users/Q":    `C:\Users\Q`,
-		"/d/work":       `D:\work`,
+		"/c/Users/testuser": `C:\Users\testuser`,
+		"/d/work":           `D:\work`,
 		"already/plain": "already/plain",
 		"":              "",
 		"/notdrive":     "/notdrive",
@@ -29,15 +30,15 @@ func TestGetHomeDirectoryWindowsBranches(t *testing.T) {
 	}
 	// MSYS-style HOME when USERPROFILE absent
 	t.Setenv("USERPROFILE", "")
-	t.Setenv("HOME", "/c/Users/Q")
-	if got := getHomeDirectory(); got != `C:\Users\Q` {
+	t.Setenv("HOME", "/c/Users/testuser")
+	if got := getHomeDirectory(); got != `C:\Users\testuser` {
 		t.Errorf("MSYS HOME normalization: got %q", got)
 	}
 	// HOMEDRIVE + HOMEPATH fallback
 	t.Setenv("HOME", "")
 	t.Setenv("HOMEDRIVE", "D:")
-	t.Setenv("HOMEPATH", `\Users\Q`)
-	if got := getHomeDirectory(); got != `D:\Users\Q` {
+	t.Setenv("HOMEPATH", `\Users\testuser`)
+	if got := getHomeDirectory(); got != `D:\Users\testuser` {
 		t.Errorf("HOMEDRIVE+HOMEPATH: got %q", got)
 	}
 	// Nothing set -> empty
@@ -213,7 +214,14 @@ func TestMergeHookValuesUnknownExistingFormat(t *testing.T) {
 
 func TestFindBestPathReturnsExistingFile(t *testing.T) {
 	dir := t.TempDir()
-	t.Chdir(dir)
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chdir(orig) }()
 
 	// Codex project scope: ./.codex/hooks.json
 	if err := afero.NewOsFs().MkdirAll(".codex", 0755); err != nil {
