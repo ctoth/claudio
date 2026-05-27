@@ -58,3 +58,35 @@ jobs:
         env:
           CGO_ENABLED: "0"
         run: go build ./...
+
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      # These packages have no cgo dependency, so no ALSA headers are needed.
+      - name: Enforce coverage floor
+        run: |
+          THRESHOLD=87.0
+          status=0
+          for pkg in ./internal/hooks ./internal/install; do
+            line=$(go test "$pkg" -count=1 -cover)
+            pct=$(echo "$line" | grep -oE 'coverage: [0-9.]+%' | grep -oE '[0-9.]+')
+            if [ -z "$pct" ]; then
+              echo "FAIL: could not parse coverage for $pkg"
+              echo "$line"
+              status=1
+              continue
+            fi
+            if awk -v p="$pct" -v t="$THRESHOLD" 'BEGIN { exit !(p+0 >= t+0) }'; then
+              echo "OK: $pkg coverage ${pct}% (floor ${THRESHOLD}%)"
+            else
+              echo "FAIL: $pkg coverage ${pct}% below floor ${THRESHOLD}%"
+              status=1
+            fi
+          done
+          exit $status
