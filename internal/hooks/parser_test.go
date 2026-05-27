@@ -1368,3 +1368,40 @@ func TestGetContextPostCompact(t *testing.T) {
 		t.Errorf("expected operation post-compact, got %q", ctx.Operation)
 	}
 }
+
+func TestGetContextCodexApplyPatchPreToolUse(t *testing.T) {
+	tool := "apply_patch"
+	event := &HookEvent{SessionID: "a", CWD: "/tmp", EventName: "PreToolUse", ToolName: &tool}
+	ctx := event.GetContext()
+	if ctx.Category != Loading {
+		t.Errorf("expected Loading, got %v", ctx.Category)
+	}
+	if ctx.SoundHint != "apply_patch-start" {
+		t.Errorf("expected apply_patch-start, got %q", ctx.SoundHint)
+	}
+}
+
+func TestGetContextCodexApplyPatchPostToolUseSuccess(t *testing.T) {
+	tool := "apply_patch"
+	resp := json.RawMessage(`{"output":"done"}`)
+	event := &HookEvent{SessionID: "a", CWD: "/tmp", EventName: "PostToolUse", ToolName: &tool, ToolResponse: &resp}
+	ctx := event.GetContext()
+	if ctx.Category != Success {
+		t.Errorf("expected Success, got %v", ctx.Category)
+	}
+	if ctx.SoundHint != "apply_patch-success" {
+		t.Errorf("expected apply_patch-success, got %q", ctx.SoundHint)
+	}
+}
+
+func TestGetContextCodexMcpToolNormalized(t *testing.T) {
+	tool := "mcp__filesystem__read_file"
+	event := &HookEvent{SessionID: "a", CWD: "/tmp", EventName: "PreToolUse", ToolName: &tool}
+	ctx := event.GetContext()
+	if ctx.ToolName != "mcp" {
+		t.Errorf("expected normalized tool name mcp, got %q", ctx.ToolName)
+	}
+	if ctx.SoundHint != "mcp-start" {
+		t.Errorf("expected mcp-start, got %q", ctx.SoundHint)
+	}
+}
