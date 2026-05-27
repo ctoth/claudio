@@ -1302,3 +1302,41 @@ func TestMCPToolNormalization(t *testing.T) {
 		}
 	})
 }
+
+// Codex sends transcript_path as null or omits it entirely.
+func TestParseCodexNullTranscriptPathSucceeds(t *testing.T) {
+	parser := NewHookEventParser()
+	data := []byte(`{"session_id":"abc","cwd":"/tmp","hook_event_name":"SessionStart","transcript_path":null}`)
+	event, err := parser.Parse(data)
+	if err != nil {
+		t.Fatalf("expected nil error for null transcript_path, got: %v", err)
+	}
+	if event.EventName != "SessionStart" {
+		t.Errorf("expected SessionStart, got %q", event.EventName)
+	}
+}
+
+func TestParseCodexOmittedTranscriptPathSucceeds(t *testing.T) {
+	parser := NewHookEventParser()
+	data := []byte(`{"session_id":"abc","cwd":"/tmp","hook_event_name":"Stop"}`)
+	_, err := parser.Parse(data)
+	if err != nil {
+		t.Fatalf("expected nil error for omitted transcript_path, got: %v", err)
+	}
+}
+
+func TestParseStillRequiresSessionIDAndEventAndCwd(t *testing.T) {
+	parser := NewHookEventParser()
+	cases := map[string][]byte{
+		"missing session_id": []byte(`{"cwd":"/tmp","hook_event_name":"Stop"}`),
+		"missing event":      []byte(`{"session_id":"a","cwd":"/tmp"}`),
+		"missing cwd":        []byte(`{"session_id":"a","hook_event_name":"Stop"}`),
+	}
+	for name, data := range cases {
+		t.Run(name, func(t *testing.T) {
+			if _, err := parser.Parse(data); err == nil {
+				t.Errorf("expected error for %s, got nil", name)
+			}
+		})
+	}
+}

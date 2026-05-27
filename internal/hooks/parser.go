@@ -121,12 +121,6 @@ func (p *HookEventParser) Parse(data []byte) (*HookEvent, error) {
 		return nil, err
 	}
 
-	if event.TranscriptPath == "" {
-		err := fmt.Errorf("missing required field: transcript_path")
-		slog.Error("validation failed", "error", err)
-		return nil, err
-	}
-
 	slog.Debug("hook event parsed successfully",
 		"event_name", event.EventName,
 		"session_id", event.SessionID,
