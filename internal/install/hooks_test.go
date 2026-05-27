@@ -472,3 +472,46 @@ func TestGenerateClaudioHooksUsesExecutablePath(t *testing.T) {
 		}
 	}
 }
+
+func TestGenerateClaudioHooksForCodexAgent(t *testing.T) {
+	fsys := GetFilesystemFactory().Memory()
+	result, err := GenerateClaudioHooksForAgent(fsys, "/usr/local/bin/claudio", AgentCodex)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	hooks, ok := result.(HooksMap)
+	if !ok {
+		t.Fatalf("expected HooksMap, got %T", result)
+	}
+	if len(hooks) != len(CodexHooks) {
+		t.Errorf("expected %d codex hooks, got %d", len(CodexHooks), len(hooks))
+	}
+	if _, ok := hooks["PostCompact"]; !ok {
+		t.Error("expected PostCompact in codex hooks")
+	}
+	if _, ok := hooks["Notification"]; ok {
+		t.Error("codex hooks must not include Notification")
+	}
+	arr := hooks["Stop"].([]interface{})
+	cfg := arr[0].(map[string]interface{})
+	if cfg["matcher"] != "*" {
+		t.Errorf("codex matcher = %v, want *", cfg["matcher"])
+	}
+}
+
+func TestGenerateClaudioHooksDefaultsToClaude(t *testing.T) {
+	fsys := GetFilesystemFactory().Memory()
+	result, err := GenerateClaudioHooks(fsys, "/usr/local/bin/claudio")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	hooks := result.(HooksMap)
+	if len(hooks) != len(GetEnabledHooks()) {
+		t.Errorf("claude generation count mismatch")
+	}
+	arr := hooks["PreToolUse"].([]interface{})
+	cfg := arr[0].(map[string]interface{})
+	if cfg["matcher"] != ".*" {
+		t.Errorf("claude matcher = %v, want .*", cfg["matcher"])
+	}
+}
