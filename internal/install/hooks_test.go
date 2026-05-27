@@ -3,6 +3,8 @@ package install
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/spf13/afero"
 )
 
 func TestGenerateClaudioHooks(t *testing.T) {
@@ -513,5 +515,57 @@ func TestGenerateClaudioHooksDefaultsToClaude(t *testing.T) {
 	cfg := arr[0].(map[string]interface{})
 	if cfg["matcher"] != ".*" {
 		t.Errorf("claude matcher = %v, want .*", cfg["matcher"])
+	}
+}
+
+func TestCodexInstallMergesIntoHooksJSON(t *testing.T) {
+	fsys := afero.NewMemMapFs()
+	path := "/home/u/.codex/hooks.json"
+
+	// Pre-existing user hook that is NOT claudio — must be preserved.
+	existing := []byte(`{"hooks":{"PreToolUse":[{"matcher":"*","hooks":[{"type":"command","command":"/usr/bin/logger"}]}]}}`)
+	if err := afero.WriteFile(fsys, path, existing, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	settings, err := ReadSettingsFile(fsys, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	codexHooks, err := GenerateClaudioHooksForAgent(fsys, "/usr/local/bin/claudio", AgentCodex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	merged, err := MergeHooksIntoSettings(settings, codexHooks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteSettingsFile(fsys, path, merged); err != nil {
+		t.Fatal(err)
+	}
+
+	readBack, err := ReadSettingsFile(fsys, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hooksSection := (*readBack)["hooks"].(map[string]interface{})
+
+	if _, ok := hooksSection["PostCompact"]; !ok {
+		t.Error("expected PostCompact after codex install")
+	}
+
+	preArr := hooksSection["PreToolUse"].([]interface{})
+	foundLogger := false
+	for _, e := range preArr {
+		cfg := e.(map[string]interface{})
+		hooksList := cfg["hooks"].([]interface{})
+		for _, h := range hooksList {
+			if h.(map[string]interface{})["command"] == "/usr/bin/logger" {
+				foundLogger = true
+			}
+		}
+	}
+	if !foundLogger {
+		t.Error("pre-existing non-claudio hook was lost during merge")
 	}
 }
