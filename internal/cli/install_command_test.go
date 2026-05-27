@@ -1,6 +1,9 @@
 package cli
 
 import (
+	"bytes"
+	"io"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -40,4 +43,46 @@ func findCommand(rootCmd *cobra.Command, name string) *cobra.Command {
 		}
 	}
 	return nil
+}
+
+func TestInstallCommandRejectsInvalidAgent(t *testing.T) {
+	cmd := newInstallCommand()
+	cmd.SetArgs([]string{"--agent", "gemini", "--dry-run"})
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+	if err := cmd.Execute(); err == nil {
+		t.Error("expected error for invalid agent, got nil")
+	}
+}
+
+func TestInstallCommandCodexDryRunShowsTrustReminder(t *testing.T) {
+	cmd := newInstallCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"--agent", "codex", "--dry-run"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	s := out.String()
+	if !strings.Contains(s, "hooks.json") {
+		t.Errorf("expected codex hooks.json path in output, got: %s", s)
+	}
+	if !strings.Contains(s, "/hooks") {
+		t.Errorf("expected /hooks trust reminder in output, got: %s", s)
+	}
+}
+
+func TestInstallCommandDefaultsToClaude(t *testing.T) {
+	cmd := newInstallCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"--dry-run"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(out.String(), "settings.json") {
+		t.Errorf("expected claude settings.json path by default, got: %s", out.String())
+	}
 }

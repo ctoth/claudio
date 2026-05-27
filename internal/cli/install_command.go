@@ -40,6 +40,9 @@ func newInstallCommand() *cobra.Command {
 	// Add --scope flag with validation
 	cmd.Flags().StringP("scope", "s", "user", "Installation scope: 'user' for user-specific settings, 'project' for project-specific settings")
 
+	// Add --agent flag with validation
+	cmd.Flags().StringP("agent", "a", "claude", "Target agent: 'claude' for Claude Code, 'codex' for OpenAI Codex CLI")
+
 	// Add --dry-run flag
 	cmd.Flags().BoolP("dry-run", "d", false, "Show what would be done without making changes (simulation mode)")
 
@@ -68,6 +71,16 @@ func runInstallCommandE(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid scope '%s': must be 'user' or 'project'", scopeStr)
 	}
 
+	// Get and validate agent flag
+	agentStr, err := cmd.Flags().GetString("agent")
+	if err != nil {
+		return fmt.Errorf("failed to get agent flag: %w", err)
+	}
+	agent, err := install.ParseAgent(agentStr)
+	if err != nil {
+		return err
+	}
+
 	// Get dry-run flag
 	dryRun, err := cmd.Flags().GetBool("dry-run")
 	if err != nil {
@@ -89,10 +102,10 @@ func runInstallCommandE(cmd *cobra.Command, args []string) error {
 
 	slog.Info("install command executing", "scope", scope, "dry_run", dryRun, "quiet", quiet, "print", print)
 
-	// Find the best Claude Code settings path for the specified scope
-	settingsPath, err := install.FindBestSettingsPath(scope.String())
+	// Find the best config path for the specified agent and scope
+	settingsPath, err := agent.BestConfigPath(scope.String())
 	if err != nil {
-		return fmt.Errorf("failed to find Claude Code settings path: %w", err)
+		return fmt.Errorf("failed to find %s config path: %w", agent, err)
 	}
 
 	slog.Debug("using settings path", "path", settingsPath, "scope", scope)
@@ -124,11 +137,14 @@ func runInstallCommandE(cmd *cobra.Command, args []string) error {
 			cmd.Printf("DRY-RUN: Claudio installation simulation for %s scope\n", scope.String())
 			cmd.Printf("Settings path: %s\n", settingsPath)
 
-			// Use registry to show hook names instead of hardcoded list
-			hookNames := install.GetHookNames()
+			// Use agent registry to show hook names instead of hardcoded list
+			hookNames := agent.HookNames()
 			hookList := strings.Join(hookNames, ", ")
 			cmd.Printf("Would install hooks: %s\n", hookList)
 			cmd.Printf("No changes will be made.\n")
+			if agent == install.AgentCodex {
+				cmd.Printf("After install, run /hooks in Codex to trust the claudio hook.\n")
+			}
 		} else {
 			cmd.Printf("DRY-RUN: %s -> %s\n", scope.String(), settingsPath)
 		}
@@ -141,7 +157,7 @@ func runInstallCommandE(cmd *cobra.Command, args []string) error {
 		cmd.Printf("Settings path: %s\n", settingsPath)
 	}
 
-	err = runInstallWorkflow(scope.String(), settingsPath)
+	err = runInstallWorkflow(agent, scope.String(), settingsPath)
 	if err != nil {
 		return fmt.Errorf("installation failed: %w", err)
 	}
@@ -149,7 +165,10 @@ func runInstallCommandE(cmd *cobra.Command, args []string) error {
 	// Success message
 	if !quiet {
 		cmd.Printf("✅ Claudio installation completed successfully!\n")
-		cmd.Printf("Audio hooks have been added to Claude Code settings.\n")
+		cmd.Printf("Audio hooks have been added to %s settings.\n", agent)
+		if agent == install.AgentCodex {
+			cmd.Printf("Run /hooks in Codex to trust the claudio hook.\n")
+		}
 	} else {
 		cmd.Printf("Install: %s ✅\n", scope.String())
 	}
@@ -159,7 +178,7 @@ func runInstallCommandE(cmd *cobra.Command, args []string) error {
 
 // runInstallWorkflow orchestrates the complete Claudio installation process
 // Workflow: Detect paths → Read settings → Generate hooks → Merge → Write → Verify
-func runInstallWorkflow(scope string, settingsPath string) error {
+func runInstallWorkflow(agent install.Agent, scope string, settingsPath string) error {
 	slog.Info("starting Claudio installation workflow",
 		"scope", scope,
 		"settings_path", settingsPath)
@@ -195,7 +214,7 @@ func runInstallWorkflow(scope string, settingsPath string) error {
 	
 	// Use production filesystem (reuse existing variables)
 	
-	claudioHooks, err := install.GenerateClaudioHooks(prodFS, execPath)
+	claudioHooks, err := install.GenerateClaudioHooksForAgent(prodFS, execPath, agent)
 	if err != nil {
 		return fmt.Errorf("failed to generate Claudio hooks: %w", err)
 	}
@@ -231,7 +250,7 @@ func runInstallWorkflow(scope string, settingsPath string) error {
 	// Check that all Claudio hooks are present
 	if hooks, exists := (*verifySettings)["hooks"]; exists {
 		if hooksMap, ok := hooks.(map[string]interface{}); ok {
-			expectedHooks := install.GetHookNames() // Use registry instead of hardcoded list
+			expectedHooks := agent.HookNames() // Use agent registry instead of hardcoded list
 			for _, hookName := range expectedHooks {
 				if val, exists := hooksMap[hookName]; !exists {
 					return fmt.Errorf("verification failed: Claudio hook '%s' missing after installation", hookName)
