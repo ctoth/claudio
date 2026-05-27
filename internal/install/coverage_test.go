@@ -10,12 +10,14 @@ import (
 )
 
 func TestNormalizeMSYSPathCoverage(t *testing.T) {
+	// normalizeMSYSPath uses filepath.FromSlash, which differs by OS, so build
+	// expectations portably rather than hardcoding backslashes.
 	cases := map[string]string{
-		"/c/Users/testuser": `C:\Users\testuser`,
-		"/d/work":           `D:\work`,
-		"already/plain": "already/plain",
-		"":              "",
-		"/notdrive":     "/notdrive",
+		"/c/Users/testuser": "C:" + filepath.FromSlash("/Users/testuser"),
+		"/d/work":           "D:" + filepath.FromSlash("/work"),
+		"already/plain":     "already/plain",
+		"":                  "",
+		"/notdrive":         "/notdrive",
 	}
 	for in, want := range cases {
 		if got := normalizeMSYSPath(in); got != want {
@@ -46,6 +48,20 @@ func TestGetHomeDirectoryWindowsBranches(t *testing.T) {
 	t.Setenv("HOMEPATH", "")
 	if got := getHomeDirectory(); got != "" {
 		t.Errorf("expected empty home when no env set, got %q", got)
+	}
+}
+
+func TestGetHomeDirectoryUnixBranches(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("unix-only home resolution branch")
+	}
+	t.Setenv("HOME", "/home/test")
+	if got := getHomeDirectory(); got != "/home/test" {
+		t.Errorf("expected /home/test, got %q", got)
+	}
+	t.Setenv("HOME", "")
+	if got := getHomeDirectory(); got != "" {
+		t.Errorf("expected empty home when HOME unset, got %q", got)
 	}
 }
 
