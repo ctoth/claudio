@@ -223,7 +223,11 @@ func (e *HookEvent) GetContext() *EventContext {
 			} else if strings.HasPrefix(context.ToolName, "mcp__") {
 				context.OriginalTool = context.ToolName
 				context.ToolName = "mcp"
-				context.SoundHint = "mcp-error"
+				if errorType != "" {
+					context.SoundHint = errorType
+				} else {
+					context.SoundHint = "mcp-error"
+				}
 			} else {
 				// Original logic for non-Bash tools
 				if errorType != "" {
