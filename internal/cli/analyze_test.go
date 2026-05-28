@@ -38,12 +38,12 @@ func TestAnalyzeMissingCommand(t *testing.T) {
 	}{
 		{
 			sessionID:    "session-1",
-			toolName:     "Edit",  
+			toolName:     "Edit",
 			selectedPath: "default.wav",
 			missingPaths: []string{"success/edit-success.wav", "success/tool-complete.wav"},
 		},
 		{
-			sessionID:    "session-2", 
+			sessionID:    "session-2",
 			toolName:     "Bash",
 			selectedPath: "default.wav",
 			missingPaths: []string{"success/bash-success.wav", "success/git-push.wav"},
@@ -51,7 +51,7 @@ func TestAnalyzeMissingCommand(t *testing.T) {
 		{
 			sessionID:    "session-3",
 			toolName:     "Edit",
-			selectedPath: "default.wav", 
+			selectedPath: "default.wav",
 			missingPaths: []string{"success/edit-success.wav"}, // Duplicate - should aggregate
 		},
 	}
@@ -107,25 +107,25 @@ func TestAnalyzeMissingCommand(t *testing.T) {
 
 	// Run: claudio analyze missing
 	exitCode := cli.Run([]string{"claudio", "analyze", "missing"}, stdin, stdout, stderr)
-	
+
 	if exitCode != 0 {
 		t.Errorf("Expected exit code 0, got %d", exitCode)
 		t.Logf("Stderr: %s", stderr.String())
 	}
 
 	output := stdout.String()
-	
+
 	// TDD Step 3 GREEN: Update expectations for hierarchical tool-first output format with corrected tool names
 	expectedHierarchicalContent := []string{
-		"Missing Sounds by Tool", // New hierarchical header
-		"Edit", // Tool names should appear as headers (from context ToolName)
-		"git",  // Tool names should appear as headers (extracted from Bash context ToolName)
-		"success/edit-success.wav", // Should appear under Edit tool
-		"success/bash-success.wav", // Should appear under git tool (extracted from Bash)
-		"success/git-push.wav",     // Should appear under git tool (extracted from Bash)
+		"Missing Sounds by Tool",    // New hierarchical header
+		"Edit",                      // Tool names should appear as headers (from context ToolName)
+		"git",                       // Tool names should appear as headers (extracted from Bash context ToolName)
+		"success/edit-success.wav",  // Should appear under Edit tool
+		"success/bash-success.wav",  // Should appear under git tool (extracted from Bash)
+		"success/git-push.wav",      // Should appear under git tool (extracted from Bash)
 		"success/tool-complete.wav", // Should appear under Edit tool
-		"requests", // Should show request counts
-		"total:", // Should show tool totals
+		"requests",                  // Should show request counts
+		"total:",                    // Should show tool totals
 	}
 
 	for _, content := range expectedHierarchicalContent {
@@ -135,19 +135,19 @@ func TestAnalyzeMissingCommand(t *testing.T) {
 	}
 
 	// TDD Step 3 GREEN: Verify tools are ordered by total requests (Edit=3, git=2)
-	editToolIndex := strings.Index(output, "Edit (total:")   // Tool header with total
-	gitToolIndex := strings.Index(output, "git (total:")     // Tool header with total
-	
+	editToolIndex := strings.Index(output, "Edit (total:") // Tool header with total
+	gitToolIndex := strings.Index(output, "git (total:")   // Tool header with total
+
 	if editToolIndex == -1 || gitToolIndex == -1 {
 		t.Fatal("Expected both Edit and git tool headers in hierarchical output")
 	}
 
-	// Edit (3 total requests) should appear before git (2 total requests) 
+	// Edit (3 total requests) should appear before git (2 total requests)
 	if editToolIndex > gitToolIndex {
 		t.Error("Expected tools to be ordered by total requests (Edit=3 should come before git=2)")
 	}
 
-	// TDD Step 3 GREEN: Verify hierarchical indentation for sounds under tools  
+	// TDD Step 3 GREEN: Verify hierarchical indentation for sounds under tools
 	if !strings.Contains(output, "    success/edit-success.wav") {
 		t.Error("Expected sounds to be indented under their tool section (4 spaces)")
 	}
@@ -167,7 +167,7 @@ func TestAnalyzeMissingCommandWithFilters(t *testing.T) {
 
 	// Insert test data with different tools and timestamps
 	now := time.Now().Unix()
-	oneWeekAgo := now - (7 * 24 * 60 * 60)
+	withinLastWeek := now - (7 * 24 * 60 * 60) + 60
 	twoWeeksAgo := now - (14 * 24 * 60 * 60)
 
 	testEvents := []struct {
@@ -176,7 +176,7 @@ func TestAnalyzeMissingCommandWithFilters(t *testing.T) {
 		missingPath string
 	}{
 		{now, "Edit", "success/edit-success.wav"},
-		{oneWeekAgo, "Bash", "success/bash-success.wav"},
+		{withinLastWeek, "Bash", "success/bash-success.wav"},
 		{twoWeeksAgo, "Git", "success/git-push.wav"}, // Should be filtered out by --days 7
 	}
 
@@ -223,7 +223,7 @@ func TestAnalyzeMissingCommandWithFilters(t *testing.T) {
 
 	// Run: claudio analyze missing --days 7
 	exitCode := cli.Run([]string{"claudio", "analyze", "missing", "--days", "7"}, stdin, stdout, stderr)
-	
+
 	if exitCode != 0 {
 		t.Errorf("Expected exit code 0, got %d", exitCode)
 		t.Logf("Stderr: %s", stderr.String())
@@ -311,7 +311,7 @@ func TestAnalyzeMissingCommandWithToolFilter(t *testing.T) {
 
 	// Run: claudio analyze missing --tool Edit
 	exitCode := cli.Run([]string{"claudio", "analyze", "missing", "--tool", "Edit"}, stdin, stdout, stderr)
-	
+
 	if exitCode != 0 {
 		t.Errorf("Expected exit code 0, got %d", exitCode)
 		t.Logf("Stderr: %s", stderr.String())
@@ -345,7 +345,7 @@ func TestAnalyzeMissingCommandNoDatabase(t *testing.T) {
 
 	// Run: claudio analyze missing
 	exitCode := cli.Run([]string{"claudio", "analyze", "missing"}, stdin, stdout, stderr)
-	
+
 	// Should handle gracefully - either exit with error message or show empty results
 	if exitCode != 0 && exitCode != 1 {
 		t.Errorf("Expected exit code 0 or 1 when tracking disabled, got %d", exitCode)
@@ -367,7 +367,7 @@ func TestAnalyzeMissingCommandHelp(t *testing.T) {
 
 	// Run: claudio analyze missing --help
 	exitCode := cli.Run([]string{"claudio", "analyze", "missing", "--help"}, stdin, stdout, stderr)
-	
+
 	if exitCode != 0 {
 		t.Errorf("Expected exit code 0 for help command, got %d", exitCode)
 	}
@@ -378,7 +378,7 @@ func TestAnalyzeMissingCommandHelp(t *testing.T) {
 	expectedHelpContent := []string{
 		"missing",
 		"--days",
-		"--tool", 
+		"--tool",
 		"--limit",
 		"sounds",
 		"requested",
@@ -406,7 +406,7 @@ func TestGroupMissingSoundsByTool(t *testing.T) {
 			Path:         "loading/git-start.wav",
 			RequestCount: 30,
 			Tools:        []string{"git"},
-			Category:     "loading", 
+			Category:     "loading",
 			ToolName:     "git",
 		},
 		{
@@ -544,7 +544,7 @@ func TestAnalyzeUsageCommand(t *testing.T) {
 		{
 			timestamp:     now,
 			sessionID:     "session-1",
-			toolName:      "Edit", 
+			toolName:      "Edit",
 			soundPath:     "success/edit-success.wav",
 			fallbackLevel: 1, // Exact match
 			contextJSON:   `{"Category":1,"ToolName":"Edit","IsSuccess":true}`,
@@ -553,7 +553,7 @@ func TestAnalyzeUsageCommand(t *testing.T) {
 			timestamp:     now - 1800,
 			sessionID:     "session-1",
 			toolName:      "Edit",
-			soundPath:     "success/edit-success.wav", 
+			soundPath:     "success/edit-success.wav",
 			fallbackLevel: 1,
 			contextJSON:   `{"Category":1,"ToolName":"Edit","IsSuccess":true}`,
 		},
@@ -566,7 +566,7 @@ func TestAnalyzeUsageCommand(t *testing.T) {
 			contextJSON:   `{"Category":0,"ToolName":"Bash","IsLoading":true}`,
 		},
 		{
-			timestamp:     now - 7200, 
+			timestamp:     now - 7200,
 			sessionID:     "session-3",
 			toolName:      "Read",
 			soundPath:     "default.wav",
@@ -614,13 +614,13 @@ func TestAnalyzeUsageCommand(t *testing.T) {
 	expectedContent := []string{
 		"Sound Usage Statistics",
 		"Most Frequently Used Sounds:",
-		"success/edit-success.wav", // Should appear with count 2
-		"loading/bash-thinking.wav", // Should appear with count 1
-		"default.wav",              // Should appear with count 1
-		"2 times",                  // Edit sound played twice
-		"exact match",              // Fallback description
-		"tool-specific",            // Fallback description  
-		"default fallback",         // Fallback description
+		"success/edit-success.wav",        // Should appear with count 2
+		"loading/bash-thinking.wav",       // Should appear with count 1
+		"default.wav",                     // Should appear with count 1
+		"2 times",                         // Edit sound played twice
+		"exact match",                     // Fallback description
+		"tool-specific",                   // Fallback description
+		"default fallback",                // Fallback description
 		"To improve your sound coverage:", // Footer advice
 	}
 
@@ -659,7 +659,7 @@ func TestAnalyzeUsageCommandWithFilters(t *testing.T) {
 
 	// Insert test data with different tools and timestamps
 	now := time.Now().Unix()
-	oneWeekAgo := now - (7 * 24 * 60 * 60)
+	withinLastWeek := now - (7 * 24 * 60 * 60) + 60
 	twoWeeksAgo := now - (14 * 24 * 60 * 60)
 
 	testEvents := []struct {
@@ -668,10 +668,10 @@ func TestAnalyzeUsageCommandWithFilters(t *testing.T) {
 		soundPath string
 		category  int
 	}{
-		{now, "Edit", "success/edit-success.wav", 1},         // Recent, should be included
-		{oneWeekAgo, "Bash", "success/bash-success.wav", 1}, // Week old, should be included with --days 7
-		{twoWeeksAgo, "Read", "success/read-success.wav", 1}, // Too old, should be filtered out
-		{now, "Edit", "error/edit-error.wav", 2},            // Recent but different category
+		{now, "Edit", "success/edit-success.wav", 1},            // Recent, should be included
+		{withinLastWeek, "Bash", "success/bash-success.wav", 1}, // Inside last week, should be included with --days 7
+		{twoWeeksAgo, "Read", "success/read-success.wav", 1},    // Too old, should be filtered out
+		{now, "Edit", "error/edit-error.wav", 2},                // Recent but different category
 	}
 
 	for i, event := range testEvents {
@@ -753,9 +753,9 @@ func TestAnalyzeUsageCommandWithSummaryAndFallbacks(t *testing.T) {
 		fallbackLevel int
 		count         int
 	}{
-		{"success/exact-match.wav", 1, 10},       // Exact matches
-		{"success/tool-specific.wav", 2, 5},      // Tool-specific
-		{"default.wav", 5, 2},                    // Default fallback
+		{"success/exact-match.wav", 1, 10},  // Exact matches
+		{"success/tool-specific.wav", 2, 5}, // Tool-specific
+		{"default.wav", 5, 2},               // Default fallback
 	}
 
 	for _, event := range testEvents {
@@ -836,9 +836,9 @@ func TestAnalyzeUsageCommandWithPresets(t *testing.T) {
 		timestamp time.Time
 		soundPath string
 	}{
-		{now, "today.wav"},                          // Today
-		{now.AddDate(0, 0, -1), "yesterday.wav"},    // Yesterday
-		{now.AddDate(0, 0, -8), "last-week.wav"},    // Over a week ago
+		{now, "today.wav"},                       // Today
+		{now.AddDate(0, 0, -1), "yesterday.wav"}, // Yesterday
+		{now.AddDate(0, 0, -8), "last-week.wav"}, // Over a week ago
 	}
 
 	for i, event := range testEvents {
@@ -963,7 +963,7 @@ func TestAnalyzeUsageCommandNoData(t *testing.T) {
 		t.Error("Expected message about no data found")
 	}
 
-	// Should provide helpful suggestions 
+	// Should provide helpful suggestions
 	if !strings.Contains(output, "Try removing the --tool filter") {
 		t.Error("Expected suggestion to remove tool filter")
 	}
