@@ -1246,6 +1246,36 @@ func TestMCPToolNormalization(t *testing.T) {
 		}
 	})
 
+	t.Run("PostToolUse interrupted mcp__github__create_issue preserves tool-interrupted", func(t *testing.T) {
+		data := `{
+			"session_id": "test",
+			"transcript_path": "/test",
+			"cwd": "/test",
+			"hook_event_name": "PostToolUse",
+			"tool_name": "mcp__github__create_issue",
+			"tool_input": {},
+			"tool_response": {"content": "", "interrupted": true, "isError": true}
+		}`
+		event, err := parser.Parse([]byte(data))
+		if err != nil {
+			t.Fatalf("Parse failed: %v", err)
+		}
+		ctx := event.GetContext()
+
+		if ctx.ToolName != "mcp" {
+			t.Errorf("ToolName: expected 'mcp', got '%s'", ctx.ToolName)
+		}
+		if ctx.OriginalTool != "mcp__github__create_issue" {
+			t.Errorf("OriginalTool: expected 'mcp__github__create_issue', got '%s'", ctx.OriginalTool)
+		}
+		if ctx.SoundHint != "tool-interrupted" {
+			t.Errorf("SoundHint: expected 'tool-interrupted', got '%s'", ctx.SoundHint)
+		}
+		if ctx.Category != Error {
+			t.Errorf("Category: expected Error, got %s", ctx.Category.String())
+		}
+	})
+
 	t.Run("non-MCP tool is unaffected", func(t *testing.T) {
 		data := `{
 			"session_id": "test",
