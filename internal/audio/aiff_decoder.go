@@ -148,7 +148,7 @@ func (d *AiffDecoder) Decode(reader io.Reader) (*AudioData, error) {
 		Format:     malgoFormat,
 	}
 
-	slog.Info("AIFF decode completed successfully",
+	slog.Debug("AIFF decode completed successfully",
 		"total_bytes", len(rawBytes),
 		"total_samples", len(pcmBuffer.Data),
 		"channels", audioData.Channels,

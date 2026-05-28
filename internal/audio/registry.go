@@ -36,7 +36,7 @@ func NewDefaultRegistry() *DecoderRegistry {
 	registry.Register(NewMp3Decoder())
 	registry.Register(NewAiffDecoder())
 
-	slog.Info("default decoder registry initialized",
+	slog.Debug("default decoder registry initialized",
 		"supported_formats", registry.GetSupportedFormats())
 
 	return registry
@@ -54,7 +54,7 @@ func (r *DecoderRegistry) Register(decoder Decoder) {
 
 	r.decoders = append(r.decoders, decoder)
 
-	slog.Info("decoder registered successfully",
+	slog.Debug("decoder registered successfully",
 		"format", formatName,
 		"total_decoders", len(r.decoders))
 }
@@ -150,7 +150,7 @@ func (r *DecoderRegistry) DetectFormatWithContent(filename string, reader io.Rea
 
 	// If magic detection succeeded, use it (this takes precedence over extension)
 	if formatDecoder != nil {
-		slog.Info("format detected by magic bytes",
+		slog.Debug("format detected by magic bytes",
 			"filename", filename,
 			"detected_format", formatDecoder.FormatName(),
 			"mime_type", detectedMime)
@@ -162,7 +162,7 @@ func (r *DecoderRegistry) DetectFormatWithContent(filename string, reader io.Rea
 	extensionDecoder := r.DetectFormat(filename)
 
 	if extensionDecoder != nil {
-		slog.Info("format detected by extension fallback",
+		slog.Debug("format detected by extension fallback",
 			"filename", filename,
 			"format", extensionDecoder.FormatName())
 	} else {
@@ -204,7 +204,7 @@ func (r *DecoderRegistry) DecodeFile(filename string, reader io.Reader) (*AudioD
 		return nil, err
 	}
 
-	slog.Info("decoder selected for file",
+	slog.Debug("decoder selected for file",
 		"filename", filename,
 		"decoder_format", decoder.FormatName())
 
@@ -219,7 +219,7 @@ func (r *DecoderRegistry) DecodeFile(filename string, reader io.Reader) (*AudioD
 		return nil, err
 	}
 
-	slog.Info("file decode completed successfully",
+	slog.Debug("file decode completed successfully",
 		"filename", filename,
 		"decoder_format", decoder.FormatName(),
 		"channels", audioData.Channels,
