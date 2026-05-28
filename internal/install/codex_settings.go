@@ -25,6 +25,11 @@ func FindCodexHooksPaths(scope string) ([]string, error) {
 func findCodexUserScopePaths() []string {
 	var paths []string
 
+	codexHome := os.Getenv("CODEX_HOME")
+	if codexHome != "" {
+		paths = append(paths, filepath.Join(codexHome, "hooks.json"))
+	}
+
 	homeDir := getHomeDirectory()
 	if homeDir != "" {
 		paths = append(paths, filepath.Join(homeDir, ".codex", "hooks.json"))

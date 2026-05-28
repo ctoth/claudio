@@ -7,6 +7,8 @@ import (
 )
 
 func TestFindCodexHooksPathsUserScope(t *testing.T) {
+	t.Setenv("CODEX_HOME", "")
+
 	paths, err := FindCodexHooksPaths("user")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -19,6 +21,24 @@ func TestFindCodexHooksPathsUserScope(t *testing.T) {
 		if !strings.HasSuffix(p, want) {
 			t.Errorf("path %q does not end with %q", p, want)
 		}
+	}
+}
+
+func TestFindCodexHooksPathsUserScopeHonorsCODEXHOME(t *testing.T) {
+	codexHome := t.TempDir()
+	t.Setenv("CODEX_HOME", codexHome)
+
+	paths, err := FindCodexHooksPaths("user")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(paths) == 0 {
+		t.Fatal("expected at least one user-scope path")
+	}
+
+	want := filepath.Join(codexHome, "hooks.json")
+	if paths[0] != want {
+		t.Fatalf("first path = %q, want CODEX_HOME path %q", paths[0], want)
 	}
 }
 
