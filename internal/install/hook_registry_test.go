@@ -161,3 +161,39 @@ func TestDefaultEnabledStatus(t *testing.T) {
 		}
 	}
 }
+
+func TestCodexRegistryContents(t *testing.T) {
+	want := map[string]bool{
+		"PreToolUse": true, "PostToolUse": true, "UserPromptSubmit": true,
+		"Stop": true, "SubagentStop": true, "SubagentStart": true,
+		"PreCompact": true, "PostCompact": true, "SessionStart": true,
+		"PermissionRequest": true,
+	}
+	got := map[string]bool{}
+	for _, h := range CodexHooks {
+		got[h.Name] = true
+	}
+	if len(got) != len(want) {
+		t.Errorf("codex registry has %d events, want %d", len(got), len(want))
+	}
+	for name := range want {
+		if !got[name] {
+			t.Errorf("codex registry missing %q", name)
+		}
+	}
+	if got["Notification"] || got["SessionEnd"] {
+		t.Error("codex registry must not contain Notification or SessionEnd")
+	}
+}
+
+func TestAgentEnabledHooksAndNames(t *testing.T) {
+	if len(AgentCodex.EnabledHooks()) != len(CodexHooks) {
+		t.Errorf("expected all codex hooks enabled by default")
+	}
+	if len(AgentCodex.HookNames()) != 10 {
+		t.Errorf("expected 10 codex hook names, got %d", len(AgentCodex.HookNames()))
+	}
+	if len(AgentClaude.HookNames()) != len(AllHooks) {
+		t.Errorf("claude hook names mismatch")
+	}
+}

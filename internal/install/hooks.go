@@ -15,28 +15,29 @@ import (
 type HooksMap map[string]interface{}
 
 
-// GenerateClaudioHooks creates the hook configuration for Claudio installation with filesystem abstraction
-// Uses the central hook registry to generate all enabled hooks dynamically
-// Returns a hooks map that can be integrated into Claude Code settings.json
-// Accepts filesystem and executable path parameters to prevent config corruption during testing
+// GenerateClaudioHooks creates the Claude Code hook configuration (backward-compatible default).
 func GenerateClaudioHooks(filesystem afero.Fs, executablePath string) (interface{}, error) {
-	slog.Debug("generating Claudio hooks configuration using registry with filesystem abstraction",
-		"executable_path", executablePath)
+	return GenerateClaudioHooksForAgent(filesystem, executablePath, AgentClaude)
+}
 
-	// Get enabled hooks from registry
-	enabledHooks := GetEnabledHooks()
-	slog.Debug("retrieved enabled hooks from registry", "count", len(enabledHooks))
+// GenerateClaudioHooksForAgent creates hook configuration for the given agent using its
+// registry and matcher. Returns a hooks map suitable for Claude settings.json or Codex hooks.json.
+// Accepts filesystem and executable path parameters to prevent config corruption during testing.
+func GenerateClaudioHooksForAgent(filesystem afero.Fs, executablePath string, agent Agent) (interface{}, error) {
+	slog.Debug("generating Claudio hooks configuration",
+		"agent", agent, "executable_path", executablePath)
+
+	enabledHooks := agent.EnabledHooks()
+	matcher := agent.Matcher()
+	slog.Debug("retrieved enabled hooks for agent", "agent", agent, "count", len(enabledHooks))
 
 	hooks := make(HooksMap)
 
 	// Helper function to create hook config structure
 	createHookConfig := func() interface{} {
-		// Use provided executable path to prevent config corruption
-		slog.Debug("using provided executable path for hook command", "path", executablePath)
-
 		return []interface{}{
 			map[string]interface{}{
-				"matcher": ".*",
+				"matcher": matcher,
 				"hooks": []interface{}{
 					map[string]interface{}{
 						"type":    "command",
@@ -47,16 +48,18 @@ func GenerateClaudioHooks(filesystem afero.Fs, executablePath string) (interface
 		}
 	}
 
-	// Generate hooks for all enabled hooks in registry
+	// Generate hooks for all enabled hooks in the agent's registry
 	for _, hookDef := range enabledHooks {
 		hooks[hookDef.Name] = createHookConfig()
 		slog.Debug("added hook from registry",
+			"agent", agent,
 			"hook_name", hookDef.Name,
 			"category", hookDef.Category,
 			"description", hookDef.Description)
 	}
 
-	slog.Info("generated Claudio hooks configuration from registry with filesystem abstraction",
+	slog.Info("generated Claudio hooks configuration",
+		"agent", agent,
 		"hook_count", len(hooks),
 		"hooks", getHookNamesList(hooks))
 

@@ -121,12 +121,6 @@ func (p *HookEventParser) Parse(data []byte) (*HookEvent, error) {
 		return nil, err
 	}
 
-	if event.TranscriptPath == "" {
-		err := fmt.Errorf("missing required field: transcript_path")
-		slog.Error("validation failed", "error", err)
-		return nil, err
-	}
-
 	slog.Debug("hook event parsed successfully",
 		"event_name", event.EventName,
 		"session_id", event.SessionID,
@@ -285,6 +279,18 @@ func (e *HookEvent) GetContext() *EventContext {
 		context.SoundHint = "subagent-complete"
 		context.Operation = "subagent-stop"
 		slog.Debug("categorizing SubagentStop event as Completion", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "SubagentStart":
+		context.Category = Loading
+		context.SoundHint = "subagent-start"
+		context.Operation = "subagent-start"
+		slog.Debug("categorizing SubagentStart event as Loading", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "PostCompact":
+		context.Category = System
+		context.SoundHint = "post-compact"
+		context.Operation = "post-compact"
+		slog.Debug("categorizing PostCompact event as System", "hint", context.SoundHint, "operation", context.Operation)
 
 	case "PreCompact":
 		context.Category = System

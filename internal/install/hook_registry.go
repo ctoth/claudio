@@ -66,6 +66,21 @@ var AllHooks = []HookDefinition{
 	},
 }
 
+// CodexHooks defines the registry of OpenAI Codex CLI hooks supported by Claudio.
+// Codex lacks Notification and SessionEnd; it adds SubagentStart and PostCompact.
+var CodexHooks = []HookDefinition{
+	{Name: "PreToolUse", Category: hooks.Loading, Description: "Play loading sounds before Codex tool execution", DefaultEnabled: true},
+	{Name: "PostToolUse", Category: hooks.Success, Description: "Play success/error sounds after Codex tool execution", DefaultEnabled: true},
+	{Name: "UserPromptSubmit", Category: hooks.Interactive, Description: "Play interaction sounds when user submits prompts", DefaultEnabled: true},
+	{Name: "Stop", Category: hooks.Completion, Description: "Play sounds when Codex finishes responding", DefaultEnabled: true},
+	{Name: "SubagentStop", Category: hooks.Completion, Description: "Play sounds when a Codex subagent finishes", DefaultEnabled: true},
+	{Name: "SubagentStart", Category: hooks.Loading, Description: "Play sounds when a Codex subagent starts", DefaultEnabled: true},
+	{Name: "PreCompact", Category: hooks.System, Description: "Play sounds before Codex context compaction", DefaultEnabled: true},
+	{Name: "PostCompact", Category: hooks.System, Description: "Play sounds after Codex context compaction", DefaultEnabled: true},
+	{Name: "SessionStart", Category: hooks.System, Description: "Play sounds when a Codex session starts or resumes", DefaultEnabled: true},
+	{Name: "PermissionRequest", Category: hooks.Interactive, Description: "Play sounds for Codex permission requests", DefaultEnabled: true},
+}
+
 // GetAllHooks returns all hooks defined in the registry
 func GetAllHooks() []HookDefinition {
 	slog.Debug("retrieving all hooks from registry", "total_hooks", len(AllHooks))

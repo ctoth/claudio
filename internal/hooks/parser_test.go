@@ -1302,3 +1302,106 @@ func TestMCPToolNormalization(t *testing.T) {
 		}
 	})
 }
+
+// Codex sends transcript_path as null or omits it entirely.
+func TestParseCodexNullTranscriptPathSucceeds(t *testing.T) {
+	parser := NewHookEventParser()
+	data := []byte(`{"session_id":"abc","cwd":"/tmp","hook_event_name":"SessionStart","transcript_path":null}`)
+	event, err := parser.Parse(data)
+	if err != nil {
+		t.Fatalf("expected nil error for null transcript_path, got: %v", err)
+	}
+	if event.EventName != "SessionStart" {
+		t.Errorf("expected SessionStart, got %q", event.EventName)
+	}
+}
+
+func TestParseCodexOmittedTranscriptPathSucceeds(t *testing.T) {
+	parser := NewHookEventParser()
+	data := []byte(`{"session_id":"abc","cwd":"/tmp","hook_event_name":"Stop"}`)
+	_, err := parser.Parse(data)
+	if err != nil {
+		t.Fatalf("expected nil error for omitted transcript_path, got: %v", err)
+	}
+}
+
+func TestParseStillRequiresSessionIDAndEventAndCwd(t *testing.T) {
+	parser := NewHookEventParser()
+	cases := map[string][]byte{
+		"missing session_id": []byte(`{"cwd":"/tmp","hook_event_name":"Stop"}`),
+		"missing event":      []byte(`{"session_id":"a","cwd":"/tmp"}`),
+		"missing cwd":        []byte(`{"session_id":"a","hook_event_name":"Stop"}`),
+	}
+	for name, data := range cases {
+		t.Run(name, func(t *testing.T) {
+			if _, err := parser.Parse(data); err == nil {
+				t.Errorf("expected error for %s, got nil", name)
+			}
+		})
+	}
+}
+
+func TestGetContextSubagentStart(t *testing.T) {
+	event := &HookEvent{SessionID: "a", CWD: "/tmp", EventName: "SubagentStart"}
+	ctx := event.GetContext()
+	if ctx.Category != Loading {
+		t.Errorf("expected Loading, got %v", ctx.Category)
+	}
+	if ctx.SoundHint != "subagent-start" {
+		t.Errorf("expected subagent-start, got %q", ctx.SoundHint)
+	}
+	if ctx.Operation != "subagent-start" {
+		t.Errorf("expected operation subagent-start, got %q", ctx.Operation)
+	}
+}
+
+func TestGetContextPostCompact(t *testing.T) {
+	event := &HookEvent{SessionID: "a", CWD: "/tmp", EventName: "PostCompact"}
+	ctx := event.GetContext()
+	if ctx.Category != System {
+		t.Errorf("expected System, got %v", ctx.Category)
+	}
+	if ctx.SoundHint != "post-compact" {
+		t.Errorf("expected post-compact, got %q", ctx.SoundHint)
+	}
+	if ctx.Operation != "post-compact" {
+		t.Errorf("expected operation post-compact, got %q", ctx.Operation)
+	}
+}
+
+func TestGetContextCodexApplyPatchPreToolUse(t *testing.T) {
+	tool := "apply_patch"
+	event := &HookEvent{SessionID: "a", CWD: "/tmp", EventName: "PreToolUse", ToolName: &tool}
+	ctx := event.GetContext()
+	if ctx.Category != Loading {
+		t.Errorf("expected Loading, got %v", ctx.Category)
+	}
+	if ctx.SoundHint != "apply_patch-start" {
+		t.Errorf("expected apply_patch-start, got %q", ctx.SoundHint)
+	}
+}
+
+func TestGetContextCodexApplyPatchPostToolUseSuccess(t *testing.T) {
+	tool := "apply_patch"
+	resp := json.RawMessage(`{"output":"done"}`)
+	event := &HookEvent{SessionID: "a", CWD: "/tmp", EventName: "PostToolUse", ToolName: &tool, ToolResponse: &resp}
+	ctx := event.GetContext()
+	if ctx.Category != Success {
+		t.Errorf("expected Success, got %v", ctx.Category)
+	}
+	if ctx.SoundHint != "apply_patch-success" {
+		t.Errorf("expected apply_patch-success, got %q", ctx.SoundHint)
+	}
+}
+
+func TestGetContextCodexMcpToolNormalized(t *testing.T) {
+	tool := "mcp__filesystem__read_file"
+	event := &HookEvent{SessionID: "a", CWD: "/tmp", EventName: "PreToolUse", ToolName: &tool}
+	ctx := event.GetContext()
+	if ctx.ToolName != "mcp" {
+		t.Errorf("expected normalized tool name mcp, got %q", ctx.ToolName)
+	}
+	if ctx.SoundHint != "mcp-start" {
+		t.Errorf("expected mcp-start, got %q", ctx.SoundHint)
+	}
+}

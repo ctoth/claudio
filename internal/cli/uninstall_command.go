@@ -21,6 +21,9 @@ func newUninstallCommand() *cobra.Command {
 	// Add --scope flag with validation
 	cmd.Flags().StringP("scope", "s", "user", "Uninstall scope: 'user' for user-specific settings, 'project' for project-specific settings")
 
+	// Add --agent flag with validation
+	cmd.Flags().StringP("agent", "a", "claude", "Target agent: 'claude' for Claude Code, 'codex' for OpenAI Codex CLI")
+
 	// Add --dry-run flag
 	cmd.Flags().BoolP("dry-run", "d", false, "Show what would be removed without making changes (simulation mode)")
 
@@ -49,6 +52,16 @@ func runUninstallCommandE(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid scope '%s': must be 'user' or 'project'", scopeStr)
 	}
 
+	// Get and validate agent flag
+	agentStr, err := cmd.Flags().GetString("agent")
+	if err != nil {
+		return fmt.Errorf("failed to get agent flag: %w", err)
+	}
+	agent, err := install.ParseAgent(agentStr)
+	if err != nil {
+		return err
+	}
+
 	// Get dry-run flag
 	dryRun, err := cmd.Flags().GetBool("dry-run")
 	if err != nil {
@@ -70,10 +83,10 @@ func runUninstallCommandE(cmd *cobra.Command, args []string) error {
 
 	slog.Info("uninstall command executing", "scope", scope, "dry_run", dryRun, "quiet", quiet, "print", print)
 
-	// Find the best Claude Code settings path for the specified scope
-	settingsPath, err := install.FindBestSettingsPath(scope.String())
+	// Find the best config path for the specified agent and scope
+	settingsPath, err := agent.BestConfigPath(scope.String())
 	if err != nil {
-		return fmt.Errorf("failed to find Claude Code settings path: %w", err)
+		return fmt.Errorf("failed to find %s config path: %w", agent, err)
 	}
 
 	slog.Debug("using settings path", "path", settingsPath, "scope", scope)
