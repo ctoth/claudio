@@ -170,6 +170,154 @@ claudio analyze missing --tool Bash --category error
 claudio analyze missing --preset all-time --limit 50
 ```
 
+## claudio soundpack
+
+Manage soundpacks: create templates, list discoverable packs, validate, install
+local packs, switch the active pack, and manage git-backed packs. The source
+of truth for these subcommands is `internal/cli/soundpack_command.go` and
+`internal/cli/soundpack_git.go`.
+
+### claudio soundpack init
+
+Create a JSON soundpack template populated with every known sound key.
+
+```bash
+claudio soundpack init <name> [flags]
+```
+
+**--dir** `string` (default: ".")
+: Output directory for the soundpack file
+
+**--from-platform** `boolean` (default: false)
+: Pre-fill mapping values from the current platform's embedded soundpack
+  (windows / wsl / darwin)
+
+The output file is `<dir>/<name>.json`. Fails if the file already exists.
+
+### claudio soundpack list
+
+List every discoverable soundpack — embedded platform packs, packs under XDG
+data directories, and any packs reachable through `soundpack_paths`.
+
+```bash
+claudio soundpack list
+```
+
+Output is a tabular `NAME / TYPE / SOUNDS / PATH` listing.
+
+### claudio soundpack validate
+
+Validate a JSON soundpack file or a directory soundpack and print a coverage
+report.
+
+```bash
+claudio soundpack validate <path>
+```
+
+Checks:
+1. JSON structure parses as a soundpack
+2. Referenced files exist
+3. Coverage of known sound keys
+4. File extensions are `.wav`, `.mp3`, or `.aiff`
+
+Exit code is non-zero if broken references are found. Empty mappings are
+informational, not errors.
+
+### claudio soundpack install
+
+Copy a local JSON file or directory soundpack into the XDG data directory and
+add it to `soundpack_paths`.
+
+```bash
+claudio soundpack install <path> [flags]
+```
+
+**--default** `boolean` (default: false)
+: Also set the installed soundpack as `default_soundpack`
+
+**--skip-validate** `boolean` (default: false)
+: Skip validation before installing
+
+JSON files install to `<XDG_DATA_HOME>/claudio/<name>.json`; directories
+install to `<XDG_DATA_HOME>/claudio/soundpacks/<name>/`.
+
+### claudio soundpack use
+
+Switch the active soundpack by updating `default_soundpack` in the config
+file. The name must match an installed or embedded soundpack (see
+`claudio soundpack list`).
+
+```bash
+claudio soundpack use <name>
+```
+
+### claudio soundpack add
+
+Clone a git-backed soundpack into Claudio's managed data directory. The
+playable soundpack path is added to `soundpack_paths` and recorded in
+`soundpacks.json`.
+
+```bash
+claudio soundpack add <git-url> [flags]
+```
+
+**--name** `string`
+: Name to install the soundpack under (defaults to a name derived from the URL)
+
+**--ref** `string`
+: Branch, tag, or commit to check out
+
+**--subdir** `string`
+: Directory or JSON file within the repository to use as the soundpack
+
+**--default** `boolean` (default: false)
+: Also set the soundpack as `default_soundpack`
+
+**--skip-validate** `boolean` (default: false)
+: Skip validation before adding
+
+**--replace** `boolean` (default: false)
+: Replace an existing managed git soundpack with the same name
+
+GitHub shorthand `gh:owner/repo` is accepted in place of the full URL.
+
+### claudio soundpack update
+
+Update one or all managed git soundpacks.
+
+```bash
+claudio soundpack update [name] [flags]
+```
+
+**--all** `boolean` (default: false)
+: Update every managed git soundpack (mutually exclusive with `[name]`)
+
+**--force** `boolean` (default: false)
+: Discard local changes in the managed clone before updating
+
+### claudio soundpack remove
+
+Remove a managed git soundpack: deletes the clone, removes the registry
+entry, and updates `soundpack_paths`.
+
+```bash
+claudio soundpack remove <name> [flags]
+```
+
+**--keep-files** `boolean` (default: false)
+: Remove registry/config entries but leave the clone on disk
+
+**--force** `boolean` (default: false)
+: Remove registry/config entries even if clone deletion fails
+
+### claudio soundpack status
+
+Show the registry/clone status of one or all managed git soundpacks.
+
+```bash
+claudio soundpack status [name]
+```
+
 ## claudio uninstall
 
 Removes Claudio hooks from Claude Code settings to disable audio feedback.
@@ -251,6 +399,11 @@ echo '{"hook_event_name":"PostToolUse",...}' | claudio [flags]
 
 ### Hook Execution Flags
 
+**--config** `string` (default: "")
+: Path to a config file to use instead of XDG discovery
+: Useful for tests and ad-hoc invocations; pass `/dev/null` (or `NUL` on
+  Windows) to skip all config files and run with defaults
+
 **--volume** `float` (default: from config)
 : Audio playback volume (0.0 to 1.0)
 : Overrides configuration file volume setting
@@ -262,6 +415,12 @@ echo '{"hook_event_name":"PostToolUse",...}' | claudio [flags]
 **--soundpack** `string` (default: from config)
 : Soundpack to use for audio
 : Overrides configuration file soundpack setting
+
+**--source** `string` (default: "claude")
+: Hook source: `claude` / `codex` (stdin JSON carries the event) or `antigravity`
+
+**--hook-event** `string` (default: "")
+: Hook event name for sources whose payload omits it (Antigravity)
 
 ### Environment Variables
 
@@ -283,6 +442,22 @@ Claudio respects these environment variables:
 : Logging verbosity
 : Options: `debug`, `info`, `warn`, `error`
 : Example: `export CLAUDIO_LOG_LEVEL=debug`
+: Note: stderr is hardcoded to ERROR. This variable controls only the rotated
+  log file (`~/.cache/claudio/logs/claudio.log` by default). Tail the file to
+  see debug/info/warn output.
+
+**XDG_CONFIG_HOME**
+: Override the XDG config directory used for `config.json` discovery
+: Example: `export XDG_CONFIG_HOME=/custom/config/path`
+
+**XDG_DATA_HOME**
+: Override the XDG data directory used for soundpack discovery (Claudio
+  appends the literal `claudio/soundpacks/<id>` subpath)
+: Example: `export XDG_DATA_HOME=/custom/data/path`
+
+**XDG_CACHE_HOME**
+: Override the XDG cache directory used for the rotated log file
+: Example: `export XDG_CACHE_HOME=/custom/cache/path`
 
 ## Global Options
 
