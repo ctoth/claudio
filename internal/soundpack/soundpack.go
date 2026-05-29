@@ -384,6 +384,80 @@ func validateJSONSoundpack(soundpack JSONSoundpackFile) error {
 	return validateMappingFilesExist(soundpack)
 }
 
+// PeekJSONSoundpackFromBytes parses a JSON soundpack from byte data and
+// returns its struct, applying the basics check (name + non-empty
+// mappings) and the mappings-count cap, but NOT the path-syntax
+// validation or the existence check. It is intended for discovery,
+// listing, and metadata-only consumers that need to inspect a soundpack
+// without dereferencing its files — e.g. counting mappings, extracting
+// the name, listing keys across multiple soundpacks where some
+// referenced files may not exist on the host platform.
+//
+// Callers that intend to USE the soundpack (resolve sounds at runtime)
+// must use LoadJSONSoundpack(FromBytes) or LoadEmbeddedPlatformSoundpack
+// instead.
+func PeekJSONSoundpackFromBytes(data []byte) (*JSONSoundpackFile, error) {
+	var sp JSONSoundpackFile
+	if err := json.Unmarshal(data, &sp); err != nil {
+		return nil, fmt.Errorf("failed to parse JSON soundpack: %w", err)
+	}
+	if err := validateJSONSoundpackBasics(sp); err != nil {
+		return nil, err
+	}
+	return &sp, nil
+}
+
+// PeekJSONSoundpackFromFile opens an on-disk soundpack JSON, reads it
+// under the safeio cap, and parses it via PeekJSONSoundpackFromBytes.
+// Same semantics as the bytes variant: applies the size cap, basics
+// check, and mappings-count cap; skips path-syntax validation and the
+// existence check.
+func PeekJSONSoundpackFromFile(path string) (*JSONSoundpackFile, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open JSON soundpack file: %w", err)
+	}
+	defer f.Close()
+
+	data, err := safeio.ReadAllCapped(f, safeio.MaxSoundpackJSONBytes, "soundpack JSON")
+	if err != nil {
+		return nil, fmt.Errorf("failed to read JSON soundpack file: %w", err)
+	}
+	return PeekJSONSoundpackFromBytes(data)
+}
+
+// PeekJSONSoundpackMetadataFromFile is a permissive variant of
+// PeekJSONSoundpackFromFile that applies ONLY the size cap and the
+// mappings-count cap. It does NOT require `name` or non-empty
+// `mappings` to be set, so it can read partially-populated soundpacks
+// (e.g. install command extracting the name from a JSON whose mappings
+// are filled in later, or a soundpack init scaffold).
+//
+// Use this when you need to inspect metadata from an arbitrary
+// soundpack JSON without rejecting work-in-progress files.
+func PeekJSONSoundpackMetadataFromFile(path string) (*JSONSoundpackFile, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open JSON soundpack file: %w", err)
+	}
+	defer f.Close()
+
+	data, err := safeio.ReadAllCapped(f, safeio.MaxSoundpackJSONBytes, "soundpack JSON")
+	if err != nil {
+		return nil, fmt.Errorf("failed to read JSON soundpack file: %w", err)
+	}
+
+	var sp JSONSoundpackFile
+	if err := json.Unmarshal(data, &sp); err != nil {
+		return nil, fmt.Errorf("failed to parse JSON soundpack: %w", err)
+	}
+	if len(sp.Mappings) > MaxSoundpackMappings {
+		return nil, fmt.Errorf("soundpack mappings exceed limit of %d entries (got %d)",
+			MaxSoundpackMappings, len(sp.Mappings))
+	}
+	return &sp, nil
+}
+
 // CreateSoundpackMapper auto-detects soundpack type and creates appropriate mapper
 func CreateSoundpackMapper(name, path string) (PathMapper, error) {
 	slog.Debug("creating soundpack mapper", "name", name, "path", path)

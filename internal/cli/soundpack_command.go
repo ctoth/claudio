@@ -102,9 +102,9 @@ func runSoundpackInit(cmd *cobra.Command, name, dir string, fromPlatform bool) e
 		if err != nil {
 			slog.Warn("failed to load platform soundpack for pre-fill", "file", platformFile, "error", err)
 		} else {
-			var platformSP soundpack.JSONSoundpackFile
-			if err := json.Unmarshal(data, &platformSP); err != nil {
-				slog.Warn("failed to parse platform soundpack for pre-fill", "file", platformFile, "error", err)
+			platformSP, peekErr := soundpack.PeekJSONSoundpackFromBytes(data)
+			if peekErr != nil {
+				slog.Warn("failed to parse platform soundpack for pre-fill", "file", platformFile, "error", peekErr)
 			} else {
 				for key, val := range platformSP.Mappings {
 					if _, exists := mappings[key]; exists {
@@ -287,9 +287,9 @@ func discoverEmbeddedSoundpacks() ([]soundpackInfo, error) {
 			continue
 		}
 
-		var spFile soundpack.JSONSoundpackFile
-		if err := json.Unmarshal(data, &spFile); err != nil {
-			slog.Warn("failed to parse embedded platform soundpack", "file", file, "error", err)
+		spFile, peekErr := soundpack.PeekJSONSoundpackFromBytes(data)
+		if peekErr != nil {
+			slog.Warn("failed to parse embedded platform soundpack", "file", file, "error", peekErr)
 			continue
 		}
 
@@ -350,15 +350,12 @@ func discoverXDGSoundpacks() []soundpackInfo {
 					Path:       fullPath,
 				})
 			} else if strings.HasSuffix(entry.Name(), ".json") {
-				// JSON soundpack file
-				data, err := os.ReadFile(fullPath)
-				if err != nil {
-					slog.Debug("could not read JSON soundpack file", "path", fullPath, "error", err)
-					continue
-				}
-				var spFile soundpack.JSONSoundpackFile
-				if err := json.Unmarshal(data, &spFile); err != nil {
-					slog.Debug("could not parse JSON soundpack file", "path", fullPath, "error", err)
+				// JSON soundpack file — peek (apply size cap and basic
+				// validation) so malformed or oversized files are
+				// skipped rather than blowing up discovery.
+				spFile, peekErr := soundpack.PeekJSONSoundpackFromFile(fullPath)
+				if peekErr != nil {
+					slog.Debug("could not peek JSON soundpack file", "path", fullPath, "error", peekErr)
 					continue
 				}
 				soundCount := countNonEmptyMappings(spFile.Mappings)
@@ -390,12 +387,8 @@ func discoverXDGSoundpacks() []soundpackInfo {
 				continue
 			}
 			fullPath := filepath.Join(parentDir, entry.Name())
-			data, err := os.ReadFile(fullPath)
-			if err != nil {
-				continue
-			}
-			var spFile soundpack.JSONSoundpackFile
-			if err := json.Unmarshal(data, &spFile); err != nil {
+			spFile, peekErr := soundpack.PeekJSONSoundpackFromFile(fullPath)
+			if peekErr != nil {
 				continue
 			}
 			soundCount := countNonEmptyMappings(spFile.Mappings)
@@ -444,14 +437,9 @@ func discoverConfigSoundpacks() []soundpackInfo {
 				Path:       path,
 			})
 		} else if strings.HasSuffix(path, ".json") {
-			data, err := os.ReadFile(path)
-			if err != nil {
-				slog.Debug("could not read config JSON soundpack", "path", path, "error", err)
-				continue
-			}
-			var spFile soundpack.JSONSoundpackFile
-			if err := json.Unmarshal(data, &spFile); err != nil {
-				slog.Debug("could not parse config JSON soundpack", "path", path, "error", err)
+			spFile, peekErr := soundpack.PeekJSONSoundpackFromFile(path)
+			if peekErr != nil {
+				slog.Debug("could not peek config JSON soundpack", "path", path, "error", peekErr)
 				continue
 			}
 			soundCount := countNonEmptyMappings(spFile.Mappings)
@@ -500,8 +488,9 @@ func countNonEmptyMappings(mappings map[string]string) int {
 }
 
 // ExtractAllSoundKeys reads all 3 embedded platform JSONs and returns the sorted
-// union of all mapping keys. It uses raw json.Unmarshal (not LoadJSONSoundpack)
-// to avoid file-existence validation.
+// union of all mapping keys. It uses PeekJSONSoundpackFromBytes (which
+// applies the size and mappings-count caps but skips path/existence
+// checks) since we only need the keys.
 func ExtractAllSoundKeys() ([]string, error) {
 	platformFiles := []string{"windows.json", "wsl.json", "darwin.json"}
 	keySet := make(map[string]struct{})
@@ -513,9 +502,9 @@ func ExtractAllSoundKeys() ([]string, error) {
 			continue
 		}
 
-		var spFile soundpack.JSONSoundpackFile
-		if err := json.Unmarshal(data, &spFile); err != nil {
-			slog.Warn("failed to parse embedded platform soundpack", "file", file, "error", err)
+		spFile, peekErr := soundpack.PeekJSONSoundpackFromBytes(data)
+		if peekErr != nil {
+			slog.Warn("failed to parse embedded platform soundpack", "file", file, "error", peekErr)
 			continue
 		}
 
@@ -630,17 +619,16 @@ func runSoundpackValidate(cmd *cobra.Command, path string) error {
 func validateJSONSoundpackFile(path string) (validateResult, error) {
 	slog.Debug("validating JSON soundpack", "path", path)
 
-	data, err := os.ReadFile(path)
+	// Peek applies the size cap + basics + mappings count cap. The
+	// validate command then walks the mappings to produce its own
+	// detailed broken-references report, which is richer than what the
+	// strict untrusted loader returns.
+	spFilePtr, err := soundpack.PeekJSONSoundpackFromFile(path)
 	if err != nil {
-		slog.Error("failed to read file", "path", path, "error", err)
-		return validateResult{}, fmt.Errorf("failed to read file: %w", err)
+		slog.Error("failed to peek file", "path", path, "error", err)
+		return validateResult{}, fmt.Errorf("failed to load JSON soundpack: %w", err)
 	}
-
-	var spFile soundpack.JSONSoundpackFile
-	if err := json.Unmarshal(data, &spFile); err != nil {
-		slog.Error("failed to parse JSON", "path", path, "error", err)
-		return validateResult{}, fmt.Errorf("failed to parse JSON: %w", err)
-	}
+	spFile := *spFilePtr
 	soundpack.ResolveJSONSoundpackMappings(&spFile, filepath.Dir(path))
 
 	slog.Info("parsed JSON soundpack", "name", spFile.Name, "mappings", len(spFile.Mappings))
@@ -947,17 +935,16 @@ func runSoundpackInstall(cmd *cobra.Command, srcPath string, setDefault, skipVal
 		slog.Info("soundpack validation passed")
 	}
 
-	// For JSON files, read and extract name from the JSON content
+	// For JSON files, read and extract name from the JSON content. Use
+	// the permissive metadata peek (size cap + mappings count cap; does
+	// NOT require name or mappings to be populated) — this site only
+	// wants the name, and install-time JSONs may legitimately have
+	// empty mappings (e.g. soundpack init scaffolds).
 	if !isDir {
-		data, readErr := os.ReadFile(srcPath)
-		if readErr != nil {
-			slog.Error("failed to read JSON file", "path", srcPath, "error", readErr)
-			return fmt.Errorf("failed to read JSON file: %w", readErr)
-		}
-		var spFile soundpack.JSONSoundpackFile
-		if jsonErr := json.Unmarshal(data, &spFile); jsonErr != nil {
-			slog.Error("failed to parse JSON", "path", srcPath, "error", jsonErr)
-			return fmt.Errorf("failed to parse JSON: %w", jsonErr)
+		spFile, peekErr := soundpack.PeekJSONSoundpackMetadataFromFile(srcPath)
+		if peekErr != nil {
+			slog.Error("failed to peek JSON file", "path", srcPath, "error", peekErr)
+			return fmt.Errorf("failed to load JSON file: %w", peekErr)
 		}
 		if spFile.Name != "" {
 			name = spFile.Name
