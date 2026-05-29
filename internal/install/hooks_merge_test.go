@@ -729,3 +729,263 @@ func TestMergeHooksWithExistingNonClaudioHooks(t *testing.T) {
 
 // Functions that will need to be implemented (currently undefined):
 // - MergeHooksIntoSettings(existing *SettingsMap, claudioHooks interface{}) (*SettingsMap, error)
+
+// claudioArrayEntry returns a hook array element with a single claudio command.
+func claudioArrayEntry(cmd string) map[string]interface{} {
+	return map[string]interface{}{
+		"matcher": ".*",
+		"hooks": []interface{}{
+			map[string]interface{}{
+				"type":    "command",
+				"command": cmd,
+			},
+		},
+	}
+}
+
+// customArrayEntry returns a hook array element with a single non-claudio
+// command. The matcher value is parametrised so callers can distinguish their
+// entries when asserting preservation.
+func customArrayEntry(matcher, cmd string) map[string]interface{} {
+	return map[string]interface{}{
+		"matcher": matcher,
+		"hooks": []interface{}{
+			map[string]interface{}{
+				"type":    "command",
+				"command": cmd,
+			},
+		},
+	}
+}
+
+func countCommandsInHookValue(t *testing.T, v interface{}) int {
+	t.Helper()
+	arr, ok := v.([]interface{})
+	if !ok {
+		t.Fatalf("expected []interface{} hook value, got %T", v)
+	}
+	count := 0
+	for _, item := range arr {
+		m, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		hooks, ok := m["hooks"].([]interface{})
+		if !ok {
+			continue
+		}
+		count += len(hooks)
+	}
+	return count
+}
+
+// TestIsClaudioHookMultiMatcherArray verifies that IsClaudioHook returns true
+// for an array whose claudio entry is NOT in position 0. The old arr[0]-only
+// scan would have returned false here, and the merge path would have appended
+// a second claudio block.
+func TestIsClaudioHookMultiMatcherArray(t *testing.T) {
+	value := []interface{}{
+		customArrayEntry(".*", "/usr/local/bin/custom"),
+		claudioArrayEntry("/usr/local/bin/claudio"),
+	}
+	if !IsClaudioHook(value) {
+		t.Errorf("IsClaudioHook should detect claudio in any array position, got false for %v", value)
+	}
+}
+
+// TestIsClaudioHookMultiHookInsideMatcher verifies the predicate scans every
+// inner hook inside a matcher block, not just hooks[0].
+func TestIsClaudioHookMultiHookInsideMatcher(t *testing.T) {
+	value := []interface{}{
+		map[string]interface{}{
+			"matcher": ".*",
+			"hooks": []interface{}{
+				map[string]interface{}{"type": "command", "command": "/usr/local/bin/custom"},
+				map[string]interface{}{"type": "command", "command": "/usr/local/bin/claudio"},
+			},
+		},
+	}
+	if !IsClaudioHook(value) {
+		t.Errorf("IsClaudioHook should detect claudio in any hooks-sub-array position, got false")
+	}
+}
+
+// TestMergeHooksIdempotent_CustomThenClaudio: starting with a pre-existing
+// [custom, claudio] array, run two merges. After the first merge the array
+// should still have exactly two elements (claudio is replaced, not duplicated).
+// After the second merge it must remain two elements (idempotency).
+func TestMergeHooksIdempotent_CustomThenClaudio(t *testing.T) {
+	const claudioCmd = "/test/mock/claudio"
+
+	existing := &SettingsMap{
+		"hooks": map[string]interface{}{
+			"PostToolUse": []interface{}{
+				customArrayEntry(".*", "/usr/local/bin/custom"),
+				claudioArrayEntry(claudioCmd),
+			},
+		},
+	}
+
+	claudioHooks := map[string]interface{}{
+		"PostToolUse": []interface{}{claudioArrayEntry(claudioCmd)},
+	}
+
+	first, err := MergeHooksIntoSettings(existing, claudioHooks)
+	if err != nil {
+		t.Fatalf("first merge failed: %v", err)
+	}
+
+	firstHooks, _ := (*first)["hooks"].(map[string]interface{})
+	firstArr, ok := firstHooks["PostToolUse"].([]interface{})
+	if !ok {
+		t.Fatalf("expected PostToolUse to be []interface{}, got %T", firstHooks["PostToolUse"])
+	}
+	if got, want := len(firstArr), 2; got != want {
+		t.Errorf("after first merge: expected %d array elements, got %d (%v)", want, got, firstArr)
+	}
+
+	// Second merge — must be byte-identical to first.
+	second, err := MergeHooksIntoSettings(first, claudioHooks)
+	if err != nil {
+		t.Fatalf("second merge failed: %v", err)
+	}
+
+	firstJSON, _ := json.Marshal(first)
+	secondJSON, _ := json.Marshal(second)
+	if string(firstJSON) != string(secondJSON) {
+		t.Errorf("merge not idempotent:\nfirst:  %s\nsecond: %s", firstJSON, secondJSON)
+	}
+}
+
+// TestMergeHooksIdempotent_ClaudioThenCustom asserts the data-loss bug is
+// fixed: starting with [claudio, custom], the custom entry is preserved
+// across a merge. Under the old code IsClaudioHook(arr[0]) returned true
+// and the idempotent-update branch replaced the whole array with the
+// claudio-only value, deleting the user's custom hook.
+func TestMergeHooksIdempotent_ClaudioThenCustom(t *testing.T) {
+	const claudioCmd = "/test/mock/claudio"
+	const customCmd = "/usr/local/bin/custom"
+
+	existing := &SettingsMap{
+		"hooks": map[string]interface{}{
+			"PostToolUse": []interface{}{
+				claudioArrayEntry(claudioCmd),
+				customArrayEntry("custom-matcher", customCmd),
+			},
+		},
+	}
+
+	claudioHooks := map[string]interface{}{
+		"PostToolUse": []interface{}{claudioArrayEntry(claudioCmd)},
+	}
+
+	merged, err := MergeHooksIntoSettings(existing, claudioHooks)
+	if err != nil {
+		t.Fatalf("merge failed: %v", err)
+	}
+
+	mergedHooks, _ := (*merged)["hooks"].(map[string]interface{})
+	arr, ok := mergedHooks["PostToolUse"].([]interface{})
+	if !ok {
+		t.Fatalf("expected PostToolUse to be []interface{}, got %T", mergedHooks["PostToolUse"])
+	}
+
+	if got, want := len(arr), 2; got != want {
+		t.Errorf("expected %d array elements after merge, got %d (%v)", want, got, arr)
+	}
+
+	// Verify the custom entry survived.
+	foundCustom := false
+	for _, item := range arr {
+		m, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		hooks, _ := m["hooks"].([]interface{})
+		for _, h := range hooks {
+			hm, ok := h.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if cmd, _ := hm["command"].(string); cmd == customCmd {
+				foundCustom = true
+			}
+		}
+	}
+	if !foundCustom {
+		t.Errorf("custom hook %q was silently deleted by merge — data-loss bug regressed. Got: %v", customCmd, arr)
+	}
+
+	// Exactly one claudio entry.
+	if claudioCount := countCommandsInHookValue(t, arr) - 1; claudioCount != 1 {
+		t.Errorf("expected exactly 1 claudio command after merge, got %d (1 custom + claudio commands)", claudioCount)
+	}
+}
+
+// TestMergeHooksIdempotent_MultipleClaudio: a pre-corrupted state with two
+// claudio entries plus one custom entry. One merge must collapse to exactly
+// one claudio plus the custom — self-healing for any settings file already
+// corrupted by the pre-fix code.
+func TestMergeHooksIdempotent_MultipleClaudio(t *testing.T) {
+	const claudioCmd = "/test/mock/claudio"
+	const customCmd = "/usr/local/bin/custom"
+
+	existing := &SettingsMap{
+		"hooks": map[string]interface{}{
+			"PostToolUse": []interface{}{
+				claudioArrayEntry(claudioCmd),
+				claudioArrayEntry(claudioCmd),
+				customArrayEntry("custom-matcher", customCmd),
+			},
+		},
+	}
+
+	claudioHooks := map[string]interface{}{
+		"PostToolUse": []interface{}{claudioArrayEntry(claudioCmd)},
+	}
+
+	merged, err := MergeHooksIntoSettings(existing, claudioHooks)
+	if err != nil {
+		t.Fatalf("merge failed: %v", err)
+	}
+
+	mergedHooks, _ := (*merged)["hooks"].(map[string]interface{})
+	arr, ok := mergedHooks["PostToolUse"].([]interface{})
+	if !ok {
+		t.Fatalf("expected PostToolUse to be []interface{}, got %T", mergedHooks["PostToolUse"])
+	}
+
+	if got, want := len(arr), 2; got != want {
+		t.Errorf("expected exactly 2 array elements (1 custom + 1 claudio) after collapsing duplicates, got %d (%v)", got, arr)
+	}
+
+	// Count claudio commands across the array.
+	claudioCommands := 0
+	customFound := false
+	for _, item := range arr {
+		m, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		hooks, _ := m["hooks"].([]interface{})
+		for _, h := range hooks {
+			hm, ok := h.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			cmd, _ := hm["command"].(string)
+			if cmd == claudioCmd {
+				claudioCommands++
+			}
+			if cmd == customCmd {
+				customFound = true
+			}
+		}
+	}
+	if claudioCommands != 1 {
+		t.Errorf("expected exactly 1 claudio command after collapse, got %d", claudioCommands)
+	}
+	if !customFound {
+		t.Errorf("custom command %q was lost during multi-claudio collapse", customCmd)
+	}
+}

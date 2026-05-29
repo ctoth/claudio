@@ -142,19 +142,16 @@ func MergeHooksIntoSettings(existingSettings *SettingsMap, claudioHooks interfac
 		slog.Debug("preserved existing hook", "hook_name", hookName, "hook_value", hookValue)
 	}
 
-	// Then, add/update Claudio hooks with proper merging
+	// Then, add/update Claudio hooks with strip-and-replace merging.
+	// mergeHookValues now handles both cases uniformly: it strips any
+	// pre-existing Claudio entries from the existing array and appends the
+	// new Claudio entries. This preserves the user's non-Claudio entries
+	// regardless of ordering and is idempotent across repeated merges.
 	for hookName, claudioValue := range claudioHooksMap {
 		if existingValue, exists := mergedHooks[hookName]; exists {
-			if !IsClaudioHook(existingValue) {
-				// Merge existing non-Claudio hook with Claudio hook
-				mergedHooks[hookName] = mergeHookValues(existingValue, claudioValue)
-				slog.Info("merged existing non-Claudio hook with Claudio",
-					"hook_name", hookName, "action", "merging")
-			} else {
-				// Existing is Claudio - idempotent update
-				mergedHooks[hookName] = claudioValue
-				slog.Debug("updated existing Claudio hook", "hook_name", hookName)
-			}
+			mergedHooks[hookName] = mergeHookValues(existingValue, claudioValue)
+			slog.Debug("merged existing hook with Claudio (strip-and-replace)",
+				"hook_name", hookName)
 		} else {
 			// No conflict - add new Claudio hook
 			mergedHooks[hookName] = claudioValue
@@ -192,16 +189,13 @@ func deepCopySettings(original *SettingsMap) (*SettingsMap, error) {
 }
 
 // mergeHookValues merges an existing hook value with a Claudio hook value
-// Returns the merged result in array format, preserving existing commands and adding Claudio commands
-// Handles deduplication when the existing hook is already a Claudio hook
+// Returns the merged result in array format, preserving existing non-Claudio
+// commands and replacing any pre-existing Claudio entries with the new ones.
+// The merge is idempotent regardless of element ordering: any Claudio entry in
+// the existing array is filtered out before the new Claudio entries are
+// appended, so merge(merge(existing)) == merge(existing).
 func mergeHookValues(existingValue, claudioValue interface{}) interface{} {
 	slog.Debug("merging hook values", "existing_type", fmt.Sprintf("%T", existingValue), "claudio_type", fmt.Sprintf("%T", claudioValue))
-
-	// If existing value is already a Claudio hook, don't duplicate - return Claudio value (idempotent)
-	if IsClaudioHook(existingValue) {
-		slog.Debug("existing value is Claudio hook, returning Claudio value (idempotent)")
-		return claudioValue
-	}
 
 	// Convert Claudio value to array format (it should already be, but be safe)
 	claudioArray, ok := claudioValue.([]interface{})
@@ -246,51 +240,92 @@ func mergeHookValues(existingValue, claudioValue interface{}) interface{} {
 		}
 	}
 
-	// Merge arrays: existing commands first, then Claudio commands
-	var mergedArray []interface{}
+	// Strip any pre-existing Claudio entries from the existing array, then
+	// append the new Claudio entries. This makes the merge idempotent and
+	// preserves the user's non-Claudio entries regardless of ordering.
+	filteredExisting := make([]interface{}, 0, len(existingArray))
+	strippedCount := 0
+	for _, item := range existingArray {
+		if itemMap, ok := item.(map[string]interface{}); ok && itemContainsClaudioCommand(itemMap) {
+			strippedCount++
+			continue
+		}
+		filteredExisting = append(filteredExisting, item)
+	}
 
-	// Add all existing array elements
-	mergedArray = append(mergedArray, existingArray...)
-
-	// Add Claudio array elements
+	mergedArray := make([]interface{}, 0, len(filteredExisting)+len(claudioArray))
+	mergedArray = append(mergedArray, filteredExisting...)
 	mergedArray = append(mergedArray, claudioArray...)
 
-	slog.Debug("completed hook value merge", 
+	slog.Debug("completed hook value merge",
 		"existing_elements", len(existingArray),
+		"existing_claudio_entries_stripped", strippedCount,
 		"claudio_elements", len(claudioArray),
 		"merged_elements", len(mergedArray))
 
 	return mergedArray
 }
 
-// IsClaudioHook checks if a hook value represents a claudio hook,
-// supporting both the old string format and new array format
-func IsClaudioHook(hookValue interface{}) bool {
-	// Helper function to check if command is a claudio executable
-	isClaudioCommand := func(cmdStr string) bool {
-		// Strip quotes if present (for Windows compatibility)
-		if len(cmdStr) >= 2 && cmdStr[0] == '"' && cmdStr[len(cmdStr)-1] == '"' {
-			cmdStr = cmdStr[1 : len(cmdStr)-1]
-		}
-		return executableRecognizer(filepath.Base(cmdStr))
+// itemContainsClaudioCommand returns true if the given hook-array element
+// (a map with a "hooks" sub-array) contains any hook whose command resolves
+// to the claudio executable per executableRecognizer.
+func itemContainsClaudioCommand(item map[string]interface{}) bool {
+	hooks, ok := item["hooks"].([]interface{})
+	if !ok {
+		return false
 	}
+	for _, h := range hooks {
+		cmd, ok := h.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		cmdStr, ok := cmd["command"].(string)
+		if !ok {
+			continue
+		}
+		if isClaudioCommandString(cmdStr) {
+			return true
+		}
+	}
+	return false
+}
 
+// isClaudioCommandString reports whether a command string refers to the
+// claudio executable. Shared between IsClaudioHook and the merge filter so
+// the two predicates cannot drift apart.
+func isClaudioCommandString(cmdStr string) bool {
+	// Strip surrounding quotes if present (for Windows compatibility)
+	if len(cmdStr) >= 2 && cmdStr[0] == '"' && cmdStr[len(cmdStr)-1] == '"' {
+		cmdStr = cmdStr[1 : len(cmdStr)-1]
+	}
+	return executableRecognizer(filepath.Base(cmdStr))
+}
+
+// IsClaudioHook reports whether a hook value contains any reference to the
+// claudio executable. Supports the old string format and the new array
+// format. The array form is scanned exhaustively — return true if ANY array
+// element contains ANY hooks-sub-array entry whose command refers to claudio.
+// This any-element semantics matches the merge-side filter so a mixed array
+// like [customHook, claudioHook] is correctly identified as containing
+// Claudio regardless of element ordering.
+func IsClaudioHook(hookValue interface{}) bool {
 	// Check old string format (backward compatibility)
 	if str, ok := hookValue.(string); ok {
-		return isClaudioCommand(str)
+		return isClaudioCommandString(str)
 	}
 
-	// Check new array format
+	// Check new array format — scan every element, not just arr[0].
 	if arr, ok := hookValue.([]interface{}); ok && len(arr) > 0 {
-		if config, ok := arr[0].(map[string]interface{}); ok {
-			if hooks, ok := config["hooks"].([]interface{}); ok && len(hooks) > 0 {
-				if cmd, ok := hooks[0].(map[string]interface{}); ok {
-					if cmdStr, ok := cmd["command"].(string); ok {
-						return isClaudioCommand(cmdStr)
-					}
-				}
+		for _, item := range arr {
+			itemMap, ok := item.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if itemContainsClaudioCommand(itemMap) {
+				return true
 			}
 		}
+		return false
 	}
 
 	return false
