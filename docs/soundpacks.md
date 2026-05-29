@@ -355,34 +355,37 @@ You can create custom soundpacks in two ways: traditional directory-based soundp
 
 **Step 1: Create Directory Structure**
 
+Directory soundpacks live under the literal `claudio/soundpacks/<id>`
+subpath inside an XDG data directory:
+
 ```bash
-mkdir -p ~/.local/share/claudio/my-pack/{loading,success,error,interactive}
+mkdir -p ~/.local/share/claudio/soundpacks/my-pack/{loading,success,error,interactive}
 ```
 
 **Step 2: Add Sound Files**
 
-Add `.wav` or `.mp3` files to appropriate directories. Start with essentials:
+Add `.wav`, `.mp3`, or `.aiff` files to appropriate directories. Start with essentials:
 
 ```bash
 # Essential files for a functional soundpack
-touch ~/.local/share/claudio/my-pack/loading/loading.wav
-touch ~/.local/share/claudio/my-pack/success/success.wav
-touch ~/.local/share/claudio/my-pack/error/error.wav
-touch ~/.local/share/claudio/my-pack/interactive/interactive.wav
-touch ~/.local/share/claudio/my-pack/default.wav
+touch ~/.local/share/claudio/soundpacks/my-pack/loading/loading.wav
+touch ~/.local/share/claudio/soundpacks/my-pack/success/success.wav
+touch ~/.local/share/claudio/soundpacks/my-pack/error/error.wav
+touch ~/.local/share/claudio/soundpacks/my-pack/interactive/interactive.wav
+touch ~/.local/share/claudio/soundpacks/my-pack/default.wav
 ```
 
 **Step 3: Configure Claudio**
 
 ```json
 {
-  "default_soundpack": "my-pack",
-  "soundpack_paths": [
-    "/home/user/.local/share/claudio",
-    "/usr/local/share/claudio"
-  ]
+  "default_soundpack": "my-pack"
 }
 ```
+
+You only need to add explicit entries to `soundpack_paths` for soundpacks that
+live OUTSIDE the standard XDG locations — Claudio searches the XDG data dirs
+automatically.
 
 ### Option 2: JSON Soundpack (Recommended)
 
