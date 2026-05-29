@@ -14,7 +14,6 @@ require (
 	github.com/stretchr/testify v1.9.0
 	github.com/tj/go-naturaldate v1.3.0
 	github.com/youpy/go-wav v0.3.2
-	golang.org/x/term v0.33.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	modernc.org/sqlite v1.38.2
 )

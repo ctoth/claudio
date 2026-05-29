@@ -32,7 +32,6 @@ type CLI struct {
 	soundpackResolver soundpack.SoundpackResolver
 	audioBackend      audio.AudioBackend
 	backendFactory    audio.BackendFactory
-	terminalDetector  TerminalDetector
 	trackingDB        *sql.DB // Optional tracking database
 }
 
@@ -82,7 +81,6 @@ func NewCLI() *CLI {
 		soundpackResolver: nil, // Lazy initialization - only create when needed
 		audioBackend:      nil, // Lazy initialization - only create when needed
 		backendFactory:    nil, // Lazy initialization - only create when needed
-		terminalDetector:  nil, // Lazy initialization - only create when needed
 		trackingDB:        nil, // Lazy initialization - only create when needed
 	}
 }
@@ -559,9 +557,6 @@ func (c *CLI) initializeSystems() {
 	// Don't create global SoundMapper - it will be created per-request with session-specific SoundChecker
 	if c.backendFactory == nil {
 		c.backendFactory = audio.NewBackendFactory()
-	}
-	if c.terminalDetector == nil {
-		c.terminalDetector = &DefaultTerminalDetector{}
 	}
 	// soundpackResolver and audioBackend are initialized in initializeAudioSystem when needed
 }
