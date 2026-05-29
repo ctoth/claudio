@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"claudio.click/internal/config"
+	"claudio.click/internal/safeio"
 	"claudio.click/internal/soundpack"
 	"github.com/adrg/xdg"
 	"github.com/spf13/cobra"
@@ -472,10 +473,23 @@ func loadSoundpackRegistry() (*soundpackRegistry, error) {
 		Packs:   make(map[string]gitSoundpackRecord),
 	}
 
-	data, err := os.ReadFile(soundpackRegistryPath())
+	// Registry content is attacker-influenced: every `claudio soundpack
+	// add gh:...` mutates this file with metadata derived from the
+	// source repo. A malicious or compromised process could also
+	// overwrite the file outright with a multi-GiB payload to OOM the
+	// next CLI invocation. Cap the read at MaxSoundpackJSONBytes — same
+	// 10 MiB cap used for soundpack JSONs, ample for tens of thousands
+	// of registry entries.
+	f, err := os.Open(soundpackRegistryPath())
 	if os.IsNotExist(err) {
 		return registry, nil
 	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to open soundpack registry: %w", err)
+	}
+	defer f.Close()
+
+	data, err := safeio.ReadAllCapped(f, safeio.MaxSoundpackJSONBytes, "soundpack registry")
 	if err != nil {
 		return nil, fmt.Errorf("failed to read soundpack registry: %w", err)
 	}
@@ -593,13 +607,14 @@ func removeConfigSoundpackPath(playablePath, clonePath, removedName string) erro
 	return cm.SaveToFile(cfg, configPath)
 }
 
+// countJSONMappings returns the number of non-empty mappings in an
+// on-disk soundpack JSON. Routes through PeekJSONSoundpackMetadataFromFile
+// so the size cap (MaxSoundpackJSONBytes) and the 10K mappings cap apply
+// — the JSON path here came from a user-supplied gh:owner/repo source and
+// must not be read raw.
 func countJSONMappings(jsonPath string) int {
-	data, err := os.ReadFile(jsonPath)
+	spFile, err := soundpack.PeekJSONSoundpackMetadataFromFile(jsonPath)
 	if err != nil {
-		return 0
-	}
-	var spFile soundpack.JSONSoundpackFile
-	if err := json.Unmarshal(data, &spFile); err != nil {
 		return 0
 	}
 	return countNonEmptyMappings(spFile.Mappings)
