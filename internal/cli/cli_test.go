@@ -359,13 +359,15 @@ func TestShouldDetachHookProcessing_DisabledViaEnvVar(t *testing.T) {
 		t.Error("expected shouldDetachHookProcessing()==false with CLAUDIO_DETACH_DISABLE=1")
 	}
 
-	// With the var unset, none of the other gates fire for this input
-	// (non-empty data, enabled config, no daemon-child flag) so the
-	// function returns true.
-	t.Setenv("CLAUDIO_DETACH_DISABLE", "")
-	if !shouldDetachHookProcessing(cli.rootCmd, cfg, inputData) {
-		t.Error("expected shouldDetachHookProcessing()==true with CLAUDIO_DETACH_DISABLE unset")
-	}
+	// NOTE: previously this test had a second branch that called
+	// t.Setenv("CLAUDIO_DETACH_DISABLE", "") and claimed to exercise the
+	// "unset" path. But t.Setenv sets the variable to empty string; it does
+	// NOT unset it. os.Getenv returns "" for both cases so the production
+	// check (== "1") agrees, but the comment-documented contract was not
+	// truly exercised. Dropped to keep this test honest about what it
+	// verifies — only the env-var-enabled disable path. The unset/enabled
+	// path is covered transitively by the other shouldDetachHookProcessing
+	// tests in this file.
 }
 
 func TestCLIEnvironmentVariables(t *testing.T) {
