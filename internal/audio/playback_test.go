@@ -31,9 +31,6 @@ func TestAudioPlayer(t *testing.T) {
 	if player == nil {
 		t.Fatal("NewAudioPlayer returned nil")
 	}
-
-	// Test that player implements expected interface
-	var _ Player = player
 }
 
 func TestAudioPlayerInitialization(t *testing.T) {
@@ -342,24 +339,6 @@ func TestAudioPlayerCleanup(t *testing.T) {
 			t.Error("PlaySound should fail after Close")
 		}
 	})
-}
-
-func TestAudioPlayerInterface(t *testing.T) {
-	// Verify that our player implements the expected interface
-	var player Player = NewAudioPlayer()
-
-	// Test interface methods exist (compilation check)
-	_ = player.IsPlaying()
-	_ = player.GetVolume()
-	_ = player.SetVolume(1.0)
-	_ = player.IsSoundLoaded("test")
-	_ = player.PreloadSound("test", nil)
-	_ = player.PlaySound("test")
-	_ = player.PlaySoundWithContext(context.Background(), "test")
-	_ = player.Stop()
-	_ = player.StopAll()
-	_ = player.UnloadSound("test")
-	_ = player.Close()
 }
 
 func TestAudioLoggingLevels(t *testing.T) {

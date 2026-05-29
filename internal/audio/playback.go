@@ -12,28 +12,6 @@ import (
 	"github.com/gen2brain/malgo"
 )
 
-// Player interface defines audio playback capabilities
-type Player interface {
-	// State management
-	IsPlaying() bool
-	GetVolume() float32
-	SetVolume(volume float32) error
-	
-	// Sound management
-	IsSoundLoaded(soundID string) bool
-	PreloadSound(soundID string, audioData *AudioData) error
-	UnloadSound(soundID string) error
-	
-	// Playback control
-	PlaySound(soundID string) error
-	PlaySoundWithContext(ctx context.Context, soundID string) error
-	Stop() error
-	StopAll() error
-	
-	// Lifecycle
-	Close() error
-}
-
 // AudioPlayer implements memory-based audio playback using malgo
 type AudioPlayer struct {
 	context     *Context
