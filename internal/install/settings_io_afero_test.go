@@ -2,7 +2,9 @@ package install
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/spf13/afero"
@@ -282,6 +284,24 @@ func TestWriteSettingsFile_CreatesBackup(t *testing.T) {
 	}
 	if string(bakBytes) != string(firstBytes) {
 		t.Errorf(".bak does not match first write\n  bak:  %s\n  want: %s", bakBytes, firstBytes)
+	}
+
+	// BackupSettingsFile uses temp+rename for atomicity. Assert no
+	// .settings-bak-*.tmp residue remains in the directory after a
+	// successful backup.
+	bakTmpResidue := false
+	_ = afero.Walk(memFS, filepath.Dir(settingsPath), func(p string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return nil
+		}
+		base := filepath.Base(p)
+		if strings.HasPrefix(base, ".settings-bak-") && strings.HasSuffix(base, ".tmp") {
+			bakTmpResidue = true
+		}
+		return nil
+	})
+	if bakTmpResidue {
+		t.Error(".settings-bak-*.tmp residue remained after BackupSettingsFile")
 	}
 }
 

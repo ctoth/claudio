@@ -83,9 +83,45 @@ func BackupSettingsFile(filesystem afero.Fs, filePath string) {
 			"path", filePath, "err", err)
 		return
 	}
+	// Atomic temp+rename for the .bak write so a crash mid-write cannot
+	// corrupt the recovery file the whole hardening chunk exists to provide.
 	bakPath := filePath + ".bak"
-	if err := afero.WriteFile(filesystem, bakPath, data, info.Mode()&os.ModePerm); err != nil {
-		slog.Warn("backup write failed", "path", bakPath, "err", err)
+	bakDir := filepath.Dir(bakPath)
+	mode := info.Mode() & os.ModePerm
+
+	tempFile, err := afero.TempFile(filesystem, bakDir, ".settings-bak-*.tmp")
+	if err != nil {
+		slog.Warn("backup skipped: temp file create failed", "path", bakPath, "err", err)
+		return
+	}
+	tempName := tempFile.Name()
+	cleanupTemp := func() { _ = filesystem.Remove(tempName) }
+
+	if _, err := tempFile.Write(data); err != nil {
+		tempFile.Close()
+		cleanupTemp()
+		slog.Warn("backup skipped: temp write failed", "path", bakPath, "err", err)
+		return
+	}
+	if err := tempFile.Sync(); err != nil {
+		tempFile.Close()
+		cleanupTemp()
+		slog.Warn("backup skipped: temp sync failed", "path", bakPath, "err", err)
+		return
+	}
+	if err := tempFile.Close(); err != nil {
+		cleanupTemp()
+		slog.Warn("backup skipped: temp close failed", "path", bakPath, "err", err)
+		return
+	}
+	if err := filesystem.Chmod(tempName, mode); err != nil {
+		cleanupTemp()
+		slog.Warn("backup skipped: chmod failed", "path", bakPath, "err", err)
+		return
+	}
+	if err := filesystem.Rename(tempName, bakPath); err != nil {
+		cleanupTemp()
+		slog.Warn("backup rename failed", "path", bakPath, "err", err)
 		return
 	}
 	slog.Debug("settings backed up", "from", filePath, "to", bakPath)

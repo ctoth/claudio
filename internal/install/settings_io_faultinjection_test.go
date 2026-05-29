@@ -14,6 +14,14 @@ import (
 
 // faultPoint enumerates the syscall/operation we want to fail in a
 // fault-injection table row.
+//
+// Scout's section F specified an additional failLockAcquire row, but the
+// lock-held path is exercised by the companion test
+// TestWriteSettingsFile_ConcurrentWritersSerialise against a real
+// gofrs/flock instance — that test gives stronger coverage of the
+// retry-and-fail behavior than a synthetic fault could. The split between
+// syscall-level fault injection (this table) and lock-level coverage
+// (the concurrent test) is deliberate.
 type faultPoint int
 
 const (
@@ -103,9 +111,13 @@ func (f *faultyFile) Sync() error {
 
 func (f *faultyFile) Close() error {
 	if f.fail == failClose {
-		// Still close the underlying file to release resources, but
-		// report a synthetic error.
-		_ = f.File.Close()
+		// Do NOT close the inner file: a real production Close failure
+		// (NFS, EIO, ENOSPC) typically leaves the file in an undefined
+		// state — temp not removable, or data partial. Closing the inner
+		// file before returning the synthetic error would silently flush
+		// the data and make the temp removable, hiding the failure mode
+		// the test is meant to exercise. The injected error represents a
+		// genuine Close failure.
 		return errors.New("injected Close error")
 	}
 	return f.File.Close()
