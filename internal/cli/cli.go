@@ -70,6 +70,9 @@ func NewCLI() *CLI {
 	rootCmd.AddCommand(newMuteCommand())
 	rootCmd.AddCommand(newUnmuteCommand())
 
+	// Add status subcommand
+	rootCmd.AddCommand(newStatusCommand())
+
 	// Add persistent flags to root command for backward compatibility
 	rootCmd.PersistentFlags().String("config", "", "Path to config file")
 	rootCmd.PersistentFlags().String("volume", "", "Set volume (0.0 to 1.0)")
