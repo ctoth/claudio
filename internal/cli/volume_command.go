@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"os"
 	"strconv"
 
 	"github.com/spf13/afero"
@@ -57,8 +58,15 @@ func runVolumeE(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
+		// Apply env overrides so the reported value matches what hook
+		// invocations actually use, and what `claudio status` reports.
+		// WRITE path below intentionally does NOT do this — persistence
+		// must be deterministic regardless of env state.
+		cfg = cli.configManager.ApplyEnvironmentOverrides(cfg)
 		if cfg.Volume == nil {
 			fmt.Fprintln(cmd.OutOrStdout(), "volume: default (no persisted setting)")
+		} else if os.Getenv("CLAUDIO_VOLUME") != "" {
+			fmt.Fprintf(cmd.OutOrStdout(), "volume: %.2f (from CLAUDIO_VOLUME)\n", *cfg.Volume)
 		} else {
 			fmt.Fprintf(cmd.OutOrStdout(), "volume: %.2f\n", *cfg.Volume)
 		}

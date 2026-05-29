@@ -207,8 +207,184 @@ func TestVolumeCommand_RejectsNegative(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 
-	code := cli.Run([]string{"claudio", "volume", "-0.1", "--config", configPath}, stdin, stdout, stderr)
+	// Use "--" so cobra stops flag parsing and the verb sees "-0.1" as a
+	// positional arg. Without "--" cobra rejects "-0.1" as a malformed
+	// shorthand flag BEFORE runVolumeE runs, so the verb's own range check
+	// (the code we want to protect) would never execute and a refactor
+	// that drops the v < 0.0 arm would pass this test.
+	code := cli.Run([]string{"claudio", "volume", "--config", configPath, "--", "-0.1"}, stdin, stdout, stderr)
 	if code == 0 {
 		t.Fatalf("expected non-zero exit code for negative volume")
+	}
+
+	// The verb's own range-check message must be the cause — not cobra's
+	// flag parser. The CLI writes the error to stderr.
+	combined := stderr.String() + stdout.String()
+	if !strings.Contains(combined, "must be between 0.0 and 1.0") {
+		t.Errorf("expected verb's range-check error, got: stderr=%q stdout=%q",
+			stderr.String(), stdout.String())
+	}
+
+	// Persisted value must not have been overwritten.
+	persisted := readPersistedConfig(t, configPath)
+	if persisted.Volume == nil || *persisted.Volume != 0.2 {
+		t.Errorf("Volume should be unchanged after rejection, got %v", persisted.Volume)
+	}
+}
+
+func TestVolumeCommand_RejectsNaN(t *testing.T) {
+	tmp := t.TempDir()
+	configPath := filepath.Join(tmp, "config.json")
+
+	startVol := 0.2
+	writeSeedConfig(t, configPath, &config.Config{
+		Volume:           &startVol,
+		DefaultSoundpack: "x",
+		Enabled:          true,
+		LogLevel:         "warn",
+		AudioBackend:     "auto",
+	})
+
+	cli := NewCLI()
+	stdin := strings.NewReader("")
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	// strconv.ParseFloat accepts "NaN" as a valid float, so the parse step
+	// succeeds and the math.IsNaN branch is the only thing rejecting this.
+	// A refactor that drops that branch would silently allow NaN through.
+	code := cli.Run([]string{"claudio", "volume", "NaN", "--config", configPath}, stdin, stdout, stderr)
+	if code == 0 {
+		t.Fatalf("expected non-zero exit code for NaN; stdout=%q stderr=%q",
+			stdout.String(), stderr.String())
+	}
+	combined := stderr.String() + stdout.String()
+	if !strings.Contains(combined, "finite") {
+		t.Errorf("expected error mentioning 'finite' for NaN, got: stderr=%q stdout=%q",
+			stderr.String(), stdout.String())
+	}
+
+	// Persisted value must not have been overwritten.
+	persisted := readPersistedConfig(t, configPath)
+	if persisted.Volume == nil || *persisted.Volume != 0.2 {
+		t.Errorf("Volume should be unchanged after NaN rejection, got %v", persisted.Volume)
+	}
+}
+
+func TestVolumeCommand_RejectsInf(t *testing.T) {
+	tmp := t.TempDir()
+	configPath := filepath.Join(tmp, "config.json")
+
+	startVol := 0.2
+	writeSeedConfig(t, configPath, &config.Config{
+		Volume:           &startVol,
+		DefaultSoundpack: "x",
+		Enabled:          true,
+		LogLevel:         "warn",
+		AudioBackend:     "auto",
+	})
+
+	cli := NewCLI()
+	stdin := strings.NewReader("")
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	// Same shape as NaN: ParseFloat accepts "Inf"; the math.IsInf branch
+	// is what rejects it. Guard that branch from accidental removal.
+	code := cli.Run([]string{"claudio", "volume", "Inf", "--config", configPath}, stdin, stdout, stderr)
+	if code == 0 {
+		t.Fatalf("expected non-zero exit code for Inf; stdout=%q stderr=%q",
+			stdout.String(), stderr.String())
+	}
+	combined := stderr.String() + stdout.String()
+	if !strings.Contains(combined, "finite") {
+		t.Errorf("expected error mentioning 'finite' for Inf, got: stderr=%q stdout=%q",
+			stderr.String(), stdout.String())
+	}
+
+	// Persisted value must not have been overwritten.
+	persisted := readPersistedConfig(t, configPath)
+	if persisted.Volume == nil || *persisted.Volume != 0.2 {
+		t.Errorf("Volume should be unchanged after Inf rejection, got %v", persisted.Volume)
+	}
+}
+
+// TestVolumeCommand_NoArgsRespectsEnvVar is the F1 regression test. The
+// zero-arg read path must apply CLAUDIO_VOLUME the same way `claudio status`
+// does — otherwise the two read commands disagree about the effective volume.
+// The WRITE path is covered separately by TestVolumeCommand_WriteIgnoresEnvVar.
+func TestVolumeCommand_NoArgsRespectsEnvVar(t *testing.T) {
+	tmp := t.TempDir()
+	configPath := filepath.Join(tmp, "config.json")
+
+	persisted := 0.3
+	writeSeedConfig(t, configPath, &config.Config{
+		Volume:           &persisted,
+		DefaultSoundpack: "default",
+		Enabled:          true,
+		LogLevel:         "warn",
+		AudioBackend:     "auto",
+	})
+
+	t.Setenv("CLAUDIO_VOLUME", "0.7")
+
+	cli := NewCLI()
+	stdin := strings.NewReader("")
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	code := cli.Run([]string{"claudio", "volume", "--config", configPath}, stdin, stdout, stderr)
+	if code != 0 {
+		t.Fatalf("exit code = %d; stderr=%s", code, stderr.String())
+	}
+
+	out := stdout.String()
+	if !strings.Contains(out, "0.70") {
+		t.Errorf("expected env value 0.70 in output, got: %q", out)
+	}
+	if !strings.Contains(out, "CLAUDIO_VOLUME") {
+		t.Errorf("expected source annotation 'CLAUDIO_VOLUME' in output, got: %q", out)
+	}
+	// Must NOT contain the persisted value as the headline number.
+	if strings.Contains(out, "0.30") {
+		t.Errorf("expected env to override persisted 0.30, got: %q", out)
+	}
+}
+
+// TestVolumeCommand_WriteIgnoresEnvVar pins the WRITE-path semantics: even
+// with CLAUDIO_VOLUME set, `claudio volume 0.4` persists 0.4 verbatim.
+// Persistence must be deterministic regardless of env state.
+func TestVolumeCommand_WriteIgnoresEnvVar(t *testing.T) {
+	tmp := t.TempDir()
+	configPath := filepath.Join(tmp, "config.json")
+
+	startVol := 0.2
+	writeSeedConfig(t, configPath, &config.Config{
+		Volume:           &startVol,
+		DefaultSoundpack: "default",
+		Enabled:          true,
+		LogLevel:         "warn",
+		AudioBackend:     "auto",
+	})
+
+	t.Setenv("CLAUDIO_VOLUME", "0.9")
+
+	cli := NewCLI()
+	stdin := strings.NewReader("")
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	code := cli.Run([]string{"claudio", "volume", "0.4", "--config", configPath}, stdin, stdout, stderr)
+	if code != 0 {
+		t.Fatalf("exit code = %d; stderr=%s", code, stderr.String())
+	}
+
+	persisted := readPersistedConfig(t, configPath)
+	if persisted.Volume == nil {
+		t.Fatal("Volume should be persisted, got nil")
+	}
+	if *persisted.Volume != 0.4 {
+		t.Errorf("persisted Volume = %v, want 0.4 (env should NOT influence write)",
+			*persisted.Volume)
 	}
 }
