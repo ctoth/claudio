@@ -15,7 +15,7 @@ Linux/macOS contributors. Use the snippet that matches your shell.
 
 ```powershell
 # Build the main binary
-go build -o claudio.exe .
+go build -o claudio.exe ./cmd/claudio
 
 # Install to a directory on PATH
 Copy-Item claudio.exe $env:USERPROFILE\bin\
@@ -48,7 +48,7 @@ $env:CLAUDIO_LOG_LEVEL='debug'; '...' | .\claudio.exe --config NUL --silent
 
 ```bash
 # Build the main binary
-go build -o claudio .
+go build -o claudio ./cmd/claudio
 
 # Install to system PATH
 sudo cp claudio /usr/local/bin/
@@ -96,7 +96,7 @@ Remove-Item -ErrorAction SilentlyContinue claudio.exe
 go test ./...
 
 # 3. Build fresh binary
-go build -o claudio.exe .
+go build -o claudio.exe ./cmd/claudio
 
 # 4. Test binary works
 .\claudio.exe --version
@@ -123,7 +123,7 @@ rm -f claudio
 go test ./...
 
 # 3. Build fresh binary
-go build -o claudio .
+go build -o claudio ./cmd/claudio
 
 # 4. Test binary works
 ./claudio --version
