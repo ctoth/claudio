@@ -6,18 +6,28 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"math"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gen2brain/malgo"
 )
 
-// AudioPlayer implements memory-based audio playback using malgo
+// AudioPlayer implements memory-based audio playback using malgo.
+//
+// Always construct via NewAudioPlayer — a zero-value AudioPlayer has volume 0
+// (silent) because atomic.Uint32's zero value decodes to a 0.0 float32 via
+// math.Float32frombits.
 type AudioPlayer struct {
-	context     *Context
-	sounds      map[string]*AudioData
-	devices     map[string]*malgo.Device
-	volume      float32
+	context *Context
+	sounds  map[string]*AudioData
+	devices map[string]*malgo.Device
+	// volume holds the playback gain (0.0..1.0) as a float32 encoded via
+	// math.Float32bits and accessed atomically. Lock-free access is mandatory:
+	// the malgo realtime audio callback reads this on every buffer fill and
+	// must never block (see PlaySoundWithContext's onSamples closure).
+	volume      atomic.Uint32
 	isPlaying   bool
 	mutex       sync.RWMutex
 	deviceMutex sync.Mutex
@@ -31,11 +41,13 @@ func NewAudioPlayer() *AudioPlayer {
 	player := &AudioPlayer{
 		sounds:  make(map[string]*AudioData),
 		devices: make(map[string]*malgo.Device),
-		volume:  1.0, // Default full volume
 		mutex:   sync.RWMutex{},
 	}
-	
-	slog.Debug("audio player created successfully", "default_volume", player.volume)
+	// atomic.Uint32 cannot be initialised in a struct literal with a non-zero
+	// value; seed the default full-volume after construction.
+	player.volume.Store(math.Float32bits(1.0))
+
+	slog.Debug("audio player created successfully", "default_volume", float32(1.0))
 	return player
 }
 
@@ -46,27 +58,30 @@ func (p *AudioPlayer) IsPlaying() bool {
 	return p.isPlaying
 }
 
-// GetVolume returns the current volume level (0.0 to 1.0)
+// GetVolume returns the current volume level (0.0 to 1.0). Lock-free; safe to
+// call from the malgo realtime audio callback.
 func (p *AudioPlayer) GetVolume() float32 {
-	p.mutex.RLock()
-	defer p.mutex.RUnlock()
-	return p.volume
+	return math.Float32frombits(p.volume.Load())
 }
 
-// SetVolume sets the volume level (0.0 to 1.0)
+// SetVolume sets the volume level (0.0 to 1.0). Rejects NaN and Inf to match
+// SystemCommandBackend.SetVolume's input contract.
 func (p *AudioPlayer) SetVolume(volume float32) error {
+	if math.IsNaN(float64(volume)) || math.IsInf(float64(volume), 0) {
+		err := fmt.Errorf("invalid volume level: %f (must be finite)", volume)
+		slog.Error("invalid volume setting (non-finite)", "volume", volume, "error", err)
+		return err
+	}
 	if volume < 0.0 || volume > 1.0 {
 		err := fmt.Errorf("invalid volume level: %f (must be 0.0-1.0)", volume)
 		slog.Error("invalid volume setting", "volume", volume, "error", err)
 		return err
 	}
-	
-	p.mutex.Lock()
-	oldVolume := p.volume
-	p.volume = volume
-	p.mutex.Unlock()
-	
-	slog.Debug("volume changed", "old_volume", oldVolume, "new_volume", volume)
+
+	// atomic.Swap returns the previous bits so we can preserve the existing
+	// "old_volume" debug log without an extra Load round-trip.
+	oldBits := p.volume.Swap(math.Float32bits(volume))
+	slog.Debug("volume changed", "old_volume", math.Float32frombits(oldBits), "new_volume", volume)
 	return nil
 }
 
@@ -257,8 +272,12 @@ func (p *AudioPlayer) PlaySoundWithContext(ctx context.Context, soundID string) 
 			pOutputSample[i] = 0
 		}
 		
-		// Apply volume if needed
-		volume := p.GetVolume()
+		// Apply volume if needed.
+		//
+		// REALTIME HOT PATH: this callback runs on malgo's audio thread under a
+		// hard deadline. The volume read MUST remain lock-free — inline the
+		// atomic load and skip the GetVolume method-call frame on purpose.
+		volume := math.Float32frombits(p.volume.Load())
 		if volume != 1.0 {
 			applyVolumeToSamples(pOutputSample[:bytesToCopy], audioData.Format, volume)
 		}

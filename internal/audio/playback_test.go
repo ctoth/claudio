@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"log/slog"
+	"math"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -393,4 +395,121 @@ func TestAudioLoggingLevels(t *testing.T) {
 		t.Error("Expected some DEBUG level logs but found none")
 		t.Logf("Full log output: %s", logOutput)
 	}
+}
+
+// TestSetVolumeGetVolume_ConcurrentNoRace exercises the lock-free volume
+// access pattern that supports the realtime audio callback. The constructor
+// is lazy and does NOT initialise a malgo device, so this test runs in any
+// CI without audio hardware.
+//
+// Run with `go test -race -count=3` — must produce zero data races. Before
+// the atomic.Uint32 conversion, GetVolume acquired an RLock from inside the
+// malgo onSamples callback, which is racy by design (realtime audio callbacks
+// must never lock) and likely contributed to the documented crackling.
+//
+// This is the load-bearing regression guard against future de-atomicisation
+// of the volume read path.
+func TestSetVolumeGetVolume_ConcurrentNoRace(t *testing.T) {
+	player := NewAudioPlayer()
+	defer func() {
+		if err := player.Close(); err != nil {
+			t.Logf("error closing player: %v", err)
+		}
+	}()
+
+	const iters = 10_000
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		for i := 0; i < iters; i++ {
+			v := float32(i%101) / 100.0 // 0.00..1.00 inclusive
+			if err := player.SetVolume(v); err != nil {
+				t.Errorf("SetVolume(%v): %v", v, err)
+				return
+			}
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		for i := 0; i < iters; i++ {
+			v := player.GetVolume()
+			if v < 0.0 || v > 1.0 {
+				t.Errorf("GetVolume out of range: %v", v)
+				return
+			}
+		}
+	}()
+
+	wg.Wait()
+}
+
+// TestSetVolume_RejectsNonFinite verifies the NaN/Inf input guard added to
+// match SystemCommandBackend.SetVolume's input contract.
+func TestSetVolume_RejectsNonFinite(t *testing.T) {
+	player := NewAudioPlayer()
+	defer func() { _ = player.Close() }()
+
+	nonFinite := []float32{
+		float32(math.NaN()),
+		float32(math.Inf(1)),
+		float32(math.Inf(-1)),
+	}
+	for _, v := range nonFinite {
+		err := player.SetVolume(v)
+		if err == nil {
+			t.Errorf("SetVolume(%v) should reject non-finite input but returned nil", v)
+		}
+	}
+
+	// The valid volume should remain whatever it was before the rejected
+	// writes — the default 1.0 set by NewAudioPlayer.
+	if got := player.GetVolume(); got != 1.0 {
+		t.Errorf("after rejected non-finite writes, GetVolume()=%v, want 1.0", got)
+	}
+}
+
+// TestPlayWithConcurrentSetVolume_NoRace exercises the actual realtime
+// callback path under concurrent SetVolume mutation. Requires audio hardware
+// and is skipped on CI runners without a device. The device-free hammer test
+// above is the load-bearing regression — this one is icing for dev boxes.
+func TestPlayWithConcurrentSetVolume_NoRace(t *testing.T) {
+	player := NewAudioPlayer()
+	defer func() { _ = player.Close() }()
+
+	// Tiny PCM blob — enough to exercise the callback a few times.
+	sound := &AudioData{
+		Samples:    make([]byte, 16*1024),
+		Channels:   2,
+		SampleRate: 44100,
+		Format:     malgo.FormatS16,
+	}
+	soundID := "test-concurrent-volume"
+	if err := player.PreloadSound(soundID, sound); err != nil {
+		t.Fatalf("PreloadSound: %v", err)
+	}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; i < 1000; i++ {
+			_ = player.SetVolume(float32(i%101) / 100.0)
+		}
+	}()
+
+	for i := 0; i < 3; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+		err := player.PlaySoundWithContext(ctx, soundID)
+		cancel()
+		// First call surfaces "no audio device" if hardware is missing; skip
+		// the whole test in that case rather than asserting failure.
+		skipIfNoAudioDevice(t, err)
+		if err != nil {
+			t.Errorf("PlaySoundWithContext: %v", err)
+			break
+		}
+	}
+	<-done
 }
