@@ -241,16 +241,67 @@ func mergeHookValues(existingValue, claudioValue interface{}) interface{} {
 	}
 
 	// Strip any pre-existing Claudio entries from the existing array, then
-	// append the new Claudio entries. This makes the merge idempotent and
-	// preserves the user's non-Claudio entries regardless of ordering.
+	// append the new Claudio entries. Filtering operates at HOOK granularity
+	// inside each item's "hooks" sub-array (mirroring removeClaudioFromArray
+	// in internal/uninstall/hook_removal.go): for each existing item, build
+	// a new item whose hooks sub-array contains only the non-Claudio
+	// entries. Drop the item only when removal emptied its hooks sub-array.
+	// Items with no Claudio commands pass through verbatim. This preserves
+	// user non-Claudio hooks that share a matcher's hooks sub-array with a
+	// Claudio command (Chunk 5 analyst Finding 1).
 	filteredExisting := make([]interface{}, 0, len(existingArray))
 	strippedCount := 0
 	for _, item := range existingArray {
-		if itemMap, ok := item.(map[string]interface{}); ok && itemContainsClaudioCommand(itemMap) {
-			strippedCount++
+		itemMap, ok := item.(map[string]interface{})
+		if !ok {
+			// Preserve non-map entries verbatim
+			filteredExisting = append(filteredExisting, item)
 			continue
 		}
-		filteredExisting = append(filteredExisting, item)
+		hooks, ok := itemMap["hooks"].([]interface{})
+		if !ok {
+			// Preserve items without a hooks sub-array verbatim
+			filteredExisting = append(filteredExisting, item)
+			continue
+		}
+		keptHooks := make([]interface{}, 0, len(hooks))
+		itemStripped := 0
+		for _, h := range hooks {
+			hookMap, ok := h.(map[string]interface{})
+			if !ok {
+				keptHooks = append(keptHooks, h)
+				continue
+			}
+			cmdStr, ok := hookMap["command"].(string)
+			if !ok {
+				keptHooks = append(keptHooks, h)
+				continue
+			}
+			if isClaudioCommandString(cmdStr) {
+				itemStripped++
+				continue
+			}
+			keptHooks = append(keptHooks, h)
+		}
+		if itemStripped == 0 {
+			// No Claudio commands in this item; preserve verbatim.
+			filteredExisting = append(filteredExisting, item)
+			continue
+		}
+		strippedCount += itemStripped
+		if len(keptHooks) == 0 {
+			// Item was Claudio-only; drop it. The new Claudio entries will
+			// be appended below.
+			continue
+		}
+		// Item had Claudio + non-Claudio siblings; preserve the non-Claudio
+		// siblings in a copied item so we never mutate the input map.
+		newItem := make(map[string]interface{}, len(itemMap))
+		for k, v := range itemMap {
+			newItem[k] = v
+		}
+		newItem["hooks"] = keptHooks
+		filteredExisting = append(filteredExisting, newItem)
 	}
 
 	mergedArray := make([]interface{}, 0, len(filteredExisting)+len(claudioArray))

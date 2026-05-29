@@ -989,3 +989,87 @@ func TestMergeHooksIdempotent_MultipleClaudio(t *testing.T) {
 		t.Errorf("custom command %q was lost during multi-claudio collapse", customCmd)
 	}
 }
+
+// TestMergeHooksIdempotent_ClaudioSiblingNonClaudio asserts that when a
+// matcher's hooks sub-array contains BOTH a Claudio command AND a user
+// non-Claudio command, the merge filters only the Claudio command and
+// preserves the user command in the same matcher block.
+//
+// Regression for Chunk 5 analyst Finding 1: the strip-and-replace previously
+// dropped the entire array item if it contained ANY Claudio command, losing
+// the user's sibling command in the same hooks sub-array.
+func TestMergeHooksIdempotent_ClaudioSiblingNonClaudio(t *testing.T) {
+	const claudioCmd = "/test/mock/claudio"
+	const userCmd = "/usr/local/bin/user-lint"
+
+	existing := &SettingsMap{
+		"hooks": map[string]interface{}{
+			"PostToolUse": []interface{}{
+				map[string]interface{}{
+					"matcher": ".*",
+					"hooks": []interface{}{
+						map[string]interface{}{"type": "command", "command": claudioCmd},
+						map[string]interface{}{"type": "command", "command": userCmd},
+					},
+				},
+			},
+		},
+	}
+
+	claudioHooks := map[string]interface{}{
+		"PostToolUse": []interface{}{claudioArrayEntry(claudioCmd)},
+	}
+
+	merged, err := MergeHooksIntoSettings(existing, claudioHooks)
+	if err != nil {
+		t.Fatalf("first merge failed: %v", err)
+	}
+
+	// Inspect the merged result: the user-lint command must survive somewhere
+	// in the PostToolUse array. The Claudio command must appear exactly once.
+	mergedHooks, _ := (*merged)["hooks"].(map[string]interface{})
+	arr, ok := mergedHooks["PostToolUse"].([]interface{})
+	if !ok {
+		t.Fatalf("expected PostToolUse to be []interface{}, got %T", mergedHooks["PostToolUse"])
+	}
+
+	userFound := false
+	claudioCount := 0
+	for _, item := range arr {
+		m, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		hooks, _ := m["hooks"].([]interface{})
+		for _, h := range hooks {
+			hm, ok := h.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			cmd, _ := hm["command"].(string)
+			switch cmd {
+			case userCmd:
+				userFound = true
+			case claudioCmd:
+				claudioCount++
+			}
+		}
+	}
+	if !userFound {
+		t.Errorf("user command %q was silently deleted by merge — Finding 1 regressed. Got: %v", userCmd, arr)
+	}
+	if claudioCount != 1 {
+		t.Errorf("expected exactly 1 claudio command after merge, got %d", claudioCount)
+	}
+
+	// Second merge — must be byte-identical (idempotency).
+	second, err := MergeHooksIntoSettings(merged, claudioHooks)
+	if err != nil {
+		t.Fatalf("second merge failed: %v", err)
+	}
+	firstJSON, _ := json.Marshal(merged)
+	secondJSON, _ := json.Marshal(second)
+	if string(firstJSON) != string(secondJSON) {
+		t.Errorf("merge not idempotent:\nfirst:  %s\nsecond: %s", firstJSON, secondJSON)
+	}
+}
