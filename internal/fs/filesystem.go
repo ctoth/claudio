@@ -45,13 +45,3 @@ func ExecutablePath() (string, error) {
 	return filepath.ToSlash(p), nil
 }
 
-// MockExecutablePath can be used in tests to override the executable path
-var MockExecutablePath func() (string, error)
-
-// TestExecutablePath returns the executable path, using mock if set (for testing)
-func TestExecutablePath() (string, error) {
-	if MockExecutablePath != nil {
-		return MockExecutablePath()
-	}
-	return ExecutablePath()
-}

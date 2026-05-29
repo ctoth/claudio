@@ -87,33 +87,3 @@ func TestExecutablePathFunction(t *testing.T) {
 	}
 }
 
-func TestMockExecutablePath(t *testing.T) {
-	// Set up mock
-	originalMock := MockExecutablePath
-	defer func() { MockExecutablePath = originalMock }()
-	
-	MockExecutablePath = func() (string, error) {
-		return "/mock/claudio", nil
-	}
-	
-	// Test mock is used
-	path, err := TestExecutablePath()
-	if err != nil {
-		t.Errorf("TestExecutablePath with mock failed: %v", err)
-	}
-	
-	if path != "/mock/claudio" {
-		t.Errorf("Expected mock path '/mock/claudio', got '%s'", path)
-	}
-	
-	// Clear mock and test fallback
-	MockExecutablePath = nil
-	path2, err := TestExecutablePath()
-	if err != nil {
-		t.Errorf("TestExecutablePath without mock failed: %v", err)
-	}
-	
-	if path2 == "/mock/claudio" {
-		t.Error("Expected real path when mock is cleared, but got mock path")
-	}
-}
