@@ -5,18 +5,22 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strconv"
 	"sync"
 )
 
 // SystemCommandBackend implements AudioBackend using system commands like paplay
 type SystemCommandBackend struct {
-	command   string
-	volume    float32
-	isPlaying bool
-	closed    bool
-	mutex     sync.RWMutex
+	command          string
+	volume           float32
+	isPlaying        bool
+	closed           bool
+	mutex            sync.RWMutex
+	warnNoVolumeOnce sync.Once // one WARN per backend instance for aplay
 }
 
 // NewSystemCommandBackend creates a new SystemCommandBackend with the specified command
@@ -136,21 +140,74 @@ func (scb *SystemCommandBackend) Play(ctx context.Context, source AudioSource) e
 	return scb.playReaderViaTempFile(ctx, reader, format)
 }
 
+// loadVolume returns the current volume under RLock. The subprocess fork-exec
+// dominates the wall-clock cost of playFile, so a mutex here is a rounding
+// error; we don't need atomic loads on this code path. (The malgo realtime
+// callback in playback.go is a separate site with separate constraints.)
+func (scb *SystemCommandBackend) loadVolume() float32 {
+	scb.mutex.RLock()
+	defer scb.mutex.RUnlock()
+	return scb.volume
+}
+
+// buildPlayerArgv returns the argv (NOT including scb.command itself) to play
+// filePath at volume v on the configured backend. v is in [0.0, 1.0]; the
+// function scales it to the backend's native value space. Backends without a
+// native volume flag (e.g. aplay) ignore v and log a one-time WARN.
+//
+// Verified mappings (paplay, ffplay, afplay) come from each player's
+// authoritative documentation. afplay's mapping is identity — review finding
+// #4 incorrectly claimed 0..255 scaling; afplay treats `-v 1.0` as 100%.
+func (scb *SystemCommandBackend) buildPlayerArgv(filePath string, v float64) []string {
+	switch filepath.Base(scb.command) {
+	case "paplay":
+		// PulseAudio: --volume=N where N is uint32, 65536 = 100%.
+		n := uint32(math.Round(v * 65536))
+		return []string{fmt.Sprintf("--volume=%d", n), filePath}
+	case "ffplay":
+		// ffmpeg: -volume N where N is int, 100 = 100%.
+		// -nodisp prevents ffplay opening an SDL window for audio-only input.
+		// -autoexit makes ffplay exit at EOF (without it, cmd.Run() hangs).
+		n := int(math.Round(v * 100))
+		return []string{"-nodisp", "-autoexit", "-volume", strconv.Itoa(n), filePath}
+	case "afplay":
+		// macOS: -v V where V is a float; 1.0 = 100%. Identity mapping.
+		return []string{"-v", strconv.FormatFloat(v, 'f', 2, 64), filePath}
+	case "aplay":
+		// ALSA aplay has no native volume flag. Warn once per backend instance
+		// when the configured volume is not full.
+		if v != 1.0 {
+			scb.warnNoVolumeOnce.Do(func() {
+				slog.Warn("aplay has no native volume flag; configured volume ignored",
+					"command", scb.command, "volume", v)
+			})
+		}
+		return []string{filePath}
+	default:
+		// Unknown / test command (e.g. "echo" in TestSystemCommandBackend_Play):
+		// pass only the file path, preserving prior behavior.
+		return []string{filePath}
+	}
+}
+
 // playFile plays a file directly using the system command
 func (scb *SystemCommandBackend) playFile(ctx context.Context, filePath string) error {
 	slog.Debug("playing file via system command", "file", filePath, "command", scb.command)
 
+	v := scb.loadVolume()
+	argv := scb.buildPlayerArgv(filePath, float64(v))
+
 	// Create command with context for cancellation
-	cmd := exec.CommandContext(ctx, scb.command, filePath)
+	cmd := exec.CommandContext(ctx, scb.command, argv...)
 
 	// Run the command and wait for completion
 	err := cmd.Run()
 	if err != nil {
-		slog.Error("system command failed", "command", scb.command, "file", filePath, "error", err)
+		slog.Error("system command failed", "command", scb.command, "argv", argv, "file", filePath, "error", err)
 		return fmt.Errorf("system command failed: %w", err)
 	}
 
-	slog.Debug("file playback completed successfully", "file", filePath)
+	slog.Debug("file playback completed successfully", "file", filePath, "argv", argv)
 	return nil
 }
 
