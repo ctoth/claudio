@@ -16,6 +16,18 @@ import (
 	"claudio.click/internal/soundpack"
 )
 
+// TestMain ensures hook processing stays in-process during tests. The
+// production binary spawns a detached worker via os.Executable(); under
+// `go test` that re-invokes the test binary and would recursively run
+// the entire test suite. CLAUDIO_DETACH_DISABLE=1 short-circuits the
+// detach path so tests observe in-process side effects.
+func TestMain(m *testing.M) {
+	os.Setenv("CLAUDIO_DETACH_DISABLE", "1")
+	code := m.Run()
+	os.Unsetenv("CLAUDIO_DETACH_DISABLE")
+	os.Exit(code)
+}
+
 func TestCLI(t *testing.T) {
 	cli := NewCLI()
 
@@ -335,13 +347,24 @@ func TestCLISilentMode(t *testing.T) {
 	t.Logf("Silent mode output: %s", stdout.String())
 }
 
-func TestShouldDetachHookProcessing_DisabledInTests(t *testing.T) {
+func TestShouldDetachHookProcessing_DisabledViaEnvVar(t *testing.T) {
 	cli := NewCLI()
 	cfg := &config.Config{Enabled: true}
 	inputData := []byte(`{"session_id":"test","hook_event_name":"PostToolUse"}`)
 
+	// With CLAUDIO_DETACH_DISABLE=1 (set by TestMain), shouldDetachHookProcessing
+	// returns false so hook processing runs in-process.
+	t.Setenv("CLAUDIO_DETACH_DISABLE", "1")
 	if shouldDetachHookProcessing(cli.rootCmd, cfg, inputData) {
-		t.Fatal("shouldDetachHookProcessing should be disabled when running under go test")
+		t.Error("expected shouldDetachHookProcessing()==false with CLAUDIO_DETACH_DISABLE=1")
+	}
+
+	// With the var unset, none of the other gates fire for this input
+	// (non-empty data, enabled config, no daemon-child flag) so the
+	// function returns true.
+	t.Setenv("CLAUDIO_DETACH_DISABLE", "")
+	if !shouldDetachHookProcessing(cli.rootCmd, cfg, inputData) {
+		t.Error("expected shouldDetachHookProcessing()==true with CLAUDIO_DETACH_DISABLE unset")
 	}
 }
 

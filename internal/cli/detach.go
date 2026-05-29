@@ -5,8 +5,6 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
-	"path/filepath"
-	"strings"
 
 	"claudio.click/internal/config"
 	"github.com/spf13/cobra"
@@ -28,17 +26,12 @@ func shouldDetachHookProcessing(cmd *cobra.Command, cfg *config.Config, inputDat
 		return false
 	}
 
-	// Keep unit/integration tests deterministic and in-process.
-	if isGoTestBinary() {
+	// Tests opt out of detach via env var to keep hook processing in-process.
+	if os.Getenv("CLAUDIO_DETACH_DISABLE") == "1" {
 		return false
 	}
 
 	return true
-}
-
-func isGoTestBinary() bool {
-	base := strings.ToLower(filepath.Base(os.Args[0]))
-	return strings.HasSuffix(base, ".test") || strings.HasSuffix(base, ".test.exe")
 }
 
 func spawnDetachedHookWorker(cmd *cobra.Command, inputData []byte) error {
