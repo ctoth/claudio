@@ -2,46 +2,8 @@ package install
 
 import (
 	"encoding/json"
-	"path/filepath"
 	"testing"
 )
-
-// isClaudioHook checks if a hook value represents a claudio hook,
-// supporting both the old string format and new array format
-func isClaudioHook(hookValue interface{}) bool {
-	// Helper function to check if command is a claudio executable
-	isClaudioCommand := func(cmdStr string) bool {
-		// Remove quotes if present (handles quoted paths in JSON)
-		unquoted := cmdStr
-		if len(cmdStr) >= 2 && cmdStr[0] == '"' && cmdStr[len(cmdStr)-1] == '"' {
-			unquoted = cmdStr[1 : len(cmdStr)-1]
-		}
-		
-		baseName := filepath.Base(unquoted)
-		// Handle production "claudio" and test executables "install.test", "uninstall.test"
-		return baseName == "claudio" || baseName == "install.test" || baseName == "uninstall.test"
-	}
-
-	// Check old string format (backward compatibility)
-	if str, ok := hookValue.(string); ok {
-		return isClaudioCommand(str)
-	}
-
-	// Check new array format
-	if arr, ok := hookValue.([]interface{}); ok && len(arr) > 0 {
-		if config, ok := arr[0].(map[string]interface{}); ok {
-			if hooks, ok := config["hooks"].([]interface{}); ok && len(hooks) > 0 {
-				if cmd, ok := hooks[0].(map[string]interface{}); ok {
-					if cmdStr, ok := cmd["command"].(string); ok {
-						return isClaudioCommand(cmdStr)
-					}
-				}
-			}
-		}
-	}
-
-	return false
-}
 
 // Helper function for merge tests to generate hooks with test parameters
 func generateTestHooksForMerge() (interface{}, error) {
@@ -156,7 +118,7 @@ func TestMergeHooksIdempotent(t *testing.T) {
 					for _, expectedHook := range expectedHooks {
 						if val, exists := hooksMap[expectedHook]; !exists {
 							t.Errorf("Expected hook '%s' missing after merge", expectedHook)
-						} else if !isClaudioHook(val) {
+						} else if !IsClaudioHook(val) {
 							t.Errorf("Expected hook '%s' to be a claudio hook, got: %v", expectedHook, val)
 						}
 					}
@@ -291,7 +253,7 @@ func TestMergeHooksPreservesExisting(t *testing.T) {
 					for _, hookName := range claudioHookNames {
 						if val, exists := hooksMap[hookName]; !exists {
 							t.Errorf("Claudio hook '%s' missing after merge", hookName)
-						} else if !isClaudioHook(val) {
+						} else if !IsClaudioHook(val) {
 							// For conflicting hooks, check the merge strategy
 							t.Logf("Hook '%s' has value '%v' (merge strategy applied)", hookName, val)
 						}

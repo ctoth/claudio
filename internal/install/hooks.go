@@ -14,6 +14,13 @@ import (
 // HooksMap represents the hooks section of Claude Code settings
 type HooksMap map[string]interface{}
 
+// executableRecognizer decides whether a basename refers to the claudio
+// executable. Production matches only claudio and claudio.exe; test code
+// extends this in a *_test.go init() to also accept go test binary names.
+var executableRecognizer = func(name string) bool {
+	return name == "claudio" || name == "claudio.exe"
+}
+
 
 // GenerateClaudioHooks creates the Claude Code hook configuration (backward-compatible default).
 func GenerateClaudioHooks(filesystem afero.Fs, executablePath string) (interface{}, error) {
@@ -265,9 +272,7 @@ func IsClaudioHook(hookValue interface{}) bool {
 		if len(cmdStr) >= 2 && cmdStr[0] == '"' && cmdStr[len(cmdStr)-1] == '"' {
 			cmdStr = cmdStr[1 : len(cmdStr)-1]
 		}
-		baseName := filepath.Base(cmdStr)
-		// Handle production "claudio" and "claudio.exe" (Windows) and test executables "install.test", "uninstall.test", "cli.test"
-		return baseName == "claudio" || baseName == "claudio.exe" || baseName == "install.test" || baseName == "uninstall.test" || baseName == "cli.test"
+		return executableRecognizer(filepath.Base(cmdStr))
 	}
 
 	// Check old string format (backward compatibility)
