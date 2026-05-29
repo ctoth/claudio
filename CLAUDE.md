@@ -8,6 +8,44 @@ Claudio is a hook-based audio plugin for Claude Code that plays contextual sound
 
 ## Build and Development Commands
 
+The project's primary development host is Windows; bash variants are kept for
+Linux/macOS contributors. Use the snippet that matches your shell.
+
+### PowerShell (Windows)
+
+```powershell
+# Build the main binary
+go build -o claudio.exe .
+
+# Install to a directory on PATH
+Copy-Item claudio.exe $env:USERPROFILE\bin\
+
+# Run tests
+go test ./...
+
+# Run specific package tests with verbose output
+go test ./internal/config -v
+go test ./internal/cli -v
+
+# Test audio playback manually
+'{"session_id":"test","transcript_path":"/test","cwd":"/test","hook_event_name":"PostToolUse","tool_name":"Bash","tool_response":{"stdout":"success","stderr":"","interrupted":false}}' | .\claudio.exe
+
+# Run with different volumes
+'...' | .\claudio.exe --volume 0.7
+
+# Use silent mode for testing without audio
+'...' | .\claudio.exe --silent
+
+# Test file logging (Windows config null is "NUL")
+'...' | .\claudio.exe --config NUL --silent
+Get-Content $env:LOCALAPPDATA\claudio\logs\claudio.log
+
+# Test with debug logging
+$env:CLAUDIO_LOG_LEVEL='debug'; '...' | .\claudio.exe --config NUL --silent
+```
+
+### Bash (Linux / macOS / WSL)
+
 ```bash
 # Build the main binary
 go build -o claudio .
@@ -35,7 +73,7 @@ echo '...' | claudio --silent
 echo '...' | claudio --config /dev/null --silent
 cat ~/.cache/claudio/logs/claudio.log
 
-# Test with debug logging to see file creation
+# Test with debug logging
 CLAUDIO_LOG_LEVEL=debug echo '...' | claudio --config /dev/null --silent
 ```
 
@@ -48,7 +86,35 @@ When releasing a new version of Claudio, follow this standardized process:
 2. **Clean Workspace**: Ensure no uncommitted changes that shouldn't be released
 3. **Remove Old Binaries**: Delete any existing binaries to ensure fresh build
 
-### Release Steps
+### Release Steps (PowerShell)
+
+```powershell
+# 1. Clean build environment
+Remove-Item -ErrorAction SilentlyContinue claudio.exe
+
+# 2. Run full test suite
+go test ./...
+
+# 3. Build fresh binary
+go build -o claudio.exe .
+
+# 4. Test binary works
+.\claudio.exe --version
+
+# 5. Functional smoke test
+'{"session_id":"test","transcript_path":"/test","cwd":"/test","hook_event_name":"PostToolUse","tool_name":"Bash","tool_response":{"stdout":"success","stderr":"","interrupted":false}}' | .\claudio.exe --silent
+
+# 6. Create and push git tag
+$version = (Select-String -Path internal/cli/cli.go -Pattern 'const Version').Line -replace '.*"([^"]+)".*','$1'
+git tag "v$version"
+git push origin "v$version"
+
+# 7. Clean up build artifacts
+Remove-Item -ErrorAction SilentlyContinue claudio.exe
+```
+
+### Release Steps (bash)
+
 ```bash
 # 1. Clean build environment
 rm -f claudio
