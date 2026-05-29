@@ -8,18 +8,29 @@ import (
 	"claudio.click/internal/util"
 )
 
-// RunUninstallWorkflow orchestrates the complete Claudio uninstall process (public interface)
-// Workflow: Validate scope → Read settings → Detect hooks → Remove hooks → Write → Verify
-func RunUninstallWorkflow(scope string, settingsPath string) error {
-	return runUninstallWorkflow(scope, settingsPath)
+// agentResolver returns the settings path for the given agent and scope.
+// Production calls agent.BestConfigPath. Tests override via swapAgentResolver
+// (defined in *_test.go) so a t.TempDir() path can be injected without
+// changing the workflow's signature.
+var agentResolver = func(agent install.Agent, scope string) (string, error) {
+	return agent.BestConfigPath(scope)
 }
 
-// runUninstallWorkflow orchestrates the complete Claudio uninstall process
-// Workflow: Validate scope → Read settings → Detect hooks → Remove hooks → Write → Verify
-func runUninstallWorkflow(scope string, settingsPath string) error {
+// RunUninstallWorkflow orchestrates the complete Claudio uninstall process (public interface).
+// The settings-file path is resolved internally from the agent and the
+// validated scope, so the scope check becomes load-bearing: a caller cannot
+// pass scope=user with a path that does not belong to that scope.
+// Workflow: Validate scope → Resolve path → Read settings → Detect hooks → Remove hooks → Write → Verify
+func RunUninstallWorkflow(scope string, agent install.Agent) error {
+	return runUninstallWorkflow(scope, agent)
+}
+
+// runUninstallWorkflow orchestrates the complete Claudio uninstall process.
+// Workflow: Validate scope → Resolve path → Read settings → Detect hooks → Remove hooks → Write → Verify
+func runUninstallWorkflow(scope string, agent install.Agent) error {
 	slog.Info("starting Claudio uninstall workflow",
 		"scope", scope,
-		"settings_path", settingsPath)
+		"agent", agent)
 
 	// Step 1: Validate scope
 	if scope != "user" && scope != "project" {
@@ -27,6 +38,15 @@ func runUninstallWorkflow(scope string, settingsPath string) error {
 	}
 
 	slog.Debug("validated uninstall scope", "scope", scope)
+
+	// Resolve the settings path from the validated scope using the agent.
+	// Going through agentResolver lets tests inject a TempDir path without
+	// changing this signature.
+	settingsPath, err := agentResolver(agent, scope)
+	if err != nil {
+		return fmt.Errorf("failed to resolve settings path for agent %s scope %s: %w", agent, scope, err)
+	}
+	slog.Debug("resolved settings path from agent", "agent", agent, "scope", scope, "path", settingsPath)
 
 	// Acquire advisory lock around the full read-mutate-write window so
 	// concurrent install/uninstall processes serialise. See

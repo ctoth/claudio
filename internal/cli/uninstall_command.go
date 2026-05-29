@@ -107,7 +107,7 @@ func runUninstallCommandE(cmd *cobra.Command, args []string) error {
 		cmd.Printf("Settings path: %s\n", settingsPath)
 	}
 
-	err = uninstall.RunUninstallWorkflow(scope.String(), settingsPath)
+	err = uninstall.RunUninstallWorkflow(scope.String(), agent)
 	if err != nil {
 		return fmt.Errorf("uninstall failed: %w", err)
 	}

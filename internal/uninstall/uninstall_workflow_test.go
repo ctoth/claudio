@@ -136,8 +136,11 @@ func TestInstallUninstallWithExecutablePath(t *testing.T) {
 					t.Error("Expected at least one hook to use executable command")
 				}
 
-				// Step 3: Run uninstall workflow to remove hooks
-				err = runUninstallWorkflow(tc.scope, settingsPath)
+				// Step 3: Run uninstall workflow to remove hooks. Inject the
+				// test's tempdir path via swapAgentResolver so we don't write
+				// to the user's real settings file.
+				swapAgentResolver(t, fixedPathResolver(settingsPath))
+				err = runUninstallWorkflow(tc.scope, install.AgentClaude)
 				if tc.expectError && err == nil {
 					t.Error("Expected error but got none")
 				}
@@ -337,8 +340,11 @@ func TestRunUninstallWorkflow(t *testing.T) {
 				}
 			}
 
-			// Test the complete uninstall workflow
-			err = runUninstallWorkflow(tc.scope, settingsFile)
+			// Test the complete uninstall workflow. Inject the test's tempdir
+			// path via swapAgentResolver so the workflow targets settingsFile
+			// instead of resolving via agent.BestConfigPath.
+			swapAgentResolver(t, fixedPathResolver(settingsFile))
+			err = runUninstallWorkflow(tc.scope, install.AgentClaude)
 
 			if tc.expectError && err == nil {
 				t.Errorf("Expected error but got none")
@@ -496,7 +502,8 @@ func TestUninstallWorkflowErrorHandling(t *testing.T) {
 			settingsPath, cleanup := tc.setupFunc()
 			defer cleanup()
 
-			err := runUninstallWorkflow(tc.scope, settingsPath)
+			swapAgentResolver(t, fixedPathResolver(settingsPath))
+			err := runUninstallWorkflow(tc.scope, install.AgentClaude)
 
 			if tc.expectError {
 				if err == nil {
