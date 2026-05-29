@@ -1,8 +1,44 @@
 package soundpack
 
 import (
+	"fmt"
 	"log/slog"
+	"path/filepath"
+	"strings"
 )
+
+// validateMappingValue checks an untrusted soundpack mapping value and
+// resolves it relative to baseDir. Returns the resolved absolute path on
+// success, or an error if the value is empty, absolute, contains a `..`
+// segment, or resolves outside baseDir.
+//
+// This is the trust boundary for soundpack JSONs loaded from on-disk
+// sources (untrusted). The trusted-embedded loader does NOT call this
+// function — those JSONs may legitimately reference absolute system paths
+// like /System/Library/Sounds/Purr.aiff.
+func validateMappingValue(value, baseDir string) (resolved string, err error) {
+	if value == "" {
+		return "", fmt.Errorf("empty mapping value")
+	}
+	if filepath.IsAbs(value) {
+		return "", fmt.Errorf("absolute paths not allowed: %q", value)
+	}
+	// Reject `..` segments BEFORE Clean — Clean would resolve `a/../b` to
+	// `b` and silently lose the traversal attempt.
+	for _, seg := range strings.Split(filepath.ToSlash(value), "/") {
+		if seg == ".." {
+			return "", fmt.Errorf("path traversal not allowed: %q", value)
+		}
+	}
+	cleaned := filepath.Clean(filepath.Join(baseDir, value))
+	// Defense in depth — Clean+Join should already have prevented escape,
+	// but verify the result is still under baseDir.
+	rel, err := filepath.Rel(baseDir, cleaned)
+	if err != nil || strings.HasPrefix(rel, "..") || rel == ".." {
+		return "", fmt.Errorf("resolves outside soundpack root: %q", value)
+	}
+	return cleaned, nil
+}
 
 // JSONMapper maps relative paths to absolute paths defined in a JSON mapping
 type JSONMapper struct {

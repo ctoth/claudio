@@ -837,7 +837,7 @@ func loadEmbeddedPlatformSoundpack(identifier string) (soundpack.PathMapper, err
 		return nil, fmt.Errorf("failed to read embedded platform soundpack: %w", err)
 	}
 
-	mapper, err := soundpack.LoadJSONSoundpackFromBytes(data)
+	mapper, err := soundpack.LoadEmbeddedPlatformSoundpack(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load embedded platform soundpack: %w", err)
 	}

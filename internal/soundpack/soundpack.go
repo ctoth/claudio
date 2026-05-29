@@ -171,7 +171,21 @@ type JSONSoundpackFile struct {
 	Mappings    map[string]string `json:"mappings"`
 }
 
-// LoadJSONSoundpack loads a JSON soundpack file and creates a JSONMapper
+// MaxSoundpackMappings caps the number of entries in a soundpack JSON.
+// Defense against pathological JSONs that pass the byte-size cap but
+// would still pin os.Stat calls during existence-check validation.
+//
+// Shipped platform JSONs have ~90 mappings; a maximalist legitimate
+// soundpack covering every fallback key is on the order of low hundreds.
+// 10,000 is two orders of magnitude over realistic legitimate use.
+const MaxSoundpackMappings = 10_000
+
+// LoadJSONSoundpack loads an UNTRUSTED JSON soundpack file from disk and
+// returns a JSONMapper. The file's directory is used as the soundpack
+// root; every mapping value must be a relative path resolving under that
+// root (no absolute paths, no `..` traversal). For trusted go:embed
+// bytes that reference absolute system paths, use
+// LoadEmbeddedPlatformSoundpack instead.
 func LoadJSONSoundpack(filePath string) (PathMapper, error) {
 	slog.Debug("loading JSON soundpack", "file_path", filePath)
 
@@ -190,38 +204,124 @@ func LoadJSONSoundpack(filePath string) (PathMapper, error) {
 		return nil, fmt.Errorf("failed to read JSON soundpack file: %w", err)
 	}
 
-	// Parse JSON
-	var soundpack JSONSoundpackFile
-	err = json.Unmarshal(fileData, &soundpack)
+	mapper, err := loadJSONSoundpackUntrusted(fileData, filepath.Dir(filePath))
 	if err != nil {
-		slog.Error("failed to parse JSON soundpack", "file_path", filePath, "error", err)
-		return nil, fmt.Errorf("failed to parse JSON soundpack: %w", err)
-	}
-
-	ResolveJSONSoundpackMappings(&soundpack, filepath.Dir(filePath))
-
-	// Validate soundpack structure and content
-	if err := validateJSONSoundpack(soundpack); err != nil {
-		slog.Error("JSON soundpack validation failed", "file_path", filePath, "error", err)
+		slog.Error("JSON soundpack load failed", "file_path", filePath, "error", err)
 		return nil, err
 	}
 
-	slog.Debug("JSON soundpack parsed successfully",
+	slog.Debug("JSON soundpack loaded successfully",
 		"file_path", filePath,
+		"name", mapper.GetName())
+
+	return mapper, nil
+}
+
+// LoadJSONSoundpackFromBytes loads an UNTRUSTED JSON soundpack from byte
+// data and resolves mapping values relative to baseDir. Use this when
+// the bytes came from an attacker-influenced source (downloaded
+// soundpack, user-supplied JSON) and you have a directory to root
+// relative paths against.
+//
+// For trusted go:embed bytes use LoadEmbeddedPlatformSoundpack.
+func LoadJSONSoundpackFromBytes(data []byte, baseDir string) (PathMapper, error) {
+	slog.Debug("loading untrusted JSON soundpack from bytes",
+		"data_size", len(data),
+		"base_dir", baseDir)
+	return loadJSONSoundpackUntrusted(data, baseDir)
+}
+
+// LoadEmbeddedPlatformSoundpack loads a TRUSTED JSON soundpack from
+// go:embed bytes baked into the binary at build time. It skips the
+// path-syntax validation (absolute-path rejection, `..` rejection,
+// under-baseDir resolution) because shipped platform soundpacks
+// legitimately reference absolute system paths like
+// /System/Library/Sounds/Purr.aiff.
+//
+// The mappings-count cap and the existence check still apply — those
+// are DoS guards, not trust checks. The byte-size cap is the caller's
+// responsibility (embedded bytes are usually trusted to be small).
+func LoadEmbeddedPlatformSoundpack(data []byte) (PathMapper, error) {
+	slog.Debug("loading trusted embedded platform soundpack", "data_size", len(data))
+	return loadJSONSoundpackTrusted(data)
+}
+
+// loadJSONSoundpackUntrusted is the internal entry point for untrusted
+// JSONs. It parses the bytes, applies the mappings-count cap, runs
+// validateMappingValue on every value (resolving relatives under
+// baseDir; rejecting absolutes and `..` segments), then runs the
+// existence check.
+func loadJSONSoundpackUntrusted(data []byte, baseDir string) (PathMapper, error) {
+	var soundpack JSONSoundpackFile
+	if err := json.Unmarshal(data, &soundpack); err != nil {
+		slog.Error("failed to parse untrusted JSON soundpack", "error", err)
+		return nil, fmt.Errorf("failed to parse JSON soundpack: %w", err)
+	}
+
+	if err := validateJSONSoundpackBasics(soundpack); err != nil {
+		return nil, err
+	}
+
+	// Resolve and validate each mapping value through the trust boundary.
+	resolved := make(map[string]string, len(soundpack.Mappings))
+	for key, value := range soundpack.Mappings {
+		abs, err := validateMappingValue(value, baseDir)
+		if err != nil {
+			slog.Error("mapping value rejected",
+				"key", key,
+				"value", value,
+				"base_dir", baseDir,
+				"error", err)
+			return nil, fmt.Errorf("invalid mapping %q: %w", key, err)
+		}
+		resolved[key] = abs
+	}
+	soundpack.Mappings = resolved
+
+	if err := validateMappingFilesExist(soundpack); err != nil {
+		return nil, err
+	}
+
+	slog.Debug("untrusted JSON soundpack parsed",
 		"name", soundpack.Name,
 		"mappings_count", len(soundpack.Mappings))
 
-	slog.Debug("JSON soundpack loaded successfully",
-		"file_path", filePath,
-		"name", soundpack.Name,
-		"valid_mappings", len(soundpack.Mappings))
+	return NewJSONMapper(soundpack.Name, soundpack.Mappings), nil
+}
 
-	// Create and return JSONMapper
+// loadJSONSoundpackTrusted is the internal entry point for trusted
+// embedded JSONs. It applies the mappings-count cap and the existence
+// check but skips path-syntax validation, since embedded JSONs legitimately
+// reference absolute system paths.
+func loadJSONSoundpackTrusted(data []byte) (PathMapper, error) {
+	var soundpack JSONSoundpackFile
+	if err := json.Unmarshal(data, &soundpack); err != nil {
+		slog.Error("failed to parse trusted JSON soundpack", "error", err)
+		return nil, fmt.Errorf("failed to parse JSON soundpack: %w", err)
+	}
+
+	if err := validateJSONSoundpackBasics(soundpack); err != nil {
+		return nil, err
+	}
+
+	if err := validateMappingFilesExist(soundpack); err != nil {
+		return nil, err
+	}
+
+	slog.Debug("trusted JSON soundpack parsed",
+		"name", soundpack.Name,
+		"mappings_count", len(soundpack.Mappings))
+
 	return NewJSONMapper(soundpack.Name, soundpack.Mappings), nil
 }
 
 // ResolveJSONSoundpackMappings converts non-empty relative mapping values to
 // absolute paths rooted at baseDir. Absolute values are preserved.
+//
+// Retained for backward compatibility with code paths that build a
+// JSONSoundpackFile by hand and want to canonicalize relative values
+// the same way the loader does. New code should use
+// LoadJSONSoundpack(FromBytes) which now performs the strict validation.
 func ResolveJSONSoundpackMappings(soundpack *JSONSoundpackFile, baseDir string) {
 	if soundpack == nil || baseDir == "" {
 		return
@@ -235,18 +335,27 @@ func ResolveJSONSoundpackMappings(soundpack *JSONSoundpackFile, baseDir string) 
 	}
 }
 
-// validateJSONSoundpack validates the structure and content of a JSON soundpack
-func validateJSONSoundpack(soundpack JSONSoundpackFile) error {
-	// Validate required fields
+// validateJSONSoundpackBasics checks structural invariants shared by
+// the trusted and untrusted load paths: required fields, non-empty
+// mappings, and the mappings-count cap.
+func validateJSONSoundpackBasics(soundpack JSONSoundpackFile) error {
 	if soundpack.Name == "" {
 		return fmt.Errorf("JSON soundpack missing required 'name' field")
 	}
-
 	if len(soundpack.Mappings) == 0 {
 		return fmt.Errorf("JSON soundpack missing or empty 'mappings' field")
 	}
+	if len(soundpack.Mappings) > MaxSoundpackMappings {
+		return fmt.Errorf("soundpack mappings exceed limit of %d entries (got %d)",
+			MaxSoundpackMappings, len(soundpack.Mappings))
+	}
+	return nil
+}
 
-	// Validate that all referenced sound files exist
+// validateMappingFilesExist runs os.Stat on each mapping value and
+// returns an error if any referenced file is missing. The mappings-count
+// cap (validateJSONSoundpackBasics) bounds the number of stat calls.
+func validateMappingFilesExist(soundpack JSONSoundpackFile) error {
 	for relativePath, absolutePath := range soundpack.Mappings {
 		if _, err := os.Stat(absolutePath); err != nil {
 			slog.Error("sound file not found",
@@ -261,38 +370,18 @@ func validateJSONSoundpack(soundpack JSONSoundpackFile) error {
 			"relative_path", relativePath,
 			"absolute_path", absolutePath)
 	}
-
 	return nil
 }
 
-// LoadJSONSoundpackFromBytes loads a JSON soundpack from byte data and creates a JSONMapper
-func LoadJSONSoundpackFromBytes(data []byte) (PathMapper, error) {
-	slog.Debug("loading JSON soundpack from bytes", "data_size", len(data))
-
-	// Parse JSON
-	var soundpack JSONSoundpackFile
-	err := json.Unmarshal(data, &soundpack)
-	if err != nil {
-		slog.Error("failed to parse JSON soundpack from bytes", "error", err)
-		return nil, fmt.Errorf("failed to parse JSON soundpack from bytes: %w", err)
+// validateJSONSoundpack is kept as a backwards-compatible wrapper that
+// applies the full validation chain a non-loader caller might rely on
+// (basics + existence check). It does NOT apply the path-syntax
+// validation — callers that want that should use the loader.
+func validateJSONSoundpack(soundpack JSONSoundpackFile) error {
+	if err := validateJSONSoundpackBasics(soundpack); err != nil {
+		return err
 	}
-
-	// Validate soundpack structure and content
-	if err := validateJSONSoundpack(soundpack); err != nil {
-		slog.Error("JSON soundpack validation failed", "error", err)
-		return nil, err
-	}
-
-	slog.Debug("JSON soundpack parsed successfully from bytes",
-		"name", soundpack.Name,
-		"mappings_count", len(soundpack.Mappings))
-
-	slog.Debug("JSON soundpack loaded successfully from bytes",
-		"name", soundpack.Name,
-		"valid_mappings", len(soundpack.Mappings))
-
-	// Create and return JSONMapper
-	return NewJSONMapper(soundpack.Name, soundpack.Mappings), nil
+	return validateMappingFilesExist(soundpack)
 }
 
 // CreateSoundpackMapper auto-detects soundpack type and creates appropriate mapper
