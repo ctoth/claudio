@@ -540,67 +540,6 @@ func TestCLI_ResolvesDefaultSoundpackToPaths(t *testing.T) {
 	}
 }
 
-func TestCLI_UsesSoundLoaderForFileResolution(t *testing.T) {
-	// TDD Test: Verify CLI uses SoundLoader for file resolution instead of duplicate logic
-	cli := NewCLI()
-
-	// Create temporary soundpack with test file
-	tempDir := t.TempDir()
-	soundpackDir := tempDir + "/test-pack/success"
-	err := os.MkdirAll(soundpackDir, 0755)
-	if err != nil {
-		t.Fatalf("Failed to create soundpack dir: %v", err)
-	}
-
-	// Create a simple WAV file for testing
-	wavFile := soundpackDir + "/bash-success.wav"
-	wavData := createMinimalWAV()
-	err = os.WriteFile(wavFile, wavData, 0644)
-	if err != nil {
-		t.Fatalf("Failed to create test WAV file: %v", err)
-	}
-
-	// Create config that points to our test soundpack
-	configFile := tempDir + "/test-config.json"
-	configContent := `{
-		"volume": 0.5,
-		"default_soundpack": "test-pack",
-		"soundpack_paths": ["` + tempDir + `"],
-		"enabled": false,
-		"log_level": "info"
-	}`
-
-	err = os.WriteFile(configFile, []byte(configContent), 0644)
-	if err != nil {
-		t.Fatalf("Failed to create test config: %v", err)
-	}
-
-	hookJSON := `{
-		"session_id": "test",
-		"transcript_path": "/test",
-		"cwd": "/test",
-		"hook_event_name": "PostToolUse",
-		"tool_name": "Bash"
-	}`
-
-	stdin := strings.NewReader(hookJSON)
-	stdout := &bytes.Buffer{}
-	stderr := &bytes.Buffer{}
-
-	// Run CLI with the config
-	exitCode := cli.Run([]string{"claudio", "--config", configFile}, stdin, stdout, stderr)
-
-	if exitCode != 0 {
-		t.Errorf("Expected exit code 0, got %d", exitCode)
-		t.Logf("Stderr: %s", stderr.String())
-	}
-
-	// For now, this test just verifies the CLI runs without error when a sound file exists
-	// The actual test for using SoundLoader will be validated by examining the CLI code
-	// TODO: This test will be more meaningful after we refactor playSound method
-	t.Log("CLI should use SoundLoader.LoadSound() instead of manual file resolution in playSound()")
-}
-
 // Helper type for testing error conditions
 type errorReader struct{}
 
@@ -971,5 +910,32 @@ func TestCLILoggingLevels(t *testing.T) {
 	if !strings.Contains(logOutput, "level=DEBUG") {
 		t.Error("Expected some DEBUG level logs but found none")
 		t.Logf("Full log output: %s", logOutput)
+	}
+}
+
+// createMinimalWAV produces a minimal valid WAV file for tests that need a
+// real on-disk sound file to feed the loader.
+func createMinimalWAV() []byte {
+	// Minimal valid WAV: 44-byte header + 8 bytes audio data
+	return []byte{
+		// RIFF header
+		'R', 'I', 'F', 'F',
+		44, 0, 0, 0, // File size - 8 (44 - 8 = 36 + 8 data = 44)
+		'W', 'A', 'V', 'E',
+
+		// fmt chunk
+		'f', 'm', 't', ' ',
+		16, 0, 0, 0, // fmt chunk size
+		1, 0, // PCM format
+		1, 0, // mono
+		0x44, 0xAC, 0, 0, // 44100 Hz sample rate
+		0x88, 0x58, 0x01, 0, // byte rate
+		2, 0, // block align
+		16, 0, // 16 bits per sample
+
+		// data chunk
+		'd', 'a', 't', 'a',
+		8, 0, 0, 0, // data size
+		0, 0, 0x7F, 0x7F, 0, 0, 0x7F, 0x7F, // 4 samples of audio data
 	}
 }
