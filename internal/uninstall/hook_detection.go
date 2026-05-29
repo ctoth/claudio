@@ -82,11 +82,6 @@ func isClaudioCommand(cmdStr string) bool {
 		return true
 	}
 
-	// Go test binaries end with .test (e.g., "install.test", "uninstall.test", "test.test")
-	if strings.HasSuffix(name, ".test") {
-		return true
-	}
-
 	return false
 }
 

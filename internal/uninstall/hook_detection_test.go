@@ -91,20 +91,20 @@ func TestDetectClaudioHooksWithFullPaths(t *testing.T) {
 			expected: []string{"PreToolUse", "PostToolUse", "Stop"},
 		},
 		{
-			name: "test executable path (install.test)",
-			settings: &install.SettingsMap{
-				"hooks": map[string]interface{}{
-					"PreToolUse": "/tmp/install.test",
-				},
-			},
-			expected: []string{"PreToolUse"},
-		},
-		{
 			name: "no claudio paths - different executables",
 			settings: &install.SettingsMap{
 				"hooks": map[string]interface{}{
 					"PreToolUse":  "/usr/bin/git",
 					"PostToolUse": "/bin/echo",
+				},
+			},
+			expected: []string{},
+		},
+		{
+			name: "user binary ending in .test is NOT a Claudio command",
+			settings: &install.SettingsMap{
+				"hooks": map[string]interface{}{
+					"PreToolUse": "/usr/local/bin/lint.test",
 				},
 			},
 			expected: []string{},

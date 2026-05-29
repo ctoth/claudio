@@ -60,10 +60,9 @@ func TestInstallUninstallWithExecutablePath(t *testing.T) {
 				// Step 1: Install claudio hooks (which should use executable path)
 				factory := install.GetFilesystemFactory()
 				memFS := factory.Memory()
-				execPath, _ := install.GetExecutablePath()
-				if execPath == "" {
-					execPath = "claudio"
-				}
+				// Use an explicit fixture path so the test does not depend on go test's
+				// binary name leaking through GetExecutablePath().
+				execPath := "/usr/local/bin/claudio"
 				claudioHooks, err := install.GenerateClaudioHooks(memFS, execPath)
 				if err != nil {
 					t.Fatalf("Failed to generate claudio hooks: %v", err)

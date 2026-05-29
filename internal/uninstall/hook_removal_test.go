@@ -63,21 +63,6 @@ func TestRemoveClaudioHooksWithFullPaths(t *testing.T) {
 			},
 		},
 		{
-			name: "remove test executable path (install.test)",
-			initialSettings: &install.SettingsMap{
-				"hooks": map[string]interface{}{
-					"PreToolUse": "/tmp/install.test",
-					"Other":      "keep",
-				},
-			},
-			hookNames: []string{"PreToolUse"},
-			expectedSettings: &install.SettingsMap{
-				"hooks": map[string]interface{}{
-					"Other": "keep",
-				},
-			},
-		},
-		{
 			name: "remove complex array hook - full system path",
 			initialSettings: &install.SettingsMap{
 				"hooks": map[string]interface{}{
