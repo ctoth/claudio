@@ -1,10 +1,41 @@
 package audio
 
 import (
+	"math"
 	"reflect"
 	"strings"
 	"testing"
 )
+
+// TestSetVolume_RejectsNaN verifies SetVolume rejects NaN. NaN evaluates as
+// false for both bounds checks, so without an explicit guard it would slip
+// past the [0.0, 1.0] range check and reach the subprocess argv.
+func TestSetVolume_RejectsNaN(t *testing.T) {
+	scb := NewSystemCommandBackend("paplay")
+	err := scb.SetVolume(float32(math.NaN()))
+	if err == nil {
+		t.Fatal("SetVolume(NaN) should error")
+	}
+	if !strings.Contains(err.Error(), "finite") {
+		t.Errorf("expected 'finite' in error, got: %v", err)
+	}
+}
+
+// TestSetVolume_RejectsPosInf verifies SetVolume rejects +Inf.
+func TestSetVolume_RejectsPosInf(t *testing.T) {
+	scb := NewSystemCommandBackend("paplay")
+	if err := scb.SetVolume(float32(math.Inf(+1))); err == nil {
+		t.Fatal("SetVolume(+Inf) should error")
+	}
+}
+
+// TestSetVolume_RejectsNegInf verifies SetVolume rejects -Inf.
+func TestSetVolume_RejectsNegInf(t *testing.T) {
+	scb := NewSystemCommandBackend("paplay")
+	if err := scb.SetVolume(float32(math.Inf(-1))); err == nil {
+		t.Fatal("SetVolume(-Inf) should error")
+	}
+}
 
 // TestBuildPlayerArgv_Paplay verifies paplay's --volume=N mapping (0..65536).
 func TestBuildPlayerArgv_Paplay(t *testing.T) {
