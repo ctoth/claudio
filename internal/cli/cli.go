@@ -73,6 +73,9 @@ func NewCLI() *CLI {
 	// Add status subcommand
 	rootCmd.AddCommand(newStatusCommand())
 
+	// Add install-commands subcommand (writes the /claudio slash command markdown)
+	rootCmd.AddCommand(newInstallCommandsCommand())
+
 	// Add persistent flags to root command for backward compatibility
 	rootCmd.PersistentFlags().String("config", "", "Path to config file")
 	rootCmd.PersistentFlags().String("volume", "", "Set volume (0.0 to 1.0)")
