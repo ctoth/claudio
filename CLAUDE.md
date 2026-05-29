@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Claudio is a hook-based audio plugin for Claude Code that plays contextual sounds based on tool usage and events. It uses a 5-level fallback system to map events to sounds and supports custom soundpacks.
+Claudio is a hook-based audio plugin for Claude Code that plays contextual sounds based on tool usage and events. It uses three event-specific fallback chains (enhanced/posttool/simple) to map events to sounds and supports custom soundpacks.
 
 ## Build and Development Commands
 
@@ -88,12 +88,19 @@ rm -f claudio
    - Maps events to sound categories: loading, success, error, interactive
 
 2. **Sound Mapping** (`internal/sounds/`)
-   - 5-level fallback system:
-     1. Exact hint match: `category/hint.wav` (e.g., `success/bash-success.wav`)
-     2. Tool-specific: `category/tool.wav` (e.g., `success/bash.wav`)
-     3. Operation-specific: `category/operation.wav` (e.g., `success/tool-complete.wav`)
-     4. Category-specific: `category/category.wav` (e.g., `success/success.wav`)
-     5. Default: `default.wav`
+   - Three event-specific fallback chains (see `internal/sounds/mapper.go`):
+     - **Enhanced** (PreToolUse with a tool name) — 9 levels: hint, command-subcommand,
+       command+suffix, command-only, original-tool+suffix, original-tool, operation,
+       category, default.
+     - **PostTool** (PostToolUse success/error with a tool name) — 6 levels: hint,
+       command+suffix, original-tool+suffix, operation, category, default. (Skips
+       the command-only level for semantic accuracy.)
+     - **Simple** (UserPromptSubmit, Notification, Stop, SubagentStop, PreCompact,
+       and other tool-less events) — 4 levels: hint, event-specific (operation),
+       category, default.
+   - A vestigial `mapLegacySound` 6-level chain (`ChainTypeLegacy`) is currently
+     unreachable — the chain-type switch covers all live cases. It is scheduled
+     for deletion (see review-fix-plan Chunk 2).
 
 3. **Audio System** (`internal/audio/`)
    - Uses malgo (miniaudio Go wrapper) for cross-platform audio
@@ -104,7 +111,10 @@ rm -f claudio
 
 4. **Configuration** (`internal/config/`)
    - XDG Base Directory compliant
-   - Config file at `/etc/xdg/claudio/config.json`
+   - Config search order: `$XDG_CONFIG_HOME/claudio/config.json` first, then each
+     directory in `$XDG_CONFIG_DIRS` (typically `/etc/xdg/claudio/config.json` on
+     Linux/macOS). Windows uses the Windows-native XDG mapping; `/etc/xdg` is
+     not checked there.
    - Environment variable overrides: `CLAUDIO_VOLUME`, `CLAUDIO_SOUNDPACK`, etc.
 
 5. **File Logging System** (`internal/config/`)
@@ -118,19 +128,26 @@ rm -f claudio
 
 1. **TDD Approach**: All components have comprehensive tests written first
 2. **slog Logging**: Extensive structured logging throughout for debugging
-3. **Simple v1 CLI**: Focused on core functionality, saving rich features for v2
-4. **Memory-based Audio**: Pre-loads entire sound files to avoid streaming complexity
+3. **Memory-based Audio**: Pre-loads entire sound files to avoid streaming complexity
 
 ## Configuration
 
-Default config location: `/etc/xdg/claudio/config.json`
+Config is loaded from XDG-compliant locations (see `internal/config/`). On
+Linux/macOS the first hit is `$XDG_CONFIG_HOME/claudio/config.json` (typically
+`~/.config/claudio/config.json`), then `/etc/xdg/claudio/config.json`. On
+Windows it uses the Windows-native XDG mapping; `/etc/xdg` is never checked.
+
+Default values (these are baked into `GetDefaultConfig`, not a literal file
+shipped to users):
+
 ```json
 {
   "volume": 0.5,
-  "default_soundpack": "default",
-  "soundpack_paths": ["/usr/local/share/claudio/default"],
+  "default_soundpack": "<platform-detected>",
+  "soundpack_paths": [],
   "enabled": true,
   "log_level": "warn",
+  "audio_backend": "auto",
   "file_logging": {
     "enabled": true,
     "filename": "",
@@ -141,6 +158,11 @@ Default config location: `/etc/xdg/claudio/config.json`
   }
 }
 ```
+
+`soundpack_paths` defaults to `[]` — XDG data dirs (with the hardcoded
+`claudio/soundpacks/` subpath) are searched automatically.
+`default_soundpack` is computed at runtime by platform detection (windows /
+wsl / darwin embedded packs).
 
 ### File Logging Configuration
 
@@ -157,26 +179,33 @@ When `filename` is empty (default), logs are written to `~/.cache/claudio/logs/c
 
 ## Soundpack Structure
 
-Soundpacks use a category-based directory structure with 4 main categories:
-- `loading/` - PreToolUse events and thinking sounds
-- `success/` - PostToolUse success events  
-- `error/` - PostToolUse error events and failures
-- `interactive/` - UserPromptSubmit, Notification events
-
-Each category can contain tool-specific sounds (e.g., `bash-thinking.wav`, `read-success.wav`) that follow the 5-level fallback system. Use `ls /usr/local/share/claudio/default/` to see current available sounds.
+Directory soundpacks use a category-based structure (e.g. `loading/`,
+`success/`, `error/`, `interactive/`, `completion/`, `system/`). Each category
+holds tool-specific or generic sounds resolved through the three fallback
+chains documented under "Sound Mapping" above. Installed soundpacks live under
+`~/.local/share/claudio/soundpacks/<id>/` (or the equivalent XDG data dir);
+embedded platform packs (windows / wsl / darwin) are baked into the binary and
+can be inspected via `claudio soundpack list`.
 
 ## Current Issues and Workarounds
 
 1. **Audio Crackling**: The current memory-based implementation has some crackling.
 
-2. **Config Auto-discovery**: Fixed by moving config from `/usr/local/share/claudio/` to `/etc/xdg/claudio/`
+## Shipped Subcommands
 
-## Future Development (v2)
+Beyond the default stdin-mode hook executor, claudio ships these subcommands
+(registered in `internal/cli/cli.go`):
 
-The codebase is prepared for subcommands structure:
-- `claudio dev log` - development logging mode
-- `claudio analyze soundpack [name]` - analyze coverage
-- `claudio soundpack report` - generate reports
+- `claudio install` / `claudio uninstall` — manage Claude/Codex/Antigravity hooks
+- `claudio analyze usage` / `claudio analyze missing` — query the sound-tracking
+  database for playback patterns and missing-sound gaps
+- `claudio soundpack` — manage soundpacks:
+  - `init` — create a JSON template
+  - `list` — list discoverable soundpacks
+  - `validate` — coverage report and broken-reference check
+  - `install` — copy a local pack into the XDG data dir
+  - `use` — switch the active soundpack
+  - `add` / `update` / `remove` / `status` — manage git-backed soundpacks
 
 ## Development Practices - CRITICAL
 
@@ -223,10 +252,10 @@ TDD: Short description of what was implemented
 
 ## Important File Locations
 
-- Hook Logger: `/root/code/claudio/cmd/hook-logger/` - captures real Claude Code hook JSON
-- Test Sounds: `/root/code/claudio/sounds/` - test audio files
-- Soundpack: `/usr/local/share/claudio/default/` - installed soundpack
-- Log Files: `~/.cache/claudio/logs/claudio.log` - default file logging location
+- Hook Logger: `cmd/hook-logger/` — captures real Claude Code hook JSON for debugging
+- Embedded Soundpacks: `internal/config/embedded_soundpacks/` (windows.json, wsl.json, darwin.json)
+- User-installed soundpacks: `~/.local/share/claudio/soundpacks/<id>/` (XDG data dir; Windows uses Windows-native XDG mapping)
+- Log Files: `~/.cache/claudio/logs/claudio.log` — default file logging location
 
 ## File Logging System Details
 
@@ -241,7 +270,13 @@ The file logging system follows Go best practices using standard library compone
 
 ### Key Features
 
-1. **Dual Output**: All logs go to both stderr (for immediate feedback) and file (for persistence)
+1. **Asymmetric Dual Output**: Logs are written to BOTH stderr and the rotated log
+   file, but at different levels. The stderr handler is **hardcoded to
+   `slog.LevelError`** (see `setupLogging` in `internal/cli/cli.go` around line
+   725) — only ERROR records ever reach stderr regardless of `log_level`. The
+   file handler honors the configured `log_level`. To see debug/info/warn
+   output, tail the log file (e.g. `tail -F ~/.cache/claudio/logs/claudio.log`);
+   `CLAUDIO_LOG_LEVEL=debug` on its own will not produce extra stderr output.
 2. **Automatic Rotation**: When log file reaches 10MB, creates numbered backups
 3. **Cleanup**: Automatically removes logs older than 30 days or beyond 5 backup files
 4. **Compression**: Rotated log files are gzipped to save disk space
@@ -252,7 +287,8 @@ The file logging system follows Go best practices using standard library compone
 
 - **Hook Usage**: File logging defaults to **enabled** because CLI flags are difficult to pass in hook scenarios
 - **Log Location**: Uses XDG cache directory (`~/.cache/claudio/logs/claudio.log`) when no custom path specified
-- **Log Level**: Respects existing `log_level` configuration for both stderr and file output
+- **Log Level**: `log_level` controls the FILE handler. The stderr handler stays
+  at ERROR — debug output requires tailing the log file.
 - **No Regression**: All existing slog calls work unchanged
 
 ### Testing
