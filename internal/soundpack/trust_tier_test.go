@@ -153,6 +153,69 @@ func TestLoadEmbeddedPlatformSoundpack_AcceptsAbsolutePaths(t *testing.T) {
 	}
 }
 
+// TestValidateMappingValue_RejectsSymlinkEscapingBase asserts the
+// trust-boundary validator looks through symlinks. A symlink placed
+// inside the soundpack root that points outside the root is the
+// path-traversal vector the syntactic Clean+Rel check misses: a
+// malicious git-cloned soundpack can preserve a committed symlink.
+// EvalSymlinks resolves the target; the resolved path must still be
+// under baseDir.
+func TestValidateMappingValue_RejectsSymlinkEscapingBase(t *testing.T) {
+	base := t.TempDir()
+	outsideDir := t.TempDir()
+	outside := filepath.Join(outsideDir, "secret.wav")
+	if err := os.WriteFile(outside, []byte("secret"), 0o644); err != nil {
+		t.Fatalf("write outside file: %v", err)
+	}
+	link := filepath.Join(base, "innocuous.wav")
+	if err := os.Symlink(outside, link); err != nil {
+		// On Windows, symlink creation typically requires admin or
+		// developer mode. Skipping is the correct response; the POSIX
+		// runs and CI cover the assertion.
+		t.Skipf("symlink unsupported on this platform: %v", err)
+	}
+
+	if _, err := validateMappingValue("innocuous.wav", base); err == nil {
+		t.Error("expected validator to reject symlink escaping baseDir")
+	}
+}
+
+// TestValidateMappingValue_AcceptsSymlinkStayingInsideBase asserts the
+// symlink defense is precise: a symlink whose target IS inside the
+// soundpack root must still be accepted. Otherwise we'd over-reject
+// and break legitimate soundpacks that use symlinks for deduplication.
+func TestValidateMappingValue_AcceptsSymlinkStayingInsideBase(t *testing.T) {
+	base := t.TempDir()
+	target := filepath.Join(base, "real.wav")
+	if err := os.WriteFile(target, []byte("real"), 0o644); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+	link := filepath.Join(base, "alias.wav")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlink unsupported on this platform: %v", err)
+	}
+
+	if _, err := validateMappingValue("alias.wav", base); err != nil {
+		t.Errorf("expected validator to accept in-root symlink, got: %v", err)
+	}
+}
+
+// TestValidateMappingValue_AcceptsMissingFile asserts the symlink
+// defense is gated on Lstat success: when the referenced file does not
+// exist yet, the syntactic check stands and the validator does NOT
+// reject. The missing-file error surfaces at load time (existence
+// check), not at validation.
+func TestValidateMappingValue_AcceptsMissingFile(t *testing.T) {
+	base := t.TempDir()
+
+	// "nope.wav" is not on disk. validateMappingValue should still
+	// return a resolved path so the existence check can produce the
+	// real "file not found" error.
+	if _, err := validateMappingValue("nope.wav", base); err != nil {
+		t.Errorf("expected validator to accept non-existent file (syntax check only), got: %v", err)
+	}
+}
+
 // TestLoadJSONSoundpack_RejectsTooManyMappings asserts the 10K cap
 // fires before existence checks would run.
 func TestLoadJSONSoundpack_RejectsTooManyMappings(t *testing.T) {

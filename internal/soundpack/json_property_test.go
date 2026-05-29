@@ -50,6 +50,59 @@ func TestProperty_AbsolutePathsAlwaysRejected(t *testing.T) {
 	})
 }
 
+// TestProperty_WindowsAbsolutePathsAlwaysRejected generates Windows
+// drive-letter absolute shapes (e.g. C:\foo, c:/bar, Z:\baz) and
+// asserts the validator always rejects them regardless of host GOOS.
+// Locks in the isAnyPlatformAbsolute drive-letter branch so a future
+// refactor that drops cross-platform absolute handling is caught.
+func TestProperty_WindowsAbsolutePathsAlwaysRejected(t *testing.T) {
+	rapid.Check(t, func(t *rapid.T) {
+		baseDir := rapid.StringMatching(`[a-z]{1,8}`).Draw(t, "baseDir")
+		drive := rapid.SampledFrom([]string{"C:", "c:", "D:", "z:", "Z:"}).Draw(t, "drive")
+		sep := rapid.SampledFrom([]string{`\`, "/"}).Draw(t, "sep")
+		tail := rapid.StringMatching(`[a-zA-Z0-9_/\\-]{0,20}`).Draw(t, "tail")
+		value := drive + sep + tail
+
+		if _, err := validateMappingValue(value, baseDir); err == nil {
+			t.Fatalf("validator accepted Windows absolute path %q (base=%q)", value, baseDir)
+		}
+	})
+}
+
+// TestProperty_BackslashRootedAlwaysRejected covers the Windows
+// drive-relative absolute shape — a leading `\` (e.g. `\Windows`).
+// Also covers the leading-byte test for `\\?\…` extended-length paths
+// since those also start with `\`.
+func TestProperty_BackslashRootedAlwaysRejected(t *testing.T) {
+	rapid.Check(t, func(t *rapid.T) {
+		baseDir := rapid.StringMatching(`[a-z]{1,8}`).Draw(t, "baseDir")
+		tail := rapid.StringMatching(`[a-zA-Z0-9_/\\-]{0,20}`).Draw(t, "tail")
+		value := `\` + tail
+
+		if _, err := validateMappingValue(value, baseDir); err == nil {
+			t.Fatalf("validator accepted backslash-rooted path %q (base=%q)", value, baseDir)
+		}
+	})
+}
+
+// TestProperty_UNCPathsAlwaysRejected covers Windows UNC shapes
+// (`\\server\share\...`). These start with `\` so are caught by the
+// same branch as backslash-rooted; the dedicated test pins the UNC
+// shape so a future refactor that special-cases `\\` is caught.
+func TestProperty_UNCPathsAlwaysRejected(t *testing.T) {
+	rapid.Check(t, func(t *rapid.T) {
+		baseDir := rapid.StringMatching(`[a-z]{1,8}`).Draw(t, "baseDir")
+		server := rapid.StringMatching(`[a-zA-Z]{1,8}`).Draw(t, "server")
+		share := rapid.StringMatching(`[a-zA-Z]{1,8}`).Draw(t, "share")
+		tail := rapid.StringMatching(`[a-zA-Z0-9_/\\-]{0,20}`).Draw(t, "tail")
+		value := `\\` + server + `\` + share + `\` + tail
+
+		if _, err := validateMappingValue(value, baseDir); err == nil {
+			t.Fatalf("validator accepted UNC path %q (base=%q)", value, baseDir)
+		}
+	})
+}
+
 // TestProperty_DotDotAlwaysRejected generates values containing a `..`
 // segment in any position and asserts the validator always rejects
 // them, even when the cleaned result would still resolve under

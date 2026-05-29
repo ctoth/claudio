@@ -3,6 +3,7 @@ package soundpack
 import (
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -43,6 +44,40 @@ func validateMappingValue(value, baseDir string) (resolved string, err error) {
 	rel, err := filepath.Rel(baseDir, cleaned)
 	if err != nil || strings.HasPrefix(rel, "..") || rel == ".." {
 		return "", fmt.Errorf("resolves outside soundpack root: %q", value)
+	}
+	// Symlink defense: the syntactic Rel check above is purely textual —
+	// a symlink committed inside the soundpack root (e.g. preserved by
+	// git from a malicious gh: source) that points outside would still
+	// resolve to outside content at decode time. Resolve symlinks now
+	// and re-verify the resolved path stays under baseDir.
+	//
+	// Gated on Lstat success because validation may run before the file
+	// exists on disk in some flows (e.g. soundpack init scaffolds). If
+	// the file isn't there yet, the syntactic check is all we can do;
+	// the missing-file error will surface at load time.
+	if _, statErr := os.Lstat(cleaned); statErr == nil {
+		resolved, evalErr := filepath.EvalSymlinks(cleaned)
+		if evalErr != nil {
+			return "", fmt.Errorf("evaluating symlinks for %q: %w", value, evalErr)
+		}
+		absBase, baseErr := filepath.Abs(baseDir)
+		if baseErr != nil {
+			return "", fmt.Errorf("resolving baseDir %q: %w", baseDir, baseErr)
+		}
+		// EvalSymlinks resolves the absolute path of the target, so the
+		// baseDir we compare against must also be absolute for Rel to
+		// produce a meaningful answer.
+		realBase, baseEvalErr := filepath.EvalSymlinks(absBase)
+		if baseEvalErr != nil {
+			// baseDir may not exist yet either (rare but possible);
+			// fall back to absBase. The strict equality fails closed —
+			// any non-existent base means we can't verify, so reject.
+			realBase = absBase
+		}
+		resRel, relErr := filepath.Rel(realBase, resolved)
+		if relErr != nil || strings.HasPrefix(resRel, "..") || resRel == ".." {
+			return "", fmt.Errorf("symlink resolves outside soundpack root: %q -> %q", value, resolved)
+		}
 	}
 	return cleaned, nil
 }
