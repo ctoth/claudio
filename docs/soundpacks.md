@@ -80,7 +80,7 @@ Save this as `/path/to/my-sounds.json` and reference it in your config:
 
 **Validation:**
 - All mapped files must exist when the soundpack loads
-- Supports same audio formats as directory soundpacks (WAV, MP3)
+- Supports same audio formats as directory soundpacks (WAV, MP3, AIFF)
 
 ### Use Cases
 
@@ -523,6 +523,10 @@ CLAUDIO_SOUNDPACK=test-pack echo '...' | claudio
 **Supported Formats:**
 - WAV (recommended)
 - MP3
+- AIFF (16/24/32-bit, mono/stereo; auto-detected from magic bytes)
+
+The decoder registry that registers WAV/MP3/AIFF is at
+`internal/audio/registry.go`.
 
 **Recommendations:**
 - **Sample Rate:** 44.1kHz or 48kHz
