@@ -494,19 +494,21 @@ minimal/
 
 ## Soundpack Discovery
 
-Claudio searches for soundpacks in these locations:
+Claudio searches for soundpacks in these locations. Every XDG-derived path
+includes the literal `claudio/soundpacks/` segment (hardcoded in
+`internal/config/xdg.go`):
 
 1. **Custom paths** (from configuration `soundpack_paths`)
-2. **User directory:** `~/.local/share/claudio/`
-3. **System directory:** `/usr/local/share/claudio/`
-4. **System fallback:** `/usr/share/claudio/`
+2. **User directory:** `~/.local/share/claudio/soundpacks/<id>` (or `$XDG_DATA_HOME/claudio/soundpacks/<id>`)
+3. **System directory:** `/usr/local/share/claudio/soundpacks/<id>`
+4. **System fallback:** `/usr/share/claudio/soundpacks/<id>`
 
 ### Listing Available Soundpacks
 
 ```bash
 # Check what soundpacks are available
-ls ~/.local/share/claudio/
-ls /usr/local/share/claudio/
+ls ~/.local/share/claudio/soundpacks/
+ls /usr/local/share/claudio/soundpacks/
 ```
 
 ### Testing Soundpack Availability

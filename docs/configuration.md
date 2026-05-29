@@ -48,10 +48,15 @@ Claudio follows XDG Base Directory specifications for configuration:
 : Name of the soundpack to use
 : Must correspond to a directory in one of the soundpack paths
 
-**soundpack_paths** `array of strings` (default: XDG directories)
-: List of directories to search for soundpacks
+**soundpack_paths** `array of strings` (default: `[]`)
+: Extra paths to search for soundpacks (added on top of XDG defaults)
 : Searched in order; first match wins
-: If empty, uses XDG-compliant paths: `/usr/local/share/claudio/`, `~/.local/share/claudio/`
+: When empty, Claudio uses the XDG defaults. Soundpacks live under the literal
+  `claudio/soundpacks/` subdirectory of each XDG data dir (e.g.
+  `~/.local/share/claudio/soundpacks/<id>`,
+  `/usr/local/share/claudio/soundpacks/<id>`,
+  `/usr/share/claudio/soundpacks/<id>`).
+  The `soundpacks/` segment is hardcoded in `internal/config/xdg.go`.
 
 **enabled** `boolean` (default: true)
 : Whether Claudio should produce audio output
@@ -210,14 +215,14 @@ export CLAUDIO_ENABLED=false
 Claudio searches for soundpacks in this order:
 
 1. **Explicit paths** from `soundpack_paths` configuration
-2. **XDG data directories:**
-   - `$XDG_DATA_HOME/claudio/` (if set)
-   - `~/.local/share/claudio/` (user-specific)
-   - `/usr/local/share/claudio/` (system-wide)
-   - `/usr/share/claudio/` (system-wide fallback)
+2. **XDG data directories**, each under the literal `claudio/soundpacks/<id>` subpath:
+   - `$XDG_DATA_HOME/claudio/soundpacks/<id>` (typically `~/.local/share/claudio/soundpacks/<id>`)
+   - `/usr/local/share/claudio/soundpacks/<id>`
+   - `/usr/share/claudio/soundpacks/<id>`
 
-For soundpack named "custom", Claudio looks for:
-- `/path/to/custom/` directory containing sound files
+For a soundpack named `custom`, Claudio looks for:
+- `~/.local/share/claudio/soundpacks/custom/` (or the equivalent under another XDG data dir)
+- Or any explicit path you listed in `soundpack_paths`
 - Must contain at least a `default.wav` file
 
 ## Validation
@@ -250,9 +255,9 @@ echo '...' | claudio
 
 **Verify soundpack paths:**
 ```bash
-# List available soundpacks
-ls /usr/local/share/claudio/
-ls ~/.local/share/claudio/
+# List available soundpacks (note the soundpacks/ subdir is required)
+ls ~/.local/share/claudio/soundpacks/
+ls /usr/local/share/claudio/soundpacks/
 ```
 
 **Test configuration changes:**

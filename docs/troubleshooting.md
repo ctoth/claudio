@@ -139,10 +139,10 @@ Common issues and solutions for Claudio installation and usage.
 
 4. **Verify soundpack exists:**
    ```bash
-   # Check default soundpack
-   ls -la /usr/local/share/claudio/default/
-   ls -la ~/.local/share/claudio/default/
-   
+   # Check default soundpack (note the soundpacks/ subdir is required)
+   ls -la /usr/local/share/claudio/soundpacks/default/
+   ls -la ~/.local/share/claudio/soundpacks/default/
+
    # Test with explicit soundpack
    CLAUDIO_SOUNDPACK=default echo '...' | claudio
    ```
@@ -163,11 +163,11 @@ Common issues and solutions for Claudio installation and usage.
 2. **Check sound file quality:**
    ```bash
    # Verify sound files aren't corrupted
-   file /usr/local/share/claudio/default/default.wav
-   
+   file /usr/local/share/claudio/soundpacks/default/default.wav
+
    # Play sound file directly
-   aplay /usr/local/share/claudio/default/default.wav  # Linux
-   afplay /usr/local/share/claudio/default/default.wav  # macOS
+   aplay /usr/local/share/claudio/soundpacks/default/default.wav  # Linux
+   afplay /usr/local/share/claudio/soundpacks/default/default.wav  # macOS
    ```
 
 3. **Update audio configuration:**
@@ -271,11 +271,11 @@ Common issues and solutions for Claudio installation and usage.
 2. **Check soundpack contents:**
    ```bash
    # List available sounds
-   find /usr/local/share/claudio/default -name "*.wav" | sort
-   
+   find /usr/local/share/claudio/soundpacks/default -name "*.wav" | sort
+
    # Verify tool-specific sounds exist
-   ls -la /usr/local/share/claudio/default/success/git-*
-   ls -la /usr/local/share/claudio/default/success/npm-*
+   ls -la /usr/local/share/claudio/soundpacks/default/success/git-*
+   ls -la /usr/local/share/claudio/soundpacks/default/success/npm-*
    ```
 
 3. **Test fallback chain:**
@@ -355,9 +355,9 @@ Common issues and solutions for Claudio installation and usage.
 
 1. **Check soundpack structure:**
    ```bash
-   # Verify directory structure
-   find ~/.local/share/claudio/my-pack -type f
-   
+   # Verify directory structure (note the soundpacks/ subdir is required)
+   find ~/.local/share/claudio/soundpacks/my-pack -type f
+
    # Must contain at least:
    # default.wav
    # success/success.wav
@@ -389,21 +389,21 @@ Common issues and solutions for Claudio installation and usage.
 1. **Check audio format:**
    ```bash
    # Verify file format
-   file ~/.local/share/claudio/my-pack/default.wav
-   
-   # Should be: WAVE audio or MP3
+   file ~/.local/share/claudio/soundpacks/my-pack/default.wav
+
+   # Should be: WAVE audio, MP3, or AIFF
    ```
 
 2. **Test files directly:**
    ```bash
    # Play sound file with system player
-   aplay ~/.local/share/claudio/my-pack/default.wav  # Linux
-   afplay ~/.local/share/claudio/my-pack/default.wav  # macOS
+   aplay ~/.local/share/claudio/soundpacks/my-pack/default.wav  # Linux
+   afplay ~/.local/share/claudio/soundpacks/my-pack/default.wav  # macOS
    ```
 
 3. **Check file permissions:**
    ```bash
-   ls -la ~/.local/share/claudio/my-pack/*.wav
+   ls -la ~/.local/share/claudio/soundpacks/my-pack/*.wav
    # Should be readable (644 or similar)
    ```
 
@@ -434,7 +434,7 @@ system_profiler SPAudioDataType
 
 # Claudio configuration
 claudio install --print
-find /usr/local/share/claudio -name "*.wav" | head -10
+find /usr/local/share/claudio/soundpacks -name "*.wav" | head -10
 env | grep CLAUDIO
 ```
 
