@@ -94,15 +94,13 @@ After installation, verify Claudio is working:
 
 ## Claude Code Settings Location
 
-Claudio automatically finds your Claude Code settings in these locations:
+Claudio writes Claude Code hooks to these locations:
 
-**User Settings:**
-- macOS: `~/Library/Application Support/claude-code/settings.json`
-- Linux: `~/.config/claude-code/settings.json`
-- Windows: `%APPDATA%\claude-code\settings.json`
+**User Settings:** `~/.claude/settings.json` (all platforms; on Windows, `%USERPROFILE%\.claude\settings.json`).
 
-**Project Settings:**
-- `.claude-code/settings.json` in your project directory
+**Project Settings:** `./.claude/settings.json` relative to the current working directory.
+
+The canonical resolution lives in `internal/install/claude_settings.go`.
 
 ## What Gets Installed
 

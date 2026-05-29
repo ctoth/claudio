@@ -55,12 +55,11 @@ Common issues and solutions for Claudio installation and usage.
 
 2. **Check settings locations:**
    ```bash
-   # User settings (most common)
-   ls -la ~/.config/claude-code/settings.json        # Linux
-   ls -la ~/Library/Application\ Support/claude-code/settings.json  # macOS
-   
+   # User settings (all platforms; Windows resolves to %USERPROFILE%\.claude\settings.json)
+   ls -la ~/.claude/settings.json
+
    # Project settings
-   ls -la .claude-code/settings.json
+   ls -la .claude/settings.json
    ```
 
 3. **Try different scope:**
@@ -75,11 +74,11 @@ Common issues and solutions for Claudio installation and usage.
 4. **Create settings manually:**
    ```bash
    # Create settings directory
-   mkdir -p ~/.config/claude-code
-   
+   mkdir -p ~/.claude
+
    # Create minimal settings file
-   echo '{}' > ~/.config/claude-code/settings.json
-   
+   echo '{}' > ~/.claude/settings.json
+
    # Try installation again
    claudio install
    ```
@@ -92,13 +91,13 @@ Common issues and solutions for Claudio installation and usage.
 
 1. **Check file permissions:**
    ```bash
-   ls -la ~/.config/claude-code/settings.json
+   ls -la ~/.claude/settings.json
    ```
 
 2. **Fix permissions:**
    ```bash
-   chmod 644 ~/.config/claude-code/settings.json
-   chmod 755 ~/.config/claude-code
+   chmod 644 ~/.claude/settings.json
+   chmod 755 ~/.claude
    ```
 
 3. **Run with correct user:**
@@ -235,13 +234,13 @@ Common issues and solutions for Claudio installation and usage.
 2. **Check Claude Code settings:**
    ```bash
    # Examine settings file directly
-   cat ~/.config/claude-code/settings.json
-   
-   # Look for hooks section:
+   cat ~/.claude/settings.json
+
+   # Look for a hooks section like:
    # "hooks": {
-   #   "PreToolUse": "claudio",
-   #   "PostToolUse": "claudio",
-   #   "UserPromptSubmit": "claudio"
+   #   "PreToolUse": [{"hooks": [{"type": "command", "command": "claudio"}]}],
+   #   "PostToolUse": [{"hooks": [{"type": "command", "command": "claudio"}]}],
+   #   ...
    # }
    ```
 

@@ -303,15 +303,13 @@ These options work with all commands:
 
 ## Settings File Locations
 
-Claudio automatically discovers Claude Code settings:
+Claudio writes Claude Code hooks to:
 
-**User Scope:**
-- macOS: `~/Library/Application Support/claude-code/settings.json`
-- Linux: `~/.config/claude-code/settings.json`  
-- Windows: `%APPDATA%\claude-code\settings.json`
+**User Scope:** `~/.claude/settings.json` (Windows: `%USERPROFILE%\.claude\settings.json`).
 
-**Project Scope:**
-- `.claude-code/settings.json` in current directory or parent directories
+**Project Scope:** `./.claude/settings.json` in the current working directory.
+
+See `internal/install/claude_settings.go` for the canonical resolution logic.
 
 ## Hook Events
 
