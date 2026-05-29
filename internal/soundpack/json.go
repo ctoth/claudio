@@ -16,11 +16,18 @@ import (
 // sources (untrusted). The trusted-embedded loader does NOT call this
 // function — those JSONs may legitimately reference absolute system paths
 // like /System/Library/Sounds/Purr.aiff.
+//
+// Cross-platform absolute-path handling: filepath.IsAbs is GOOS-aware,
+// so `/etc/shadow` is "not absolute" on Windows and `C:\Windows` is
+// "not absolute" on Linux. A soundpack JSON crafted on one platform
+// must not bypass validation when loaded on another. We therefore
+// reject *any* value that looks absolute under *any* common convention
+// in addition to the GOOS-aware check.
 func validateMappingValue(value, baseDir string) (resolved string, err error) {
 	if value == "" {
 		return "", fmt.Errorf("empty mapping value")
 	}
-	if filepath.IsAbs(value) {
+	if isAnyPlatformAbsolute(value) {
 		return "", fmt.Errorf("absolute paths not allowed: %q", value)
 	}
 	// Reject `..` segments BEFORE Clean — Clean would resolve `a/../b` to
@@ -38,6 +45,36 @@ func validateMappingValue(value, baseDir string) (resolved string, err error) {
 		return "", fmt.Errorf("resolves outside soundpack root: %q", value)
 	}
 	return cleaned, nil
+}
+
+// isAnyPlatformAbsolute returns true if value looks absolute under any
+// of POSIX, Windows, or UNC conventions, regardless of the host GOOS.
+// filepath.IsAbs is GOOS-aware, which is the wrong default for a trust
+// boundary on portable data files like JSON soundpacks.
+func isAnyPlatformAbsolute(value string) bool {
+	if value == "" {
+		return false
+	}
+	// GOOS-aware check first (handles platform-native shape).
+	if filepath.IsAbs(value) {
+		return true
+	}
+	// POSIX absolute: leading `/`.
+	if value[0] == '/' {
+		return true
+	}
+	// Windows backslash-rooted: leading `\` (e.g. `\Windows\System32`).
+	if value[0] == '\\' {
+		return true
+	}
+	// Windows drive-letter: `C:` or `C:/...` or `C:\...`.
+	if len(value) >= 2 && value[1] == ':' {
+		c := value[0]
+		if (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') {
+			return true
+		}
+	}
+	return false
 }
 
 // JSONMapper maps relative paths to absolute paths defined in a JSON mapping

@@ -17,6 +17,7 @@ require (
 	github.com/youpy/go-wav v0.3.2
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	modernc.org/sqlite v1.38.2
+	pgregory.net/rapid v1.3.0
 )
 
 require (
