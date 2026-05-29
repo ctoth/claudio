@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"strings"
 
+	"claudio.click/internal/safeio"
 	"github.com/gen2brain/malgo"
 	"github.com/go-audio/aiff"
 	"github.com/go-audio/audio"
@@ -46,7 +47,7 @@ func (d *AiffDecoder) Decode(reader io.Reader) (*AudioData, error) {
 	slog.Debug("starting AIFF decode operation")
 
 	// Read all data from reader (go-audio/aiff needs a ReadSeeker)
-	data, err := io.ReadAll(reader)
+	data, err := safeio.ReadAllCapped(reader, safeio.MaxAudioFileBytes, "AIFF audio")
 	if err != nil {
 		slog.Error("failed to read AIFF data", "error", err)
 		return nil, ErrReadFailure

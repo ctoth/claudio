@@ -3,11 +3,12 @@ package soundpack
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"claudio.click/internal/safeio"
 )
 
 // PathMapper defines how to map relative sound paths to candidate absolute paths
@@ -183,7 +184,7 @@ func LoadJSONSoundpack(filePath string) (PathMapper, error) {
 	defer file.Close()
 
 	// Read file contents
-	fileData, err := io.ReadAll(file)
+	fileData, err := safeio.ReadAllCapped(file, safeio.MaxSoundpackJSONBytes, "soundpack JSON")
 	if err != nil {
 		slog.Error("failed to read JSON soundpack file", "file_path", filePath, "error", err)
 		return nil, fmt.Errorf("failed to read JSON soundpack file: %w", err)

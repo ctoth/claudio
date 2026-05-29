@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"strings"
 
+	"claudio.click/internal/safeio"
 	"github.com/gen2brain/malgo"
 	"github.com/youpy/go-wav"
 )
@@ -25,7 +26,7 @@ func (d *WavDecoder) Decode(reader io.Reader) (*AudioData, error) {
 	slog.Debug("starting WAV decode operation")
 
 	// youpy/go-wav needs a ReadSeeker, so we need to read all data first
-	data, err := io.ReadAll(reader)
+	data, err := safeio.ReadAllCapped(reader, safeio.MaxAudioFileBytes, "WAV audio")
 	if err != nil {
 		slog.Error("failed to read WAV data", "error", err)
 		return nil, ErrReadFailure

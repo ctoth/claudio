@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"strings"
 
+	"claudio.click/internal/safeio"
 	"github.com/gabriel-vasile/mimetype"
 )
 
@@ -187,7 +188,7 @@ func (r *DecoderRegistry) DecodeFile(filename string, reader io.Reader) (*AudioD
 	slog.Debug("starting file decode operation", "filename", filename)
 
 	// Buffer the entire content to avoid reader consumption issues during format detection
-	fullContent, err := io.ReadAll(reader)
+	fullContent, err := safeio.ReadAllCapped(reader, safeio.MaxAudioFileBytes, "audio file")
 	if err != nil {
 		slog.Error("failed to read file content for decode", "filename", filename, "error", err)
 		return nil, fmt.Errorf("failed to read file content: %w", err)

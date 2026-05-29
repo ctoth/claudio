@@ -3,11 +3,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"time"
+
+	"claudio.click/internal/safeio"
 )
 
 func main() {
@@ -20,7 +21,7 @@ func main() {
 	slog.Info("hook logger started", "args", os.Args, "stdin_available", true)
 
 	// Read JSON from stdin (Claude Code sends hook data via stdin)
-	input, err := io.ReadAll(os.Stdin)
+	input, err := safeio.ReadAllCapped(os.Stdin, safeio.MaxHookPayloadBytes, "hook payload")
 	if err != nil {
 		slog.Error("failed to read stdin", "error", err)
 		os.Exit(1)

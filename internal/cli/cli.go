@@ -15,6 +15,7 @@ import (
 	"claudio.click/internal/audio"
 	"claudio.click/internal/config"
 	"claudio.click/internal/hooks"
+	"claudio.click/internal/safeio"
 	"claudio.click/internal/soundpack"
 	"claudio.click/internal/sounds"
 	"claudio.click/internal/tracking"
@@ -368,9 +369,17 @@ func (c *CLI) initializeAudioSystemWithBackend(cfg *config.Config) error {
 func readHookInput(cmd *cobra.Command) ([]byte, error) {
 	hookInputFile, _ := cmd.Flags().GetString("hook-input-file")
 	if hookInputFile != "" {
-		inputData, err := os.ReadFile(hookInputFile)
+		f, err := os.Open(hookInputFile)
 		if err != nil {
 			return nil, fmt.Errorf("error reading hook input file: %w", err)
+		}
+		inputData, err := safeio.ReadAllCapped(f, safeio.MaxHookPayloadBytes, "hook spool")
+		closeErr := f.Close()
+		if err != nil {
+			return nil, fmt.Errorf("error reading hook input file: %w", err)
+		}
+		if closeErr != nil {
+			slog.Warn("failed to close hook input file", "file", hookInputFile, "error", closeErr)
 		}
 
 		if removeErr := os.Remove(hookInputFile); removeErr != nil {
@@ -380,7 +389,7 @@ func readHookInput(cmd *cobra.Command) ([]byte, error) {
 		return inputData, nil
 	}
 
-	inputData, err := io.ReadAll(cmd.InOrStdin())
+	inputData, err := safeio.ReadAllCapped(cmd.InOrStdin(), safeio.MaxHookPayloadBytes, "hook payload")
 	if err != nil {
 		return nil, fmt.Errorf("error reading from stdin: %w", err)
 	}
