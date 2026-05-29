@@ -3,6 +3,7 @@ package install
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -61,6 +62,35 @@ func ReadSettingsFile(filesystem afero.Fs, filePath string) (*SettingsMap, error
 }
 
 
+// BackupSettingsFile copies filePath to filePath+".bak" if filePath
+// exists and parses as JSON. Failure is logged at WARN but not
+// returned — callers proceed with the write regardless. A missing
+// backup is better than a blocked write; a refusal to overwrite a
+// valid .bak with a corrupt source preserves the last-known-good copy.
+func BackupSettingsFile(filesystem afero.Fs, filePath string) {
+	info, err := filesystem.Stat(filePath)
+	if err != nil {
+		return // no file, no backup needed
+	}
+	data, err := afero.ReadFile(filesystem, filePath)
+	if err != nil {
+		slog.Warn("backup skipped: read failed", "path", filePath, "err", err)
+		return
+	}
+	var probe SettingsMap
+	if err := json.Unmarshal(data, &probe); err != nil {
+		slog.Warn("backup skipped: existing file is not valid JSON, refusing to overwrite .bak",
+			"path", filePath, "err", err)
+		return
+	}
+	bakPath := filePath + ".bak"
+	if err := afero.WriteFile(filesystem, bakPath, data, info.Mode()&os.ModePerm); err != nil {
+		slog.Warn("backup write failed", "path", bakPath, "err", err)
+		return
+	}
+	slog.Debug("settings backed up", "from", filePath, "to", bakPath)
+}
+
 // WriteSettingsFile writes settings to a file atomically using filesystem abstraction
 // Creates directory structure if it doesn't exist
 func WriteSettingsFile(filesystem afero.Fs, filePath string, settings *SettingsMap) error {
@@ -70,6 +100,12 @@ func WriteSettingsFile(filesystem afero.Fs, filePath string, settings *SettingsM
 	if err != nil {
 		return fmt.Errorf("failed to create directory %s: %w", dir, err)
 	}
+
+	// Back up existing settings before overwrite. Non-fatal: a missing
+	// .bak is better than a blocked write. Caller's advisory lock
+	// (see internal/install/lockfile.go) keeps this safely inside the
+	// read-mutate-write window.
+	BackupSettingsFile(filesystem, filePath)
 
 	// Detect existing file permissions to preserve them
 	fileMode := os.FileMode(0644) // Default for new files
@@ -96,6 +132,16 @@ func WriteSettingsFile(filesystem afero.Fs, filePath string, settings *SettingsM
 		tempFile.Close()
 		_ = filesystem.Remove(tempFileName)
 		return fmt.Errorf("failed to write to temp file: %w", err)
+	}
+
+	// Sync temp file to disk before close so a crash between rename and
+	// full durability doesn't leave the new content unflushed. afero.File
+	// declares Sync() on the interface — MemMapFs no-ops, OsFs delegates
+	// to os.File.Sync (the real fsync(2) syscall).
+	if err := tempFile.Sync(); err != nil {
+		tempFile.Close()
+		_ = filesystem.Remove(tempFileName)
+		return fmt.Errorf("failed to sync temp file: %w", err)
 	}
 
 	// Close temp file
