@@ -166,6 +166,16 @@ func WriteSettingsFile(filesystem afero.Fs, filePath string, settings *SettingsM
 		return fmt.Errorf("failed to rename temp settings file: %w", err)
 	}
 
+	// fsync the parent directory so the rename entry survives a crash on
+	// POSIX filesystems. Skipped on Windows (no portable directory flush)
+	// and on non-OS filesystems (MemMapFs has no real directory to sync).
+	// Failure here is non-fatal — the rename already succeeded.
+	if _, isOs := filesystem.(*afero.OsFs); isOs {
+		if err := fsyncDir(dir); err != nil {
+			slog.Warn("parent dir fsync failed (non-fatal)", "dir", dir, "err", err)
+		}
+	}
+
 	return nil
 }
 
