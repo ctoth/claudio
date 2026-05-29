@@ -164,9 +164,6 @@ rm -f claudio
      - **Simple** (UserPromptSubmit, Notification, Stop, SubagentStop, PreCompact,
        and other tool-less events) — 4 levels: hint, event-specific (operation),
        category, default.
-   - A vestigial `mapLegacySound` 6-level chain (`ChainTypeLegacy`) is currently
-     unreachable — the chain-type switch covers all live cases. It is scheduled
-     for deletion (see review-fix-plan Chunk 2).
 
 3. **Audio System** (`internal/audio/`)
    - Uses malgo (miniaudio Go wrapper) for cross-platform audio

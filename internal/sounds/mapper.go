@@ -19,7 +19,6 @@ const (
 	ChainTypeEnhanced = "enhanced" // PreToolUse: 9-level with command-only sounds
 	ChainTypePostTool = "posttool" // PostToolUse: 6-level, skip command-only sounds
 	ChainTypeSimple   = "simple"   // Simple events: 4-level event-specific fallback
-	ChainTypeLegacy   = "legacy"   // Legacy fallback for compatibility
 )
 
 // SoundMappingResult contains the mapping result and metadata
@@ -80,10 +79,9 @@ func (m *SoundMapper) MapSound(context *hooks.EventContext) *SoundMappingResult 
 		return m.mapPostToolSound(context)
 	case ChainTypeSimple:
 		return m.mapSimpleSound(context)
-	default:
-		slog.Warn("unknown chain type, falling back to legacy mapper", "chain_type", chainType)
-		return m.mapLegacySound(context)
 	}
+	// Unreachable: determineChainType returns only Enhanced, PostTool, or Simple.
+	return m.mapSimpleSound(context)
 }
 
 // determineChainType analyzes event context to determine which fallback chain type to use
@@ -537,104 +535,6 @@ func (m *SoundMapper) mapSimpleSound(context *hooks.EventContext) *SoundMappingR
 		"total_paths", result.TotalPaths,
 		"chain_type", result.ChainType,
 		"all_paths", result.AllPaths)
-
-	return result
-}
-
-// mapLegacySound implements the original 6-level fallback system for backwards compatibility
-func (m *SoundMapper) mapLegacySound(context *hooks.EventContext) *SoundMappingResult {
-	slog.Debug("mapping sound using legacy 6-level fallback",
-		"category", context.Category.String(),
-		"tool_name", context.ToolName,
-		"original_tool", context.OriginalTool,
-		"sound_hint", context.SoundHint,
-		"operation", context.Operation,
-		"file_type", context.FileType,
-		"is_success", context.IsSuccess,
-		"has_error", context.HasError)
-
-	var paths []string
-	categoryStr := context.Category.String()
-
-	// Level 1: Exact hint match
-	if context.SoundHint != "" {
-		hintPath := categoryStr + "/" + normalizeName(context.SoundHint) + ".wav"
-		paths = append(paths, hintPath)
-		slog.Debug("added level 1 path (exact hint)", "path", hintPath)
-	}
-
-	// Level 2: Tool-specific (extracted tool)
-	if context.ToolName != "" {
-		toolPath := categoryStr + "/" + normalizeName(context.ToolName) + ".wav"
-		paths = append(paths, toolPath)
-		slog.Debug("added level 2 path (tool-specific)", "path", toolPath)
-	}
-
-	// Level 3: Original tool fallback (if different from current tool)
-	if context.OriginalTool != "" && context.OriginalTool != context.ToolName {
-		originalPath := categoryStr + "/" + normalizeName(context.OriginalTool) + ".wav"
-		paths = append(paths, originalPath)
-		slog.Debug("added level 3 path (original tool fallback)", "path", originalPath)
-	}
-
-	// Level 4: Operation-specific
-	if context.Operation != "" {
-		opPath := categoryStr + "/" + normalizeName(context.Operation) + ".wav"
-		paths = append(paths, opPath)
-		slog.Debug("added level 4 path (operation-specific)", "path", opPath)
-	}
-
-	// Level 5: Category-specific
-	if categoryStr != "" && categoryStr != "unknown" {
-		categoryPath := categoryStr + "/" + categoryStr + ".wav"
-		paths = append(paths, categoryPath)
-		slog.Debug("added level 5 path (category-specific)", "path", categoryPath)
-	}
-
-	// Level 6: Default
-	paths = append(paths, "default.wav")
-	slog.Debug("added level 6 path (default)", "path", "default.wav")
-
-	if len(paths) == 0 {
-		slog.Warn("no paths generated, using default fallback")
-		paths = []string{"default.wav"}
-	}
-
-	// Determine chain type for result metadata using same logic as main mapper
-	var chainType string
-	if m.isEnhancedChainEvent(context) {
-		chainType = ChainTypeEnhanced // Will be properly implemented in Phase 2.2
-	} else if m.isPostToolChainEvent(context) {
-		chainType = ChainTypePostTool // Will be properly implemented in Phase 2.3
-	} else {
-		chainType = ChainTypeSimple // Will be properly implemented in Phase 2.4
-	}
-
-	// Calculate fallback level and determine selected path
-	fallbackLevel := m.calculateFallbackLevel(context, paths)
-	selectedPath := paths[0] // Default to first path
-	if fallbackLevel > 0 && fallbackLevel <= len(paths) {
-		selectedPath = paths[fallbackLevel-1] // Convert 1-based to 0-based index
-	}
-
-	result := &SoundMappingResult{
-		SelectedPath:  selectedPath,
-		FallbackLevel: fallbackLevel,
-		TotalPaths:    len(paths),
-		AllPaths:      paths,
-		ChainType:     chainType,
-	}
-
-	slog.Debug("legacy sound mapping completed",
-		"selected_path", result.SelectedPath,
-		"fallback_level", result.FallbackLevel,
-		"total_paths", result.TotalPaths,
-		"chain_type", result.ChainType,
-		"all_paths", result.AllPaths,
-		"context_category", context.Category.String(),
-		"context_tool", context.ToolName,
-		"context_original_tool", context.OriginalTool,
-		"context_hint", context.SoundHint)
 
 	return result
 }
