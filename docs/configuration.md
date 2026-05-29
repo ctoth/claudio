@@ -9,13 +9,17 @@ Claudio can be configured through configuration files, environment variables, an
 
 ## Configuration File
 
-Claudio follows XDG Base Directory specifications for configuration:
+Claudio follows the XDG Base Directory specification for configuration. The
+config file is discovered by searching, in order:
 
-**Default Location:** `/etc/xdg/claudio/config.json`
+1. `$XDG_CONFIG_HOME/claudio/config.json` (typically `~/.config/claudio/config.json`
+   on Linux, the Windows-native XDG mapping on Windows)
+2. Each directory in `$XDG_CONFIG_DIRS`, with `claudio/config.json` appended —
+   on Linux/macOS this typically resolves to `/etc/xdg/claudio/config.json`;
+   `/etc/xdg` is **not** checked on Windows.
 
-**Alternative Locations:**
-- `$XDG_CONFIG_HOME/claudio/config.json` (if `XDG_CONFIG_HOME` is set)
-- `~/.config/claudio/config.json` (fallback)
+The first existing file wins. If no file is found, Claudio runs with its
+built-in defaults (see "Configuration Format" below).
 
 ### Configuration Format
 
