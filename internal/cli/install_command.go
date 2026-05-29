@@ -190,6 +190,22 @@ func runInstallWorkflow(agent install.Agent, scope string, settingsPath string) 
 
 	slog.Debug("validated installation scope", "scope", scope)
 
+	// Acquire advisory lock around the full read-mutate-write window so
+	// concurrent install/uninstall processes serialise. This must happen
+	// BEFORE the initial ReadSettingsFile — putting it inside
+	// WriteSettingsFile would not prevent the classic read-modify-write
+	// race two install processes hit when they both read the same
+	// starting state.
+	lock, err := install.LockSettingsDir(settingsPath)
+	if err != nil {
+		return fmt.Errorf("install: %w", err)
+	}
+	defer func() {
+		if unlockErr := lock.Unlock(); unlockErr != nil {
+			slog.Warn("failed to release settings lock", "err", unlockErr)
+		}
+	}()
+
 	// Step 2: Read existing settings
 	slog.Debug("reading existing settings", "path", settingsPath)
 	factory := install.GetFilesystemFactory()

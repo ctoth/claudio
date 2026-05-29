@@ -28,6 +28,19 @@ func runUninstallWorkflow(scope string, settingsPath string) error {
 
 	slog.Debug("validated uninstall scope", "scope", scope)
 
+	// Acquire advisory lock around the full read-mutate-write window so
+	// concurrent install/uninstall processes serialise. See
+	// install.LockSettingsDir for semantics.
+	lock, err := install.LockSettingsDir(settingsPath)
+	if err != nil {
+		return fmt.Errorf("uninstall: %w", err)
+	}
+	defer func() {
+		if unlockErr := lock.Unlock(); unlockErr != nil {
+			slog.Warn("failed to release settings lock", "err", unlockErr)
+		}
+	}()
+
 	// Step 2: Read existing settings
 	slog.Debug("reading existing settings", "path", settingsPath)
 	factory := install.GetFilesystemFactory()
