@@ -354,15 +354,24 @@ func itemContainsClaudioCommand(item map[string]interface{}) bool {
 	return false
 }
 
-// isClaudioCommandString reports whether a command string refers to the
-// claudio executable. Shared between IsClaudioHook and the merge filter so
-// the two predicates cannot drift apart.
-func isClaudioCommandString(cmdStr string) bool {
+// IsClaudioCommandString reports whether a command string refers to the
+// claudio executable. Shared between IsClaudioHook, the merge filter,
+// and the uninstall package's hook detection so the three predicates
+// cannot drift apart. (Chunk 3 analyst F1: previously install and
+// uninstall maintained two recognizers with divergent code shapes;
+// they happened to agree on production inputs only by accident.)
+func IsClaudioCommandString(cmdStr string) bool {
 	// Strip surrounding quotes if present (for Windows compatibility)
 	if len(cmdStr) >= 2 && cmdStr[0] == '"' && cmdStr[len(cmdStr)-1] == '"' {
 		cmdStr = cmdStr[1 : len(cmdStr)-1]
 	}
 	return executableRecognizer(filepath.Base(cmdStr))
+}
+
+// isClaudioCommandString is the previous (unexported) spelling, kept as
+// a thin alias so adjacent install-package call sites stay readable.
+func isClaudioCommandString(cmdStr string) bool {
+	return IsClaudioCommandString(cmdStr)
 }
 
 // IsClaudioHook reports whether a hook value contains any reference to the

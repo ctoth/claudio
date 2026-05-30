@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -216,9 +217,18 @@ func (cm *ConfigManager) LoadConfig() (*Config, error) {
 func (cm *ConfigManager) ValidateConfig(config *Config) error {
 	var errors []string
 
-	// Validate volume (nil is valid - means use default)
-	if config.Volume != nil && (*config.Volume < 0.0 || *config.Volume > 1.0) {
-		errors = append(errors, fmt.Sprintf("volume must be between 0.0 and 1.0, got %f", *config.Volume))
+	// Validate volume (nil is valid - means use default).
+	// Reject NaN/Inf before the range check to match the guards in
+	// SystemCommandBackend.SetVolume and AudioPlayer.SetVolume; the float
+	// comparison treats NaN as out-of-range silently, so without an explicit
+	// IsNaN/IsInf guard a configured NaN volume would slip through here.
+	if config.Volume != nil {
+		v := float64(*config.Volume)
+		if math.IsNaN(v) || math.IsInf(v, 0) {
+			errors = append(errors, fmt.Sprintf("volume must be finite, got %f", *config.Volume))
+		} else if v < 0.0 || v > 1.0 {
+			errors = append(errors, fmt.Sprintf("volume must be between 0.0 and 1.0, got %f", *config.Volume))
+		}
 	}
 
 	// Validate default soundpack

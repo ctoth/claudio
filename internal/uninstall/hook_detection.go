@@ -2,8 +2,6 @@ package uninstall
 
 import (
 	"log/slog"
-	"path/filepath"
-	"strings"
 
 	"claudio.click/internal/install"
 )
@@ -59,25 +57,13 @@ func DetectClaudioHooks(settings *install.SettingsMap) []string {
 	return claudioHooks
 }
 
-// isClaudioCommand checks if a command string represents a claudio executable
+// isClaudioCommand checks if a command string represents a claudio
+// executable. Delegates to the install package's IsClaudioCommandString
+// so install (which performs the hook recognition during merge) and
+// uninstall (which performs hook detection for removal) can never drift
+// apart. Chunk 3 analyst F1.
 func isClaudioCommand(cmdStr string) bool {
-	// Remove quotes if present (handles quoted paths in JSON)
-	unquoted := cmdStr
-	if len(cmdStr) >= 2 && cmdStr[0] == '"' && cmdStr[len(cmdStr)-1] == '"' {
-		unquoted = cmdStr[1 : len(cmdStr)-1]
-	}
-
-	baseName := filepath.Base(unquoted)
-
-	// Strip .exe suffix for cross-platform comparison
-	name := strings.TrimSuffix(baseName, ".exe")
-
-	// Production executable
-	if name == "claudio" {
-		return true
-	}
-
-	return false
+	return install.IsClaudioCommandString(cmdStr)
 }
 
 // containsClaudioCommand checks if an array contains a claudio command

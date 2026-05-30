@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"log/slog"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -261,6 +262,63 @@ func TestLoadConfigWithValidation(t *testing.T) {
 				if err != nil {
 					t.Errorf("Unexpected validation error: %v", err)
 				}
+			}
+		})
+	}
+}
+
+// TestValidateConfig_RejectsNaN guards the NaN hole in the volume range check.
+// NaN comparisons silently fail both `v < 0.0` and `v > 1.0`, so without an
+// explicit math.IsNaN guard a configured NaN volume would slip past validation
+// and reach the audio backend where it produces a non-finite output sample.
+func TestValidateConfig_RejectsNaN(t *testing.T) {
+	mgr := NewConfigManager()
+	nan := math.NaN()
+	cfg := &Config{
+		Volume:           &nan,
+		DefaultSoundpack: "default",
+		Enabled:          true,
+		AudioBackend:     "auto",
+	}
+
+	err := mgr.ValidateConfig(cfg)
+	if err == nil {
+		t.Fatal("ValidateConfig accepted NaN volume; expected rejection")
+	}
+	if !strings.Contains(err.Error(), "finite") {
+		t.Errorf("expected error mentioning 'finite', got: %v", err)
+	}
+}
+
+// TestValidateConfig_RejectsInf guards the +/-Inf hole. +Inf passes
+// `v > 1.0` so it would be rejected by the range check alone, but -Inf
+// trips `v < 0.0` and the existing message would print "got -Inf" which is
+// less informative than naming the underlying non-finite property. The
+// IsInf guard ensures both directions are reported consistently.
+func TestValidateConfig_RejectsInf(t *testing.T) {
+	cases := []struct {
+		name string
+		v    float64
+	}{
+		{"positive infinity", math.Inf(1)},
+		{"negative infinity", math.Inf(-1)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mgr := NewConfigManager()
+			v := tc.v
+			cfg := &Config{
+				Volume:           &v,
+				DefaultSoundpack: "default",
+				Enabled:          true,
+				AudioBackend:     "auto",
+			}
+			err := mgr.ValidateConfig(cfg)
+			if err == nil {
+				t.Fatalf("ValidateConfig accepted %v volume; expected rejection", tc.v)
+			}
+			if !strings.Contains(err.Error(), "finite") {
+				t.Errorf("expected error mentioning 'finite', got: %v", err)
 			}
 		})
 	}

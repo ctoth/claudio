@@ -141,6 +141,54 @@ func TestDatabaseConstraints(t *testing.T) {
 	}
 }
 
+// TestNewDatabase_BusyTimeoutPersistsAcrossConnections is the regression
+// for the chunk-13 finding: db.Exec("PRAGMA busy_timeout = ...") only
+// primes whichever single connection database/sql happens to hand out at
+// that moment. New connections opened later by the pool inherit the
+// 0-ms default and fail fast with SQLITE_BUSY under contention.
+//
+// NewDatabase now pushes busy_timeout onto the DSN, which the
+// modernc.org/sqlite driver applies on EVERY connection it opens.
+// This test asserts the property by forcing the pool to hand out
+// multiple distinct *sql.Conn handles and reading busy_timeout from
+// each one. If any of them reports 0, the regression has returned.
+func TestNewDatabase_BusyTimeoutPersistsAcrossConnections(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "busy.db")
+	db, err := NewDatabase(dbPath)
+	if err != nil {
+		t.Fatalf("NewDatabase: %v", err)
+	}
+	defer db.Close()
+
+	// Hold several connections simultaneously so the pool MUST open new
+	// ones beyond whichever single connection the schema setup used.
+	const n = 4
+	ctx := t.Context()
+	conns := make([]*sql.Conn, 0, n)
+	defer func() {
+		for _, c := range conns {
+			_ = c.Close()
+		}
+	}()
+	for i := 0; i < n; i++ {
+		c, err := db.Conn(ctx)
+		if err != nil {
+			t.Fatalf("db.Conn[%d]: %v", i, err)
+		}
+		conns = append(conns, c)
+	}
+
+	for i, c := range conns {
+		var bt int
+		if err := c.QueryRowContext(ctx, "PRAGMA busy_timeout").Scan(&bt); err != nil {
+			t.Fatalf("conn[%d] PRAGMA busy_timeout: %v", i, err)
+		}
+		if bt != 10000 {
+			t.Errorf("conn[%d]: busy_timeout = %d, want 10000 (DSN didn't apply to this connection)", i, bt)
+		}
+	}
+}
+
 // TestMigration_DropsFallbackLevel verifies the v2 migration drops the
 // pre-existing fallback_level column from a legacy database and adds the
 // new chain_type column.

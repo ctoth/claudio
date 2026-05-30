@@ -47,6 +47,15 @@ func (d *DBHook) RecordEvent(
 	lookups []Lookup,
 	selectedPath string,
 ) error {
+	// Refuse to record a row with no event context. The previous behavior
+	// json.Marshal'd a nil pointer to the literal string "null" and wrote
+	// that into the context column, producing a row whose only payload
+	// was "the recorder was called with nothing." That row is useless to
+	// analytics and silently mis-represents reality. Chunk 13 analyst F3.
+	if eventCtx == nil {
+		return fmt.Errorf("RecordEvent: nil eventCtx; refusing to insert a context-less row")
+	}
+
 	tx, err := d.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
@@ -58,10 +67,7 @@ func (d *DBHook) RecordEvent(
 		return fmt.Errorf("marshal context: %w", err)
 	}
 
-	var toolName string
-	if eventCtx != nil {
-		toolName = eventCtx.ToolName
-	}
+	toolName := eventCtx.ToolName
 
 	res, err := tx.ExecContext(ctx, `
 		INSERT INTO hook_events (timestamp, session_id, tool_name, selected_path, chain_type, context)

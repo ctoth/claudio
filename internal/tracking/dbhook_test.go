@@ -246,21 +246,61 @@ func TestRecordEvent_FirstExistingPathWins(t *testing.T) {
 	}
 }
 
+// TestRecordEvent_NilEventCtx_RefusesInsert (regression for chunk-13 analyst F3).
+// Before the guard, passing eventCtx=nil json.Marshal'd to the literal
+// string "null" and wrote that as the context column of a real row —
+// a useless row whose only content was "we don't know what this was."
+// RecordEvent now returns an error and inserts nothing.
+func TestRecordEvent_NilEventCtx_RefusesInsert(t *testing.T) {
+	db := setupTestDB(t)
+	hook := NewDBHook(db, "test-nil-ctx")
+
+	err := hook.RecordEvent(context.Background(), nil, "posttool",
+		[]Lookup{{Path: "success/x.wav", Sequence: 1, Found: true}},
+		"success/x.wav")
+	if err == nil {
+		t.Fatal("expected RecordEvent with nil eventCtx to error; got nil")
+	}
+
+	var n int
+	if err := db.QueryRow("SELECT COUNT(*) FROM hook_events").Scan(&n); err != nil {
+		t.Fatalf("count hook_events: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("expected 0 rows after refused insert, got %d", n)
+	}
+	if err := db.QueryRow("SELECT COUNT(*) FROM path_lookups").Scan(&n); err != nil {
+		t.Fatalf("count path_lookups: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("expected 0 path_lookups after refused insert, got %d", n)
+	}
+}
+
 // TestRecordEvent_Atomic_NoPartialState (regression for #22).
-// A duplicate-sequence collision in the path_lookups slice triggers a
-// UNIQUE constraint failure mid-transaction. The whole transaction must
-// roll back — no hook_events row may survive.
+// A duplicate-path collision in the path_lookups slice triggers a
+// UNIQUE(event_id, path) constraint failure mid-transaction. The whole
+// transaction must roll back — no hook_events row may survive.
+//
+// Chunk 13 analyst F4: the previous version of this test used a duplicate
+// SEQUENCE which fires UNIQUE(event_id, sequence). That UNIQUE exists,
+// but the production bug — the one this test guards against the
+// regression of — was duplicate PATH entries in the chain (a tool name
+// equal to its hint suffix collapses L1/L2/L3 to the same path) which
+// fires UNIQUE(event_id, path). Switching the duplicate-detection axis
+// here makes the test exercise the same constraint shape the production
+// bug exercises.
 func TestRecordEvent_Atomic_NoPartialState(t *testing.T) {
 	db := setupTestDB(t)
 	sessionID := "test-atomic"
 	hook := NewDBHook(db, sessionID)
 
 	eventCtx := &hooks.EventContext{Category: hooks.Error, ToolName: "bash"}
-	// Two lookups with the same sequence will violate UNIQUE(event_id, sequence)
+	// Two lookups with the same path will violate UNIQUE(event_id, path)
 	// on the second INSERT, forcing a rollback.
 	lookups := []Lookup{
-		{Path: "error/a.wav", Sequence: 1, Found: false},
-		{Path: "error/b.wav", Sequence: 1, Found: false}, // duplicate sequence
+		{Path: "error/dup.wav", Sequence: 1, Found: false},
+		{Path: "error/dup.wav", Sequence: 2, Found: false}, // duplicate path
 	}
 
 	err := hook.RecordEvent(context.Background(), eventCtx, "posttool", lookups, "error/a.wav")
