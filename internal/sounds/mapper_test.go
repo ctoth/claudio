@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -1124,3 +1125,217 @@ func (m *MockSoundpackResolver) ResolveSoundWithFallback(paths []string) (string
 func (m *MockSoundpackResolver) GetName() string { return "mock" }
 func (m *MockSoundpackResolver) GetType() string { return "mock" }
 
+// fakeRecorder captures RecordEvent invocations for assertions. It is the
+// minimal tracking.EventRecorder implementation needed to prove the mapper
+// calls the recorder exactly once per MapSound with the resolved chain.
+type fakeRecorder struct {
+	mu    sync.Mutex
+	calls []recorderCall
+}
+
+type recorderCall struct {
+	chainType    string
+	lookups      []tracking.Lookup
+	selectedPath string
+}
+
+func (f *fakeRecorder) RecordEvent(
+	ctx context.Context,
+	eventCtx *hooks.EventContext,
+	chainType string,
+	lookups []tracking.Lookup,
+	selectedPath string,
+) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	// Copy the lookups slice so later mutations by the mapper (none exist
+	// today, but defensive) cannot corrupt the captured state.
+	cp := make([]tracking.Lookup, len(lookups))
+	copy(cp, lookups)
+	f.calls = append(f.calls, recorderCall{
+		chainType:    chainType,
+		lookups:      cp,
+		selectedPath: selectedPath,
+	})
+	return nil
+}
+
+// TestMapSound_RouteRecorder_OnceWithAllLookups locks in the contract that
+// MapSound calls EventRecorder.RecordEvent EXACTLY ONCE per invocation
+// with the full deduped lookup list and the selected winner, across all
+// three chain types (enhanced, posttool, simple).
+//
+// Regression guard for review findings #21 and #22 — the original streaming
+// pattern called the recorder N times per event with partial state. The
+// finisher commit (465e21c) claimed this test landed; it did not. The
+// previous diff was entirely mechanical context-threading. This test is
+// the actually-prescribed regression guard.
+func TestMapSound_RouteRecorder_OnceWithAllLookups(t *testing.T) {
+	tempDir := t.TempDir()
+	defaultFile := filepath.Join(tempDir, "default.wav")
+	if err := os.WriteFile(defaultFile, []byte("test"), 0644); err != nil {
+		t.Fatalf("write default.wav: %v", err)
+	}
+	resolver := &MockSoundpackResolver{
+		mappings: map[string]string{
+			"default.wav": defaultFile,
+			// All other paths intentionally absent — forces the resolver to
+			// walk the entire chain so lookups list is fully populated and
+			// the dedup invariant has something to chew on.
+		},
+	}
+
+	tests := []struct {
+		name              string
+		eventCtx          *hooks.EventContext
+		expectedChainType string
+	}{
+		{
+			name: "enhanced chain (PreToolUse with tool)",
+			eventCtx: &hooks.EventContext{
+				Category:     hooks.Loading,
+				ToolName:     "Bash",
+				OriginalTool: "Bash",
+				SoundHint:    "bash-thinking",
+				Operation:    "tool-start",
+			},
+			expectedChainType: ChainTypeEnhanced,
+		},
+		{
+			name: "posttool chain (PostToolUse success)",
+			eventCtx: &hooks.EventContext{
+				Category:  hooks.Success,
+				ToolName:  "Edit",
+				Operation: "tool-complete",
+				IsSuccess: true,
+			},
+			expectedChainType: ChainTypePostTool,
+		},
+		{
+			name: "simple chain (Interactive event)",
+			eventCtx: &hooks.EventContext{
+				Category:  hooks.Interactive,
+				Operation: "prompt",
+			},
+			expectedChainType: ChainTypeSimple,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := &fakeRecorder{}
+			mapper := NewSoundMapperWithResolver(resolver, WithRecorder(rec))
+
+			result := mapper.MapSound(context.Background(), tc.eventCtx)
+			if result == nil {
+				t.Fatal("MapSound returned nil result")
+			}
+
+			rec.mu.Lock()
+			defer rec.mu.Unlock()
+
+			// Exactly one RecordEvent invocation per MapSound — the
+			// single-row-per-event contract.
+			if len(rec.calls) != 1 {
+				t.Fatalf("expected exactly 1 RecordEvent call, got %d", len(rec.calls))
+			}
+			call := rec.calls[0]
+
+			// Chain type tag matches the routed method.
+			if call.chainType != tc.expectedChainType {
+				t.Errorf("chainType: got %q, want %q", call.chainType, tc.expectedChainType)
+			}
+
+			// Lookups must be non-empty — every chain emits at least one
+			// path (category-specific + default), so an empty lookup list
+			// would mean the recorder was wired before resolveChain ran.
+			if len(call.lookups) == 0 {
+				t.Error("RecordEvent called with empty lookups; expected non-empty")
+			}
+
+			// SelectedPath must be set — empty selectedPath would mean the
+			// recorder was wired before the winner was chosen.
+			if call.selectedPath == "" {
+				t.Error("RecordEvent called with empty selectedPath")
+			}
+
+			// SelectedPath must appear in the lookups list — the winner
+			// is a member of the chain, not a separate value.
+			selectedFound := false
+			for _, lk := range call.lookups {
+				if lk.Path == call.selectedPath {
+					selectedFound = true
+					break
+				}
+			}
+			if !selectedFound {
+				t.Errorf("selectedPath %q not found in lookups paths", call.selectedPath)
+			}
+
+			// Dedup invariant: every lookup.Path is unique. The chain
+			// builder can emit duplicates (e.g. PostTool hint == tool-suffix
+			// collapse); resolveChain deduplicates BEFORE recording. If
+			// duplicates make it to the recorder, the UNIQUE(event_id, path)
+			// constraint would fire in production.
+			seen := make(map[string]bool)
+			for _, lk := range call.lookups {
+				if seen[lk.Path] {
+					t.Errorf("duplicate path in lookups: %q (dedup invariant violated)", lk.Path)
+				}
+				seen[lk.Path] = true
+			}
+
+			// Result's AllPaths must match the lookups' paths in order —
+			// the deduped slice is shared with the analytics row.
+			if len(result.AllPaths) != len(call.lookups) {
+				t.Errorf("AllPaths length %d != lookups length %d",
+					len(result.AllPaths), len(call.lookups))
+			} else {
+				for i, lk := range call.lookups {
+					if result.AllPaths[i] != lk.Path {
+						t.Errorf("AllPaths[%d]=%q != lookups[%d].Path=%q",
+							i, result.AllPaths[i], i, lk.Path)
+					}
+				}
+			}
+
+			// Sequences must be 1-based and contiguous — the recorder
+			// relies on this to populate path_lookups.sequence.
+			for i, lk := range call.lookups {
+				if lk.Sequence != i+1 {
+					t.Errorf("lookups[%d].Sequence=%d, want %d", i, lk.Sequence, i+1)
+				}
+			}
+		})
+	}
+}
+
+// TestMapSound_NilRecorder_NoCall pins that a mapper with no recorder
+// configured (WithRecorder not used) never panics and silently skips
+// the RecordEvent call. Tracking is optional.
+func TestMapSound_NilRecorder_NoCall(t *testing.T) {
+	tempDir := t.TempDir()
+	defaultFile := filepath.Join(tempDir, "default.wav")
+	if err := os.WriteFile(defaultFile, []byte("test"), 0644); err != nil {
+		t.Fatalf("write default.wav: %v", err)
+	}
+	resolver := &MockSoundpackResolver{
+		mappings: map[string]string{"default.wav": defaultFile},
+	}
+
+	// No WithRecorder option.
+	mapper := NewSoundMapperWithResolver(resolver)
+
+	result := mapper.MapSound(context.Background(), &hooks.EventContext{
+		Category:  hooks.Success,
+		ToolName:  "Edit",
+		Operation: "tool-complete",
+	})
+	if result == nil {
+		t.Fatal("MapSound returned nil result")
+	}
+	// No panic = pass. The result still resolves normally.
+	if result.SelectedPath == "" {
+		t.Error("SelectedPath should be set even without a recorder")
+	}
+}

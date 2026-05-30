@@ -2,12 +2,14 @@ package tracking
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"sync"
 	"testing"
 	"time"
 
 	"claudio.click/internal/hooks"
+	_ "modernc.org/sqlite"
 )
 
 // TestNewDBHook verifies the constructor stamps the immutable fields. The
@@ -293,16 +295,33 @@ func TestRecordEvent_Atomic_NoPartialState(t *testing.T) {
 // always uses a file-backed DB.
 func TestRecordEvent_ConcurrentCallers_RaceClean(t *testing.T) {
 	dbPath := t.TempDir() + "/concurrent.db"
-	db, err := NewDatabase(dbPath)
-	if err != nil {
-		t.Fatalf("NewDatabase: %v", err)
+	// First open via NewDatabase to install the schema (pragmas + tables +
+	// migrations). Then close it and re-open via a DSN that embeds
+	// busy_timeout, so EVERY pooled connection — not just the first one
+	// — waits at the SQLite write lock instead of failing fast with
+	// SQLITE_BUSY. NewDatabase applies its busy_timeout via db.Exec, which
+	// only takes effect on one pool connection; once we leave the cap off,
+	// new pool connections opened under load do not inherit it. The DSN
+	// pragma is honored on every connection the driver opens.
+	if db0, err := NewDatabase(dbPath); err != nil {
+		t.Fatalf("NewDatabase (schema setup): %v", err)
+	} else {
+		db0.Close()
 	}
-	// Pin pool size to 1 so the test exercises DBHook's own goroutine-safety
-	// (no shared mutable state in the type) without the noise of SQLite's
-	// write-lock contention surfacing as SQLITE_BUSY under heavy parallelism.
-	// Production opens a single-connection-friendly file DB and hooks fire
-	// serially per process — this matches that constraint.
-	db.SetMaxOpenConns(1)
+	dsn := "file:" + dbPath + "?_pragma=busy_timeout(10000)&_pragma=journal_mode(WAL)"
+	db, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		t.Fatalf("sql.Open: %v", err)
+	}
+	// Note: do NOT set db.SetMaxOpenConns(1). That would serialize at the
+	// database/sql layer before reaching SQLite's own write lock, masking
+	// any race in DBHook itself. The whole point of this test is to
+	// exercise the SQLite-level concurrency contract documented on
+	// dbhook.go — "concurrent calls serialize at the SQLite write lock."
+	// Leaving the pool unbounded lets multiple goroutines hold distinct
+	// *sql.Conn handles and contend at SQLite, which is the production
+	// surface we want guarded against future refactors that would add
+	// shared mutable struct state to DBHook.
 	t.Cleanup(func() { db.Close() })
 	sessionID := "test-concurrent"
 	hook := NewDBHook(db, sessionID)
