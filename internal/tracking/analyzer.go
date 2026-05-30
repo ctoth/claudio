@@ -286,16 +286,16 @@ type CategoryDistribution struct {
 	Percentage float64 `json:"percentage"`
 }
 
-// FallbackStatistic represents fallback level statistics.
-//
-// Deprecated: scheduled for removal in the analyzer-surface cleanup
-// commit. The fallback_level column it was computed from is gone in
-// schema v2; see review finding #20.
-type FallbackStatistic struct {
-	FallbackLevel int     `json:"fallback_level"`
-	Count         int     `json:"count"`
-	Percentage    float64 `json:"percentage"`
-	Description   string  `json:"description"`
+// ChainTypeStatistic summarizes how often each chain type fires and how
+// deep into its fallback chain it landed on average. Replaces the
+// removed FallbackStatistic — chain-scoped sequence is the only honest
+// version of "how often does Claudio fall back?" given that sequence
+// numbering is not comparable across chains. See review finding #20.
+type ChainTypeStatistic struct {
+	ChainType  string  `json:"chain_type"`
+	EventCount int     `json:"event_count"`
+	AvgDepth   float64 `json:"avg_depth"` // Average selected_path sequence within the chain
+	Percentage float64 `json:"percentage"`
 }
 
 // TDD GREEN: Usage analysis functions
@@ -478,37 +478,68 @@ func GetToolUsageStats(db *sql.DB, filter QueryFilter) ([]ToolUsageStats, error)
 	return results, nil
 }
 
-// GetFallbackStatistics returns fallback level statistics.
+// GetChainTypeStatistics returns per-chain-type event counts and average
+// selected-path depth (joined from path_lookups). The depth reflects how
+// far down the fallback chain Claudio had to walk before finding a
+// playable sound — high depth = thin soundpack coverage for that chain.
 //
-// Deprecated: returns an error in schema v2 because hook_events.fallback_level
-// no longer exists. This function will be deleted in the analyzer-surface
-// cleanup commit (review finding #20).
-func GetFallbackStatistics(db *sql.DB, filter QueryFilter) ([]FallbackStatistic, error) {
+// chain_type is nullable in schema v2 (pre-migration rows have NULL);
+// rows with NULL chain_type are surfaced under the empty-string label
+// so callers can still see them without lying about which chain they
+// came from.
+func GetChainTypeStatistics(db *sql.DB, filter QueryFilter) ([]ChainTypeStatistic, error) {
 	if db == nil {
 		return nil, fmt.Errorf("database connection is nil")
 	}
-	return nil, fmt.Errorf("GetFallbackStatistics is deprecated: hook_events.fallback_level was removed in schema v2; see review finding #20")
-}
 
-// getFallbackDescription returns human-readable description for fallback levels.
-//
-// Deprecated: kept only so analyze_command.go still compiles; scheduled for
-// deletion in the analyzer-surface cleanup commit.
-func getFallbackDescription(level int) string {
-	switch level {
-	case 1:
-		return "Exact hint match"
-	case 2:
-		return "Tool-specific sound"
-	case 3:
-		return "Operation-specific sound"
-	case 4:
-		return "Category-specific sound"
-	case 5:
-		return "Default fallback sound"
-	default:
-		return "Unknown fallback level"
+	baseQuery := `
+		SELECT
+			COALESCE(he.chain_type, '') AS chain_type,
+			COUNT(*) AS event_count,
+			AVG(COALESCE(pl.sequence, 0)) AS avg_depth
+		FROM hook_events he
+		LEFT JOIN path_lookups pl
+			ON pl.event_id = he.id AND pl.path = he.selected_path
+		WHERE he.selected_path != ''`
+
+	whereClause, args := filter.BuildWhereClause()
+	if whereClause != "" {
+		baseQuery += " AND " + whereClause
 	}
+
+	baseQuery += `
+		GROUP BY COALESCE(he.chain_type, '')
+		ORDER BY event_count DESC`
+
+	rows, err := db.Query(baseQuery, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query chain type statistics: %w", err)
+	}
+	defer rows.Close()
+
+	var results []ChainTypeStatistic
+	var total int
+
+	for rows.Next() {
+		var stat ChainTypeStatistic
+		if err := rows.Scan(&stat.ChainType, &stat.EventCount, &stat.AvgDepth); err != nil {
+			return nil, fmt.Errorf("failed to scan chain type statistics row: %w", err)
+		}
+		total += stat.EventCount
+		results = append(results, stat)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating chain type statistics rows: %w", err)
+	}
+
+	for i := range results {
+		if total > 0 {
+			results[i].Percentage = float64(results[i].EventCount) / float64(total) * 100.0
+		}
+	}
+
+	return results, nil
 }
 
 // GetCategoryDistribution returns category usage distribution

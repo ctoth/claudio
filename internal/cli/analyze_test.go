@@ -779,14 +779,14 @@ func TestAnalyzeUsageCommandWithSummaryAndFallbacks(t *testing.T) {
 		os.Unsetenv("CLAUDIO_SOUND_TRACKING_DB")
 	}()
 
-	// Test with --show-summary and --show-fallbacks
+	// Test with --show-summary and --show-chains
 	cli := NewCLI()
 	stdin := strings.NewReader("")
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 
-	// Run: claudio analyze usage --show-summary --show-fallbacks
-	exitCode := cli.Run([]string{"claudio", "analyze", "usage", "--show-summary", "--show-fallbacks"}, stdin, stdout, stderr)
+	// Run: claudio analyze usage --show-summary --show-chains
+	exitCode := cli.Run([]string{"claudio", "analyze", "usage", "--show-summary", "--show-chains"}, stdin, stdout, stderr)
 
 	if exitCode != 0 {
 		t.Errorf("Expected exit code 0, got %d", exitCode)
@@ -988,13 +988,13 @@ func TestAnalyzeUsageCommandHelp(t *testing.T) {
 		"--tool",
 		"--category",
 		"--preset",
-		"--show-fallbacks",
+		"--show-chains",
 		"--show-summary",
 		"--limit",
 		"Examples:",
 		"claudio analyze usage --days 30",
 		"claudio analyze usage --preset today",
-		"fallback levels",
+		"chain",
 		"optimization opportunities",
 	}
 

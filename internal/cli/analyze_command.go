@@ -424,7 +424,7 @@ func newAnalyzeUsageCommand() *cobra.Command {
 	var category string
 	var limit int
 	var preset string
-	var showFallbacks bool
+	var showChains bool
 	var showSummary bool
 
 	usageCmd := &cobra.Command{
@@ -433,12 +433,12 @@ func newAnalyzeUsageCommand() *cobra.Command {
 		Long: `Show actual sound usage patterns and statistics from the tracking database.
 
 This command analyzes which sounds were actually played, how often they were used,
-and what fallback levels were reached. This helps you understand your soundpack
-effectiveness and identify optimization opportunities.
+and which fallback chain (Enhanced/PostTool/Simple) Claudio walked. This helps you
+understand your soundpack effectiveness and identify optimization opportunities.
 
 The results show:
 - Most frequently played sounds
-- Fallback level statistics (lower levels = better sound coverage)  
+- Per-chain-type statistics (event count and average depth into the chain)
 - Tool usage patterns
 - Category distribution
 
@@ -448,10 +448,10 @@ Examples:
   claudio analyze usage --preset today    # Today only
   claudio analyze usage --tool Edit       # Edit tool only
   claudio analyze usage --category success # Success sounds only
-  claudio analyze usage --show-fallbacks  # Include fallback statistics
+  claudio analyze usage --show-chains     # Include chain-type statistics
   claudio analyze usage --show-summary    # Show summary statistics`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runAnalyzeUsage(cmd, days, tool, category, limit, preset, showFallbacks, showSummary)
+			return runAnalyzeUsage(cmd, days, tool, category, limit, preset, showChains, showSummary)
 		},
 	}
 
@@ -461,14 +461,14 @@ Examples:
 	usageCmd.Flags().StringVar(&category, "category", "", "Filter by category (success, error, loading, interactive)")
 	usageCmd.Flags().IntVar(&limit, "limit", 20, "Maximum number of results to show")
 	usageCmd.Flags().StringVar(&preset, "preset", "", "Date preset (today, yesterday, last-week, this-month, all-time)")
-	usageCmd.Flags().BoolVar(&showFallbacks, "show-fallbacks", false, "Show fallback level statistics")
+	usageCmd.Flags().BoolVar(&showChains, "show-chains", false, "Show per-chain-type statistics")
 	usageCmd.Flags().BoolVar(&showSummary, "show-summary", false, "Show usage summary statistics")
 
 	return usageCmd
 }
 
 // runAnalyzeUsage executes the analyze usage command
-func runAnalyzeUsage(cmd *cobra.Command, days int, tool, category string, limit int, preset string, showFallbacks, showSummary bool) error {
+func runAnalyzeUsage(cmd *cobra.Command, days int, tool, category string, limit int, preset string, showChains, showSummary bool) error {
 	slog.Debug("running analyze usage command", "days", days, "tool", tool, "category", category, "limit", limit, "preset", preset)
 
 	// Extract CLI instance from context
@@ -505,7 +505,7 @@ func runAnalyzeUsage(cmd *cobra.Command, days int, tool, category string, limit 
 	}
 
 	// Output results
-	if err := outputUsageStatistics(cmd.OutOrStdout(), usage, filter, showFallbacks, showSummary, cli.trackingDB); err != nil {
+	if err := outputUsageStatistics(cmd.OutOrStdout(), usage, filter, showChains, showSummary, cli.trackingDB); err != nil {
 		return fmt.Errorf("failed to output usage statistics: %w", err)
 	}
 
@@ -513,7 +513,7 @@ func runAnalyzeUsage(cmd *cobra.Command, days int, tool, category string, limit 
 }
 
 // outputUsageStatistics formats and outputs usage statistics
-func outputUsageStatistics(w io.Writer, usage []tracking.SoundUsage, filter tracking.QueryFilter, showFallbacks, showSummary bool, db interface{}) error {
+func outputUsageStatistics(w io.Writer, usage []tracking.SoundUsage, filter tracking.QueryFilter, showChains, showSummary bool, db interface{}) error {
 	if len(usage) == 0 {
 		fmt.Fprintln(w, "No sound usage data found for the specified criteria.")
 		
@@ -595,17 +595,21 @@ func outputUsageStatistics(w io.Writer, usage []tracking.SoundUsage, filter trac
 		fmt.Fprintln(w)
 	}
 
-	// Show fallback statistics if requested
-	if showFallbacks {
+	// Show per-chain-type statistics if requested
+	if showChains {
 		if dbConn, ok := db.(*sql.DB); ok {
-			fmt.Fprintln(w, "\nFallback Level Statistics:")
-			fmt.Fprintln(w, "--------------------------")
-			
-			fallbackStats, err := tracking.GetFallbackStatistics(dbConn, filter)
+			fmt.Fprintln(w, "\nChain Type Statistics:")
+			fmt.Fprintln(w, "----------------------")
+
+			chainStats, err := tracking.GetChainTypeStatistics(dbConn, filter)
 			if err == nil {
-				for _, stat := range fallbackStats {
-					fmt.Fprintf(w, "Level %d: %d events (%.1f%%) - %s\n",
-						stat.FallbackLevel, stat.Count, stat.Percentage, stat.Description)
+				for _, stat := range chainStats {
+					label := stat.ChainType
+					if label == "" {
+						label = "(unrecorded)"
+					}
+					fmt.Fprintf(w, "%s: %d events (%.1f%%), avg depth %.1f\n",
+						label, stat.EventCount, stat.Percentage, stat.AvgDepth)
 				}
 			}
 		}
@@ -613,31 +617,13 @@ func outputUsageStatistics(w io.Writer, usage []tracking.SoundUsage, filter trac
 
 	// Footer with actionable advice
 	fmt.Fprintln(w, "\nTo improve your sound coverage:")
-	fmt.Fprintln(w, "  1. Focus on sounds with higher fallback levels")
+	fmt.Fprintln(w, "  1. Focus on sounds at deeper positions in their fallback chain")
 	fmt.Fprintln(w, "  2. Create specific sounds for frequently used tools")
-	fmt.Fprintln(w, "  3. Use --show-fallbacks to see detailed fallback statistics")
-	
+	fmt.Fprintln(w, "  3. Use --show-chains to see per-chain-type statistics")
+
 	if !showSummary {
 		fmt.Fprintln(w, "  4. Use --show-summary to see overall statistics")
 	}
 
 	return nil
-}
-
-// getFallbackLevelDescription returns a short description for fallback levels
-func getFallbackLevelDescription(level int) string {
-	switch level {
-	case 1:
-		return "exact match"
-	case 2:
-		return "tool-specific"
-	case 3:
-		return "operation-specific" 
-	case 4:
-		return "category-specific"
-	case 5:
-		return "default fallback"
-	default:
-		return fmt.Sprintf("level %d", level)
-	}
 }

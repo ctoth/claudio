@@ -517,13 +517,128 @@ func TestGetCategoryDistribution(t *testing.T) {
 	}
 }
 
-// TestGetFallbackStatistics_Deprecated asserts the function returns the
-// deprecation error in schema v2. The function (and the test) will be
-// deleted in the analyzer-surface cleanup commit.
-func TestGetFallbackStatistics_Deprecated(t *testing.T) {
+// TestGetChainTypeStatistics asserts the new per-chain-type analytics
+// surface that replaced fallback_level aggregation. Each event's
+// chain_type is recorded; depth comes from the path_lookups row whose
+// path matches selected_path.
+func TestGetChainTypeStatistics(t *testing.T) {
 	db := setupTestDB(t)
-	_, err := GetFallbackStatistics(db, QueryFilter{})
-	if err == nil {
-		t.Error("expected GetFallbackStatistics to return a deprecation error in schema v2")
+	now := time.Now().Unix()
+
+	// Three events: two "enhanced" (depths 1 and 3) and one "posttool"
+	// (depth 2). Avg depth: enhanced=(1+3)/2=2.0; posttool=2.0.
+	events := []struct {
+		sessionID    string
+		toolName     string
+		selectedPath string
+		chainType    string
+		paths        []struct {
+			path  string
+			seq   int
+			found int
+		}
+	}{
+		{
+			sessionID:    "s1",
+			toolName:     "git",
+			selectedPath: "loading/git-start.wav",
+			chainType:    "enhanced",
+			paths: []struct {
+				path  string
+				seq   int
+				found int
+			}{
+				{"loading/git-start.wav", 1, 1},
+			},
+		},
+		{
+			sessionID:    "s2",
+			toolName:     "bash",
+			selectedPath: "loading/loading.wav",
+			chainType:    "enhanced",
+			paths: []struct {
+				path  string
+				seq   int
+				found int
+			}{
+				{"loading/bash-start.wav", 1, 0},
+				{"loading/bash.wav", 2, 0},
+				{"loading/loading.wav", 3, 1},
+			},
+		},
+		{
+			sessionID:    "s3",
+			toolName:     "edit",
+			selectedPath: "success/edit-success.wav",
+			chainType:    "posttool",
+			paths: []struct {
+				path  string
+				seq   int
+				found int
+			}{
+				{"success/edit-success.wav", 2, 1},
+			},
+		},
+	}
+
+	for i, e := range events {
+		res, err := db.Exec(`INSERT INTO hook_events
+			(timestamp, session_id, tool_name, selected_path, chain_type, context)
+			VALUES (?, ?, ?, ?, ?, '{"Category":1,"ToolName":"`+e.toolName+`"}')`,
+			now-int64(i*60), e.sessionID, e.toolName, e.selectedPath, e.chainType)
+		if err != nil {
+			t.Fatalf("insert event %d: %v", i, err)
+		}
+		eventID, _ := res.LastInsertId()
+		for _, p := range e.paths {
+			if _, err := db.Exec(`INSERT INTO path_lookups (event_id, path, sequence, found) VALUES (?, ?, ?, ?)`,
+				eventID, p.path, p.seq, p.found); err != nil {
+				t.Fatalf("insert path lookup: %v", err)
+			}
+		}
+	}
+
+	stats, err := GetChainTypeStatistics(db, QueryFilter{})
+	if err != nil {
+		t.Fatalf("GetChainTypeStatistics: %v", err)
+	}
+	if len(stats) != 2 {
+		t.Fatalf("expected 2 chain-type rows, got %d", len(stats))
+	}
+
+	byChain := map[string]ChainTypeStatistic{}
+	for _, s := range stats {
+		byChain[s.ChainType] = s
+	}
+
+	enh, ok := byChain["enhanced"]
+	if !ok {
+		t.Fatal("expected 'enhanced' chain type in results")
+	}
+	if enh.EventCount != 2 {
+		t.Errorf("expected enhanced EventCount=2, got %d", enh.EventCount)
+	}
+	if enh.AvgDepth < 1.99 || enh.AvgDepth > 2.01 {
+		t.Errorf("expected enhanced AvgDepth=2.0, got %.2f", enh.AvgDepth)
+	}
+
+	post, ok := byChain["posttool"]
+	if !ok {
+		t.Fatal("expected 'posttool' chain type in results")
+	}
+	if post.EventCount != 1 {
+		t.Errorf("expected posttool EventCount=1, got %d", post.EventCount)
+	}
+	if post.AvgDepth < 1.99 || post.AvgDepth > 2.01 {
+		t.Errorf("expected posttool AvgDepth=2.0, got %.2f", post.AvgDepth)
+	}
+
+	// Percentages: enhanced 66.7%, posttool 33.3%. Sum to 100.
+	totalPct := 0.0
+	for _, s := range stats {
+		totalPct += s.Percentage
+	}
+	if totalPct < 99.9 || totalPct > 100.1 {
+		t.Errorf("expected percentages to sum to ~100, got %.2f", totalPct)
 	}
 }
