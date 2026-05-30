@@ -567,3 +567,157 @@ func TestPlaySound_ContextInitOnce_NoRace(t *testing.T) {
 		}
 	}
 }
+
+// TestStopAll_NoDoubleFree asserts the deviceEntry.uninitOnce wrapper
+// prevents a double-Uninit on the same *malgo.Device when StopAll races
+// with PlaySoundWithContext's inline cleanup. Before the wrapper, the
+// snapshot iteration in StopAll and the per-sound goroutine's deferred
+// cleanup would both call device.Uninit() on the same pointer — a real
+// C-side double-free per malgo semantics. With uninitOnce, only the first
+// caller reaches malgo; the second is a no-op.
+//
+// The Go race detector does not see C-side double-frees, so this test
+// asserts the behavioural guarantee: no panic, no crash, IsPlaying false
+// after both paths return. Regression for review finding #33.
+func TestStopAll_NoDoubleFree(t *testing.T) {
+	player := NewAudioPlayer()
+	defer func() { _ = player.Close() }()
+
+	testData := &AudioData{
+		Samples:    make([]byte, 16*1024),
+		Channels:   1,
+		SampleRate: 44100,
+		Format:     malgo.FormatS16,
+	}
+	soundID := "double-free-test"
+	if err := player.PreloadSound(soundID, testData); err != nil {
+		t.Fatalf("PreloadSound: %v", err)
+	}
+
+	var playErr error
+	playDone := make(chan struct{})
+	go func() {
+		defer close(playDone)
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		playErr = player.PlaySoundWithContext(ctx, soundID)
+	}()
+
+	// Let the Play goroutine register the device.
+	time.Sleep(50 * time.Millisecond)
+
+	// Race StopAll against the in-flight Play. With uninitOnce both call
+	// sites are safe; without it, this is the double-free path.
+	if err := player.StopAll(); err != nil {
+		t.Errorf("StopAll: %v", err)
+	}
+
+	<-playDone
+	skipIfNoAudioDevice(t, playErr)
+	if playErr != nil {
+		t.Errorf("PlaySoundWithContext goroutine returned: %v", playErr)
+	}
+	if player.IsPlaying() {
+		t.Error("IsPlaying should be false after StopAll + play completion")
+	}
+}
+
+// TestStop_ActuallyHaltsPlayback asserts Stop now halts playback the way
+// every caller assumed. Before this change Stop only flipped an isPlaying
+// flag without touching any malgo device — playback continued, but
+// IsPlaying reported false. Now Stop delegates to StopAll. Regression for
+// review finding #36.
+func TestStop_ActuallyHaltsPlayback(t *testing.T) {
+	player := NewAudioPlayer()
+	defer func() { _ = player.Close() }()
+
+	testData := &AudioData{
+		Samples:    make([]byte, 64*1024), // long-ish to give Stop time to win
+		Channels:   1,
+		SampleRate: 44100,
+		Format:     malgo.FormatS16,
+	}
+	soundID := "stop-halts-test"
+	if err := player.PreloadSound(soundID, testData); err != nil {
+		t.Fatalf("PreloadSound: %v", err)
+	}
+
+	playDone := make(chan error, 1)
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		playDone <- player.PlaySoundWithContext(ctx, soundID)
+	}()
+
+	// Give Play time to register its device. If no audio device is present,
+	// PlaySoundWithContext returns quickly with an init error — channel
+	// signals before the deadline.
+	time.Sleep(100 * time.Millisecond)
+
+	if err := player.Stop(); err != nil {
+		t.Errorf("Stop returned error: %v", err)
+	}
+
+	// IsPlaying must flip false within a bounded window after Stop returns.
+	deadline := time.Now().Add(200 * time.Millisecond)
+	for player.IsPlaying() && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if player.IsPlaying() {
+		t.Error("IsPlaying should be false within 200ms of Stop()")
+	}
+
+	select {
+	case err := <-playDone:
+		skipIfNoAudioDevice(t, err)
+		// non-nil err is acceptable: ctx may have cancelled or device
+		// uninit propagated, depending on timing. The contract this test
+		// guards is "Stop halts and IsPlaying flips" — both already
+		// asserted above.
+		_ = err
+	case <-time.After(2 * time.Second):
+		t.Error("Play goroutine did not return within 2s after Stop")
+	}
+}
+
+// TestIsPlaying_ReflectsDeviceCount asserts IsPlaying is now derived from
+// len(p.devices) under deviceMutex — the device map is the single source
+// of truth for playback state. Empty map => false; populated map => true.
+// This is a device-free test that exercises the new derivation directly
+// without requiring audio hardware. Regression for Chunk 9c analyst's L-2.
+func TestIsPlaying_ReflectsDeviceCount(t *testing.T) {
+	player := NewAudioPlayer()
+	defer func() { _ = player.Close() }()
+
+	if player.IsPlaying() {
+		t.Error("fresh AudioPlayer should not be playing")
+	}
+
+	// Inject a fake entry into the device map. We intentionally use a nil
+	// *malgo.Device — deviceEntry.uninit() handles the nil case so Close's
+	// StopAll teardown remains safe.
+	player.deviceMutex.Lock()
+	player.devices["fake-1"] = &deviceEntry{device: nil}
+	player.deviceMutex.Unlock()
+
+	if !player.IsPlaying() {
+		t.Error("IsPlaying should be true when device map is non-empty")
+	}
+
+	player.deviceMutex.Lock()
+	player.devices["fake-2"] = &deviceEntry{device: nil}
+	player.deviceMutex.Unlock()
+
+	if !player.IsPlaying() {
+		t.Error("IsPlaying should remain true with multiple entries")
+	}
+
+	player.deviceMutex.Lock()
+	delete(player.devices, "fake-1")
+	delete(player.devices, "fake-2")
+	player.deviceMutex.Unlock()
+
+	if player.IsPlaying() {
+		t.Error("IsPlaying should be false after device map is emptied")
+	}
+}

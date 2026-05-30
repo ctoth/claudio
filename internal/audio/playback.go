@@ -14,6 +14,30 @@ import (
 	"github.com/gen2brain/malgo"
 )
 
+// deviceEntry wraps a malgo.Device with a sync.Once gating Uninit so that
+// concurrent teardown paths (per-sound inline cleanup in PlaySoundWithContext,
+// StopAll's snapshot iteration, Close's delegation to StopAll) cannot
+// double-free the same C-side device. malgo.Device.Uninit calls
+// `dev.free()` on the underlying C struct; a second call is a real
+// double-free, not just a stale Go reference.
+type deviceEntry struct {
+	device     *malgo.Device
+	uninitOnce sync.Once
+}
+
+// uninit stops and uninits the wrapped device exactly once, regardless of
+// how many goroutines reach the teardown path. Safe to call any number of
+// times from any goroutine.
+func (e *deviceEntry) uninit() {
+	e.uninitOnce.Do(func() {
+		if e.device == nil {
+			return
+		}
+		_ = e.device.Stop()
+		e.device.Uninit()
+	})
+}
+
 // AudioPlayer implements memory-based audio playback using malgo.
 //
 // Always construct via NewAudioPlayer — a zero-value AudioPlayer has volume 0
@@ -22,13 +46,16 @@ import (
 type AudioPlayer struct {
 	context *Context
 	sounds  map[string]*AudioData
-	devices map[string]*malgo.Device
+	// devices maps soundID -> *deviceEntry. The map is the single source of
+	// truth for "is anything playing": IsPlaying() returns len(devices) > 0
+	// under deviceMutex, and there is no separate isPlaying bool to drift
+	// out of sync.
+	devices map[string]*deviceEntry
 	// volume holds the playback gain (0.0..1.0) as a float32 encoded via
 	// math.Float32bits and accessed atomically. Lock-free access is mandatory:
 	// the malgo realtime audio callback reads this on every buffer fill and
 	// must never block (see PlaySoundWithContext's onSamples closure).
 	volume      atomic.Uint32
-	isPlaying   bool
 	mutex       sync.RWMutex
 	deviceMutex sync.Mutex
 	closed      bool
@@ -44,10 +71,10 @@ type AudioPlayer struct {
 // NewAudioPlayer creates a new audio player instance
 func NewAudioPlayer() *AudioPlayer {
 	slog.Debug("creating new audio player instance")
-	
+
 	player := &AudioPlayer{
 		sounds:  make(map[string]*AudioData),
-		devices: make(map[string]*malgo.Device),
+		devices: make(map[string]*deviceEntry),
 		mutex:   sync.RWMutex{},
 	}
 	// atomic.Uint32 cannot be initialised in a struct literal with a non-zero
@@ -58,11 +85,13 @@ func NewAudioPlayer() *AudioPlayer {
 	return player
 }
 
-// IsPlaying returns true if any audio is currently playing
+// IsPlaying returns true if any audio is currently playing. The device map
+// is the single source of truth — a non-empty map means at least one malgo
+// device is live. Eliminates the prior isPlaying-vs-actual-state drift.
 func (p *AudioPlayer) IsPlaying() bool {
-	p.mutex.RLock()
-	defer p.mutex.RUnlock()
-	return p.isPlaying
+	p.deviceMutex.Lock()
+	defer p.deviceMutex.Unlock()
+	return len(p.devices) > 0
 }
 
 // GetVolume returns the current volume level (0.0 to 1.0). Lock-free; safe to
@@ -320,99 +349,89 @@ func (p *AudioPlayer) PlaySoundWithContext(ctx context.Context, soundID string) 
 	}
 	
 	slog.Debug("playback device initialized", "sound_id", soundID)
-	
-	// Store device for cleanup
+
+	// Wrap in a deviceEntry whose uninitOnce makes Uninit idempotent. Both
+	// this goroutine's inline cleanup and any concurrent StopAll/Close can
+	// call entry.uninit() safely; only the first call reaches malgo.
+	entry := &deviceEntry{device: device}
+
+	// Store entry for cleanup
 	p.deviceMutex.Lock()
-	p.devices[soundID] = device
+	p.devices[soundID] = entry
 	p.deviceMutex.Unlock()
-	
+
 	// Start playback
 	err = device.Start()
 	if err != nil {
-		device.Uninit()
+		entry.uninit()
 		p.deviceMutex.Lock()
 		delete(p.devices, soundID)
 		p.deviceMutex.Unlock()
 		slog.Error("failed to start playback", "sound_id", soundID, "error", err)
 		return fmt.Errorf("failed to start playback: %w", err)
 	}
-	
-	p.mutex.Lock()
-	p.isPlaying = true
-	p.mutex.Unlock()
-	
+
 	slog.Debug("sound playback started successfully", "sound_id", soundID)
-	
+
 	// Estimate playback duration
 	duration := time.Duration(totalFrames) * time.Second / time.Duration(audioData.SampleRate)
-	
+
 	// Wait for playback to complete or context cancellation
 	timer := time.NewTimer(duration + 500*time.Millisecond) // Add buffer for callback processing
 	defer timer.Stop()
-	
+
 	select {
 	case <-ctx.Done():
 		slog.Debug("playback context cancelled", "sound_id", soundID)
 	case <-timer.C:
 		slog.Debug("playback duration elapsed", "sound_id", soundID)
 	}
-	
-	// Cleanup device
-	_ = device.Stop()
-	device.Uninit()
-	
+
+	// Cleanup device — idempotent via deviceEntry.uninitOnce. Map removal
+	// must precede the IsPlaying-derived state observation.
+	entry.uninit()
+
 	p.deviceMutex.Lock()
 	delete(p.devices, soundID)
-	p.deviceMutex.Unlock()
-	
-	// Update playing status if no more devices
-	p.deviceMutex.Lock()
 	stillPlaying := len(p.devices) > 0
 	p.deviceMutex.Unlock()
-	
-	p.mutex.Lock()
-	p.isPlaying = stillPlaying
-	p.mutex.Unlock()
 	
 	slog.Debug("sound playback cleanup completed", "sound_id", soundID, "still_playing", stillPlaying)
 	return nil
 }
 
-// Stop stops the current sound (for single-sound scenarios)
+// Stop halts all currently playing sounds. Previously this method only
+// flipped an isPlaying flag without touching any malgo device — playback
+// continued, but IsPlaying reported false. Stop is now an alias for
+// StopAll, the only semantically-correct behaviour for a player with no
+// per-sound handle in its public API.
 func (p *AudioPlayer) Stop() error {
-	slog.Debug("stopping current sound playback")
-	
-	p.mutex.Lock()
-	p.isPlaying = false
-	p.mutex.Unlock()
-	
-	slog.Debug("sound playback stopped")
-	return nil
+	slog.Debug("stopping current sound playback (delegating to StopAll)")
+	return p.StopAll()
 }
 
-// StopAll stops all currently playing sounds
+// StopAll stops all currently playing sounds. Each device's uninitOnce
+// makes the teardown safe even if a per-sound goroutine is racing to its
+// own inline cleanup — only the first uninit call reaches malgo.
 func (p *AudioPlayer) StopAll() error {
 	slog.Debug("stopping all sound playback")
-	
+
 	p.deviceMutex.Lock()
-	devices := make([]*malgo.Device, 0, len(p.devices))
-	for _, device := range p.devices {
-		devices = append(devices, device)
+	entries := make([]*deviceEntry, 0, len(p.devices))
+	for _, entry := range p.devices {
+		entries = append(entries, entry)
 	}
-	p.devices = make(map[string]*malgo.Device) // Clear map
+	p.devices = make(map[string]*deviceEntry) // Clear map
 	p.deviceMutex.Unlock()
-	
-	// Stop and cleanup all devices
-	for _, device := range devices {
-		_ = device.Stop()
-		device.Uninit()
+
+	// Uninit each entry. The uninitOnce inside deviceEntry guarantees this
+	// is safe even when a per-sound goroutine is concurrently uninitting
+	// the same entry from PlaySoundWithContext's deferred cleanup path.
+	for _, entry := range entries {
+		entry.uninit()
 	}
-	
-	p.mutex.Lock()
-	p.isPlaying = false
-	p.mutex.Unlock()
-	
-	slog.Debug("all sound playback stopped", "devices_stopped", len(devices))
+
+	slog.Debug("all sound playback stopped", "devices_stopped", len(entries))
 	return nil
 }
 
