@@ -212,6 +212,21 @@ func runSoundpackAdd(cmd *cobra.Command, source, requestedName, ref, subdir stri
 		return err
 	}
 
+	// Resolve subdir to its canonical form once. An empty/dot subdir must
+	// serialize as "" so it omits from the registry JSON; anything else
+	// is normalized via filepath.Clean and slashified for cross-platform
+	// stability. The previous implementation wrote the entry twice — the
+	// first write filled in Subdir even when it should have been empty,
+	// then a conditional re-wrote without it — which depended on the
+	// second write succeeding.
+	cleanedSubdir := ""
+	if subdir != "" {
+		cleaned := filepath.ToSlash(filepath.Clean(subdir))
+		if cleaned != "." {
+			cleanedSubdir = cleaned
+		}
+	}
+
 	now := time.Now().UTC().Format(time.RFC3339)
 	registry.Packs[name] = gitSoundpackRecord{
 		Name:           name,
@@ -219,22 +234,10 @@ func runSoundpackAdd(cmd *cobra.Command, source, requestedName, ref, subdir stri
 		URL:            url,
 		Ref:            ref,
 		ResolvedCommit: commit,
-		Subdir:         filepath.ToSlash(filepath.Clean(subdir)),
+		Subdir:         cleanedSubdir,
 		Path:           clonePath,
 		InstalledAt:    now,
 		UpdatedAt:      now,
-	}
-	if subdir == "" {
-		registry.Packs[name] = gitSoundpackRecord{
-			Name:           name,
-			SourceType:     gitSoundpackSourceType,
-			URL:            url,
-			Ref:            ref,
-			ResolvedCommit: commit,
-			Path:           clonePath,
-			InstalledAt:    now,
-			UpdatedAt:      now,
-		}
 	}
 
 	if err := saveSoundpackRegistry(registry); err != nil {
