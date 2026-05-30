@@ -32,6 +32,14 @@ type SoundpackResolver interface {
 // the input candidates slice); exists indicates whether the candidate resolved
 // to a file present on disk. Observers MUST NOT mutate the path or block —
 // resolution is on the hot hook path.
+//
+// Concurrency: the current UnifiedSoundpackResolver fires the observer
+// synchronously from a single goroutine, so a non-goroutine-safe observer
+// is correct today. The PathObserver contract however reserves the right
+// for future resolver implementations to fan resolution out across
+// goroutines (e.g. parallel os.Stat), so observers SHOULD be goroutine-
+// safe. tracking.LookupBuffer's observer takes an internal sync.Mutex
+// precisely for this reason.
 type PathObserver func(path string, sequence int, exists bool)
 
 // ResolveOption configures a single ResolveSoundWithFallback call.
@@ -62,15 +70,6 @@ func buildResolveConfig(opts []ResolveOption) resolveConfig {
 		}
 	}
 	return cfg
-}
-
-// ExtractObserverForTest folds the variadic options into a config and
-// returns the resulting PathObserver (nil if none was wired). Exported only
-// so that test-double resolvers in other packages can implement the
-// observer-firing contract without having to mirror the private
-// resolveConfig structure. NOT for production use.
-func ExtractObserverForTest(opts ...ResolveOption) PathObserver {
-	return buildResolveConfig(opts).observer
 }
 
 // UnifiedSoundpackResolver implements SoundpackResolver using any PathMapper

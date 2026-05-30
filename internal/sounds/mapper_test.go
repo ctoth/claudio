@@ -2,7 +2,6 @@ package sounds
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -12,6 +11,18 @@ import (
 	"claudio.click/internal/hooks"
 	"claudio.click/internal/soundpack"
 )
+
+// newTestResolver builds a real soundpack.SoundpackResolver backed by a
+// JSONMapper. The mapping is logical-path → physical-absolute-path. Tests
+// must create the physical files on disk (typically under t.TempDir()) so
+// that os.Stat inside the resolver finds them.
+//
+// Using the real UnifiedSoundpackResolver keeps the observer-firing
+// contract end-to-end — there's no hand-rolled mock to keep in sync with
+// the production resolver's observer semantics.
+func newTestResolver(mappings map[string]string) soundpack.SoundpackResolver {
+	return soundpack.NewSoundpackResolver(soundpack.NewJSONMapper("test", mappings))
+}
 
 func TestSoundMapper(t *testing.T) {
 	mapper := NewSoundMapper()
@@ -814,14 +825,14 @@ func TestSoundMapper_BugReproduction_AllPathsFallbackToDefault(t *testing.T) {
 	err = os.WriteFile(defaultFile, []byte("test"), 0644)
 	require.NoError(t, err)
 	
-	// Mock resolver that maps specific sounds
-	resolver := &MockSoundpackResolver{
-		mappings: map[string]string{
-			"success/bash-success.wav": bashSuccessFile, // This should be found
-			"default.wav": defaultFile,
-		},
+	// Real resolver mapping logical → physical absolute paths. Anything not
+	// in the map produces a MapPath miss, so the resolver walks the chain
+	// the same way the production resolver does.
+	resolver := newTestResolver(map[string]string{
+		"success/bash-success.wav": bashSuccessFile, // This should be found
+		"default.wav":              defaultFile,
 		// Note: success/tool-complete.wav and success/success.wav are NOT mapped
-	}
+	})
 	
 	mapper := NewSoundMapperWithResolver(resolver)
 	
@@ -857,11 +868,9 @@ func TestSoundMapper_BugReproduction_NoSpecificSoundFallsToDefault(t *testing.T)
 	require.NoError(t, err)
 	
 	// Resolver only has default.wav, no specific sounds
-	resolver := &MockSoundpackResolver{
-		mappings: map[string]string{
-			"default.wav": defaultFile,
-		},
-	}
+	resolver := newTestResolver(map[string]string{
+		"default.wav": defaultFile,
+	})
 	
 	mapper := NewSoundMapperWithResolver(resolver)
 	
@@ -884,49 +893,6 @@ func TestSoundMapper_BugReproduction_NoSpecificSoundFallsToDefault(t *testing.T)
 		t.Errorf("Expected fallback level %d (last), got %d", len(result.AllPaths), result.FallbackLevel)
 	}
 }
-
-// MockSoundpackResolver for testing (same as in types_test.go)
-type MockSoundpackResolver struct {
-	mappings map[string]string
-}
-
-func (m *MockSoundpackResolver) ResolveSound(relativePath string) (string, error) {
-	if physical, exists := m.mappings[relativePath]; exists {
-		return physical, nil
-	}
-	return "", fmt.Errorf("sound not found: %s", relativePath)
-}
-
-// ResolveSoundWithFallback satisfies the soundpack.SoundpackResolver
-// interface. The mock walks the candidates calling ResolveSound on each and
-// fires the wired observer per candidate, mirroring the real
-// UnifiedSoundpackResolver's contract: observer fires once per input
-// candidate in order, with 1-based sequence; post-winner remaining
-// candidates fire with exists=false to preserve chain-shape telemetry.
-func (m *MockSoundpackResolver) ResolveSoundWithFallback(paths []string, opts ...soundpack.ResolveOption) (string, error) {
-	obs := soundpack.ExtractObserverForTest(opts...)
-	fire := func(path string, sequence int, exists bool) {
-		if obs != nil {
-			obs(path, sequence, exists)
-		}
-	}
-
-	for i, path := range paths {
-		resolved, err := m.ResolveSound(path)
-		exists := err == nil
-		fire(path, i+1, exists)
-		if exists {
-			for j := i + 1; j < len(paths); j++ {
-				fire(paths[j], j+1, false)
-			}
-			return resolved, nil
-		}
-	}
-	return "", fmt.Errorf("no sounds found in fallback chain")
-}
-
-func (m *MockSoundpackResolver) GetName() string { return "mock" }
-func (m *MockSoundpackResolver) GetType() string { return "mock" }
 
 // observerCall captures one PathObserver invocation for assertions.
 type observerCall struct {
@@ -961,14 +927,12 @@ func TestMapSound_ObserverFiresOncePerChainCandidate(t *testing.T) {
 	if err := os.WriteFile(defaultFile, []byte("test"), 0644); err != nil {
 		t.Fatalf("write default.wav: %v", err)
 	}
-	resolver := &MockSoundpackResolver{
-		mappings: map[string]string{
-			"default.wav": defaultFile,
-			// All other paths intentionally absent — forces the resolver to
-			// walk the entire chain so the observer stream is fully populated
-			// and the dedup invariant has something to chew on.
-		},
-	}
+	// Only default.wav is mapped — every other chain candidate produces a
+	// MapPath miss, so the resolver walks the entire chain and the observer
+	// stream is fully populated for the dedup invariant to chew on.
+	resolver := newTestResolver(map[string]string{
+		"default.wav": defaultFile,
+	})
 
 	tests := []struct {
 		name              string
@@ -1094,9 +1058,7 @@ func TestMapSound_NilObserver_NoPanic(t *testing.T) {
 	if err := os.WriteFile(defaultFile, []byte("test"), 0644); err != nil {
 		t.Fatalf("write default.wav: %v", err)
 	}
-	resolver := &MockSoundpackResolver{
-		mappings: map[string]string{"default.wav": defaultFile},
-	}
+	resolver := newTestResolver(map[string]string{"default.wav": defaultFile})
 
 	// No WithObserver option.
 	mapper := NewSoundMapperWithResolver(resolver)

@@ -1,8 +1,10 @@
 package tracking
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -95,5 +97,73 @@ func TestLookupBuffer_IntegratesWithSoundpackResolver(t *testing.T) {
 	}
 	if got[1].Path != "success/present.wav" || !got[1].Found {
 		t.Errorf("Lookups[1]=%+v, want {present,true}", got[1])
+	}
+}
+
+// TestLookupBuffer_ConcurrentObserverCallsRaceClean asserts the
+// buffer is goroutine-safe under -race: two goroutines hammering the
+// same Observer() closure with N appends each must produce 2N entries
+// without a data race. This locks the contract documented on
+// soundpack.PathObserver that observers SHOULD be safe to invoke
+// concurrently, even though today's resolver fires them sequentially.
+func TestLookupBuffer_ConcurrentObserverCallsRaceClean(t *testing.T) {
+	buf := NewLookupBuffer()
+	obs := buf.Observer()
+	const n = 1000
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < n; i++ {
+			obs(fmt.Sprintf("path-a-%d", i), i+1, i%2 == 0)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < n; i++ {
+			obs(fmt.Sprintf("path-b-%d", i), i+1, true)
+		}
+	}()
+	wg.Wait()
+
+	got := buf.Lookups()
+	if len(got) != 2*n {
+		t.Errorf("expected %d lookups, got %d", 2*n, len(got))
+	}
+}
+
+// TestLookupBuffer_LookupsReturnsCopy asserts that Lookups() returns a
+// fresh slice independent of the buffer's backing array — mutating the
+// returned slice MUST NOT affect future Lookups() reads, and a later
+// observer callback that appends to the buffer MUST NOT show through
+// into a previously-returned slice.
+func TestLookupBuffer_LookupsReturnsCopy(t *testing.T) {
+	buf := NewLookupBuffer()
+	obs := buf.Observer()
+	obs("path1", 1, true)
+
+	first := buf.Lookups()
+	if len(first) != 1 {
+		t.Fatalf("first snapshot len=%d want 1", len(first))
+	}
+
+	// Mutating the returned slice must not affect the buffer.
+	first[0].Path = "tampered"
+
+	obs("path2", 2, false)
+	second := buf.Lookups()
+	if len(second) != 2 {
+		t.Fatalf("second snapshot len=%d want 2", len(second))
+	}
+	if second[0].Path != "path1" {
+		t.Errorf("buffer corrupted by caller mutation: second[0].Path=%q want %q",
+			second[0].Path, "path1")
+	}
+
+	// The first snapshot must not have grown when the new observer
+	// callback appended into the buffer.
+	if len(first) != 1 {
+		t.Errorf("previously-returned snapshot grew to %d entries", len(first))
 	}
 }
