@@ -493,8 +493,11 @@ func runStdinModeE(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Initialize tracking (before audio system initialization)
-	cli.initializeTracking()
+	// Initialize tracking (before audio system initialization). Pass the
+	// already-loaded cfg so a user-supplied --config is honored
+	// (initializeTracking previously called LoadConfig itself, dropping
+	// the override).
+	cli.initializeTracking(cfg)
 
 	// Initialize audio and soundpack systems
 	err = initializeAudioSystem(cmd, cli, cfg)
@@ -778,8 +781,12 @@ func setupLogging(cfg *config.Config, stderrWriter io.Writer) {
 		"file_enabled", cfg.FileLogging != nil && cfg.FileLogging.Enabled)
 }
 
-// initializeTracking initializes the tracking database if enabled in configuration
-func (c *CLI) initializeTracking() {
+// initializeTracking initializes the tracking database if enabled in the
+// supplied configuration. The caller must pass the cfg they already
+// loaded — re-loading inside this function (the previous behavior) lost
+// any --config override the user passed, because the second LoadConfig
+// went through the env+default search path instead.
+func (c *CLI) initializeTracking(cfg *config.Config) {
 	slog.Debug("initializeTracking() called", "trackingDB_nil", c.trackingDB == nil)
 
 	if c.trackingDB != nil {
@@ -787,15 +794,10 @@ func (c *CLI) initializeTracking() {
 		return // Already initialized
 	}
 
-	// Load config to check if tracking is enabled
-	cfg, err := c.configManager.LoadConfig()
-	if err != nil {
-		slog.Debug("failed to load config for tracking initialization, using defaults", "error", err)
-		cfg = c.configManager.GetDefaultConfig()
+	if cfg == nil {
+		slog.Debug("initializeTracking called with nil cfg; skipping")
+		return
 	}
-
-	// Apply environment overrides
-	cfg = c.configManager.ApplyEnvironmentOverrides(cfg)
 
 	slog.Debug("tracking config loaded",
 		"tracking_nil", cfg.SoundTracking == nil,

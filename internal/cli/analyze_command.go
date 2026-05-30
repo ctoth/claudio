@@ -102,8 +102,14 @@ func runAnalyzeMissing(cmd *cobra.Command, days int, tool, category string, limi
 		return fmt.Errorf("CLI instance not found in context")
 	}
 
-	// Ensure tracking database is initialized
-	cli.initializeTracking()
+	// Load config (honoring --config) and pass to tracking init so the
+	// override reaches the tracking database path.
+	cli.initializeConfigManager()
+	cfg, cfgErr := loadAndValidateConfig(cmd, cli)
+	if cfgErr != nil {
+		return cfgErr
+	}
+	cli.initializeTracking(cfg)
 
 	// Check if tracking database is available
 	if cli.trackingDB == nil {
@@ -477,8 +483,14 @@ func runAnalyzeUsage(cmd *cobra.Command, days int, tool, category string, limit 
 		return fmt.Errorf("CLI instance not found in context")
 	}
 
-	// Ensure tracking database is initialized
-	cli.initializeTracking()
+	// Load config (honoring --config) and pass to tracking init so the
+	// override reaches the tracking database path.
+	cli.initializeConfigManager()
+	cfg, cfgErr := loadAndValidateConfig(cmd, cli)
+	if cfgErr != nil {
+		return cfgErr
+	}
+	cli.initializeTracking(cfg)
 
 	// Check if tracking database is available
 	if cli.trackingDB == nil {

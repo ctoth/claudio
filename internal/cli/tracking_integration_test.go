@@ -545,11 +545,73 @@ func TestPerRequestSoundCheckerInitialization(t *testing.T) {
 		if recordedSessionID != session.sessionID {
 			t.Errorf("Expected session ID %s, got %s", session.sessionID, recordedSessionID)
 		}
-		
+
 		// Verify the context contains the correct tool name
 		if !strings.Contains(context, session.toolName) {
 			t.Errorf("Expected context to contain tool name %s, got: %s", session.toolName, context)
 		}
 	}
+}
+
+// TestCLITrackingHonorsConfigFlag covers finding #50: a user-supplied
+// --config file path that enables tracking with a custom database path must
+// reach initializeTracking. Previously initializeTracking re-loaded config
+// itself, going through the env+default search and silently dropping the
+// override.
+func TestCLITrackingHonorsConfigFlag(t *testing.T) {
+	testenv.IsolateXDG(t)
+
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "from-config.db")
+	configPath := filepath.Join(tempDir, "config.json")
+
+	cfgJSON := `{
+		"volume": 0.5,
+		"default_soundpack": "default",
+		"enabled": false,
+		"log_level": "warn",
+		"sound_tracking": {
+			"enabled": true,
+			"database_path": "` + filepath.ToSlash(dbPath) + `"
+		}
+	}`
+	if err := os.WriteFile(configPath, []byte(cfgJSON), 0644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	// Ensure no env override masks the test — we explicitly want to prove
+	// the --config flag is what drove the database path.
+	os.Unsetenv("CLAUDIO_SOUND_TRACKING")
+	os.Unsetenv("CLAUDIO_SOUND_TRACKING_DB")
+
+	cli := NewCLI()
+	hookEvent := hooks.HookEvent{
+		EventName:      "PostToolUse",
+		SessionID:      "config-flag-tracking",
+		TranscriptPath: "/test/transcript",
+		CWD:            "/test/path",
+		ToolName:       stringPtr("Bash"),
+	}
+	hookJSON, err := json.Marshal(hookEvent)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	stdin := bytes.NewReader(hookJSON)
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	exitCode := cli.Run([]string{"claudio", "--config", configPath}, stdin, stdout, stderr)
+	if exitCode != 0 {
+		t.Fatalf("expected exit 0, got %d (stderr=%q)", exitCode, stderr.String())
+	}
+
+	if _, statErr := os.Stat(dbPath); os.IsNotExist(statErr) {
+		t.Errorf("tracking database was not created at config-supplied path %q; --config flag did not reach initializeTracking", dbPath)
+	}
+
+	// Avoid unused-import lint on rare build configurations.
+	_ = time.Now
+	_ = sql.ErrNoRows
 }
 
