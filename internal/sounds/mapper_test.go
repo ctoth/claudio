@@ -1,6 +1,7 @@
 package sounds
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -119,7 +120,7 @@ func TestMapSoundEventSpecificFallback(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := mapper.MapSound(tc.context)
+			result := mapper.MapSound(context.Background(), tc.context)
 
 			// Verify result structure
 			if result == nil {
@@ -180,12 +181,12 @@ func TestMapSoundPathNormalization(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Test normalization through a context that will use the input
-			context := &hooks.EventContext{
+			eventCtx := &hooks.EventContext{
 				Category:  hooks.Loading,
 				SoundHint: tc.input,
 			}
 
-			result := mapper.MapSound(context)
+			result := mapper.MapSound(context.Background(), eventCtx)
 			expected := "loading/" + tc.expected + ".wav"
 
 			if len(result.AllPaths) == 0 {
@@ -262,7 +263,7 @@ func TestMapSoundFallbackSelection(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := mapper.MapSound(tc.context)
+			result := mapper.MapSound(context.Background(), tc.context)
 
 			// Test that the expected paths are generated
 			t.Logf("%s: Generated paths: %v", tc.description, result.AllPaths)
@@ -288,7 +289,7 @@ func TestMapSoundEdgeCases(t *testing.T) {
 	mapper := NewSoundMapper(nil)
 
 	t.Run("nil context", func(t *testing.T) {
-		result := mapper.MapSound(nil)
+		result := mapper.MapSound(context.Background(), nil)
 
 		if result == nil {
 			t.Fatal("MapSound should handle nil context gracefully")
@@ -310,7 +311,7 @@ func TestMapSoundEdgeCases(t *testing.T) {
 	})
 
 	t.Run("empty strings", func(t *testing.T) {
-		result := mapper.MapSound(&hooks.EventContext{
+		result := mapper.MapSound(context.Background(), &hooks.EventContext{
 			Category:  hooks.Interactive,
 			ToolName:  "",
 			SoundHint: "",
@@ -336,11 +337,11 @@ func TestMapSoundEdgeCases(t *testing.T) {
 
 	t.Run("unknown category", func(t *testing.T) {
 		// This tests what happens with an invalid category value
-		context := &hooks.EventContext{
+		eventCtx := &hooks.EventContext{
 			Category: hooks.EventCategory(999), // Invalid category
 		}
 
-		result := mapper.MapSound(context)
+		result := mapper.MapSound(context.Background(), eventCtx)
 
 		// Should still work, falling back to default
 		if len(result.AllPaths) == 0 {
@@ -358,14 +359,14 @@ func TestMapSoundEdgeCases(t *testing.T) {
 func TestMapSoundResultMetadata(t *testing.T) {
 	mapper := NewSoundMapper(nil)
 
-	context := &hooks.EventContext{
+	eventCtx := &hooks.EventContext{
 		Category:  hooks.Success,
 		ToolName:  "Edit",
 		SoundHint: "file-saved",
 		Operation: "tool-complete",
 	}
 
-	result := mapper.MapSound(context)
+	result := mapper.MapSound(context.Background(), eventCtx)
 
 	// Verify all metadata fields are set correctly
 	if result.SelectedPath == "" {
@@ -394,7 +395,7 @@ func TestMapSoundWithOriginalToolFallback(t *testing.T) {
 	mapper := NewSoundMapper(nil)
 
 	// Test context with extracted command but original tool for fallback
-	context := &hooks.EventContext{
+	eventCtx := &hooks.EventContext{
 		Category:     hooks.Success,
 		ToolName:     "git",  // Extracted from Bash
 		OriginalTool: "Bash", // Original tool for fallback
@@ -402,7 +403,7 @@ func TestMapSoundWithOriginalToolFallback(t *testing.T) {
 		Operation:    "tool-complete",
 	}
 
-	result := mapper.MapSound(context)
+	result := mapper.MapSound(context.Background(), eventCtx)
 
 	// PostToolUse 6-level fallback (skips command-only sounds)
 	expectedPaths := []string{
@@ -553,7 +554,7 @@ func TestEventSpecificFallbackChains(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := mapper.MapSound(tt.context)
+			result := mapper.MapSound(context.Background(), tt.context)
 
 			if result == nil {
 				t.Fatal("MapSound returned nil result")
@@ -580,7 +581,7 @@ func TestEventSpecificFallbackChains(t *testing.T) {
 func TestPreToolUse9LevelEnhancedFallback(t *testing.T) {
 	mapper := NewSoundMapper(nil)
 
-	context := &hooks.EventContext{
+	eventCtx := &hooks.EventContext{
 		Category:     hooks.Loading,
 		ToolName:     "git",
 		OriginalTool: "Bash",
@@ -588,7 +589,7 @@ func TestPreToolUse9LevelEnhancedFallback(t *testing.T) {
 		Operation:    "tool-start",
 	}
 
-	result := mapper.MapSound(context)
+	result := mapper.MapSound(context.Background(), eventCtx)
 
 	// PreToolUse should generate 9-level enhanced fallback including command-only sounds
 	expectedPaths := []string{
@@ -669,7 +670,7 @@ func TestPostToolUse6LevelFallback(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := mapper.MapSound(tt.context)
+			result := mapper.MapSound(context.Background(), tt.context)
 
 			// Test will fail initially - current mapper doesn't skip command-only sounds
 			if len(result.AllPaths) != len(tt.expected) {
@@ -770,7 +771,7 @@ func TestSimpleEvent4LevelFallback(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := mapper.MapSound(tt.context)
+			result := mapper.MapSound(context.Background(), tt.context)
 
 			// Test will fail initially - current mapper doesn't generate event-specific paths
 			if len(result.AllPaths) != len(tt.expected) {
@@ -823,14 +824,14 @@ func TestMapSoundTriggersPathChecking(t *testing.T) {
 	checker := tracking.NewSoundChecker(tracking.WithHook(testHook))
 	mapper := NewSoundMapper(checker)
 
-	context := &hooks.EventContext{
+	eventCtx := &hooks.EventContext{
 		Category:  hooks.Success,
 		ToolName:  "Edit",
 		SoundHint: "file-saved",
 		Operation: "tool-complete",
 	}
 
-	result := mapper.MapSound(context)
+	result := mapper.MapSound(context.Background(), eventCtx)
 
 	// Verify that path checking was triggered
 	if len(checkedPaths) == 0 {
@@ -858,7 +859,7 @@ func TestMapSoundTriggersPathChecking(t *testing.T) {
 	}
 
 	// Verify context was passed correctly
-	if checkedContext != context {
+	if checkedContext != eventCtx {
 		t.Error("Expected original context to be passed to path checker")
 	}
 }
@@ -902,14 +903,14 @@ func TestMapSoundFallbackLevelBasedOnFileExistence(t *testing.T) {
 	checker := tracking.NewSoundChecker(tracking.WithHook(trackingHook))
 	mapper := NewSoundMapper(checker)
 
-	context := &hooks.EventContext{
+	eventCtx := &hooks.EventContext{
 		Category:  hooks.Success,
 		ToolName:  "Edit",
 		SoundHint: "file-saved",
 		Operation: "tool-complete",
 	}
 
-	result := mapper.MapSound(context)
+	result := mapper.MapSound(context.Background(), eventCtx)
 
 	// Since level 1 doesn't exist but level 2 does, fallback level should be 2
 	expectedFallbackLevel := 2
@@ -946,7 +947,7 @@ func TestMapSoundAllPathsChecked(t *testing.T) {
 	mapper := NewSoundMapper(checker)
 
 	// Test with enhanced 9-level fallback (PreToolUse)
-	context := &hooks.EventContext{
+	eventCtx := &hooks.EventContext{
 		Category:     hooks.Loading,
 		ToolName:     "git",
 		OriginalTool: "Bash",
@@ -954,7 +955,7 @@ func TestMapSoundAllPathsChecked(t *testing.T) {
 		Operation:    "tool-start",
 	}
 
-	result := mapper.MapSound(context)
+	result := mapper.MapSound(context.Background(), eventCtx)
 
 	// Verify all paths in the result were checked
 	if len(checkedPaths) != len(result.AllPaths) {
@@ -986,13 +987,13 @@ func TestMapSoundWithoutTrackingSkipsPathChecking(t *testing.T) {
 	// This should NOT trigger path checking
 	mapper := NewSoundMapper(nil)
 
-	context := &hooks.EventContext{
+	eventCtx := &hooks.EventContext{
 		Category:  hooks.Success,
 		ToolName:  "Edit",
 		Operation: "tool-complete",
 	}
 
-	result := mapper.MapSound(context)
+	result := mapper.MapSound(context.Background(), eventCtx)
 
 	// Path checking should not have been triggered
 	if pathCheckTriggered {
@@ -1039,13 +1040,13 @@ func TestSoundMapper_BugReproduction_AllPathsFallbackToDefault(t *testing.T) {
 	
 	mapper := NewSoundMapperWithResolver(resolver)
 	
-	context := &hooks.EventContext{
+	eventCtx := &hooks.EventContext{
 		Category:  hooks.Success,
 		ToolName:  "bash",
 		Operation: "tool-complete",
 	}
 	
-	result := mapper.MapSound(context)
+	result := mapper.MapSound(context.Background(), eventCtx)
 	
 	// Should find bash-success.wav (level 1) instead of falling back to default.wav
 	expectedPath := "success/bash-success.wav"
@@ -1079,13 +1080,13 @@ func TestSoundMapper_BugReproduction_NoSpecificSoundFallsToDefault(t *testing.T)
 	
 	mapper := NewSoundMapperWithResolver(resolver)
 	
-	context := &hooks.EventContext{
+	eventCtx := &hooks.EventContext{
 		Category:  hooks.Success,
 		ToolName:  "unknowntool",
 		Operation: "tool-complete",
 	}
 	
-	result := mapper.MapSound(context)
+	result := mapper.MapSound(context.Background(), eventCtx)
 	
 	// Should fallback to default.wav (last level)
 	expectedPath := "default.wav"
