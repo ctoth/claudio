@@ -262,3 +262,77 @@ func TestPlatformSoundpackHelpers(t *testing.T) {
 		t.Log("TDD GREEN: checkPlatformFile works correctly with afero memory filesystem!")
 	})
 }
+
+// TestIsGoTestTempExecutable_PortableAcrossPlatforms asserts that the
+// go-test temp-build detection works on Windows (where go test stages
+// binaries under %TEMP%\go-buildNNN\...) as well as POSIX. The pre-fix
+// implementation hardcoded the literal "/tmp/go-build" which never
+// matched on Windows, so the test-context CWD fallback never fired
+// there.
+func TestIsGoTestTempExecutable_PortableAcrossPlatforms(t *testing.T) {
+	tests := []struct {
+		name     string
+		exec     string
+		tmpRoot  string
+		expected bool
+	}{
+		{
+			name:     "POSIX go test under /tmp/go-build",
+			exec:     "/tmp/go-build123456/b001/config.test",
+			tmpRoot:  "/tmp",
+			expected: true,
+		},
+		{
+			name:     "POSIX go test under custom TMPDIR",
+			exec:     "/var/folders/x/y/T/go-build987/b001/config.test",
+			tmpRoot:  "/var/folders/x/y/T",
+			expected: true,
+		},
+		{
+			name:     "Windows go test under %TEMP%",
+			exec:     filepath.Join("C:", "Users", "Q", "AppData", "Local", "Temp", "go-build123456", "b001", "config.test.exe"),
+			tmpRoot:  filepath.Join("C:", "Users", "Q", "AppData", "Local", "Temp"),
+			expected: true,
+		},
+		{
+			name:     "production binary under /usr/local/bin",
+			exec:     "/usr/local/bin/claudio",
+			tmpRoot:  "/tmp",
+			expected: false,
+		},
+		{
+			name:     "production binary on Windows under Program Files",
+			exec:     filepath.Join("C:", "Program Files", "claudio", "claudio.exe"),
+			tmpRoot:  filepath.Join("C:", "Users", "Q", "AppData", "Local", "Temp"),
+			expected: false,
+		},
+		{
+			name:     "temp dir but not a go-build binary",
+			exec:     "/tmp/something-else/binary",
+			tmpRoot:  "/tmp",
+			expected: false,
+		},
+		{
+			name:     "empty executable path",
+			exec:     "",
+			tmpRoot:  "/tmp",
+			expected: false,
+		},
+		{
+			name:     "empty tmp root",
+			exec:     "/tmp/go-build123/b001/x.test",
+			tmpRoot:  "",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isGoTestTempExecutable(tt.exec, tt.tmpRoot)
+			if got != tt.expected {
+				t.Errorf("isGoTestTempExecutable(%q, %q) = %v, want %v",
+					tt.exec, tt.tmpRoot, got, tt.expected)
+			}
+		})
+	}
+}

@@ -574,9 +574,12 @@ func getExecutableDirectoryForDefault() string {
 	execDir := filepath.Dir(executable)
 	slog.Debug("executable directory detected for default config", "executable", executable, "directory", execDir)
 	
-	// If executable is in a temp build directory (like /tmp/go-buildXXX), 
-	// also check current working directory for platform JSON files
-	if strings.Contains(executable, "/tmp/go-build") {
+	// If executable is in a temp build directory (e.g. /tmp/go-buildXXX on
+	// POSIX, %TEMP%\go-buildNNN\... on Windows), also check current working
+	// directory for platform JSON files. Detection is portable via
+	// isGoTestTempExecutable, which uses os.TempDir() as the prefix and the
+	// "go-build" substring as the go-test staged-binary marker.
+	if isGoTestTempExecutable(executable, os.TempDir()) {
 		cwd, err := os.Getwd()
 		if err == nil {
 			slog.Debug("executable appears to be temp build, also checking current working directory", "cwd", cwd, "temp_exec", executable)
@@ -592,4 +595,19 @@ func getExecutableDirectoryForDefault() string {
 	}
 	
 	return execDir
+}
+
+// isGoTestTempExecutable reports whether executablePath looks like a binary
+// staged by `go test` under tmpRoot. Both inputs are cleaned via
+// filepath.Clean so the comparison is portable across slash conventions:
+//   - POSIX go test stages binaries under e.g. /tmp/go-buildNNN/.../pkg.test
+//   - Windows go test stages binaries under e.g. %TEMP%\go-buildNNN\...\pkg.test.exe
+// The "go-build" substring is the actual marker on every platform.
+func isGoTestTempExecutable(executablePath, tmpRoot string) bool {
+	if executablePath == "" || tmpRoot == "" {
+		return false
+	}
+	cleanedExec := filepath.Clean(executablePath)
+	cleanedTmp := filepath.Clean(tmpRoot)
+	return strings.HasPrefix(cleanedExec, cleanedTmp) && strings.Contains(cleanedExec, "go-build")
 }
