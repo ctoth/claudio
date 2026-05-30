@@ -14,33 +14,33 @@ import (
 func TestGetPlatformSoundpackExecutableDirectory(t *testing.T) {
 	
 	t.Run("finds wsl.json next to executable in WSL", func(t *testing.T) {
-		// Use memory filesystem for testing
+		// Use memory filesystem for testing; the manager wires it via cm.fs.
 		memFS := afero.NewMemMapFs()
-		mgr := NewConfigManager()
-		
+		mgr := NewConfigManagerWithFilesystem(memFS)
+
 		// Mock executable directory
 		execDir := "/mock/bin"
-		
+
 		// Create wsl.json in memory filesystem
 		wslJsonPath := filepath.Join(execDir, "wsl.json")
 		testJsonContent := `{"name":"test-wsl-soundpack","mappings":{"default.wav":"test.wav"}}`
-		
+
 		err := memFS.MkdirAll(execDir, 0755)
 		if err != nil {
 			t.Fatalf("Failed to create mock exec directory: %v", err)
 		}
-		
+
 		err = afero.WriteFile(memFS, wslJsonPath, []byte(testJsonContent), 0644)
 		if err != nil {
 			t.Fatalf("Failed to create test wsl.json: %v", err)
 		}
-		
+
 		t.Logf("Mock executable directory: %s", execDir)
 		t.Logf("WSL JSON path: %s", wslJsonPath)
 		t.Logf("WSL detection: %v", platform.IsWSL())
-		
-		// Test checkPlatformFile helper function
-		result := checkPlatformFile(memFS, execDir, "wsl.json")
+
+		// Test checkPlatformFile helper method
+		result := mgr.checkPlatformFile(execDir, "wsl.json")
 		if result == "" {
 			t.Error("checkPlatformFile should find wsl.json in memory filesystem")
 		} else {
@@ -49,13 +49,13 @@ func TestGetPlatformSoundpackExecutableDirectory(t *testing.T) {
 				t.Errorf("Expected checkPlatformFile to return %s, got %s", wslJsonPath, result)
 			}
 		}
-		
+
 		// Test platform detection logic
 		// Since we're in WSL, it should find wsl.json
 		if platform.IsWSL() {
-			platformResult := mgr.GetPlatformSoundpack(memFS, execDir)
+			platformResult := mgr.GetPlatformSoundpack(execDir)
 			t.Logf("Platform detection result: %s", platformResult)
-			
+
 			if platformResult == "default" {
 				t.Error("TDD: GetPlatformSoundpack should find wsl.json next to executable in WSL, but returned 'default'")
 			} else if platformResult == wslJsonPath {
@@ -65,15 +65,15 @@ func TestGetPlatformSoundpackExecutableDirectory(t *testing.T) {
 			}
 		} else {
 			t.Skip("Not in WSL, testing general JSON detection instead")
-			
+
 			// Test with linux.json since we're not in WSL
 			linuxJsonPath := filepath.Join(execDir, "linux.json")
 			err = afero.WriteFile(memFS, linuxJsonPath, []byte(testJsonContent), 0644)
 			if err != nil {
 				t.Fatalf("Failed to create test linux.json: %v", err)
 			}
-			
-			platformResult := mgr.GetPlatformSoundpack(memFS, execDir)
+
+			platformResult := mgr.GetPlatformSoundpack(execDir)
 			if platformResult != linuxJsonPath {
 				t.Errorf("Expected platform detection to find %s, got %s", linuxJsonPath, platformResult)
 			}
@@ -83,29 +83,30 @@ func TestGetPlatformSoundpackExecutableDirectory(t *testing.T) {
 	t.Run("finds darwin.json next to executable on macOS simulation", func(t *testing.T) {
 		// Use memory filesystem to simulate macOS platform detection
 		memFS := afero.NewMemMapFs()
-		
+		mgr := NewConfigManagerWithFilesystem(memFS)
+
 		execDir := "/mock/bin"
-		
+
 		// Simulate runtime.GOOS == "darwin" behavior by creating darwin.json
 		darwinJsonPath := filepath.Join(execDir, "darwin.json")
 		testJsonContent := `{"name":"test-darwin-soundpack","mappings":{"default.wav":"test.wav"}}`
-		
+
 		err := memFS.MkdirAll(execDir, 0755)
 		if err != nil {
 			t.Fatalf("Failed to create mock exec directory: %v", err)
 		}
-		
+
 		err = afero.WriteFile(memFS, darwinJsonPath, []byte(testJsonContent), 0644)
 		if err != nil {
 			t.Fatalf("Failed to create test darwin.json: %v", err)
 		}
-		
+
 		// Test that checkPlatformFile finds darwin.json
-		result := checkPlatformFile(memFS, execDir, "darwin.json")
+		result := mgr.checkPlatformFile(execDir, "darwin.json")
 		if result != darwinJsonPath {
 			t.Errorf("Expected checkPlatformFile to find %s, got %s", darwinJsonPath, result)
 		}
-		
+
 		// Note: We can't easily mock runtime.GOOS, but we can test the file detection logic
 		t.Logf("Darwin JSON detection test passed with mock filesystem")
 	})
@@ -116,8 +117,8 @@ func TestGetPlatformSoundpackWSLDetection(t *testing.T) {
 	
 	t.Run("prefers wsl.json over linux.json when WSL detected", func(t *testing.T) {
 		memFS := afero.NewMemMapFs()
-		mgr := NewConfigManager()
-		
+		mgr := NewConfigManagerWithFilesystem(memFS)
+
 		execDir := "/mock/bin"
 		
 		// Create both wsl.json and linux.json in memory filesystem
@@ -147,8 +148,8 @@ func TestGetPlatformSoundpackWSLDetection(t *testing.T) {
 		t.Logf("Actual WSL detection: %v", platform.IsWSL())
 		
 		// Test platform detection
-		result := mgr.GetPlatformSoundpack(memFS, execDir)
-		
+		result := mgr.GetPlatformSoundpack(execDir)
+
 		if platform.IsWSL() {
 			// In real WSL, should prefer wsl.json
 			if result != wslJsonPath {
@@ -166,8 +167,8 @@ func TestGetPlatformSoundpackWSLDetection(t *testing.T) {
 	
 	t.Run("uses runtime.GOOS when not in WSL", func(t *testing.T) {
 		memFS := afero.NewMemMapFs()
-		mgr := NewConfigManager()
-		
+		mgr := NewConfigManagerWithFilesystem(memFS)
+
 		execDir := "/mock/bin"
 		
 		// Create platform-specific JSON based on current GOOS
@@ -185,8 +186,8 @@ func TestGetPlatformSoundpackWSLDetection(t *testing.T) {
 			t.Fatalf("Failed to create test platform JSON: %v", err)
 		}
 		
-		result := mgr.GetPlatformSoundpack(memFS, execDir)
-		
+		result := mgr.GetPlatformSoundpack(execDir)
+
 		t.Logf("Runtime GOOS: %s", runtime.GOOS)
 		t.Logf("Expected platform file: %s", platformFile)
 		t.Logf("GetPlatformSoundpack result: %s", result)
@@ -201,17 +202,17 @@ func TestGetPlatformSoundpackWSLDetection(t *testing.T) {
 	
 	t.Run("returns embedded soundpack when no platform JSON found but embedded exists", func(t *testing.T) {
 		memFS := afero.NewMemMapFs()
-		mgr := NewConfigManager()
-		
+		mgr := NewConfigManagerWithFilesystem(memFS)
+
 		execDir := "/mock/empty"
-		
+
 		// Create empty directory
 		err := memFS.MkdirAll(execDir, 0755)
 		if err != nil {
 			t.Fatalf("Failed to create mock exec directory: %v", err)
 		}
-		
-		result := mgr.GetPlatformSoundpack(memFS, execDir)
+
+		result := mgr.GetPlatformSoundpack(execDir)
 		
 		// With embedded soundpacks, we expect the embedded platform file to be used
 		// In WSL environment, this will be "embedded:wsl.json"
@@ -230,37 +231,81 @@ func TestPlatformSoundpackHelpers(t *testing.T) {
 	
 	t.Run("checkPlatformFile works with memory filesystem", func(t *testing.T) {
 		memFS := afero.NewMemMapFs()
-		
+		mgr := NewConfigManagerWithFilesystem(memFS)
+
 		testDir := "/test/dir"
 		testFile := "test.json"
 		testPath := filepath.Join(testDir, testFile)
 		testContent := `{"name":"test"}`
-		
+
 		// Create directory and file in memory
 		err := memFS.MkdirAll(testDir, 0755)
 		if err != nil {
 			t.Fatalf("Failed to create test directory: %v", err)
 		}
-		
+
 		err = afero.WriteFile(memFS, testPath, []byte(testContent), 0644)
 		if err != nil {
 			t.Fatalf("Failed to create test file: %v", err)
 		}
-		
-		// Test that checkPlatformFile finds the file
-		result := checkPlatformFile(memFS, testDir, testFile)
+
+		// Test that checkPlatformFile (method) finds the file via cm.fs
+		result := mgr.checkPlatformFile(testDir, testFile)
 		if result != testPath {
 			t.Errorf("Expected checkPlatformFile to return %s, got %s", testPath, result)
 		}
-		
+
 		// Test that it returns empty string for nonexistent file
-		result = checkPlatformFile(memFS, testDir, "nonexistent.json")
+		result = mgr.checkPlatformFile(testDir, "nonexistent.json")
 		if result != "" {
 			t.Errorf("Expected checkPlatformFile to return empty string for nonexistent file, got %s", result)
 		}
-		
+
 		t.Log("TDD GREEN: checkPlatformFile works correctly with afero memory filesystem!")
 	})
+}
+
+// TestGetPlatformSoundpack_HonorsCmFs confirms that when the manager
+// is constructed via NewConfigManagerWithFilesystem(memFS),
+// GetPlatformSoundpack reads through that memFS. Pre-fix the method
+// took an afero.Fs parameter and production callers always passed
+// afero.NewOsFs(), so this property was effectively untestable: the
+// real filesystem state always won. After the fix cm.fs is the
+// single source of truth.
+func TestGetPlatformSoundpack_HonorsCmFs(t *testing.T) {
+	memFS := afero.NewMemMapFs()
+	mgr := NewConfigManagerWithFilesystem(memFS)
+
+	execDir := "/test/exec"
+	platformFile := runtime.GOOS + ".json"
+	platformPath := filepath.Join(execDir, platformFile)
+
+	if err := memFS.MkdirAll(execDir, 0755); err != nil {
+		t.Fatalf("memFS MkdirAll failed: %v", err)
+	}
+	content := `{"name":"cm-fs-seam-test","mappings":{"default.wav":"x.wav"}}`
+	if err := afero.WriteFile(memFS, platformPath, []byte(content), 0644); err != nil {
+		t.Fatalf("memFS WriteFile failed: %v", err)
+	}
+
+	got := mgr.GetPlatformSoundpack(execDir)
+
+	if platform.IsWSL() {
+		// In WSL, GetPlatformSoundpack prefers wsl.json. We only wrote
+		// runtime.GOOS+".json" (= "linux.json"), so the WSL branch
+		// will not find a wsl.json in memFS and will fall through to
+		// platform-file or embedded. The point of this test is the
+		// memFS seam works at all; assert we got something other than
+		// reading-real-disk.
+		if got == "default" {
+			t.Errorf("expected GetPlatformSoundpack to consult memFS and find linux.json, got %q", got)
+		}
+		return
+	}
+
+	if got != platformPath {
+		t.Errorf("expected GetPlatformSoundpack to return %q via cm.fs (memFS), got %q", platformPath, got)
+	}
 }
 
 // TestGetEmbeddedPlatformSoundpackData_LinuxEmbedded asserts that

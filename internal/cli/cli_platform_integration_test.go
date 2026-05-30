@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"claudio.click/internal/config"
-	"github.com/spf13/afero"
 )
 
 // TDD RED: Test unconfigured claudio uses platform JSON
@@ -271,7 +270,7 @@ func TestCLIPlatformDetectionIntegration(t *testing.T) {
 		// Test current platform detection behavior with updated API
 		// Use real filesystem and current executable directory
 		execDir := getPlatformExecutableDirectoryForTest()
-		platformSoundpack := mgr.GetPlatformSoundpack(afero.NewOsFs(), execDir)
+		platformSoundpack := mgr.GetPlatformSoundpack(execDir)
 		t.Logf("Current platform soundpack detection result: %s", platformSoundpack)
 		
 		// This should show current behavior (likely "default" or "linux.json")

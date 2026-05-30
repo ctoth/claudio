@@ -19,7 +19,6 @@ import (
 	"claudio.click/internal/soundpack"
 	"claudio.click/internal/sounds"
 	"claudio.click/internal/tracking"
-	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
@@ -280,7 +279,7 @@ func initializeAudioSystem(cmd *cobra.Command, cli *CLI, cfg *config.Config) err
 		// Try platform JSON fallback (e.g., wsl.json, darwin.json, linux.json)
 		cfgMgr := config.NewConfigManager()
 		execDir := getPlatformExecutableDirectory()
-		platformSoundpack := cfgMgr.GetPlatformSoundpack(afero.NewOsFs(), execDir)
+		platformSoundpack := cfgMgr.GetPlatformSoundpack(execDir)
 
 		if platformSoundpack != "default" {
 			slog.Debug("using platform-specific soundpack", "path", platformSoundpack)
