@@ -32,7 +32,6 @@ type CLI struct {
 	configManager     *config.ConfigManager
 	soundpackResolver soundpack.SoundpackResolver
 	audioBackend      audio.AudioBackend
-	backendFactory    audio.BackendFactory
 	trackingDB        *sql.DB // Optional tracking database
 }
 
@@ -94,7 +93,6 @@ func NewCLI() *CLI {
 		configManager:     nil, // Lazy initialization - only create when needed
 		soundpackResolver: nil, // Lazy initialization - only create when needed
 		audioBackend:      nil, // Lazy initialization - only create when needed
-		backendFactory:    nil, // Lazy initialization - only create when needed
 		trackingDB:        nil, // Lazy initialization - only create when needed
 	}
 }
@@ -344,8 +342,8 @@ func initializeAudioSystem(cmd *cobra.Command, cli *CLI, cfg *config.Config) err
 func (c *CLI) initializeAudioSystemWithBackend(cfg *config.Config) error {
 	slog.Debug("initializing audio backend", "backend_type", cfg.AudioBackend)
 
-	// Create audio backend using factory
-	backend, err := c.backendFactory.CreateBackend(cfg.AudioBackend)
+	// Create audio backend using package-level constructor
+	backend, err := audio.NewBackend(cfg.AudioBackend)
 	if err != nil {
 		slog.Error("failed to create audio backend", "backend_type", cfg.AudioBackend, "error", err)
 		return fmt.Errorf("failed to create audio backend '%s': %w", cfg.AudioBackend, err)
@@ -577,9 +575,6 @@ func (c *CLI) initializeSystems() {
 	// to avoid log messages appearing before the dual-level handler is set up
 
 	// Don't create global SoundMapper - it will be created per-request with session-specific SoundChecker
-	if c.backendFactory == nil {
-		c.backendFactory = audio.NewBackendFactory()
-	}
 	// soundpackResolver and audioBackend are initialized in initializeAudioSystem when needed
 }
 

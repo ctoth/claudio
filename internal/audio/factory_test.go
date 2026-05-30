@@ -1,3 +1,5 @@
+//go:build cgo
+
 package audio
 
 import (
@@ -5,20 +7,7 @@ import (
 	"testing"
 )
 
-// TestBackendFactoryInterface tests that BackendFactory interface is properly defined
-func TestBackendFactoryInterface(t *testing.T) {
-	// This test ensures the interface compiles and has expected methods
-	var _ BackendFactory = (*DefaultBackendFactory)(nil)
-}
-
-func TestNewBackendFactory(t *testing.T) {
-	factory := NewBackendFactory()
-	if factory == nil {
-		t.Error("NewBackendFactory should return a non-nil factory")
-	}
-}
-
-func TestBackendFactory_CreateBackend(t *testing.T) {
+func TestNewBackend_WithChecker(t *testing.T) {
 	tests := []struct {
 		name              string
 		backendType       string
@@ -103,20 +92,17 @@ func TestBackendFactory_CreateBackend(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create factory with dependency injection for testing
-			factory := NewBackendFactoryWithDependencies(
-				func() bool { return tt.isWSL },
-				func(cmd string) bool {
-					for _, available := range tt.availableCommands {
-						if cmd == available {
-							return true
-						}
+			isWSLFunc := func() bool { return tt.isWSL }
+			commandExists := func(cmd string) bool {
+				for _, available := range tt.availableCommands {
+					if cmd == available {
+						return true
 					}
-					return false
-				},
-			)
+				}
+				return false
+			}
 
-			backend, err := factory.CreateBackend(tt.backendType)
+			backend, err := newBackendWithChecker(tt.backendType, isWSLFunc, commandExists)
 
 			if tt.expectError && err == nil {
 				t.Errorf("expected error but got none")
@@ -129,7 +115,6 @@ func TestBackendFactory_CreateBackend(t *testing.T) {
 				if backend == nil {
 					t.Error("expected non-nil backend")
 				} else {
-					// Check backend type by trying to cast to expected types
 					switch tt.expectedType {
 					case "system_command":
 						if _, ok := backend.(*SystemCommandBackend); !ok {
@@ -141,35 +126,50 @@ func TestBackendFactory_CreateBackend(t *testing.T) {
 						}
 					}
 				}
+				if backend != nil {
+					_ = backend.Close()
+				}
 			}
 		})
 	}
 }
 
-func TestBackendFactory_GetSupportedBackends(t *testing.T) {
-	factory := NewBackendFactory()
-	supported := factory.GetSupportedBackends()
-
-	expectedBackends := []string{"auto", "system_command", "malgo"}
-	if len(supported) != len(expectedBackends) {
-		t.Errorf("expected %d supported backends, got %d", len(expectedBackends), len(supported))
+func TestSupportedBackendTypes(t *testing.T) {
+	expected := []string{"auto", "system_command", "malgo"}
+	if len(SupportedBackendTypes) != len(expected) {
+		t.Errorf("expected %d supported backend types, got %d", len(expected), len(SupportedBackendTypes))
 	}
-
-	for _, expected := range expectedBackends {
+	for _, want := range expected {
 		found := false
-		for _, actual := range supported {
-			if actual == expected {
+		for _, got := range SupportedBackendTypes {
+			if got == want {
 				found = true
 				break
 			}
 		}
 		if !found {
-			t.Errorf("expected backend %q not found in supported list: %v", expected, supported)
+			t.Errorf("expected backend type %q in SupportedBackendTypes: %v", want, SupportedBackendTypes)
 		}
 	}
 }
 
-func TestBackendFactory_SystemCommandSelection(t *testing.T) {
+func TestIsValidBackendType(t *testing.T) {
+	validTypes := []string{"auto", "system_command", "malgo", ""}
+	for _, backendType := range validTypes {
+		if !IsValidBackendType(backendType) {
+			t.Errorf("backend type %q should be valid", backendType)
+		}
+	}
+
+	invalidTypes := []string{"invalid", "unknown", "pulseaudio", "alsa"}
+	for _, backendType := range invalidTypes {
+		if IsValidBackendType(backendType) {
+			t.Errorf("backend type %q should be invalid", backendType)
+		}
+	}
+}
+
+func TestNewBackend_SystemCommandSelection(t *testing.T) {
 	tests := []struct {
 		name              string
 		availableCommands []string
@@ -210,64 +210,38 @@ func TestBackendFactory_SystemCommandSelection(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			factory := NewBackendFactoryWithDependencies(
-				func() bool { return false }, // Not WSL for these tests
-				func(cmd string) bool {
-					for _, available := range tt.availableCommands {
-						if cmd == available {
-							return true
-						}
+			isWSLFunc := func() bool { return false }
+			commandExists := func(cmd string) bool {
+				for _, available := range tt.availableCommands {
+					if cmd == available {
+						return true
 					}
-					return false
-				},
-			)
+				}
+				return false
+			}
 
-			backend, err := factory.CreateBackend("system_command")
-
+			backend, err := newBackendWithChecker("system_command", isWSLFunc, commandExists)
 			if tt.expectError && err == nil {
 				t.Errorf("expected error but got none")
 			}
 			if !tt.expectError && err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
-
 			if !tt.expectError {
-				systemBackend, ok := backend.(*SystemCommandBackend)
-				if !ok {
+				if _, ok := backend.(*SystemCommandBackend); !ok {
 					t.Errorf("expected SystemCommandBackend, got %T", backend)
-				} else {
-					// We'll need to expose the command somehow for testing
-					// For now, just verify it's a SystemCommandBackend
-					_ = systemBackend
+				}
+				if backend != nil {
+					_ = backend.Close()
 				}
 			}
 		})
 	}
 }
 
-func TestBackendFactory_ValidateBackendType(t *testing.T) {
-	factory := NewBackendFactory()
-
-	validTypes := []string{"auto", "system_command", "malgo", ""} // empty defaults to auto
-	for _, backendType := range validTypes {
-		if !factory.IsValidBackendType(backendType) {
-			t.Errorf("backend type %q should be valid", backendType)
-		}
-	}
-
-	invalidTypes := []string{"invalid", "unknown", "pulseaudio", "alsa"}
-	for _, backendType := range invalidTypes {
-		if factory.IsValidBackendType(backendType) {
-			t.Errorf("backend type %q should be invalid", backendType)
-		}
-	}
-}
-
-func TestBackendFactory_ErrorHandling(t *testing.T) {
-	factory := NewBackendFactory()
-
-	// Test invalid backend type
-	_, err := factory.CreateBackend("nonexistent")
+func TestNewBackend_ErrorHandling(t *testing.T) {
+	// Test invalid backend type via public NewBackend
+	_, err := NewBackend("nonexistent")
 	if err == nil {
 		t.Error("expected error for invalid backend type")
 	}
@@ -275,13 +249,11 @@ func TestBackendFactory_ErrorHandling(t *testing.T) {
 		t.Errorf("expected ErrInvalidBackendType, got %v", err)
 	}
 
-	// Test system_command with no available commands
-	factory = NewBackendFactoryWithDependencies(
+	// Test system_command with no available commands via checker seam
+	_, err = newBackendWithChecker("system_command",
 		func() bool { return false },
-		func(cmd string) bool { return false }, // No commands available
+		func(cmd string) bool { return false },
 	)
-
-	_, err = factory.CreateBackend("system_command")
 	if err == nil {
 		t.Error("expected error when no system commands available")
 	}
@@ -290,12 +262,10 @@ func TestBackendFactory_ErrorHandling(t *testing.T) {
 	}
 }
 
-func TestBackendFactory_RealSystemIntegration(t *testing.T) {
-	// Test against real system
-	factory := NewBackendFactory()
-
-	// Test auto detection
-	backend, err := factory.CreateBackend("auto")
+func TestNewBackend_RealSystemIntegration(t *testing.T) {
+	// Test against real system: auto detection should always succeed because
+	// malgo is a viable fallback.
+	backend, err := NewBackend("auto")
 	if err != nil {
 		t.Errorf("auto backend creation failed: %v", err)
 	}
@@ -306,7 +276,7 @@ func TestBackendFactory_RealSystemIntegration(t *testing.T) {
 	t.Logf("Real system auto backend type: %T", backend)
 
 	// Test malgo (should always work)
-	malgoBackend, err := factory.CreateBackend("malgo")
+	malgoBackend, err := NewBackend("malgo")
 	if err != nil {
 		t.Errorf("malgo backend creation failed: %v", err)
 	}
@@ -316,9 +286,9 @@ func TestBackendFactory_RealSystemIntegration(t *testing.T) {
 
 	// Clean up backends
 	if backend != nil {
-		backend.Close()
+		_ = backend.Close()
 	}
 	if malgoBackend != nil {
-		malgoBackend.Close()
+		_ = malgoBackend.Close()
 	}
 }

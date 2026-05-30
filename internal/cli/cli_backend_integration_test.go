@@ -12,10 +12,7 @@ import (
 func TestCLIBackendIntegration(t *testing.T) {
 	cli := NewCLI()
 
-	// Test that CLI structure has been updated to use backends
-	if cli.backendFactory != nil {
-		t.Error("backendFactory should be nil before initialization")
-	}
+	// audioBackend is initialized lazily; before any init it must be nil.
 	if cli.audioBackend != nil {
 		t.Error("audioBackend should be nil before initialization")
 	}
@@ -126,22 +123,13 @@ func TestCLIPlaySoundWithBackend(t *testing.T) {
 }
 
 func TestCLIBackendFactoryIntegration(t *testing.T) {
-	cli := NewCLI()
-	cli.initializeSystems()
-
-	// Test that CLI creates backend factory
-	if cli.backendFactory == nil {
-		t.Error("CLI should have backendFactory initialized")
+	// Test supported backends via package-level SupportedBackendTypes
+	if len(audio.SupportedBackendTypes) == 0 {
+		t.Error("audio.SupportedBackendTypes should be non-empty")
 	}
 
-	// Test supported backends
-	supported := cli.backendFactory.GetSupportedBackends()
-	if len(supported) == 0 {
-		t.Error("backendFactory should return supported backends")
-	}
-
-	// Test backend creation
-	backend, err := cli.backendFactory.CreateBackend("malgo")
+	// Test backend creation via package-level NewBackend
+	backend, err := audio.NewBackend("malgo")
 	if err != nil {
 		t.Errorf("failed to create malgo backend: %v", err)
 	}

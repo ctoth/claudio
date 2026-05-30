@@ -22,37 +22,6 @@ To fix this issue:
 
 For more information, see: https://pkg.go.dev/cmd/cgo`)
 
-// BackendFactory creates AudioBackend instances based on configuration
-type BackendFactory interface {
-	CreateBackend(backendType string) (AudioBackend, error)
-	GetAvailableBackends() []string
-	GetPreferredBackend() string
-	ValidateBackend(backendType string) error
-}
-
-// Stub backend factory
-type stubBackendFactory struct{}
-
-func NewBackendFactory() BackendFactory {
-	return &stubBackendFactory{}
-}
-
-func (f *stubBackendFactory) CreateBackend(backendType string) (AudioBackend, error) {
-	return nil, errCGORequired
-}
-
-func (f *stubBackendFactory) GetAvailableBackends() []string {
-	return []string{}
-}
-
-func (f *stubBackendFactory) GetPreferredBackend() string {
-	return ""
-}
-
-func (f *stubBackendFactory) ValidateBackend(backendType string) error {
-	return errCGORequired
-}
-
 // Stub audio player
 type AudioPlayer struct{}
 

@@ -13,11 +13,9 @@ import (
 func TestEndToEndAIFFSupport(t *testing.T) {
 	// This test validates the complete unified audio system from user perspective
 	
-	// Step 1: Verify backend factory supports AIFF through all backends
-	factory := audio.NewBackendFactory()
-	
+	// Step 1: Verify NewBackend supports AIFF through all backends
 	// Test MalgoBackend (primary backend for AIFF support)
-	malgoBackend, err := factory.CreateBackend("malgo")
+	malgoBackend, err := audio.NewBackend("malgo")
 	if err != nil {
 		t.Fatalf("Failed to create malgo backend: %v", err)
 	}
@@ -64,16 +62,15 @@ func TestEndToEndAIFFSupport(t *testing.T) {
 
 // TestEndToEndUnifiedSystemPerformance validates performance characteristics
 func TestEndToEndUnifiedSystemPerformance(t *testing.T) {
-	factory := audio.NewBackendFactory()
-	backend, err := factory.CreateBackend("malgo")
+	backend, err := audio.NewBackend("malgo")
 	if err != nil {
 		t.Fatalf("Failed to create backend: %v", err)
 	}
 	defer backend.Close()
-	
+
 	// Measure backend creation time (should be fast)
 	start := time.Now()
-	testBackend, err := factory.CreateBackend("malgo")
+	testBackend, err := audio.NewBackend("malgo")
 	if err != nil {
 		t.Fatalf("Failed to create test backend: %v", err)
 	}
@@ -90,11 +87,9 @@ func TestEndToEndUnifiedSystemPerformance(t *testing.T) {
 
 // TestEndToEndSystemResourceCleanup validates proper resource management
 func TestEndToEndSystemResourceCleanup(t *testing.T) {
-	factory := audio.NewBackendFactory()
-	
 	// Create and destroy multiple backends to test resource cleanup
 	for i := 0; i < 10; i++ {
-		backend, err := factory.CreateBackend("malgo")
+		backend, err := audio.NewBackend("malgo")
 		if err != nil {
 			t.Fatalf("Failed to create backend %d: %v", i, err)
 		}
