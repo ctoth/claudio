@@ -16,8 +16,11 @@ var (
 )
 
 // SupportedBackendTypes lists every backend type accepted by NewBackend.
-// Empty string is a synonym for "auto".
-var SupportedBackendTypes = []string{"auto", "system_command", "malgo"}
+// Empty string is a synonym for "auto". "fake" is a test-only backend
+// included unconditionally so cross-package tests (notably internal/cli)
+// can configure cfg.AudioBackend = "fake" without rebuilding under a
+// special tag.
+var SupportedBackendTypes = []string{"auto", "system_command", "malgo", "fake"}
 
 // IsValidBackendType reports whether the given backend type string is
 // accepted by NewBackend. Empty string is treated as "auto".
@@ -97,6 +100,8 @@ func newBackendWithChecker(backendType string, isWSLFunc func() bool, commandExi
 		return createSystemCommandBackendWithChecker(commandExists)
 	case "malgo":
 		return createRegisteredBackend("malgo")
+	case "fake":
+		return createRegisteredBackend("fake")
 	default:
 		slog.Error("invalid backend type requested", "type", backendType)
 		return nil, fmt.Errorf("%w: %s", ErrInvalidBackendType, backendType)

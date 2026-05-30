@@ -141,7 +141,7 @@ func TestNewBackend_WithChecker(t *testing.T) {
 }
 
 func TestSupportedBackendTypes(t *testing.T) {
-	expected := []string{"auto", "system_command", "malgo"}
+	expected := []string{"auto", "system_command", "malgo", "fake"}
 	if len(SupportedBackendTypes) != len(expected) {
 		t.Errorf("expected %d supported backend types, got %d", len(expected), len(SupportedBackendTypes))
 	}
@@ -160,7 +160,7 @@ func TestSupportedBackendTypes(t *testing.T) {
 }
 
 func TestIsValidBackendType(t *testing.T) {
-	validTypes := []string{"auto", "system_command", "malgo", ""}
+	validTypes := []string{"auto", "system_command", "malgo", "fake", ""}
 	for _, backendType := range validTypes {
 		if !IsValidBackendType(backendType) {
 			t.Errorf("backend type %q should be valid", backendType)
