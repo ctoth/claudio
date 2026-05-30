@@ -20,76 +20,42 @@ type SoundpackResolver interface {
 	GetType() string
 }
 
-// PathCheckedHook is called when a sound path is checked for existence.
+// SoundChecker resolves logical chain paths to physical paths and reports
+// per-path existence.
 //
-// sequence is the 1-based position of `path` within the chain CheckPaths
-// was given. chainType identifies WHICH chain this lookup ran under
-// (e.g. "enhanced", "posttool", "simple"). Sequence is only comparable
-// within a single chainType — see the v2 schema migration notes / review
-// finding #20 for the long story.
-type PathCheckedHook func(path string, exists bool, sequence int, chainType string, context *hooks.EventContext)
-
-// SoundChecker manages sound path checking with optional hooks
+// DEPRECATED: scheduled for deletion in the next commit. Once
+// sounds.SoundMapper switches to calling soundpack.ResolveSoundWithFallback
+// directly with a WithObserver-wired LookupBuffer, this type and its mirror
+// SoundpackResolver interface go away — the same os.Stat loop happens once
+// inside soundpack, observed (not duplicated) by tracking.
 type SoundChecker struct {
-	hooks    []PathCheckedHook
 	resolver SoundpackResolver
 }
 
-// SoundCheckerOption is a functional option for configuring SoundChecker
-type SoundCheckerOption func(*SoundChecker)
-
-// NewSoundChecker creates a new SoundChecker with optional hooks
-func NewSoundChecker(opts ...SoundCheckerOption) *SoundChecker {
-	sc := &SoundChecker{
-		hooks: make([]PathCheckedHook, 0),
-	}
-
-	for _, opt := range opts {
-		opt(sc)
-	}
-
-	return sc
-}
-
-// NewSoundCheckerWithResolver creates a new SoundChecker with soundpack resolver
-func NewSoundCheckerWithResolver(resolver SoundpackResolver, opts ...SoundCheckerOption) *SoundChecker {
-	sc := &SoundChecker{
-		hooks:    make([]PathCheckedHook, 0),
+// NewSoundCheckerWithResolver creates a new SoundChecker with soundpack
+// resolver. The streaming hook ecosystem (PathCheckedHook, SlogHook, NopHook,
+// WithHook) was deleted in favor of soundpack.WithObserver + LookupBuffer;
+// the resolver-less constructor (NewSoundChecker) and the hook-attaching
+// option went with it.
+func NewSoundCheckerWithResolver(resolver SoundpackResolver) *SoundChecker {
+	return &SoundChecker{
 		resolver: resolver,
 	}
-
-	for _, opt := range opts {
-		opt(sc)
-	}
-
-	return sc
 }
 
-// WithHook adds a hook to be called when paths are checked
-func WithHook(hook PathCheckedHook) SoundCheckerOption {
-	return func(sc *SoundChecker) {
-		sc.hooks = append(sc.hooks, hook)
-	}
-}
-
-// CheckPaths checks existence of multiple paths and calls all hooks with
-// 1-based sequence numbering. chainType identifies the chain these paths
-// came from so hooks can record the chain-scoped meaning of sequence
-// instead of conflating positions across chain shapes.
+// CheckPaths checks existence of multiple paths.
+//
+// chainType and context are retained on the signature for the brief
+// transition window while sounds.SoundMapper still drives this path; after
+// the next commit removes the caller, this method goes away with the rest
+// of SoundChecker.
 func (sc *SoundChecker) CheckPaths(context *hooks.EventContext, chainType string, paths []string) []bool {
+	_ = context
+	_ = chainType
 	results := make([]bool, len(paths))
-
 	for i, path := range paths {
-		exists := sc.fileExists(path)
-		results[i] = exists
-
-		// Call all hooks with 1-based sequence numbering
-		sequence := i + 1
-		for _, hook := range sc.hooks {
-			hook(path, exists, sequence, chainType, context)
-		}
+		results[i] = sc.fileExists(path)
 	}
-
 	return results
 }
 
@@ -109,4 +75,41 @@ func (sc *SoundChecker) fileExists(path string) bool {
 	// Fallback to direct path checking (backward compatibility)
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+// LookupBuffer is a single-use adapter that converts soundpack.PathObserver
+// callbacks into the buffered Lookup slice EventRecorder expects. Construct
+// one per MapSound invocation, pass Observer() to soundpack.WithObserver,
+// then read Lookups() after resolution completes to feed RecordEvent.
+//
+// LookupBuffer is the bridge that lets tracking observe soundpack's
+// resolution loop without owning the os.Stat I/O. Single-use: do not reuse
+// across resolutions — spawn a fresh buffer per event.
+type LookupBuffer struct {
+	lookups []Lookup
+}
+
+// NewLookupBuffer returns a fresh LookupBuffer with no recorded lookups.
+func NewLookupBuffer() *LookupBuffer {
+	return &LookupBuffer{}
+}
+
+// Observer returns a soundpack.PathObserver closure that appends one Lookup
+// to the buffer per callback. The closure preserves the resolver's 1-based
+// sequence and on-disk existence flag.
+func (b *LookupBuffer) Observer() soundpack.PathObserver {
+	return func(path string, sequence int, exists bool) {
+		b.lookups = append(b.lookups, Lookup{
+			Path:     path,
+			Found:    exists,
+			Sequence: sequence,
+		})
+	}
+}
+
+// Lookups returns the slice of recorded Lookup entries in the order they
+// were observed. Safe to call after resolution completes; the slice
+// reference is stable until the next Observer() callback fires.
+func (b *LookupBuffer) Lookups() []Lookup {
+	return b.lookups
 }

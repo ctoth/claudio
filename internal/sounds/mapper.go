@@ -57,10 +57,12 @@ func NewSoundMapper(soundChecker *tracking.SoundChecker) *SoundMapper {
 // NewSoundMapperWithResolver creates a new sound mapper with resolver-enabled
 // SoundChecker and optional MapperOptions (e.g. WithRecorder).
 //
-// The variadic tracking.SoundCheckerOption args (streaming PathCheckedHook
-// observers like SlogHook/NopHook) are no longer needed — DBHook is the
-// only meaningful observer and now goes through WithRecorder instead. A
-// future caller that wants a streaming hook can wire one directly.
+// The streaming-hook ecosystem (PathCheckedHook, SlogHook, NopHook) was
+// removed in favor of soundpack.PathObserver + tracking.LookupBuffer; the
+// resolver-less SoundChecker constructor and per-checker SoundCheckerOption
+// went with it. The SoundChecker held here is itself scheduled for removal
+// in the next commit once the mapper switches to driving
+// soundpack.ResolveSoundWithFallback directly with a buffer-backed observer.
 func NewSoundMapperWithResolver(resolver soundpack.SoundpackResolver, opts ...MapperOption) *SoundMapper {
 	slog.Debug("creating new sound mapper with resolver-enabled tracking")
 
