@@ -180,12 +180,15 @@ func (mb *MalgoBackend) Play(ctx context.Context, source AudioSource) error {
 		return fmt.Errorf("failed to play sound: %w", err)
 	}
 
-	// Clean up after playback
-	go func() {
-		<-ctx.Done()
-		_ = mb.audioPlayer.UnloadSound(soundID)
-		slog.Debug("sound cleanup completed", "sound_id", soundID)
-	}()
+	// Playback is synchronous: PlaySoundWithContext returns when the buffer
+	// has been consumed or ctx is cancelled. Unload inline. The previous
+	// `go func() { <-ctx.Done(); UnloadSound(soundID) }()` pattern leaked one
+	// goroutine plus a pinned *AudioData per call whenever the caller passed
+	// context.Background() (Done() is nil and the receive blocked forever) —
+	// which is exactly what the production CLI path does.
+	if uerr := mb.audioPlayer.UnloadSound(soundID); uerr != nil {
+		slog.Warn("failed to unload sound after playback", "sound_id", soundID, "error", uerr)
+	}
 
 	slog.Debug("unified playback completed successfully")
 	return nil
