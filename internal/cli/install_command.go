@@ -260,11 +260,16 @@ func runInstallWorkflow(agent install.Agent, scope string, settingsPath string) 
 		return fmt.Errorf("failed to verify installation by reading %s: %w", settingsPath, err)
 	}
 
-	// Check that all Claudio hooks are present
+	// Check that the default-enabled Claudio hooks are present. We iterate
+	// EnabledHooks (not HookNames) so we match the set the write step
+	// (install/hooks.go) actually writes — a DefaultEnabled=false hook
+	// must NOT cause a verify mismatch because it was deliberately
+	// skipped on write.
 	if hooks, exists := (*verifySettings)["hooks"]; exists {
 		if hooksMap, ok := hooks.(map[string]interface{}); ok {
-			expectedHooks := agent.HookNames() // Use agent registry instead of hardcoded list
-			for _, hookName := range expectedHooks {
+			expectedHooks := agent.EnabledHooks()
+			for _, h := range expectedHooks {
+				hookName := h.Name
 				if val, exists := hooksMap[hookName]; !exists {
 					return fmt.Errorf("verification failed: Claudio hook '%s' missing after installation", hookName)
 				} else if !install.IsClaudioHook(val) {

@@ -3,9 +3,12 @@ package cli
 import (
 	"bytes"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"claudio.click/internal/install"
 	"github.com/spf13/cobra"
 )
 
@@ -84,5 +87,59 @@ func TestInstallCommandDefaultsToClaude(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "settings.json") {
 		t.Errorf("expected claude settings.json path by default, got: %s", out.String())
+	}
+}
+
+// TestInstallVerifyHonorsDefaultEnabledFalse covers finding #82: the
+// verify step previously iterated agent.HookNames() (the full registry)
+// while the write step only wrote agent.EnabledHooks() (default-enabled
+// subset). A DefaultEnabled=false hook would fail verify even though
+// the write deliberately skipped it. The fix aligns both to
+// EnabledHooks; this test confirms install succeeds when a hook is
+// flagged DefaultEnabled=false.
+func TestInstallVerifyHonorsDefaultEnabledFalse(t *testing.T) {
+	// The verify path calls IsClaudioHook which checks the command
+	// basename against executableRecognizer. Under `go test` the
+	// executable is `<pkg>.test[.exe]`, not `claudio[.exe]`; the
+	// recognizer opts in to .test/.test.exe when this env var is set.
+	t.Setenv("CLAUDIO_TEST_RECOGNIZE_GO_TEST", "1")
+
+	// Save and restore AllHooks. We mutate the package-level registry
+	// for the duration of this test.
+	prev := install.AllHooks
+	defer func() { install.AllHooks = prev }()
+
+	// Build a registry where one hook is DefaultEnabled=false. The write
+	// step will skip it; the verify step must also skip it.
+	modified := make([]install.HookDefinition, len(prev))
+	copy(modified, prev)
+	// Flip the first hook to disabled.
+	if len(modified) == 0 {
+		t.Fatal("install.AllHooks unexpectedly empty")
+	}
+	modified[0].DefaultEnabled = false
+	install.AllHooks = modified
+
+	// Point the install at a tempdir-scoped settings file.
+	tempDir := t.TempDir()
+	settingsPath := filepath.Join(tempDir, "settings.json")
+	if err := os.WriteFile(settingsPath, []byte("{}"), 0644); err != nil {
+		t.Fatalf("write seed settings: %v", err)
+	}
+
+	err := runInstallWorkflow(install.AgentClaude, "user", settingsPath)
+	if err != nil {
+		t.Fatalf("install workflow failed when one hook is DefaultEnabled=false (verify should skip it): %v", err)
+	}
+
+	// Confirm the disabled hook is NOT in the written settings.
+	data, err := os.ReadFile(settingsPath)
+	if err != nil {
+		t.Fatalf("read settings: %v", err)
+	}
+	if strings.Contains(string(data), modified[0].Name) {
+		// The merger may still mention the disabled hook if it was
+		// previously present; we wrote {} so it should be absent.
+		t.Errorf("disabled hook %q unexpectedly written to settings: %s", modified[0].Name, string(data))
 	}
 }
