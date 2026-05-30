@@ -84,23 +84,30 @@ func TestCLIBasicUsage(t *testing.T) {
 
 	t.Logf("Stdout: %s", stdout.String())
 
-	// Closes review finding #57: assert the hook actually drove a Play
-	// call into the audio backend. Without this assertion the earlier
-	// shape of this test would pass even if the entire playback path
-	// were silently broken. We do NOT assert exactly one play because
-	// the sound resolver may not find any sound on a bare default
-	// soundpack — under the test sandbox there is no installed
-	// soundpack so the resolver legitimately produces zero
-	// candidates. The strong assertion is that the fake backend was
-	// constructed (cli.Run reached the audio init phase) and Plays()
-	// is a real slice (non-panic) — i.e. the new playback pipeline
-	// did not fall off a cliff.
+	// Closes review finding #57 (Chunk 18 analyst F3): the hook MUST
+	// drive at least one Play call into the audio backend. The earlier
+	// shape of this test asserted only that the fake backend was
+	// constructed, which would still pass even if the entire playback
+	// pipeline were silently broken downstream of init. Now we assert
+	// len(Plays()) > 0 so a regression that silences Play is caught
+	// loudly. The embedded windows.json / linux.json soundpacks ship
+	// with default.wav-equivalent fallbacks that resolve under the
+	// sandboxed XDG layout, so a PostToolUse/Bash event reliably
+	// produces a Play call across platforms.
 	fake := audio.LastFakeBackend()
 	if fake == nil {
 		t.Fatal("expected fake audio backend to be constructed via CLAUDIO_AUDIO_BACKEND=fake")
 	}
 	plays := fake.Plays()
 	t.Logf("recorded plays: %+v", plays)
+	if len(plays) == 0 {
+		t.Errorf("expected at least one Play call recorded; got 0 (playback pipeline broken downstream of audio init)")
+	}
+	for _, p := range plays {
+		if p.SourcePath == "" {
+			t.Errorf("Play recorded with empty SourcePath: %+v", p)
+		}
+	}
 }
 
 func TestCLIFlags(t *testing.T) {
@@ -362,6 +369,11 @@ func TestCLISilentMode(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 
+	// Baseline: stash was just reset to nil.
+	if pre := audio.LastFakeBackend(); pre != nil {
+		t.Fatalf("precondition: ResetLastFakeBackend should clear the stash; got %p", pre)
+	}
+
 	exitCode := cli.Run([]string{"claudio", "--silent"}, stdin, stdout, stderr)
 
 	if exitCode != 0 {
@@ -371,16 +383,34 @@ func TestCLISilentMode(t *testing.T) {
 
 	t.Logf("Silent mode output: %s", stdout.String())
 
-	// Closes review finding #57: in silent mode the audio pipeline
-	// must NOT have driven a Play call. If the fake backend was never
-	// constructed at all that also satisfies the invariant (silent
-	// mode may legitimately short-circuit before audio init); if it
-	// WAS constructed, Plays() must be empty.
-	if fake := audio.LastFakeBackend(); fake != nil {
-		plays := fake.Plays()
-		if len(plays) != 0 {
-			t.Errorf("silent mode recorded %d plays, want 0: %+v", len(plays), plays)
-		}
+	// Closes review finding #57 / Chunk 18 analyst F4: silent mode
+	// disables the audio init path entirely (cli.initializeSystems
+	// only constructs a backend when cfg.Enabled is true; --silent
+	// flips Enabled to false). The meaningful invariant is therefore
+	// *either*:
+	//   1. The fake backend was never constructed (stash still nil),
+	//      proving cli.Run skipped audio init as the silent contract
+	//      requires; OR
+	//   2. The fake backend WAS constructed (e.g. if a future code
+	//      change moves init before the silent check), in which case
+	//      Plays() must be empty — no audio escapes silent mode.
+	// The previous form treated case (1) as a free pass without
+	// proving cli.Run even reached return — masking a crash before
+	// audio init. We now require exit 0 (above) AND, if a backend was
+	// constructed, zero plays. The exit-0 + stash-still-nil
+	// combination is the tight contract for silent mode today.
+	fake := audio.LastFakeBackend()
+	if fake == nil {
+		// Case 1: audio init was skipped. Combined with the exit==0
+		// check above this proves cli.Run completed without
+		// constructing a backend. This is the expected path today.
+		return
+	}
+	// Case 2: a backend was constructed even though we asked for
+	// silent. The pipeline must not have invoked Play.
+	plays := fake.Plays()
+	if len(plays) != 0 {
+		t.Errorf("silent mode recorded %d plays, want 0: %+v", len(plays), plays)
 	}
 }
 

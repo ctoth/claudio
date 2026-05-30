@@ -20,12 +20,12 @@ import (
 // end. Closes review finding #56.
 //
 // The test isolates HOME/XDG to t.TempDir() via testenv.IsolateXDG so
-// no developer state is mutated, and swaps the install package's
-// executableRecognizer via install.SwapExecutableRecognizer so the
-// verify step accepts the go test binary's basename (e.g.
-// "cli.test.exe") as a valid claudio executable. The actual hook
-// command path under test is the test binary itself — that's the
-// "claudio" the install workflow advertises.
+// no developer state is mutated, and opts in to the install package's
+// go-test recognizer extension by setting
+// CLAUDIO_TEST_RECOGNIZE_GO_TEST=1 so the verify step accepts the go
+// test binary's basename (e.g. "cli.test.exe") as a valid claudio
+// executable. The actual hook command path under test is the test
+// binary itself — that's the "claudio" the install workflow advertises.
 func TestRunInstallWorkflow_EndToEnd_NoDryRun(t *testing.T) {
 	root := testenv.IsolateXDG(t)
 
@@ -39,17 +39,14 @@ func TestRunInstallWorkflow_EndToEnd_NoDryRun(t *testing.T) {
 		t.Fatalf("failed to pre-create .claude dir: %v", err)
 	}
 
-	// Swap the recognizer so the verify step accepts the go test
-	// binary. Production matches only "claudio" and "claudio.exe";
-	// under `go test` the executable basename is e.g. "cli.test.exe".
-	install.SwapExecutableRecognizer(t, func(name string) bool {
-		if name == "claudio" || name == "claudio.exe" {
-			return true
-		}
-		// Accept anything that looks like a go test binary
-		// (preserves the production rejection of unrelated commands).
-		return strings.Contains(name, ".test") || strings.HasSuffix(name, ".exe") && strings.Contains(name, "test")
-	})
+	// Opt in to the recognizer's go-test extension so the verify step
+	// accepts the go test binary. Production matches only "claudio"
+	// and "claudio.exe"; under `go test` the executable basename is
+	// e.g. "cli.test.exe". t.Setenv restores the prior value at test
+	// end. This replaces the prior install.SwapExecutableRecognizer
+	// helper, which forced the testing package into the production
+	// binary.
+	t.Setenv("CLAUDIO_TEST_RECOGNIZE_GO_TEST", "1")
 
 	cli := NewCLI()
 	stdin := strings.NewReader("")

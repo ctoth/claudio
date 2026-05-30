@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"claudio.click/internal/fs"
 )
@@ -14,10 +16,23 @@ import (
 type HooksMap map[string]interface{}
 
 // executableRecognizer decides whether a basename refers to the claudio
-// executable. Production matches only claudio and claudio.exe; test code
-// extends this in a *_test.go init() to also accept go test binary names.
+// executable. Production matches only claudio and claudio.exe. End-to-end
+// install tests that thread the go test binary path through
+// GetExecutablePath need the recognizer to accept names like
+// "cli.test.exe"; those tests opt in by setting
+// CLAUDIO_TEST_RECOGNIZE_GO_TEST=1 via t.Setenv. The env var is read at
+// call time so the production binary never imports the testing package
+// for a test-only seam.
 var executableRecognizer = func(name string) bool {
-	return name == "claudio" || name == "claudio.exe"
+	if name == "claudio" || name == "claudio.exe" {
+		return true
+	}
+	if os.Getenv("CLAUDIO_TEST_RECOGNIZE_GO_TEST") == "1" {
+		if strings.HasSuffix(name, ".test") || strings.HasSuffix(name, ".test.exe") {
+			return true
+		}
+	}
+	return false
 }
 
 
