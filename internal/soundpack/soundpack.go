@@ -64,6 +64,15 @@ func buildResolveConfig(opts []ResolveOption) resolveConfig {
 	return cfg
 }
 
+// ExtractObserverForTest folds the variadic options into a config and
+// returns the resulting PathObserver (nil if none was wired). Exported only
+// so that test-double resolvers in other packages can implement the
+// observer-firing contract without having to mirror the private
+// resolveConfig structure. NOT for production use.
+func ExtractObserverForTest(opts ...ResolveOption) PathObserver {
+	return buildResolveConfig(opts).observer
+}
+
 // UnifiedSoundpackResolver implements SoundpackResolver using any PathMapper
 type UnifiedSoundpackResolver struct {
 	mapper PathMapper

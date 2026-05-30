@@ -1,83 +1,19 @@
 package tracking
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"claudio.click/internal/hooks"
 	"claudio.click/internal/soundpack"
 )
 
-// MockSoundpackResolver implements a simple mock for testing
-type MockSoundpackResolver struct {
-	mappings map[string]string // logical -> physical path mappings
-}
-
-func (m *MockSoundpackResolver) ResolveSound(relativePath string) (string, error) {
-	if physical, exists := m.mappings[relativePath]; exists {
-		return physical, nil
-	}
-	return "", fmt.Errorf("sound not found: %s", relativePath)
-}
-
-func (m *MockSoundpackResolver) ResolveSoundWithFallback(paths []string, opts ...soundpack.ResolveOption) (string, error) {
-	for _, path := range paths {
-		if resolved, err := m.ResolveSound(path); err == nil {
-			return resolved, nil
-		}
-	}
-	return "", fmt.Errorf("no sounds found in fallback chain")
-}
-
-func (m *MockSoundpackResolver) GetName() string { return "mock" }
-func (m *MockSoundpackResolver) GetType() string { return "mock" }
-
-// TestSoundChecker_WithResolver verifies NewSoundCheckerWithResolver correctly
-// resolves logical paths to physical paths before checking existence on disk.
-//
-// SoundChecker is on the deletion list for the next commit (Chunk 14c); this
-// test pins the existing behavior during the migration window.
-func TestSoundChecker_WithResolver(t *testing.T) {
-	tempDir := t.TempDir()
-	bashSuccessFile := filepath.Join(tempDir, "bash-success.wav")
-	defaultFile := filepath.Join(tempDir, "default.wav")
-
-	err := os.WriteFile(bashSuccessFile, []byte("test"), 0644)
-	require.NoError(t, err)
-	err = os.WriteFile(defaultFile, []byte("test"), 0644)
-	require.NoError(t, err)
-
-	resolver := &MockSoundpackResolver{
-		mappings: map[string]string{
-			"success/bash-success.wav": bashSuccessFile,
-			"default.wav":              defaultFile,
-		},
-	}
-
-	checker := NewSoundCheckerWithResolver(resolver)
-	context := &hooks.EventContext{Category: hooks.Success, ToolName: "bash"}
-
-	logicalPaths := []string{
-		"success/bash-success.wav",
-		"success/tool-complete.wav",
-		"default.wav",
-	}
-
-	results := checker.CheckPaths(context, "posttool", logicalPaths)
-
-	if !results[0] {
-		t.Errorf("Expected first path to exist after resolution, got false")
-	}
-	if !results[2] {
-		t.Errorf("Expected default.wav to exist after resolution, got false")
-	}
-	if results[1] {
-		t.Errorf("Expected second path to not exist (no mapping), got true")
-	}
-}
+// MockSoundpackResolver and TestSoundChecker_WithResolver were deleted along
+// with SoundChecker. The per-candidate existence-and-resolution contract
+// they asserted now lives in soundpack (TestUnifiedSoundpackResolver,
+// TestResolveWithObserver_*) — the resolver owns its own os.Stat loop and
+// exposes observation via PathObserver, which LookupBuffer subscribes to.
 
 // TestLookupBuffer_CollectsObserverEvents asserts that LookupBuffer.Observer()
 // returns a soundpack.PathObserver that appends one Lookup per callback in

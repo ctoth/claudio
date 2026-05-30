@@ -7,25 +7,32 @@ import (
 
 	"claudio.click/internal/hooks"
 	"claudio.click/internal/soundpack"
-	"claudio.click/internal/tracking"
 )
 
-// SoundMapper maps hook events to sound file paths using event-specific fallback chains
+// SoundMapper maps hook events to sound file paths using event-specific
+// fallback chains. The mapper owns the chain construction; the resolver
+// (passed in at construction) owns the per-candidate existence check.
+//
+// The optional PathObserver is the inversion seam for tracking. The mapper
+// itself knows nothing about tracking — observation data flows to whatever
+// closure the caller wires in via WithObserver. The CLI composes a
+// tracking.LookupBuffer.Observer() and harvests its Lookups() for
+// RecordEvent after MapSound returns.
 type SoundMapper struct {
-	soundChecker *tracking.SoundChecker  // Optional for sound path tracking
-	recorder     tracking.EventRecorder  // Optional one-shot DB recorder (per-event RecordEvent call)
+	resolver soundpack.SoundpackResolver // resolver for path existence checks (may be nil)
+	observer soundpack.PathObserver      // optional per-candidate observer
 }
 
 // MapperOption configures a SoundMapper at construction.
 type MapperOption func(*SoundMapper)
 
-// WithRecorder injects an EventRecorder that receives one RecordEvent call
-// per MapSound invocation, after the chain has been resolved. A nil
-// recorder means "tracking off"; errors from RecordEvent are logged at
-// WARN and do NOT propagate (tracking is best-effort).
-func WithRecorder(r tracking.EventRecorder) MapperOption {
+// WithObserver injects a soundpack.PathObserver that fires once per
+// candidate path the resolver walks during MapSound. A nil observer means
+// "no observation". Use with tracking.LookupBuffer to record the resolved
+// chain for later RecordEvent persistence.
+func WithObserver(obs soundpack.PathObserver) MapperOption {
 	return func(m *SoundMapper) {
-		m.recorder = r
+		m.observer = obs
 	}
 }
 
@@ -45,32 +52,21 @@ type SoundMappingResult struct {
 	ChainType     string   // Type of fallback chain used: "enhanced", "posttool", "simple"
 }
 
-// NewSoundMapper creates a new sound mapper with SoundChecker for tracking
-func NewSoundMapper(soundChecker *tracking.SoundChecker) *SoundMapper {
-	slog.Debug("creating new sound mapper with tracking enabled")
-	
-	return &SoundMapper{
-		soundChecker: soundChecker,
-	}
+// NewSoundMapper creates a new sound mapper with no resolver (path-existence
+// checks return false; FallbackLevel defaults to 1). Retained for tests and
+// for the rare caller that wants chain-construction without resolution.
+func NewSoundMapper() *SoundMapper {
+	slog.Debug("creating new sound mapper without resolver")
+	return &SoundMapper{}
 }
 
-// NewSoundMapperWithResolver creates a new sound mapper with resolver-enabled
-// SoundChecker and optional MapperOptions (e.g. WithRecorder).
-//
-// The streaming-hook ecosystem (PathCheckedHook, SlogHook, NopHook) was
-// removed in favor of soundpack.PathObserver + tracking.LookupBuffer; the
-// resolver-less SoundChecker constructor and per-checker SoundCheckerOption
-// went with it. The SoundChecker held here is itself scheduled for removal
-// in the next commit once the mapper switches to driving
-// soundpack.ResolveSoundWithFallback directly with a buffer-backed observer.
+// NewSoundMapperWithResolver creates a new sound mapper that uses the given
+// soundpack.SoundpackResolver for per-candidate existence checks. Optional
+// MapperOptions (e.g. WithObserver) configure observation.
 func NewSoundMapperWithResolver(resolver soundpack.SoundpackResolver, opts ...MapperOption) *SoundMapper {
-	slog.Debug("creating new sound mapper with resolver-enabled tracking")
-
-	// Create SoundChecker with resolver; no streaming hooks by default.
-	soundChecker := tracking.NewSoundCheckerWithResolver(resolver)
-
+	slog.Debug("creating new sound mapper with resolver")
 	m := &SoundMapper{
-		soundChecker: soundChecker,
+		resolver: resolver,
 	}
 	for _, opt := range opts {
 		opt(m)
@@ -83,9 +79,9 @@ func NewSoundMapperWithResolver(resolver soundpack.SoundpackResolver, opts ...Ma
 // - PostToolUse: 6-level fallback (skip command-only sounds for semantic accuracy)
 // - Simple events: 4-level fallback (UserPromptSubmit, Notification, Stop, SubagentStop, PreCompact)
 //
-// ctx is threaded into the optional EventRecorder.RecordEvent call. A nil
-// ctx is treated as context.Background() so existing call sites that
-// don't have a context handy still work.
+// ctx is threaded into resolver operations. A nil ctx is treated as
+// context.Background() so existing call sites that don't have a context
+// handy still work.
 func (m *SoundMapper) MapSound(ctx context.Context, eventCtx *hooks.EventContext) *SoundMappingResult {
 	if ctx == nil {
 		ctx = context.Background()
@@ -228,33 +224,7 @@ func (m *SoundMapper) mapEnhancedSound(ctx context.Context, eventCtx *hooks.Even
 		paths = []string{"default.wav"}
 	}
 
-	// Resolve chain (dedup + check) and find the winner. Use the deduped
-	// `paths` slice returned by resolveChain — it matches the indices in
-	// `lookups` and is what persists to analytics.
-	fallbackLevel, lookups, paths := m.resolveChain(eventCtx, ChainTypeEnhanced, paths)
-	selectedPath := paths[0] // Default to first path
-	if fallbackLevel > 0 && fallbackLevel <= len(paths) {
-		selectedPath = paths[fallbackLevel-1] // Convert 1-based to 0-based index
-	}
-
-	m.recordEvent(ctx, eventCtx, ChainTypeEnhanced, lookups, selectedPath)
-
-	result := &SoundMappingResult{
-		SelectedPath:  selectedPath,
-		FallbackLevel: fallbackLevel,
-		TotalPaths:    len(paths),
-		AllPaths:      paths,
-		ChainType:     ChainTypeEnhanced,
-	}
-
-	slog.Debug("enhanced sound mapping completed",
-		"selected_path", result.SelectedPath,
-		"fallback_level", result.FallbackLevel,
-		"total_paths", result.TotalPaths,
-		"chain_type", result.ChainType,
-		"all_paths", result.AllPaths)
-
-	return result
+	return m.finalizeResult(ctx, paths, ChainTypeEnhanced)
 }
 
 // buildPath creates a standardized sound path with proper normalization
@@ -396,78 +366,92 @@ func (m *SoundMapper) extractSuffixFromOperation(operation string) string {
 	}
 }
 
-// resolveChain checks every path in the chain and returns both the winning
-// 1-based fallback level (first existing path or len(paths) for the default)
-// and the full per-path Lookup record set ready to be persisted by an
-// EventRecorder. chainType identifies WHICH chain these paths came from so
-// sequence values stay chain-scoped (see review finding #20).
-//
+// dedupPreserveOrder collapses duplicate paths keeping first occurrence.
 // Chains can emit duplicate paths (e.g. PostTool's hint and command-suffix
-// levels collapse when SoundHint == ToolName+"-"+suffix). Dedup keeping
-// first occurrence so the path_lookups UNIQUE(event_id, path) constraint
-// holds and the "first existing wins" analytics intent is preserved.
-func (m *SoundMapper) resolveChain(eventCtx *hooks.EventContext, chainType string, paths []string) (int, []tracking.Lookup, []string) {
-	// Dedup keeping first occurrence BEFORE checking. This collapses
-	// chain-level shape (e.g. hint == tool-suffix) into a single lookup
-	// row and keeps fallback-level indexing aligned with what the caller
-	// will persist. Allocate a fresh slice — the caller's `paths` backing
-	// array is also stored on SoundMappingResult.AllPaths and must not be
-	// mutated in-place. The deduped slice is returned so the caller's
-	// SelectedPath, AllPaths, and TotalPaths all reference the SAME
-	// indices the lookups slice uses.
-	if len(paths) > 1 {
-		seen := make(map[string]struct{}, len(paths))
-		deduped := make([]string, 0, len(paths))
-		for _, p := range paths {
-			if _, ok := seen[p]; ok {
-				continue
-			}
-			seen[p] = struct{}{}
-			deduped = append(deduped, p)
+// levels collapse when SoundHint == ToolName+"-"+suffix). Dedup keeps the
+// "first existing wins" intent and matches the UNIQUE(event_id, path)
+// constraint downstream telemetry relies on.
+func dedupPreserveOrder(paths []string) []string {
+	if len(paths) <= 1 {
+		return paths
+	}
+	seen := make(map[string]struct{}, len(paths))
+	deduped := make([]string, 0, len(paths))
+	for _, p := range paths {
+		if _, ok := seen[p]; ok {
+			continue
 		}
-		paths = deduped
+		seen[p] = struct{}{}
+		deduped = append(deduped, p)
 	}
-
-	// If no SoundChecker is configured, return level 1 with no lookups
-	// (backward compatibility — no DB write target either, since paths
-	// haven't been checked).
-	if m.soundChecker == nil {
-		return 1, nil, paths
-	}
-
-	// Use SoundChecker to check all paths in one streaming pass; this
-	// also invokes any registered PathCheckedHook observers.
-	results := m.soundChecker.CheckPaths(eventCtx, chainType, paths)
-
-	lookups := make([]tracking.Lookup, len(paths))
-	fallbackLevel := len(paths)
-	winnerFound := false
-	for i, exists := range results {
-		lookups[i] = tracking.Lookup{Path: paths[i], Found: exists, Sequence: i + 1}
-		if exists && !winnerFound {
-			fallbackLevel = i + 1
-			winnerFound = true
-		}
-	}
-
-	return fallbackLevel, lookups, paths
+	return deduped
 }
 
-// recordEvent forwards one resolved chain to the optional EventRecorder.
-// Tracking is best-effort: a nil recorder is a no-op, and any error from
-// the recorder is logged at WARN — it does NOT propagate to the caller
-// (a hook should never fail because tracking did).
-func (m *SoundMapper) recordEvent(ctx context.Context, eventCtx *hooks.EventContext, chainType string, lookups []tracking.Lookup, selectedPath string) {
-	if m.recorder == nil {
-		return
+// finalizeResult dedups the chain, resolves the winning candidate via
+// soundpack.ResolveSoundWithFallback (wiring the observer through), and
+// returns the SoundMappingResult with FallbackLevel set to the 1-based
+// winner index (or len(paths) when no candidate existed).
+//
+// If the mapper has no resolver, returns level 1 unchecked — callers without
+// a resolver get the first path back as the selection. No observation fires
+// in that path (no candidate was actually inspected).
+func (m *SoundMapper) finalizeResult(ctx context.Context, paths []string, chainType string) *SoundMappingResult {
+	_ = ctx // reserved for future cancellable resolution
+	paths = dedupPreserveOrder(paths)
+
+	fallbackLevel := 1
+	selectedPath := paths[0]
+
+	if m.resolver != nil {
+		// Record per-candidate hits via a local tracker so the mapper can
+		// compute FallbackLevel from the observer stream — the same source
+		// of truth telemetry uses. Wrap the caller's observer if any.
+		caller := m.observer
+		winnerIdx := -1
+		tracker := func(path string, sequence int, exists bool) {
+			if exists && winnerIdx == -1 {
+				winnerIdx = sequence
+			}
+			if caller != nil {
+				caller(path, sequence, exists)
+			}
+		}
+
+		resolved, err := m.resolver.ResolveSoundWithFallback(
+			paths,
+			soundpack.WithObserver(tracker),
+		)
+		if err == nil {
+			selectedPath = resolved
+			// Resolver returned a physical path. Map back to the logical
+			// chain index by trusting the observer's winnerIdx.
+			if winnerIdx > 0 {
+				fallbackLevel = winnerIdx
+				selectedPath = paths[winnerIdx-1]
+			}
+		} else {
+			// Nothing existed; fall back to the last chain entry (default).
+			fallbackLevel = len(paths)
+			selectedPath = paths[len(paths)-1]
+		}
 	}
-	if err := m.recorder.RecordEvent(ctx, eventCtx, chainType, lookups, selectedPath); err != nil {
-		slog.Warn("sound tracking RecordEvent failed (continuing)",
-			"error", err,
-			"chain_type", chainType,
-			"selected_path", selectedPath,
-			"lookups", len(lookups))
+
+	result := &SoundMappingResult{
+		SelectedPath:  selectedPath,
+		FallbackLevel: fallbackLevel,
+		TotalPaths:    len(paths),
+		AllPaths:      paths,
+		ChainType:     chainType,
 	}
+
+	slog.Debug("sound mapping completed",
+		"selected_path", result.SelectedPath,
+		"fallback_level", result.FallbackLevel,
+		"total_paths", result.TotalPaths,
+		"chain_type", result.ChainType,
+		"all_paths", result.AllPaths)
+
+	return result
 }
 
 // mapPostToolSound handles PostToolUse events with 6-level fallback (skip command-only sounds)
@@ -536,33 +520,7 @@ func (m *SoundMapper) mapPostToolSound(ctx context.Context, eventCtx *hooks.Even
 		paths = []string{"default.wav"}
 	}
 
-	// Resolve chain (dedup + check) and find the winner. Use the deduped
-	// `paths` slice returned by resolveChain — it matches the indices in
-	// `lookups` and is what persists to analytics.
-	fallbackLevel, lookups, paths := m.resolveChain(eventCtx, ChainTypePostTool, paths)
-	selectedPath := paths[0] // Default to first path
-	if fallbackLevel > 0 && fallbackLevel <= len(paths) {
-		selectedPath = paths[fallbackLevel-1] // Convert 1-based to 0-based index
-	}
-
-	m.recordEvent(ctx, eventCtx, ChainTypePostTool, lookups, selectedPath)
-
-	result := &SoundMappingResult{
-		SelectedPath:  selectedPath,
-		FallbackLevel: fallbackLevel,
-		TotalPaths:    len(paths),
-		AllPaths:      paths,
-		ChainType:     ChainTypePostTool,
-	}
-
-	slog.Debug("PostToolUse sound mapping completed",
-		"selected_path", result.SelectedPath,
-		"fallback_level", result.FallbackLevel,
-		"total_paths", result.TotalPaths,
-		"chain_type", result.ChainType,
-		"all_paths", result.AllPaths)
-
-	return result
+	return m.finalizeResult(ctx, paths, ChainTypePostTool)
 }
 
 // mapSimpleSound handles simple events with 4-level fallback chain
@@ -609,33 +567,7 @@ func (m *SoundMapper) mapSimpleSound(ctx context.Context, eventCtx *hooks.EventC
 		paths = []string{"default.wav"}
 	}
 
-	// Resolve chain (dedup + check) and find the winner. Use the deduped
-	// `paths` slice returned by resolveChain — it matches the indices in
-	// `lookups` and is what persists to analytics.
-	fallbackLevel, lookups, paths := m.resolveChain(eventCtx, ChainTypeSimple, paths)
-	selectedPath := paths[0] // Default to first path
-	if fallbackLevel > 0 && fallbackLevel <= len(paths) {
-		selectedPath = paths[fallbackLevel-1] // Convert 1-based to 0-based index
-	}
-
-	m.recordEvent(ctx, eventCtx, ChainTypeSimple, lookups, selectedPath)
-
-	result := &SoundMappingResult{
-		SelectedPath:  selectedPath,
-		FallbackLevel: fallbackLevel,
-		TotalPaths:    len(paths),
-		AllPaths:      paths,
-		ChainType:     ChainTypeSimple,
-	}
-
-	slog.Debug("simple sound mapping completed",
-		"selected_path", result.SelectedPath,
-		"fallback_level", result.FallbackLevel,
-		"total_paths", result.TotalPaths,
-		"chain_type", result.ChainType,
-		"all_paths", result.AllPaths)
-
-	return result
+	return m.finalizeResult(ctx, paths, ChainTypeSimple)
 }
 
 // normalizeName converts a name to lowercase and replaces invalid characters

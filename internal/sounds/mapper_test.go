@@ -11,11 +11,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"claudio.click/internal/hooks"
 	"claudio.click/internal/soundpack"
-	"claudio.click/internal/tracking"
 )
 
 func TestSoundMapper(t *testing.T) {
-	mapper := NewSoundMapper(nil)
+	mapper := NewSoundMapper()
 
 	if mapper == nil {
 		t.Fatal("NewSoundMapper returned nil")
@@ -23,7 +22,7 @@ func TestSoundMapper(t *testing.T) {
 }
 
 func TestMapSoundEventSpecificFallback(t *testing.T) {
-	mapper := NewSoundMapper(nil)
+	mapper := NewSoundMapper()
 
 	testCases := []struct {
 		name          string
@@ -163,7 +162,7 @@ func TestMapSoundEventSpecificFallback(t *testing.T) {
 }
 
 func TestMapSoundPathNormalization(t *testing.T) {
-	mapper := NewSoundMapper(nil)
+	mapper := NewSoundMapper()
 
 	testCases := []struct {
 		name     string
@@ -203,7 +202,7 @@ func TestMapSoundPathNormalization(t *testing.T) {
 }
 
 func TestMapSoundFallbackSelection(t *testing.T) {
-	mapper := NewSoundMapper(nil)
+	mapper := NewSoundMapper()
 
 	// Test fallback path generation - updated for event-specific architecture
 
@@ -288,7 +287,7 @@ func TestMapSoundFallbackSelection(t *testing.T) {
 }
 
 func TestMapSoundEdgeCases(t *testing.T) {
-	mapper := NewSoundMapper(nil)
+	mapper := NewSoundMapper()
 
 	t.Run("nil context", func(t *testing.T) {
 		result := mapper.MapSound(context.Background(), nil)
@@ -359,7 +358,7 @@ func TestMapSoundEdgeCases(t *testing.T) {
 }
 
 func TestMapSoundResultMetadata(t *testing.T) {
-	mapper := NewSoundMapper(nil)
+	mapper := NewSoundMapper()
 
 	eventCtx := &hooks.EventContext{
 		Category:  hooks.Success,
@@ -394,7 +393,7 @@ func TestMapSoundResultMetadata(t *testing.T) {
 }
 
 func TestMapSoundWithOriginalToolFallback(t *testing.T) {
-	mapper := NewSoundMapper(nil)
+	mapper := NewSoundMapper()
 
 	// Test context with extracted command but original tool for fallback
 	eventCtx := &hooks.EventContext{
@@ -438,7 +437,7 @@ func TestMapSoundWithOriginalToolFallback(t *testing.T) {
 
 // TDD Phase 2.1 RED: Event-specific fallback chain differentiation tests
 func TestEventSpecificFallbackChains(t *testing.T) {
-	mapper := NewSoundMapper(nil)
+	mapper := NewSoundMapper()
 
 	tests := []struct {
 		name              string
@@ -581,7 +580,7 @@ func TestEventSpecificFallbackChains(t *testing.T) {
 
 // TDD Phase 2.1 RED: PreToolUse enhanced 9-level fallback chain test
 func TestPreToolUse9LevelEnhancedFallback(t *testing.T) {
-	mapper := NewSoundMapper(nil)
+	mapper := NewSoundMapper()
 
 	eventCtx := &hooks.EventContext{
 		Category:     hooks.Loading,
@@ -623,7 +622,7 @@ func TestPreToolUse9LevelEnhancedFallback(t *testing.T) {
 
 // TDD Phase 2.1 RED: PostToolUse 6-level fallback chain test (skip command-only sounds)
 func TestPostToolUse6LevelFallback(t *testing.T) {
-	mapper := NewSoundMapper(nil)
+	mapper := NewSoundMapper()
 
 	tests := []struct {
 		name     string
@@ -692,7 +691,7 @@ func TestPostToolUse6LevelFallback(t *testing.T) {
 
 // TDD Phase 2.1 RED: Simple event 4-level fallback chain test
 func TestSimpleEvent4LevelFallback(t *testing.T) {
-	mapper := NewSoundMapper(nil)
+	mapper := NewSoundMapper()
 
 	tests := []struct {
 		name     string
@@ -899,12 +898,27 @@ func (m *MockSoundpackResolver) ResolveSound(relativePath string) (string, error
 }
 
 // ResolveSoundWithFallback satisfies the soundpack.SoundpackResolver
-// interface. The mock ignores opts — observer-driven tests use the real
-// UnifiedSoundpackResolver against a tmpdir; the mock only needs to choose
-// a winner among logical paths against its mapping table.
+// interface. The mock walks the candidates calling ResolveSound on each and
+// fires the wired observer per candidate, mirroring the real
+// UnifiedSoundpackResolver's contract: observer fires once per input
+// candidate in order, with 1-based sequence; post-winner remaining
+// candidates fire with exists=false to preserve chain-shape telemetry.
 func (m *MockSoundpackResolver) ResolveSoundWithFallback(paths []string, opts ...soundpack.ResolveOption) (string, error) {
-	for _, path := range paths {
-		if resolved, err := m.ResolveSound(path); err == nil {
+	obs := soundpack.ExtractObserverForTest(opts...)
+	fire := func(path string, sequence int, exists bool) {
+		if obs != nil {
+			obs(path, sequence, exists)
+		}
+	}
+
+	for i, path := range paths {
+		resolved, err := m.ResolveSound(path)
+		exists := err == nil
+		fire(path, i+1, exists)
+		if exists {
+			for j := i + 1; j < len(paths); j++ {
+				fire(paths[j], j+1, false)
+			}
 			return resolved, nil
 		}
 	}
@@ -914,52 +928,34 @@ func (m *MockSoundpackResolver) ResolveSoundWithFallback(paths []string, opts ..
 func (m *MockSoundpackResolver) GetName() string { return "mock" }
 func (m *MockSoundpackResolver) GetType() string { return "mock" }
 
-// fakeRecorder captures RecordEvent invocations for assertions. It is the
-// minimal tracking.EventRecorder implementation needed to prove the mapper
-// calls the recorder exactly once per MapSound with the resolved chain.
-type fakeRecorder struct {
-	mu    sync.Mutex
-	calls []recorderCall
+// observerCall captures one PathObserver invocation for assertions.
+type observerCall struct {
+	path     string
+	sequence int
+	exists   bool
 }
 
-type recorderCall struct {
-	chainType    string
-	lookups      []tracking.Lookup
-	selectedPath string
+// captureObserver returns a thread-safe PathObserver that appends every
+// callback into the provided slice (under the supplied mutex).
+func captureObserver(mu *sync.Mutex, calls *[]observerCall) soundpack.PathObserver {
+	return func(path string, sequence int, exists bool) {
+		mu.Lock()
+		*calls = append(*calls, observerCall{path: path, sequence: sequence, exists: exists})
+		mu.Unlock()
+	}
 }
 
-func (f *fakeRecorder) RecordEvent(
-	ctx context.Context,
-	eventCtx *hooks.EventContext,
-	chainType string,
-	lookups []tracking.Lookup,
-	selectedPath string,
-) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	// Copy the lookups slice so later mutations by the mapper (none exist
-	// today, but defensive) cannot corrupt the captured state.
-	cp := make([]tracking.Lookup, len(lookups))
-	copy(cp, lookups)
-	f.calls = append(f.calls, recorderCall{
-		chainType:    chainType,
-		lookups:      cp,
-		selectedPath: selectedPath,
-	})
-	return nil
-}
-
-// TestMapSound_RouteRecorder_OnceWithAllLookups locks in the contract that
-// MapSound calls EventRecorder.RecordEvent EXACTLY ONCE per invocation
-// with the full deduped lookup list and the selected winner, across all
-// three chain types (enhanced, posttool, simple).
+// TestMapSound_ObserverFiresOncePerChainCandidate locks in the contract
+// that MapSound fires the wired PathObserver EXACTLY ONCE per deduped chain
+// candidate, in order, with 1-based sequence. The observer stream is the
+// telemetry source that LookupBuffer accumulates and the CLI hands to
+// EventRecorder.RecordEvent in one transaction — so this invariant is the
+// updated form of Chunk 13's "one RecordEvent per MapSound" guarantee.
 //
-// Regression guard for review findings #21 and #22 — the original streaming
-// pattern called the recorder N times per event with partial state. The
-// finisher commit (465e21c) claimed this test landed; it did not. The
-// previous diff was entirely mechanical context-threading. This test is
-// the actually-prescribed regression guard.
-func TestMapSound_RouteRecorder_OnceWithAllLookups(t *testing.T) {
+// Covers all three chain types (enhanced, posttool, simple). Regression
+// guard against streaming-style observation that would fire partial state
+// during resolution.
+func TestMapSound_ObserverFiresOncePerChainCandidate(t *testing.T) {
 	tempDir := t.TempDir()
 	defaultFile := filepath.Join(tempDir, "default.wav")
 	if err := os.WriteFile(defaultFile, []byte("test"), 0644); err != nil {
@@ -969,8 +965,8 @@ func TestMapSound_RouteRecorder_OnceWithAllLookups(t *testing.T) {
 		mappings: map[string]string{
 			"default.wav": defaultFile,
 			// All other paths intentionally absent — forces the resolver to
-			// walk the entire chain so lookups list is fully populated and
-			// the dedup invariant has something to chew on.
+			// walk the entire chain so the observer stream is fully populated
+			// and the dedup invariant has something to chew on.
 		},
 	}
 
@@ -1012,97 +1008,87 @@ func TestMapSound_RouteRecorder_OnceWithAllLookups(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			rec := &fakeRecorder{}
-			mapper := NewSoundMapperWithResolver(resolver, WithRecorder(rec))
+			var mu sync.Mutex
+			var calls []observerCall
+			mapper := NewSoundMapperWithResolver(
+				resolver,
+				WithObserver(captureObserver(&mu, &calls)),
+			)
 
 			result := mapper.MapSound(context.Background(), tc.eventCtx)
 			if result == nil {
 				t.Fatal("MapSound returned nil result")
 			}
 
-			rec.mu.Lock()
-			defer rec.mu.Unlock()
-
-			// Exactly one RecordEvent invocation per MapSound — the
-			// single-row-per-event contract.
-			if len(rec.calls) != 1 {
-				t.Fatalf("expected exactly 1 RecordEvent call, got %d", len(rec.calls))
-			}
-			call := rec.calls[0]
-
 			// Chain type tag matches the routed method.
-			if call.chainType != tc.expectedChainType {
-				t.Errorf("chainType: got %q, want %q", call.chainType, tc.expectedChainType)
+			if result.ChainType != tc.expectedChainType {
+				t.Errorf("chainType: got %q, want %q", result.ChainType, tc.expectedChainType)
 			}
 
-			// Lookups must be non-empty — every chain emits at least one
-			// path (category-specific + default), so an empty lookup list
-			// would mean the recorder was wired before resolveChain ran.
-			if len(call.lookups) == 0 {
-				t.Error("RecordEvent called with empty lookups; expected non-empty")
+			mu.Lock()
+			defer mu.Unlock()
+
+			// Observer fires once per candidate; calls list must be non-empty.
+			if len(calls) == 0 {
+				t.Fatal("observer received zero callbacks; expected one per candidate")
 			}
 
-			// SelectedPath must be set — empty selectedPath would mean the
-			// recorder was wired before the winner was chosen.
-			if call.selectedPath == "" {
-				t.Error("RecordEvent called with empty selectedPath")
+			// SelectedPath must be set; the chain must include it.
+			if result.SelectedPath == "" {
+				t.Error("SelectedPath empty after resolution")
 			}
-
-			// SelectedPath must appear in the lookups list — the winner
-			// is a member of the chain, not a separate value.
 			selectedFound := false
-			for _, lk := range call.lookups {
-				if lk.Path == call.selectedPath {
+			for _, c := range calls {
+				if c.path == result.SelectedPath {
 					selectedFound = true
 					break
 				}
 			}
 			if !selectedFound {
-				t.Errorf("selectedPath %q not found in lookups paths", call.selectedPath)
+				t.Errorf("selectedPath %q not in observer call paths", result.SelectedPath)
 			}
 
-			// Dedup invariant: every lookup.Path is unique. The chain
-			// builder can emit duplicates (e.g. PostTool hint == tool-suffix
-			// collapse); resolveChain deduplicates BEFORE recording. If
-			// duplicates make it to the recorder, the UNIQUE(event_id, path)
-			// constraint would fire in production.
+			// Dedup invariant: every observed path is unique. PostTool chains
+			// can synthesize duplicates (hint == tool-suffix); the mapper
+			// dedupes BEFORE resolution so the observer stream and the
+			// downstream UNIQUE(event_id, path) constraint stay aligned.
 			seen := make(map[string]bool)
-			for _, lk := range call.lookups {
-				if seen[lk.Path] {
-					t.Errorf("duplicate path in lookups: %q (dedup invariant violated)", lk.Path)
+			for _, c := range calls {
+				if seen[c.path] {
+					t.Errorf("duplicate path in observer calls: %q (dedup invariant violated)", c.path)
 				}
-				seen[lk.Path] = true
+				seen[c.path] = true
 			}
 
-			// Result's AllPaths must match the lookups' paths in order —
-			// the deduped slice is shared with the analytics row.
-			if len(result.AllPaths) != len(call.lookups) {
-				t.Errorf("AllPaths length %d != lookups length %d",
-					len(result.AllPaths), len(call.lookups))
+			// Observer stream length == AllPaths length: the resolver walks
+			// the full deduped chain (post-winner candidates fire with
+			// exists=false to preserve telemetry shape).
+			if len(calls) != len(result.AllPaths) {
+				t.Errorf("observer calls=%d, AllPaths=%d (want equal)",
+					len(calls), len(result.AllPaths))
 			} else {
-				for i, lk := range call.lookups {
-					if result.AllPaths[i] != lk.Path {
-						t.Errorf("AllPaths[%d]=%q != lookups[%d].Path=%q",
-							i, result.AllPaths[i], i, lk.Path)
+				for i, c := range calls {
+					if result.AllPaths[i] != c.path {
+						t.Errorf("AllPaths[%d]=%q != calls[%d].path=%q",
+							i, result.AllPaths[i], i, c.path)
 					}
 				}
 			}
 
-			// Sequences must be 1-based and contiguous — the recorder
-			// relies on this to populate path_lookups.sequence.
-			for i, lk := range call.lookups {
-				if lk.Sequence != i+1 {
-					t.Errorf("lookups[%d].Sequence=%d, want %d", i, lk.Sequence, i+1)
+			// Sequences are 1-based and contiguous.
+			for i, c := range calls {
+				if c.sequence != i+1 {
+					t.Errorf("calls[%d].sequence=%d, want %d", i, c.sequence, i+1)
 				}
 			}
 		})
 	}
 }
 
-// TestMapSound_NilRecorder_NoCall pins that a mapper with no recorder
-// configured (WithRecorder not used) never panics and silently skips
-// the RecordEvent call. Tracking is optional.
-func TestMapSound_NilRecorder_NoCall(t *testing.T) {
+// TestMapSound_NilObserver_NoPanic pins that a mapper with no observer
+// configured (WithObserver not used) never panics and resolves normally.
+// Observation is optional.
+func TestMapSound_NilObserver_NoPanic(t *testing.T) {
 	tempDir := t.TempDir()
 	defaultFile := filepath.Join(tempDir, "default.wav")
 	if err := os.WriteFile(defaultFile, []byte("test"), 0644); err != nil {
@@ -1112,7 +1098,7 @@ func TestMapSound_NilRecorder_NoCall(t *testing.T) {
 		mappings: map[string]string{"default.wav": defaultFile},
 	}
 
-	// No WithRecorder option.
+	// No WithObserver option.
 	mapper := NewSoundMapperWithResolver(resolver)
 
 	result := mapper.MapSound(context.Background(), &hooks.EventContext{
@@ -1123,8 +1109,7 @@ func TestMapSound_NilRecorder_NoCall(t *testing.T) {
 	if result == nil {
 		t.Fatal("MapSound returned nil result")
 	}
-	// No panic = pass. The result still resolves normally.
 	if result.SelectedPath == "" {
-		t.Error("SelectedPath should be set even without a recorder")
+		t.Error("SelectedPath should be set even without an observer")
 	}
 }

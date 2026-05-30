@@ -596,26 +596,47 @@ func (c *CLI) processHookEvent(hookEvent *hooks.HookEvent, cfg *config.Config, s
 		"tool", eventCtx.ToolName,
 		"hint", eventCtx.SoundHint)
 
-	// Create SoundMapper with resolver-enabled SoundChecker for proper path resolution.
-	// DBHook is injected as an EventRecorder (one RecordEvent call per resolved
-	// chain, transactional). When no tracking DB is wired the recorder is nil
-	// — the mapper treats that as "tracking off" and skips the call entirely.
-	var soundMapper *sounds.SoundMapper
+	// Compose the resolution pipeline. The mapper drives chain construction
+	// and resolution; the LookupBuffer (when tracking is on) wires
+	// per-candidate observation into the EventRecorder.RecordEvent payload.
+	//
+	// End-state dependency direction: sounds knows nothing about tracking.
+	// The CLI is the orchestrator that buys observation from the resolver
+	// (via soundpack.WithObserver) and writes it to tracking — preserving
+	// Chunk 13's one-RecordEvent-per-MapSound invariant at the CLI seam.
+	ctx := context.Background()
+
+	var buf *tracking.LookupBuffer
+	var dbHook *tracking.DBHook
+	var mapperOpts []sounds.MapperOption
 	if c.trackingDB != nil {
-		dbHook := tracking.NewDBHook(c.trackingDB, hookEvent.SessionID)
-		soundMapper = sounds.NewSoundMapperWithResolver(c.soundpackResolver, sounds.WithRecorder(dbHook))
-		slog.Debug("created SoundMapper with resolver and DBHook recorder", "session_id", hookEvent.SessionID)
+		buf = tracking.NewLookupBuffer()
+		dbHook = tracking.NewDBHook(c.trackingDB, hookEvent.SessionID)
+		mapperOpts = append(mapperOpts, sounds.WithObserver(buf.Observer()))
+		slog.Debug("created LookupBuffer + DBHook for tracking", "session_id", hookEvent.SessionID)
 	} else {
-		soundMapper = sounds.NewSoundMapperWithResolver(c.soundpackResolver)
-		slog.Debug("created SoundMapper with resolver and no recorder (tracking disabled)")
+		slog.Debug("tracking disabled; mapper resolves without an observer")
 	}
 
-	// Map to sound file. context.Background() is fine here — the hook-driven
-	// CLI has no cancellation story yet; recorder calls just inherit it.
-	result := soundMapper.MapSound(context.Background(), eventCtx)
+	soundMapper := sounds.NewSoundMapperWithResolver(c.soundpackResolver, mapperOpts...)
+
+	result := soundMapper.MapSound(ctx, eventCtx)
 	if result == nil {
 		slog.Warn("no sound mapping found for event")
 		return
+	}
+
+	// One RecordEvent per MapSound, post-resolution, with the full deduped
+	// lookup chain and the chosen winner. Errors are logged at WARN and do
+	// NOT propagate — tracking is best-effort.
+	if buf != nil && dbHook != nil {
+		if err := dbHook.RecordEvent(ctx, eventCtx, result.ChainType, buf.Lookups(), result.SelectedPath); err != nil {
+			slog.Warn("sound tracking RecordEvent failed (continuing)",
+				"error", err,
+				"chain_type", result.ChainType,
+				"selected_path", result.SelectedPath,
+				"lookups", len(buf.Lookups()))
+		}
 	}
 
 	slog.Debug("sound mapped",
