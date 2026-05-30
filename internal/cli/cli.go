@@ -39,11 +39,15 @@ func NewCLI() *CLI {
 	slog.Debug("creating new CLI instance")
 
 	rootCmd := &cobra.Command{
-		Use:   "claudio",
-		Short: "Claude Code Audio Plugin",
-		Long:  "Claudio is a hook-based audio plugin for Claude Code that plays contextual sounds based on tool usage and events.",
-		RunE:  runStdinModeE, // Default behavior when no subcommand is provided
+		Use:     "claudio",
+		Short:   "Claude Code Audio Plugin",
+		Long:    "Claudio is a hook-based audio plugin for Claude Code that plays contextual sounds based on tool usage and events.",
+		Version: Version,
+		RunE:    runStdinModeE, // Default behavior when no subcommand is provided
 	}
+	// Preserve the historical version output shape ("claudio version X (Version X)\n...")
+	// that downstream tooling and tests check against.
+	rootCmd.SetVersionTemplate("claudio version " + Version + " (Version " + Version + ")\nClaude Code Audio Plugin - Hook-based sound system\n")
 
 	// Add install subcommand
 	installCmd := newInstallCommand()
@@ -84,8 +88,9 @@ func NewCLI() *CLI {
 	_ = rootCmd.PersistentFlags().MarkHidden("daemon-child")
 	_ = rootCmd.PersistentFlags().MarkHidden("hook-input-file")
 
-	// Add version flag
-	rootCmd.Flags().BoolP("version", "v", false, "Show version information")
+	// Note: cobra automatically registers a `--version` boolean flag (and
+	// short `-v`) once rootCmd.Version is set. We do not register a manual
+	// one, which previously required an args[1] short-circuit in Run().
 
 	return &CLI{
 		rootCmd:           rootCmd,
@@ -114,15 +119,25 @@ func cliFromContext(ctx context.Context) *CLI {
 	return nil
 }
 
-// handleVersionFlag checks and handles the version flag
-// Returns true if version was handled and processing should stop
-func handleVersionFlag(cmd *cobra.Command) (bool, error) {
-	version, _ := cmd.Flags().GetBool("version")
-	if version {
-		cmd.Printf("claudio version %s (Version %s)\nClaude Code Audio Plugin - Hook-based sound system\n", Version, Version)
-		return true, nil
+// hasVersionFlag reports whether --version or the short -v form appears
+// anywhere in argv. Used in Run() to gate initializeSystems so that
+// `claudio --silent --version` (and any other ordering) is as cheap as
+// `claudio --version` was previously when the flag was args[1].
+func hasVersionFlag(args []string) bool {
+	// Skip args[0] (program name).
+	for i := 1; i < len(args); i++ {
+		a := args[i]
+		if a == "--version" || a == "-v" {
+			return true
+		}
+		// Support `--version=...` and `-v=...` forms even though cobra
+		// treats them as boolean flags — defensive against future
+		// shape changes.
+		if strings.HasPrefix(a, "--version=") || strings.HasPrefix(a, "-v=") {
+			return true
+		}
 	}
-	return false, nil
+	return false
 }
 
 // loadAndValidateConfig loads configuration from flags and files, applies overrides, and validates
@@ -450,16 +465,8 @@ func runStdinModeE(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("CLI instance not found in context")
 	}
 
-	// Handle version flag first
-	handled, err := handleVersionFlag(cmd)
-	if err != nil {
-		return err
-	}
-	if handled {
-		return nil
-	}
-
-	// Load and validate configuration
+	// Load and validate configuration. (Note: --version is handled by
+	// cobra itself before RunE is invoked because rootCmd.Version is set.)
 	cfg, err := loadAndValidateConfig(cmd, cli)
 	if err != nil {
 		return err
@@ -503,11 +510,25 @@ func runStdinModeE(cmd *cobra.Command, args []string) error {
 func (c *CLI) Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	slog.Debug("CLI run started", "args", args)
 
-	// CRITICAL: Check for version flag BEFORE any system initialization
-	// This prevents unnecessary audio player creation for simple version requests
-	if len(args) > 1 && (args[1] == "--version" || args[1] == "-v") {
-		// Show version immediately without initializing any systems
-		fmt.Fprintf(stdout, "claudio version %s (Version %s)\nClaude Code Audio Plugin - Hook-based sound system\n", Version, Version)
+	// --version (and -v) is now handled by cobra natively because
+	// rootCmd.Version is set in NewCLI. Cobra exits before RunE runs, but
+	// we still skip initializeSystems() (which constructs a configManager
+	// and XDG resolver) when the version flag is present anywhere on the
+	// command line — the previous args[1] short-circuit only fired when
+	// --version was literally args[1], so e.g. `claudio --silent --version`
+	// still spun up the config manager. Detecting the flag here keeps the
+	// observable "fast path" invariant covered by TestVersionFlagEarlyExit
+	// while letting cobra produce the actual output.
+	if hasVersionFlag(args) {
+		c.rootCmd.SetArgs(args[1:])
+		c.rootCmd.SetIn(stdin)
+		c.rootCmd.SetOut(stdout)
+		c.rootCmd.SetErr(stderr)
+		c.rootCmd.SetContext(contextWithCLI(c))
+		if err := c.rootCmd.Execute(); err != nil {
+			slog.Error("cobra execution failed", "error", err)
+			return 1
+		}
 		return 0
 	}
 

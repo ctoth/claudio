@@ -1040,6 +1040,46 @@ func createMinimalWAV() []byte {
 	}
 }
 
+// TestVersionFlagAtAnyPosition covers finding #49: the manual args[1]
+// short-circuit only matched when --version was literally args[1]. With
+// rootCmd.Version set and hasVersionFlag scanning all args, the version
+// fast path now fires for `claudio --silent --version` too.
+func TestVersionFlagAtAnyPosition(t *testing.T) {
+	testenv.IsolateXDG(t)
+
+	cases := [][]string{
+		{"claudio", "--silent", "--version"},
+		{"claudio", "--version", "--silent"},
+		{"claudio", "-v"},
+		{"claudio", "--soundpack", "x", "--version"},
+	}
+
+	for _, args := range cases {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			cli := NewCLI()
+			stdout := &bytes.Buffer{}
+			stderr := &bytes.Buffer{}
+
+			code := cli.Run(args, strings.NewReader(""), stdout, stderr)
+			if code != 0 {
+				t.Fatalf("expected exit 0 for %v, got %d (stderr=%q)", args, code, stderr.String())
+			}
+			out := stdout.String()
+			if !strings.Contains(out, "claudio version") {
+				t.Errorf("expected 'claudio version' in stdout for %v, got %q", args, out)
+			}
+			// Crucially: no audio backend or tracking should have been
+			// instantiated on the version fast path.
+			if cli.audioBackend != nil {
+				t.Errorf("audioBackend must not be created on version fast path for %v", args)
+			}
+			if cli.trackingDB != nil {
+				t.Errorf("trackingDB must not be created on version fast path for %v", args)
+			}
+		})
+	}
+}
+
 // TestSetupLogging_DualOutputWithExistingVerboseHandler covers finding #47:
 // when a test installs a DEBUG-level default handler AND file logging is
 // configured, BOTH outputs must receive records. The previous early-return
