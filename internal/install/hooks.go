@@ -8,7 +8,6 @@ import (
 	"runtime"
 
 	"claudio.click/internal/fs"
-	"github.com/spf13/afero"
 )
 
 // HooksMap represents the hooks section of Claude Code settings
@@ -23,14 +22,13 @@ var executableRecognizer = func(name string) bool {
 
 
 // GenerateClaudioHooks creates the Claude Code hook configuration (backward-compatible default).
-func GenerateClaudioHooks(filesystem afero.Fs, executablePath string) (interface{}, error) {
-	return GenerateClaudioHooksForAgent(filesystem, executablePath, AgentClaude)
+func GenerateClaudioHooks(executablePath string) (interface{}, error) {
+	return GenerateClaudioHooksForAgent(executablePath, AgentClaude)
 }
 
 // GenerateClaudioHooksForAgent creates hook configuration for the given agent using its
 // registry and matcher. Returns a hooks map suitable for Claude settings.json or Codex hooks.json.
-// Accepts filesystem and executable path parameters to prevent config corruption during testing.
-func GenerateClaudioHooksForAgent(filesystem afero.Fs, executablePath string, agent Agent) (interface{}, error) {
+func GenerateClaudioHooksForAgent(executablePath string, agent Agent) (interface{}, error) {
 	slog.Debug("generating Claudio hooks configuration",
 		"agent", agent, "executable_path", executablePath)
 
@@ -396,7 +394,3 @@ func GetExecutablePath() (string, error) {
 	return p, nil
 }
 
-// GetFilesystemFactory returns the default filesystem factory
-func GetFilesystemFactory() fs.Factory {
-	return fs.NewDefaultFactory()
-}

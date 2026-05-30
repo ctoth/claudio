@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"claudio.click/internal/install"
-	"claudio.click/internal/util"
+	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 )
 
@@ -208,8 +208,7 @@ func runInstallWorkflow(agent install.Agent, scope string, settingsPath string) 
 
 	// Step 2: Read existing settings
 	slog.Debug("reading existing settings", "path", settingsPath)
-	factory := install.GetFilesystemFactory()
-	prodFS := factory.Production()
+	prodFS := afero.NewOsFs()
 	existingSettings, err := install.ReadSettingsFile(prodFS, settingsPath)
 	if err != nil {
 		return fmt.Errorf("failed to read existing settings from %s: %w", settingsPath, err)
@@ -217,7 +216,7 @@ func runInstallWorkflow(agent install.Agent, scope string, settingsPath string) 
 
 	slog.Info("loaded existing settings",
 		"path", settingsPath,
-		"settings_keys", util.GetSettingsKeys(existingSettings))
+		"settings_keys", install.SettingsKeys(existingSettings))
 
 	// Step 3: Generate Claudio hooks configuration
 	slog.Debug("generating Claudio hooks configuration")
@@ -228,9 +227,7 @@ func runInstallWorkflow(agent install.Agent, scope string, settingsPath string) 
 		return fmt.Errorf("failed to get executable path: %w", err)
 	}
 	
-	// Use production filesystem (reuse existing variables)
-	
-	claudioHooks, err := install.GenerateClaudioHooksForAgent(prodFS, execPath, agent)
+	claudioHooks, err := install.GenerateClaudioHooksForAgent(execPath, agent)
 	if err != nil {
 		return fmt.Errorf("failed to generate Claudio hooks: %w", err)
 	}
@@ -245,7 +242,7 @@ func runInstallWorkflow(agent install.Agent, scope string, settingsPath string) 
 	}
 
 	slog.Info("merged Claudio hooks into settings",
-		"merged_settings_keys", util.GetSettingsKeys(mergedSettings))
+		"merged_settings_keys", install.SettingsKeys(mergedSettings))
 
 	// Step 5: Write merged settings back to file
 	slog.Debug("writing merged settings to file", "path", settingsPath)

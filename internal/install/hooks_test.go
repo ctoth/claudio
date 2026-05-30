@@ -24,10 +24,8 @@ func TestGenerateClaudioHooks(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Test the GenerateClaudioHooks function
-			factory := GetFilesystemFactory()
-			memFS := factory.Memory()
 			execPath, _ := GetExecutablePath()
-			hooks, err := GenerateClaudioHooks(memFS, execPath)
+			hooks, err := GenerateClaudioHooks(execPath)
 
 			if err != nil {
 				t.Errorf("Unexpected error generating hooks: %v", err)
@@ -257,11 +255,9 @@ func getHookNames(hooks map[string]interface{}) []string {
 
 // Helper function for tests to generate hooks with test parameters
 func generateTestHooks() (interface{}, error) {
-	factory := GetFilesystemFactory()
-	memFS := factory.Memory()
 	// Use mock executable path to prevent config corruption during tests
 	mockExecPath := "/test/mock/claudio"
-	return GenerateClaudioHooks(memFS, mockExecPath)
+	return GenerateClaudioHooks(mockExecPath)
 }
 
 // Functions that will need to be implemented (currently undefined):
@@ -476,8 +472,7 @@ func TestGenerateClaudioHooksUsesExecutablePath(t *testing.T) {
 }
 
 func TestGenerateClaudioHooksForCodexAgent(t *testing.T) {
-	fsys := GetFilesystemFactory().Memory()
-	result, err := GenerateClaudioHooksForAgent(fsys, "/usr/local/bin/claudio", AgentCodex)
+	result, err := GenerateClaudioHooksForAgent("/usr/local/bin/claudio", AgentCodex)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -502,8 +497,7 @@ func TestGenerateClaudioHooksForCodexAgent(t *testing.T) {
 }
 
 func TestGenerateClaudioHooksDefaultsToClaude(t *testing.T) {
-	fsys := GetFilesystemFactory().Memory()
-	result, err := GenerateClaudioHooks(fsys, "/usr/local/bin/claudio")
+	result, err := GenerateClaudioHooks("/usr/local/bin/claudio")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -532,7 +526,7 @@ func TestCodexInstallMergesIntoHooksJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	codexHooks, err := GenerateClaudioHooksForAgent(fsys, "/usr/local/bin/claudio", AgentCodex)
+	codexHooks, err := GenerateClaudioHooksForAgent("/usr/local/bin/claudio", AgentCodex)
 	if err != nil {
 		t.Fatal(err)
 	}

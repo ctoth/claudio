@@ -7,11 +7,9 @@ import (
 
 // Helper function for merge tests to generate hooks with test parameters
 func generateTestHooksForMerge() (interface{}, error) {
-	factory := GetFilesystemFactory()
-	memFS := factory.Memory()
 	// Use mock executable path to prevent config corruption during tests
 	mockExecPath := "/test/mock/claudio"
-	return GenerateClaudioHooks(memFS, mockExecPath)
+	return GenerateClaudioHooks(mockExecPath)
 }
 
 func TestMergeHooksIdempotent(t *testing.T) {

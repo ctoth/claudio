@@ -1,15 +1,13 @@
-package util
+package install
 
 import (
 	"testing"
-
-	"claudio.click/internal/install"
 )
 
-func TestGetSettingsKeys(t *testing.T) {
+func TestSettingsKeys(t *testing.T) {
 	tests := []struct {
 		name     string
-		settings *install.SettingsMap
+		settings *SettingsMap
 		want     []string
 	}{
 		{
@@ -19,19 +17,19 @@ func TestGetSettingsKeys(t *testing.T) {
 		},
 		{
 			name:     "empty settings",
-			settings: &install.SettingsMap{},
+			settings: &SettingsMap{},
 			want:     []string{},
 		},
 		{
 			name: "single key",
-			settings: &install.SettingsMap{
+			settings: &SettingsMap{
 				"hooks": map[string]interface{}{},
 			},
 			want: []string{"hooks"},
 		},
 		{
 			name: "multiple keys",
-			settings: &install.SettingsMap{
+			settings: &SettingsMap{
 				"hooks":   map[string]interface{}{},
 				"version": "1.0",
 				"other":   "value",
@@ -42,11 +40,11 @@ func TestGetSettingsKeys(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := GetSettingsKeys(tt.settings)
+			got := SettingsKeys(tt.settings)
 
 			// Sort both slices for comparison since map iteration order is not guaranteed
 			if len(got) != len(tt.want) {
-				t.Errorf("GetSettingsKeys() length = %v, want %v", len(got), len(tt.want))
+				t.Errorf("SettingsKeys() length = %v, want %v", len(got), len(tt.want))
 				return
 			}
 
@@ -58,7 +56,7 @@ func TestGetSettingsKeys(t *testing.T) {
 
 			for _, wantKey := range tt.want {
 				if !gotMap[wantKey] {
-					t.Errorf("GetSettingsKeys() missing key %v, got %v", wantKey, got)
+					t.Errorf("SettingsKeys() missing key %v, got %v", wantKey, got)
 				}
 			}
 
@@ -70,15 +68,15 @@ func TestGetSettingsKeys(t *testing.T) {
 
 			for _, gotKey := range got {
 				if !wantMap[gotKey] {
-					t.Errorf("GetSettingsKeys() extra key %v, got %v", gotKey, got)
+					t.Errorf("SettingsKeys() extra key %v, got %v", gotKey, got)
 				}
 			}
 		})
 	}
 }
 
-func TestGetSettingsKeysWithComplexValues(t *testing.T) {
-	settings := &install.SettingsMap{
+func TestSettingsKeysWithComplexValues(t *testing.T) {
+	settings := &SettingsMap{
 		"hooks": map[string]interface{}{
 			"PostToolUse": "claudio",
 			"PreToolUse": []interface{}{
@@ -96,8 +94,8 @@ func TestGetSettingsKeysWithComplexValues(t *testing.T) {
 		},
 	}
 
-	got := GetSettingsKeys(settings)
-	
+	got := SettingsKeys(settings)
+
 	if len(got) != 3 {
 		t.Errorf("Expected 3 keys, got %d: %v", len(got), got)
 	}

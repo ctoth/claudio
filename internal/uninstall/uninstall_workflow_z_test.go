@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"claudio.click/internal/install"
+	"github.com/spf13/afero"
 )
 
 // TestRunUninstallWorkflowUsesAgentResolvedPath asserts that the workflow
@@ -50,7 +51,7 @@ func TestRunUninstallWorkflowUsesAgentResolvedPath(t *testing.T) {
 	// source of truth for the target path.
 	swapAgentResolver(t, fixedPathResolver(resolvedPath))
 
-	if err := runUninstallWorkflow("user", install.AgentClaude); err != nil {
+	if err := runUninstallWorkflow(afero.NewOsFs(), "user", install.AgentClaude); err != nil {
 		t.Fatalf("workflow failed: %v", err)
 	}
 
@@ -87,7 +88,7 @@ func TestRunUninstallWorkflowAgentResolverError(t *testing.T) {
 		return "", os.ErrNotExist
 	})
 
-	err := runUninstallWorkflow("user", install.AgentClaude)
+	err := runUninstallWorkflow(afero.NewOsFs(), "user", install.AgentClaude)
 	if err == nil {
 		t.Fatalf("expected resolver error to surface, got nil")
 	}

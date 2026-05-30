@@ -8,15 +8,13 @@ import (
 	"testing"
 
 	"github.com/spf13/afero"
-	"claudio.click/internal/fs"
 )
 
 // TDD RED: Test that settings I/O functions can use afero filesystem abstraction
 // These tests verify memory filesystem isolation to prevent real filesystem pollution
 
 func TestReadSettingsFile(t *testing.T) {
-	factory := fs.NewDefaultFactory()
-	memFS := factory.Memory()
+	memFS := afero.NewMemMapFs()
 	
 	// Test case 1: Non-existent file should return empty settings
 	settings, err := ReadSettingsFile(memFS, "/non/existent/file.json")
@@ -71,8 +69,7 @@ func TestReadSettingsFile(t *testing.T) {
 }
 
 func TestWriteSettingsFile(t *testing.T) {
-	factory := fs.NewDefaultFactory()
-	memFS := factory.Memory()
+	memFS := afero.NewMemMapFs()
 	
 	settingsPath := "/test/output/settings.json"
 	testSettings := SettingsMap{
@@ -131,8 +128,7 @@ func TestWriteSettingsFile(t *testing.T) {
 
 func TestSettingsFilesystemIsolation(t *testing.T) {
 	// CRITICAL TEST: Verify filesystem isolation prevents real filesystem pollution
-	factory := fs.NewDefaultFactory()
-	memFS := factory.Memory()
+	memFS := afero.NewMemMapFs()
 	
 	// Use a path that could exist on real filesystem
 	dangerousPath := "/tmp/claudio-test-isolation-settings.json"
@@ -148,8 +144,7 @@ func TestSettingsFilesystemIsolation(t *testing.T) {
 	}
 	
 	// Verify file does NOT exist on real filesystem
-	factory2 := fs.NewDefaultFactory()
-	realFS := factory2.Production()
+	realFS := afero.NewOsFs()
 	
 	exists, err := afero.Exists(realFS, dangerousPath)
 	if err == nil && exists {
@@ -168,8 +163,7 @@ func TestSettingsFilesystemIsolation(t *testing.T) {
 
 func TestReadWriteRoundTrip(t *testing.T) {
 	// Test complete read-write cycle in memory filesystem
-	factory := fs.NewDefaultFactory()
-	memFS := factory.Memory()
+	memFS := afero.NewMemMapFs()
 	
 	settingsPath := "/roundtrip/settings.json"
 	originalSettings := SettingsMap{
@@ -221,8 +215,7 @@ func TestLockingWithFilesystem(t *testing.T) {
 	
 	// For now, test the basic filesystem functions work correctly
 	// Locking abstraction is a separate enhancement beyond current scope
-	factory := fs.NewDefaultFactory()
-	memFS := factory.Memory()
+	memFS := afero.NewMemMapFs()
 	
 	settingsPath := "/simple/settings.json"
 	testSettings := SettingsMap{
@@ -248,8 +241,7 @@ func TestLockingWithFilesystem(t *testing.T) {
 // TestWriteSettingsFile_CreatesBackup verifies that a second write
 // produces a .bak file whose content equals the FIRST write's content.
 func TestWriteSettingsFile_CreatesBackup(t *testing.T) {
-	factory := fs.NewDefaultFactory()
-	memFS := factory.Memory()
+	memFS := afero.NewMemMapFs()
 
 	settingsPath := "/backup-test/settings.json"
 	firstSettings := SettingsMap{"version": "1.0", "first": true}
@@ -308,8 +300,7 @@ func TestWriteSettingsFile_CreatesBackup(t *testing.T) {
 // TestWriteSettingsFile_NoBackupOnFirstWrite verifies that writing to
 // a fresh path does not create a .bak file (nothing to back up).
 func TestWriteSettingsFile_NoBackupOnFirstWrite(t *testing.T) {
-	factory := fs.NewDefaultFactory()
-	memFS := factory.Memory()
+	memFS := afero.NewMemMapFs()
 
 	settingsPath := "/first-write/settings.json"
 	settings := SettingsMap{"version": "1.0"}
@@ -332,8 +323,7 @@ func TestWriteSettingsFile_NoBackupOnFirstWrite(t *testing.T) {
 // the target is not valid JSON, BackupSettingsFile refuses to overwrite
 // any existing .bak — preserving the last-known-good copy.
 func TestWriteSettingsFile_RefusesBackupOfCorruptJSON(t *testing.T) {
-	factory := fs.NewDefaultFactory()
-	memFS := factory.Memory()
+	memFS := afero.NewMemMapFs()
 
 	settingsPath := "/corrupt-test/settings.json"
 	bakPath := settingsPath + ".bak"

@@ -3,35 +3,7 @@ package fs
 import (
 	"os"
 	"path/filepath"
-
-	"github.com/spf13/afero"
 )
-
-// Factory provides filesystem instances for production and testing
-type Factory interface {
-	// Production returns a filesystem that operates on the real OS filesystem
-	Production() afero.Fs
-	// Memory returns an in-memory filesystem for testing
-	Memory() afero.Fs
-}
-
-// DefaultFactory provides the standard filesystem factory implementation
-type DefaultFactory struct{}
-
-// NewDefaultFactory creates a new filesystem factory
-func NewDefaultFactory() Factory {
-	return &DefaultFactory{}
-}
-
-// Production returns a filesystem that operates on the real OS filesystem
-func (f *DefaultFactory) Production() afero.Fs {
-	return afero.NewOsFs()
-}
-
-// Memory returns an in-memory filesystem for testing
-func (f *DefaultFactory) Memory() afero.Fs {
-	return afero.NewMemMapFs()
-}
 
 // ExecutablePath returns the current executable path with filesystem abstraction support
 // This is a utility function that can be easily mocked in tests
@@ -44,4 +16,3 @@ func ExecutablePath() (string, error) {
 	// passes hook commands through /usr/bin/bash on all platforms).
 	return filepath.ToSlash(p), nil
 }
-
