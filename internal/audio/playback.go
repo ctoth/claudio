@@ -276,9 +276,21 @@ func (p *AudioPlayer) PlaySoundWithContext(ctx context.Context, soundID string) 
 	// Track playback position for this sound instance
 	var frameOffset uint32
 	
-	// Calculate bytes per sample based on format
-	bytesPerSample := getBytesPerSample(audioData.Format)
-	totalFrames := uint32(len(audioData.Samples) / int(audioData.Channels) / bytesPerSample)
+	// Calculate bytes per sample based on format. Unknown formats are
+	// refused outright — silently defaulting to 2 bytes produced garbage
+	// frame math (wrong duration, wrong callback offsets, distorted audio).
+	bytesPerSample, err := getBytesPerSample(audioData.Format)
+	if err != nil {
+		slog.Error("cannot play sound: unsupported format", "sound_id", soundID, "format", audioData.Format, "error", err)
+		return fmt.Errorf("cannot play sound %q: %w", soundID, err)
+	}
+	// Round UP to include any trailing partial frame. The previous
+	// truncation caused the playback-complete timer to fire before the
+	// final callback ran, uninitting the device mid-buffer. The audio
+	// callback already pads the last frame with silence (line ~315), so
+	// the timer just needs to wait long enough for that final fire.
+	bytesPerFrame := int(audioData.Channels) * bytesPerSample
+	totalFrames := uint32((len(audioData.Samples) + bytesPerFrame - 1) / bytesPerFrame)
 	
 	// Audio callback function
 	onSamples := func(pOutputSample, pInputSamples []byte, framecount uint32) {
@@ -484,20 +496,22 @@ func (p *AudioPlayer) Close() error {
 	return nil
 }
 
-// getBytesPerSample returns the number of bytes per sample for a given format
-func getBytesPerSample(format malgo.FormatType) int {
+// getBytesPerSample returns the number of bytes per sample for a given
+// format. Unknown formats produce an error so callers can refuse playback
+// rather than silently defaulting (the previous behaviour returned 2 for
+// any unrecognised malgo.FormatType, generating garbage frame math).
+func getBytesPerSample(format malgo.FormatType) (int, error) {
 	switch format {
 	case malgo.FormatU8:
-		return 1
+		return 1, nil
 	case malgo.FormatS16:
-		return 2
+		return 2, nil
 	case malgo.FormatS24:
-		return 3
+		return 3, nil
 	case malgo.FormatS32, malgo.FormatF32:
-		return 4
+		return 4, nil
 	default:
-		slog.Warn("unknown audio format, assuming 2 bytes per sample", "format", format)
-		return 2
+		return 0, fmt.Errorf("unsupported audio format: %v", format)
 	}
 }
 

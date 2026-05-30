@@ -2,6 +2,7 @@ package audio
 
 import (
 	"bytes"
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -216,7 +217,7 @@ func TestDecoderRegistryDecodeFile(t *testing.T) {
 
 	t.Run("successful decode", func(t *testing.T) {
 		reader := bytes.NewReader([]byte("test audio data"))
-		result, err := registry.DecodeFile("audio.test", reader)
+		result, err := registry.DecodeFile(context.Background(), "audio.test", reader)
 
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
@@ -229,7 +230,7 @@ func TestDecoderRegistryDecodeFile(t *testing.T) {
 
 	t.Run("unsupported format", func(t *testing.T) {
 		reader := bytes.NewReader([]byte("test audio data"))
-		result, err := registry.DecodeFile("audio.unknown", reader)
+		result, err := registry.DecodeFile(context.Background(), "audio.unknown", reader)
 
 		if err == nil {
 			t.Fatal("expected error for unsupported format")
@@ -254,7 +255,7 @@ func TestDecoderRegistryDecodeFile(t *testing.T) {
 		registry.Register(failingDecoder)
 
 		reader := bytes.NewReader([]byte("test data"))
-		result, err := registry.DecodeFile("audio.fail", reader)
+		result, err := registry.DecodeFile(context.Background(), "audio.fail", reader)
 
 		if err == nil {
 			t.Fatal("expected error from failing decoder")
@@ -488,7 +489,7 @@ func TestAiffDecodeFileIntegration(t *testing.T) {
 
 	t.Run("successful AIFF file decode", func(t *testing.T) {
 		reader := bytes.NewReader(aiffData)
-		audioData, err := registry.DecodeFile("test.aiff", reader)
+		audioData, err := registry.DecodeFile(context.Background(), "test.aiff", reader)
 
 		if err != nil {
 			t.Fatalf("expected no error decoding AIFF file, got %v", err)
@@ -519,7 +520,7 @@ func TestAiffDecodeFileIntegration(t *testing.T) {
 
 	t.Run("AIFF decode with invalid data", func(t *testing.T) {
 		reader := bytes.NewReader([]byte("invalid aiff data"))
-		audioData, err := registry.DecodeFile("invalid.aiff", reader)
+		audioData, err := registry.DecodeFile(context.Background(), "invalid.aiff", reader)
 
 		if err == nil {
 			t.Error("expected error for invalid AIFF data, got nil")

@@ -2,6 +2,7 @@ package audio
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"testing"
 
@@ -63,7 +64,7 @@ func TestAiffDecoderDecodeInvalidData(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			reader := bytes.NewReader(tc.data)
-			audioData, err := decoder.Decode(reader)
+			audioData, err := decoder.Decode(context.Background(), reader)
 
 			if err == nil {
 				t.Errorf("expected error for %s, got nil", tc.name)
@@ -88,7 +89,7 @@ func TestAiffDecoderDecodeValidData(t *testing.T) {
 	aiffData := createMinimalAiffFile(44100, 2, 16, 1000) // 44.1kHz, stereo, 16-bit, 1000 samples
 
 	reader := bytes.NewReader(aiffData)
-	audioData, err := decoder.Decode(reader)
+	audioData, err := decoder.Decode(context.Background(), reader)
 
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -140,7 +141,7 @@ func TestAiffDecoderDifferentBitDepths(t *testing.T) {
 			aiffData := createMinimalAiffFile(44100, 1, tc.bitDepth, 100) // mono, 100 samples
 
 			reader := bytes.NewReader(aiffData)
-			audioData, err := decoder.Decode(reader)
+			audioData, err := decoder.Decode(context.Background(), reader)
 
 			if err != nil {
 				t.Fatalf("expected no error for %d-bit, got %v", tc.bitDepth, err)
@@ -174,7 +175,7 @@ func TestAiffDecoderMonoAndStereo(t *testing.T) {
 			aiffData := createMinimalAiffFile(44100, tc.channels, 16, 100)
 
 			reader := bytes.NewReader(aiffData)
-			audioData, err := decoder.Decode(reader)
+			audioData, err := decoder.Decode(context.Background(), reader)
 
 			if err != nil {
 				t.Fatalf("expected no error for %s, got %v", tc.name, err)

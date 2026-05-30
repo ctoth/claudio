@@ -2,6 +2,7 @@ package audio
 
 import (
 	"bytes"
+	"context"
 	"testing"
 )
 
@@ -61,7 +62,7 @@ func TestWavDecoderStereoChannelHandling(t *testing.T) {
 	t.Run("verify stereo channel extraction", func(t *testing.T) {
 		wavData := generateStereoTestWAV()
 		reader := bytes.NewReader(wavData)
-		data, err := decoder.Decode(reader)
+		data, err := decoder.Decode(context.Background(), reader)
 
 		if err != nil {
 			t.Fatalf("failed to decode test WAV: %v", err)
@@ -140,7 +141,7 @@ func TestWavDecoderMonoHandling(t *testing.T) {
 		wav[5] = byte(totalSize >> 8)
 
 		reader := bytes.NewReader(wav)
-		data, err := decoder.Decode(reader)
+		data, err := decoder.Decode(context.Background(), reader)
 
 		if err != nil {
 			t.Fatalf("failed to decode mono WAV: %v", err)

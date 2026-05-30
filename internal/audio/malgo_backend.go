@@ -147,7 +147,7 @@ func (mb *MalgoBackend) Play(ctx context.Context, source AudioSource) error {
 	// Try file path first (most efficient)
 	var loadErr error
 	if filePath, fpErr := source.AsFilePath(); fpErr == nil {
-		audioData, loadErr = mb.loadAudioFile(filePath)
+		audioData, loadErr = mb.loadAudioFile(ctx, filePath)
 	} else {
 		// Use reader
 		reader, format, rErr := source.AsReader()
@@ -157,7 +157,7 @@ func (mb *MalgoBackend) Play(ctx context.Context, source AudioSource) error {
 		}
 		defer reader.Close()
 
-		audioData, loadErr = mb.loadAudioFromReader(reader, format)
+		audioData, loadErr = mb.loadAudioFromReader(ctx, reader, format)
 	}
 
 	if loadErr != nil {
@@ -205,7 +205,7 @@ func (mb *MalgoBackend) Play(ctx context.Context, source AudioSource) error {
 }
 
 // loadAudioFile loads an audio file using the registry
-func (mb *MalgoBackend) loadAudioFile(filePath string) (*AudioData, error) {
+func (mb *MalgoBackend) loadAudioFile(ctx context.Context, filePath string) (*AudioData, error) {
 	slog.Debug("loading audio file with registry", "file", filePath)
 
 	file, err := os.Open(filePath)
@@ -216,7 +216,7 @@ func (mb *MalgoBackend) loadAudioFile(filePath string) (*AudioData, error) {
 	defer file.Close()
 
 	// Use registry to decode - this handles AIFF/WAV/MP3 automatically
-	audioData, err := mb.registry.DecodeFile(filePath, file)
+	audioData, err := mb.registry.DecodeFile(ctx, filePath, file)
 	if err != nil {
 		slog.Error("registry decode failed", "file", filePath, "error", err)
 		return nil, fmt.Errorf("decode failed: %w", err)
@@ -232,14 +232,14 @@ func (mb *MalgoBackend) loadAudioFile(filePath string) (*AudioData, error) {
 }
 
 // loadAudioFromReader loads audio from a reader using the registry
-func (mb *MalgoBackend) loadAudioFromReader(reader io.Reader, format string) (*AudioData, error) {
+func (mb *MalgoBackend) loadAudioFromReader(ctx context.Context, reader io.Reader, format string) (*AudioData, error) {
 	slog.Debug("loading audio from reader with registry", "format", format)
 
 	// Create filename for format detection
 	filename := "stream." + format
 
 	// Use registry to decode
-	audioData, err := mb.registry.DecodeFile(filename, reader)
+	audioData, err := mb.registry.DecodeFile(ctx, filename, reader)
 	if err != nil {
 		slog.Error("registry decode from reader failed", "format", format, "error", err)
 		return nil, fmt.Errorf("decode from reader failed: %w", err)

@@ -3,6 +3,7 @@
 package audio
 
 import (
+	"context"
 	"io"
 	"log/slog"
 	"strings"
@@ -21,15 +22,26 @@ func NewWavDecoder() *WavDecoder {
 	return &WavDecoder{}
 }
 
-// Decode reads WAV audio data from reader and returns decoded PCM data
-func (d *WavDecoder) Decode(reader io.Reader) (*AudioData, error) {
+// Decode reads WAV audio data from reader and returns decoded PCM data.
+// ctx is checked at entry and after the bulk read. WAV decoding is otherwise
+// in-memory work over a pre-buffered byte slice so there is no other
+// meaningful cancellation point.
+func (d *WavDecoder) Decode(ctx context.Context, reader io.Reader) (*AudioData, error) {
 	slog.Debug("starting WAV decode operation")
+
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 
 	// youpy/go-wav needs a ReadSeeker, so we need to read all data first
 	data, err := safeio.ReadAllCapped(reader, safeio.MaxAudioFileBytes, "WAV audio")
 	if err != nil {
 		slog.Error("failed to read WAV data", "error", err)
 		return nil, ErrReadFailure
+	}
+
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 
 	if len(data) == 0 {

@@ -3,6 +3,7 @@
 package audio
 
 import (
+	"context"
 	"io"
 	"log/slog"
 	"strings"
@@ -20,9 +21,16 @@ func NewMp3Decoder() *Mp3Decoder {
 	return &Mp3Decoder{}
 }
 
-// Decode reads MP3 audio data from reader and returns decoded PCM data
-func (d *Mp3Decoder) Decode(reader io.Reader) (*AudioData, error) {
+// Decode reads MP3 audio data from reader and returns decoded PCM data.
+// ctx is polled inside the read loop; if it's cancelled, Decode returns
+// ctx.Err() promptly rather than blocking on a stalled underlying reader.
+func (d *Mp3Decoder) Decode(ctx context.Context, reader io.Reader) (*AudioData, error) {
 	slog.Debug("starting MP3 decode operation")
+
+	// Refuse work on a pre-cancelled context.
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 
 	decoder, err := mp3.NewDecoder(reader)
 	if err != nil {
@@ -47,6 +55,16 @@ func (d *Mp3Decoder) Decode(reader io.Reader) (*AudioData, error) {
 	totalBytesRead := 0
 
 	for {
+		// Poll ctx between read chunks. go-mp3.decoder.Read ultimately reads
+		// from the original reader; a slow source can block indefinitely
+		// without this check.
+		select {
+		case <-ctx.Done():
+			slog.Debug("MP3 decode cancelled mid-stream", "bytes_read", totalBytesRead)
+			return nil, ctx.Err()
+		default:
+		}
+
 		n, err := decoder.Read(buf)
 		if err != nil {
 			if err == io.EOF {

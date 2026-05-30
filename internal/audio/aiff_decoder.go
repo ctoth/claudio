@@ -4,6 +4,7 @@ package audio
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -42,15 +43,26 @@ func (d *AiffDecoder) CanDecode(filename string) bool {
 	return canDecode
 }
 
-// Decode reads AIFF audio data from reader and returns decoded PCM data
-func (d *AiffDecoder) Decode(reader io.Reader) (*AudioData, error) {
+// Decode reads AIFF audio data from reader and returns decoded PCM data.
+// ctx is checked at entry and after the bulk read. Like the WAV decoder,
+// the heavy work is in-memory PCM conversion over already-buffered bytes,
+// so there is no other meaningful cancellation point.
+func (d *AiffDecoder) Decode(ctx context.Context, reader io.Reader) (*AudioData, error) {
 	slog.Debug("starting AIFF decode operation")
+
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 
 	// Read all data from reader (go-audio/aiff needs a ReadSeeker)
 	data, err := safeio.ReadAllCapped(reader, safeio.MaxAudioFileBytes, "AIFF audio")
 	if err != nil {
 		slog.Error("failed to read AIFF data", "error", err)
 		return nil, ErrReadFailure
+	}
+
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 
 	if len(data) == 0 {

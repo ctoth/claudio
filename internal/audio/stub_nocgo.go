@@ -149,7 +149,7 @@ type AudioData struct {
 
 type Decoder interface {
 	CanDecode(filename string) bool
-	Decode(reader io.Reader) (*AudioData, error)
+	Decode(ctx context.Context, reader io.Reader) (*AudioData, error)
 	FormatName() string
 }
 
@@ -160,7 +160,7 @@ func (d *stubDecoder) CanDecode(filename string) bool {
 	return false
 }
 
-func (d *stubDecoder) Decode(reader io.Reader) (*AudioData, error) {
+func (d *stubDecoder) Decode(ctx context.Context, reader io.Reader) (*AudioData, error) {
 	return nil, errCGORequired
 }
 

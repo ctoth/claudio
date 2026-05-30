@@ -3,6 +3,7 @@
 package audio
 
 import (
+	"context"
 	"errors"
 	"io"
 
@@ -24,10 +25,21 @@ type AudioData struct {
 	Format     malgo.FormatType // Audio format (e.g., malgo.FormatS16)
 }
 
-// Decoder interface for audio format decoding
+// Decoder interface for audio format decoding.
+//
+// Decode takes a context.Context as its first argument so callers can
+// cancel a long-running or stalled decode (e.g. an MP3 source whose
+// underlying reader has hung). The MP3 decoder polls ctx between read
+// chunks; WAV and AIFF check ctx at entry (they already buffer the whole
+// input via safeio.ReadAllCapped before per-sample work begins, so the
+// only meaningful cancellation point is the entry check).
+//
+// The interface is internal to package audio — there are no external
+// importers — so adding the parameter is safe.
 type Decoder interface {
-	// Decode reads audio data from reader and returns decoded PCM data
-	Decode(reader io.Reader) (*AudioData, error)
+	// Decode reads audio data from reader and returns decoded PCM data.
+	// If ctx is cancelled, Decode returns ctx.Err().
+	Decode(ctx context.Context, reader io.Reader) (*AudioData, error)
 
 	// CanDecode checks if this decoder can handle the given filename
 	CanDecode(filename string) bool

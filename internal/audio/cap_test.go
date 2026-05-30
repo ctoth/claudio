@@ -3,6 +3,7 @@
 package audio
 
 import (
+	"context"
 	"io"
 	"strings"
 	"testing"
@@ -36,7 +37,7 @@ func TestDecodeWAV_RejectsOversizedInput(t *testing.T) {
 	// One byte over the audio cap.
 	r := &zeroReader{remaining: safeio.MaxAudioFileBytes + 1}
 
-	_, err := decoder.Decode(r)
+	_, err := decoder.Decode(context.Background(), r)
 	if err == nil {
 		t.Fatalf("expected error for oversized WAV input")
 	}
@@ -50,7 +51,7 @@ func TestDecodeAIFF_RejectsOversizedInput(t *testing.T) {
 	decoder := NewAiffDecoder()
 	r := &zeroReader{remaining: safeio.MaxAudioFileBytes + 1}
 
-	_, err := decoder.Decode(r)
+	_, err := decoder.Decode(context.Background(), r)
 	if err == nil {
 		t.Fatalf("expected error for oversized AIFF input")
 	}
@@ -63,7 +64,7 @@ func TestDecoderRegistry_DecodeFile_RejectsOversizedInput(t *testing.T) {
 	reg := NewDefaultRegistry()
 	r := &zeroReader{remaining: safeio.MaxAudioFileBytes + 1}
 
-	_, err := reg.DecodeFile("test.wav", r)
+	_, err := reg.DecodeFile(context.Background(), "test.wav", r)
 	if err == nil {
 		t.Fatalf("expected error for oversized audio file content")
 	}

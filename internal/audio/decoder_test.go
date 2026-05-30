@@ -2,6 +2,7 @@ package audio
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"strings"
 	"testing"
@@ -17,7 +18,12 @@ type MockDecoder struct {
 	returnData *AudioData
 }
 
-func (m *MockDecoder) Decode(reader io.Reader) (*AudioData, error) {
+func (m *MockDecoder) Decode(ctx context.Context, reader io.Reader) (*AudioData, error) {
+	// Respect ctx cancellation — matches the real decoder contract added
+	// for review finding #39.
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if m.shouldFail {
 		return nil, ErrUnsupportedFormat
 	}
@@ -133,7 +139,7 @@ func TestMockDecoderDecoding(t *testing.T) {
 		}
 
 		reader := bytes.NewReader([]byte("test audio data"))
-		data, err := decoder.Decode(reader)
+		data, err := decoder.Decode(context.Background(), reader)
 
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
@@ -164,7 +170,7 @@ func TestMockDecoderDecoding(t *testing.T) {
 		}
 
 		reader := bytes.NewReader([]byte("invalid data"))
-		data, err := decoder.Decode(reader)
+		data, err := decoder.Decode(context.Background(), reader)
 
 		if err == nil {
 			t.Fatal("expected error, got nil")
@@ -196,7 +202,7 @@ func TestMockDecoderCustomData(t *testing.T) {
 	}
 
 	reader := bytes.NewReader([]byte("test"))
-	data, err := decoder.Decode(reader)
+	data, err := decoder.Decode(context.Background(), reader)
 
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)

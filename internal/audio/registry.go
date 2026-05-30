@@ -4,6 +4,7 @@ package audio
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -230,8 +231,9 @@ func (r *DecoderRegistry) findDecoderByFormatLocked(formatName string) Decoder {
 	return nil
 }
 
-// DecodeFile decodes an audio file using the appropriate decoder
-func (r *DecoderRegistry) DecodeFile(filename string, reader io.Reader) (*AudioData, error) {
+// DecodeFile decodes an audio file using the appropriate decoder. ctx is
+// forwarded to the underlying decoder so a stalled decode can be cancelled.
+func (r *DecoderRegistry) DecodeFile(ctx context.Context, filename string, reader io.Reader) (*AudioData, error) {
 	slog.Debug("starting file decode operation", "filename", filename)
 
 	// Buffer the entire content to avoid reader consumption issues during format detection
@@ -258,7 +260,7 @@ func (r *DecoderRegistry) DecodeFile(filename string, reader io.Reader) (*AudioD
 
 	// Create fresh reader from buffered content for decoder
 	decoderReader := bytes.NewReader(fullContent)
-	audioData, err := decoder.Decode(decoderReader)
+	audioData, err := decoder.Decode(ctx, decoderReader)
 	if err != nil {
 		slog.Error("decode operation failed",
 			"filename", filename,

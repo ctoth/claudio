@@ -2,6 +2,7 @@ package audio
 
 import (
 	"bytes"
+	"context"
 	"testing"
 
 	"github.com/gen2brain/malgo"
@@ -50,7 +51,7 @@ func TestMp3DecoderDecodeInvalidData(t *testing.T) {
 
 	t.Run("empty data", func(t *testing.T) {
 		reader := bytes.NewReader([]byte{})
-		data, err := decoder.Decode(reader)
+		data, err := decoder.Decode(context.Background(), reader)
 
 		if err == nil {
 			t.Fatal("expected error for empty data")
@@ -64,7 +65,7 @@ func TestMp3DecoderDecodeInvalidData(t *testing.T) {
 	t.Run("invalid MP3 header", func(t *testing.T) {
 		invalidData := []byte("not an mp3 file")
 		reader := bytes.NewReader(invalidData)
-		data, err := decoder.Decode(reader)
+		data, err := decoder.Decode(context.Background(), reader)
 
 		if err == nil {
 			t.Fatal("expected error for invalid MP3 data")
@@ -105,7 +106,7 @@ func TestMp3DecoderDecodeValidData(t *testing.T) {
 	t.Run("valid MP3 data", func(t *testing.T) {
 		mp3Data := generateTestMp3()
 		reader := bytes.NewReader(mp3Data)
-		data, err := decoder.Decode(reader)
+		data, err := decoder.Decode(context.Background(), reader)
 
 		if err != nil {
 			// MP3 decoder might fail on our minimal test data, which is expected

@@ -2,6 +2,7 @@ package audio
 
 import (
 	"bytes"
+	"context"
 	"testing"
 
 	"github.com/gen2brain/malgo"
@@ -50,7 +51,7 @@ func TestWavDecoderDecodeInvalidData(t *testing.T) {
 
 	t.Run("empty data", func(t *testing.T) {
 		reader := bytes.NewReader([]byte{})
-		data, err := decoder.Decode(reader)
+		data, err := decoder.Decode(context.Background(), reader)
 
 		if err == nil {
 			t.Fatal("expected error for empty data")
@@ -64,7 +65,7 @@ func TestWavDecoderDecodeInvalidData(t *testing.T) {
 	t.Run("invalid WAV header", func(t *testing.T) {
 		invalidData := []byte("not a wav file")
 		reader := bytes.NewReader(invalidData)
-		data, err := decoder.Decode(reader)
+		data, err := decoder.Decode(context.Background(), reader)
 
 		if err == nil {
 			t.Fatal("expected error for invalid WAV data")
@@ -122,7 +123,7 @@ func TestWavDecoderDecodeValidData(t *testing.T) {
 	t.Run("valid WAV file", func(t *testing.T) {
 		wavData := generateTestWAV()
 		reader := bytes.NewReader(wavData)
-		data, err := decoder.Decode(reader)
+		data, err := decoder.Decode(context.Background(), reader)
 
 		if err != nil {
 			t.Fatalf("expected no error for valid WAV, got %v", err)
