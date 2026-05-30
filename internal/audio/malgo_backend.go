@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"sync"
+	"sync/atomic"
 )
 
 // MalgoBackend implements AudioBackend using AudioPlayer and DecoderRegistry
@@ -17,6 +18,13 @@ type MalgoBackend struct {
 	registry    *DecoderRegistry
 	closed      bool
 	mutex       sync.RWMutex
+	// soundIDCount monotonically increments per Play to produce a unique
+	// soundID per playback. Previously the soundID was keyed on
+	// len(audioData.Samples), which collided whenever two concurrent Plays
+	// of distinct same-length buffers ran — silently overwriting each
+	// other's device entry in AudioPlayer.devices and leaking the loser's
+	// handle (review finding #40).
+	soundIDCount atomic.Uint64
 }
 
 // NewMalgoBackend creates a new MalgoBackend using AudioPlayer and DecoderRegistry
@@ -162,8 +170,10 @@ func (mb *MalgoBackend) Play(ctx context.Context, source AudioSource) error {
 		return fmt.Errorf("audio data is nil")
 	}
 
-	// Generate unique sound ID for this playback
-	soundID := fmt.Sprintf("play_%d", len(audioData.Samples))
+	// Generate unique sound ID for this playback. atomic.Uint64.Add returns
+	// the post-increment value, guaranteeing distinct IDs across
+	// concurrent Plays regardless of buffer length.
+	soundID := fmt.Sprintf("play_%d", mb.soundIDCount.Add(1))
 
 	// Preload and play
 	err = mb.audioPlayer.PreloadSound(soundID, audioData)
