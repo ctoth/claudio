@@ -22,7 +22,7 @@ func TestNewSoundChecker(t *testing.T) {
 
 func TestWithHook(t *testing.T) {
 	called := false
-	hook := func(path string, exists bool, sequence int, context *hooks.EventContext) {
+	hook := func(path string, exists bool, sequence int, chainType string, context *hooks.EventContext) {
 		called = true
 	}
 
@@ -33,7 +33,7 @@ func TestWithHook(t *testing.T) {
 
 	// Test hook is actually called
 	context := &hooks.EventContext{}
-	sc.CheckPaths(context, []string{"test.wav"})
+	sc.CheckPaths(context, "enhanced", []string{"test.wav"})
 
 	if !called {
 		t.Error("hook was not called")
@@ -46,7 +46,7 @@ func TestCheckPaths(t *testing.T) {
 	var capturedExists []bool
 	var capturedContext *hooks.EventContext
 
-	hook := func(path string, exists bool, sequence int, context *hooks.EventContext) {
+	hook := func(path string, exists bool, sequence int, chainType string, context *hooks.EventContext) {
 		capturedPaths = append(capturedPaths, path)
 		capturedSequences = append(capturedSequences, sequence)
 		capturedExists = append(capturedExists, exists)
@@ -60,7 +60,7 @@ func TestCheckPaths(t *testing.T) {
 	}
 	paths := []string{"path1.wav", "path2.wav", "path3.wav"}
 
-	results := sc.CheckPaths(context, paths)
+	results := sc.CheckPaths(context, "enhanced", paths)
 
 	if len(results) != 3 {
 		t.Errorf("expected 3 results, got %d", len(results))
@@ -98,11 +98,11 @@ func TestMultipleHooks(t *testing.T) {
 	var hook1Calls []string
 	var hook2Calls []string
 
-	hook1 := func(path string, exists bool, sequence int, context *hooks.EventContext) {
+	hook1 := func(path string, exists bool, sequence int, chainType string, context *hooks.EventContext) {
 		hook1Calls = append(hook1Calls, path)
 	}
 
-	hook2 := func(path string, exists bool, sequence int, context *hooks.EventContext) {
+	hook2 := func(path string, exists bool, sequence int, chainType string, context *hooks.EventContext) {
 		hook2Calls = append(hook2Calls, path)
 	}
 
@@ -114,7 +114,7 @@ func TestMultipleHooks(t *testing.T) {
 	context := &hooks.EventContext{}
 	paths := []string{"test1.wav", "test2.wav"}
 
-	sc.CheckPaths(context, paths)
+	sc.CheckPaths(context, "enhanced", paths)
 
 	// Both hooks should be called for each path
 	if len(hook1Calls) != 2 {
@@ -139,7 +139,7 @@ func TestMultipleHooks(t *testing.T) {
 
 func TestPathCheckedHookSignature(t *testing.T) {
 	// Test that PathCheckedHook has the correct signature
-	var hook PathCheckedHook = func(path string, exists bool, sequence int, context *hooks.EventContext) {
+	var hook PathCheckedHook = func(path string, exists bool, sequence int, chainType string, context *hooks.EventContext) {
 		// This test passes if the signature compiles correctly
 	}
 
@@ -155,7 +155,7 @@ func TestSoundChecker_LogicalPathsAlwaysFail(t *testing.T) {
 	// map logical paths to physical ones before checking existence.
 
 	var checkedPaths []string
-	hook := func(path string, exists bool, sequence int, context *hooks.EventContext) {
+	hook := func(path string, exists bool, sequence int, chainType string, context *hooks.EventContext) {
 		checkedPaths = append(checkedPaths, path)
 		// Expected: logical paths never exist on disk without a resolver
 		if exists {
@@ -173,7 +173,7 @@ func TestSoundChecker_LogicalPathsAlwaysFail(t *testing.T) {
 		"default.wav",
 	}
 	
-	results := checker.CheckPaths(context, logicalPaths)
+	results := checker.CheckPaths(context, "posttool", logicalPaths)
 	
 	// Bug: All paths should return false because we're checking logical paths
 	for i, result := range results {
@@ -238,7 +238,7 @@ func TestSoundChecker_WithResolver(t *testing.T) {
 	
 	var checkedPaths []string
 	var existsResults []bool
-	hook := func(path string, exists bool, sequence int, context *hooks.EventContext) {
+	hook := func(path string, exists bool, sequence int, chainType string, context *hooks.EventContext) {
 		checkedPaths = append(checkedPaths, path)
 		existsResults = append(existsResults, exists)
 	}
@@ -253,7 +253,7 @@ func TestSoundChecker_WithResolver(t *testing.T) {
 		"default.wav",
 	}
 	
-	results := checker.CheckPaths(context, logicalPaths)
+	results := checker.CheckPaths(context, "posttool", logicalPaths)
 	
 	// First path should exist (bash-success.wav maps to real file)
 	if !results[0] {

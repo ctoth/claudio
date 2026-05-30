@@ -14,9 +14,14 @@ type SoundpackResolver interface {
 	GetType() string
 }
 
-// PathCheckedHook is called when a sound path is checked for existence
-// sequence is 1-based (not 0-based) to match fallback level numbering
-type PathCheckedHook func(path string, exists bool, sequence int, context *hooks.EventContext)
+// PathCheckedHook is called when a sound path is checked for existence.
+//
+// sequence is the 1-based position of `path` within the chain CheckPaths
+// was given. chainType identifies WHICH chain this lookup ran under
+// (e.g. "enhanced", "posttool", "simple"). Sequence is only comparable
+// within a single chainType — see the v2 schema migration notes / review
+// finding #20 for the long story.
+type PathCheckedHook func(path string, exists bool, sequence int, chainType string, context *hooks.EventContext)
 
 // SoundChecker manages sound path checking with optional hooks
 type SoundChecker struct {
@@ -61,21 +66,24 @@ func WithHook(hook PathCheckedHook) SoundCheckerOption {
 	}
 }
 
-// CheckPaths checks existence of multiple paths and calls all hooks with 1-based sequence numbering
-func (sc *SoundChecker) CheckPaths(context *hooks.EventContext, paths []string) []bool {
+// CheckPaths checks existence of multiple paths and calls all hooks with
+// 1-based sequence numbering. chainType identifies the chain these paths
+// came from so hooks can record the chain-scoped meaning of sequence
+// instead of conflating positions across chain shapes.
+func (sc *SoundChecker) CheckPaths(context *hooks.EventContext, chainType string, paths []string) []bool {
 	results := make([]bool, len(paths))
-	
+
 	for i, path := range paths {
 		exists := sc.fileExists(path)
 		results[i] = exists
-		
+
 		// Call all hooks with 1-based sequence numbering
 		sequence := i + 1
 		for _, hook := range sc.hooks {
-			hook(path, exists, sequence, context)
+			hook(path, exists, sequence, chainType, context)
 		}
 	}
-	
+
 	return results
 }
 
@@ -91,7 +99,7 @@ func (sc *SoundChecker) fileExists(path string) bool {
 		_, err = os.Stat(resolved)
 		return err == nil
 	}
-	
+
 	// Fallback to direct path checking (backward compatibility)
 	_, err := os.Stat(path)
 	return err == nil

@@ -9,16 +9,21 @@ import (
 	"claudio.click/internal/hooks"
 )
 
-// DBHook implements database logging for sound path checks
+// DBHook implements database logging for sound path checks.
+//
+// chainType is the chain ("enhanced"/"posttool"/"simple") the current
+// event ran under; recorded once per event because sequence values from
+// different chains aren't comparable (see review finding #20 / v2
+// schema migration).
 type DBHook struct {
 	db           *sql.DB
 	sessionID    string
 	disabled     bool
-	eventID      int64 // Current event ID for grouping path checks
+	eventID      int64               // Current event ID for grouping path checks
 	context      *hooks.EventContext // Current context for grouping
-	pathChecks   []pathCheckEntry // Buffer for current event's path checks
+	pathChecks   []pathCheckEntry    // Buffer for current event's path checks
 	selectedPath string
-	fallbackLevel int
+	chainType    string
 }
 
 // pathCheckEntry represents a single path check
@@ -30,19 +35,23 @@ type pathCheckEntry struct {
 // NewDBHook creates a new database hook for the specified session
 func NewDBHook(db *sql.DB, sessionID string) *DBHook {
 	return &DBHook{
-		db:            db,
-		sessionID:     sessionID,
-		disabled:      false,
-		eventID:       0, // Will be set when first path check is logged
-		context:       nil, // Will be set for context grouping
-		pathChecks:    make([]pathCheckEntry, 0),
-		selectedPath:  "",
-		fallbackLevel: 0,
+		db:           db,
+		sessionID:    sessionID,
+		disabled:     false,
+		eventID:      0,   // Will be set when first path check is logged
+		context:      nil, // Will be set for context grouping
+		pathChecks:   make([]pathCheckEntry, 0),
+		selectedPath: "",
+		chainType:    "",
 	}
 }
 
-// LogPathCheck logs a path check to the database with transaction handling
-func (d *DBHook) LogPathCheck(path string, exists bool, sequence int, context *hooks.EventContext) {
+// LogPathCheck logs a path check to the database with transaction handling.
+//
+// chainType identifies which chain the path came from. It's recorded on
+// the hook_events row (not on each path_lookups row) because all paths
+// within a single event share the same chain.
+func (d *DBHook) LogPathCheck(path string, exists bool, sequence int, chainType string, context *hooks.EventContext) {
 	// Skip if disabled due to previous errors
 	if d.disabled {
 		return
@@ -54,9 +63,9 @@ func (d *DBHook) LogPathCheck(path string, exists bool, sequence int, context *h
 		// For the first path in a new event, assume it's selected
 		// This will be updated if a later path exists
 		d.selectedPath = path
-		d.fallbackLevel = sequence
-		
-		if err := d.ensureEvent(d.context, d.selectedPath, d.fallbackLevel); err != nil {
+		d.chainType = chainType
+
+		if err := d.ensureEvent(d.context, d.selectedPath, d.chainType); err != nil {
 			slog.Warn("sound tracking failed to create event", "error", err, "path", path)
 			d.disabled = true
 			return
@@ -66,9 +75,10 @@ func (d *DBHook) LogPathCheck(path string, exists bool, sequence int, context *h
 	// Update selected path if this one exists (first existing path wins)
 	if exists && (d.selectedPath == "" || !d.hasExistingPath()) {
 		d.selectedPath = path
-		d.fallbackLevel = sequence
+		// chainType doesn't change within an event but update for symmetry
+		d.chainType = chainType
 		// Update the event record with the correct selected path
-		if err := d.updateEventSelection(path, sequence); err != nil {
+		if err := d.updateEventSelection(path, chainType); err != nil {
 			slog.Warn("sound tracking failed to update event selection", "error", err, "path", path)
 			d.disabled = true
 			return
@@ -87,7 +97,8 @@ func (d *DBHook) LogPathCheck(path string, exists bool, sequence int, context *h
 		"event_id", d.eventID,
 		"path", path,
 		"exists", exists,
-		"sequence", sequence)
+		"sequence", sequence,
+		"chain_type", chainType)
 }
 
 // needsNewEvent determines if a new event should be created for this context
@@ -96,7 +107,7 @@ func (d *DBHook) needsNewEvent(context *hooks.EventContext) bool {
 	if d.context == nil {
 		return true
 	}
-	
+
 	// Create new event if key context fields differ
 	return d.context.Category != context.Category ||
 		d.context.ToolName != context.ToolName ||
@@ -108,7 +119,7 @@ func (d *DBHook) startNewEvent(context *hooks.EventContext) {
 	d.context = context
 	d.pathChecks = make([]pathCheckEntry, 0)
 	d.selectedPath = ""
-	d.fallbackLevel = 0
+	d.chainType = ""
 	d.eventID = 0
 }
 
@@ -122,20 +133,21 @@ func (d *DBHook) hasExistingPath() bool {
 	return false
 }
 
-// updateEventSelection updates the event record with new selected path and fallback level
-func (d *DBHook) updateEventSelection(selectedPath string, fallbackLevel int) error {
+// updateEventSelection updates the event record with new selected path
+// and chain type.
+func (d *DBHook) updateEventSelection(selectedPath, chainType string) error {
 	_, err := d.db.Exec(`
-		UPDATE hook_events 
-		SET selected_path = ?, fallback_level = ?
+		UPDATE hook_events
+		SET selected_path = ?, chain_type = ?
 		WHERE id = ?`,
 		selectedPath,
-		fallbackLevel,
+		chainType,
 		d.eventID)
 	return err
 }
 
 // ensureEvent creates a hook event record if one doesn't exist for this context
-func (d *DBHook) ensureEvent(context *hooks.EventContext, selectedPath string, fallbackLevel int) error {
+func (d *DBHook) ensureEvent(context *hooks.EventContext, selectedPath, chainType string) error {
 	// Marshal context to JSON
 	contextJSON, err := json.Marshal(context)
 	if err != nil {
@@ -144,13 +156,13 @@ func (d *DBHook) ensureEvent(context *hooks.EventContext, selectedPath string, f
 
 	// Insert event and get ID
 	result, err := d.db.Exec(`
-		INSERT INTO hook_events (timestamp, session_id, tool_name, selected_path, fallback_level, context)
+		INSERT INTO hook_events (timestamp, session_id, tool_name, selected_path, chain_type, context)
 		VALUES (?, ?, ?, ?, ?, ?)`,
 		time.Now().Unix(),
 		d.sessionID,
 		context.ToolName,
 		selectedPath,
-		fallbackLevel,
+		chainType,
 		string(contextJSON))
 	if err != nil {
 		return err

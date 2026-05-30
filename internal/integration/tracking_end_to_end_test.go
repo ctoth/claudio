@@ -82,40 +82,46 @@ func TestEndToEndHookEventProcessing(t *testing.T) {
 	
 	// Verify hook_events table contains the event
 	var (
-		sessionID      string
-		toolName       string
-		selectedPath   string
-		fallbackLevel  int
-		context        string
-		timestamp      int64
+		sessionID    string
+		toolName     string
+		selectedPath string
+		chainType    sql.NullString
+		context      string
+		timestamp    int64
 	)
-	
+
 	err = db.QueryRow(`
-		SELECT session_id, tool_name, selected_path, fallback_level, context, timestamp
-		FROM hook_events 
+		SELECT session_id, tool_name, selected_path, chain_type, context, timestamp
+		FROM hook_events
 		WHERE session_id = ?`, hookEvent.SessionID).Scan(
-		&sessionID, &toolName, &selectedPath, &fallbackLevel, &context, &timestamp)
+		&sessionID, &toolName, &selectedPath, &chainType, &context, &timestamp)
 	if err != nil {
 		t.Fatalf("Failed to query hook_events: %v", err)
 	}
-	
+
 	// Verify all fields are populated correctly
 	if sessionID != hookEvent.SessionID {
 		t.Errorf("Expected session_id %s, got %s", hookEvent.SessionID, sessionID)
 	}
-	
+
 	if toolName != *hookEvent.ToolName {
 		t.Errorf("Expected tool_name %s, got %s", *hookEvent.ToolName, toolName)
 	}
-	
+
 	if selectedPath == "" {
 		t.Error("Expected selected_path to be populated")
 	}
-	
-	if fallbackLevel <= 0 {
-		t.Errorf("Expected fallback_level > 0, got %d", fallbackLevel)
+
+	// chain_type should be one of the known chain identifiers when populated.
+	if chainType.Valid {
+		switch chainType.String {
+		case "enhanced", "posttool", "simple":
+			// ok
+		default:
+			t.Errorf("unexpected chain_type %q", chainType.String)
+		}
 	}
-	
+
 	if context == "" {
 		t.Error("Expected context to be populated")
 	}
@@ -355,15 +361,15 @@ func TestEndToEndFallbackLevelRecording(t *testing.T) {
 	}
 	defer db.Close()
 	
-	var fallbackLevel int
+	var chainType sql.NullString
 	var selectedPath string
-	err = db.QueryRow("SELECT fallback_level, selected_path FROM hook_events WHERE session_id = ?", 
-		hookEvent.SessionID).Scan(&fallbackLevel, &selectedPath)
+	err = db.QueryRow("SELECT chain_type, selected_path FROM hook_events WHERE session_id = ?",
+		hookEvent.SessionID).Scan(&chainType, &selectedPath)
 	if err != nil {
-		t.Fatalf("Failed to query fallback level: %v", err)
+		t.Fatalf("Failed to query chain type: %v", err)
 	}
-	
-	t.Logf("System behavior - Fallback level: %d, Selected path: %s", fallbackLevel, selectedPath)
+
+	t.Logf("System behavior - Chain type: %q, Selected path: %s", chainType.String, selectedPath)
 	
 	// Analyze all path lookups
 	rows, err := db.Query(`
@@ -393,22 +399,24 @@ func TestEndToEndFallbackLevelRecording(t *testing.T) {
 		t.Logf("  %d: %s (found: %t)", sequence, path, found)
 	}
 	
-	// Verify basic tracking functionality
-	if fallbackLevel <= 0 {
-		t.Errorf("Expected positive fallback level, got %d", fallbackLevel)
+	// Verify basic tracking functionality. The fallback_level column
+	// was removed in schema v2 (review finding #20); the chain_type
+	// column replaces it as the chain identifier and is asserted above.
+	if !chainType.Valid || chainType.String == "" {
+		t.Error("Expected chain_type to be recorded")
 	}
-	
+
 	if len(pathsChecked) == 0 {
 		t.Error("Expected at least one path to be checked")
 	}
-	
+
 	if selectedPath == "" {
 		t.Error("Expected selected path to be recorded")
 	}
 	
 	// Document current behavior for future reference
-	t.Logf("DOCUMENTED BEHAVIOR: Fallback system records level %d with %d path lookups", 
-		fallbackLevel, len(pathsChecked))
+	t.Logf("DOCUMENTED BEHAVIOR: Tracking system records chain_type=%q with %d path lookups",
+		chainType.String, len(pathsChecked))
 	t.Logf("This test validates that the tracking system captures fallback behavior correctly")
 }
 

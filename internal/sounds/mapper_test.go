@@ -813,7 +813,7 @@ func TestMapSoundTriggersPathChecking(t *testing.T) {
 	var checkedExists []bool
 	var checkedContext *hooks.EventContext
 
-	testHook := func(path string, exists bool, sequence int, context *hooks.EventContext) {
+	testHook := func(path string, exists bool, sequence int, chainType string, context *hooks.EventContext) {
 		checkedPaths = append(checkedPaths, path)
 		checkedExists = append(checkedExists, exists)
 		checkedSequences = append(checkedSequences, sequence)
@@ -894,7 +894,7 @@ func TestMapSoundFallbackLevelBasedOnFileExistence(t *testing.T) {
 	}
 
 	var checkedPaths []string
-	trackingHook := func(path string, exists bool, sequence int, context *hooks.EventContext) {
+	trackingHook := func(path string, exists bool, sequence int, chainType string, context *hooks.EventContext) {
 		checkedPaths = append(checkedPaths, path)
 		t.Logf("Path check: %s (exists: %v, sequence: %d)", path, exists, sequence)
 	}
@@ -938,7 +938,7 @@ func TestMapSoundFallbackLevelBasedOnFileExistence(t *testing.T) {
 func TestMapSoundAllPathsChecked(t *testing.T) {
 	var checkedPaths []string
 
-	testHook := func(path string, exists bool, sequence int, context *hooks.EventContext) {
+	testHook := func(path string, exists bool, sequence int, chainType string, context *hooks.EventContext) {
 		checkedPaths = append(checkedPaths, path)
 	}
 
@@ -979,7 +979,7 @@ func TestMapSoundWithoutTrackingSkipsPathChecking(t *testing.T) {
 	var pathCheckTriggered bool
 
 	// This hook should never be called 
-	_ = func(path string, exists bool, sequence int, context *hooks.EventContext) {
+	_ = func(path string, exists bool, sequence int, chainType string, context *hooks.EventContext) {
 		pathCheckTriggered = true
 	}
 

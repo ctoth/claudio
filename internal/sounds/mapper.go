@@ -195,7 +195,7 @@ func (m *SoundMapper) mapEnhancedSound(context *hooks.EventContext) *SoundMappin
 	}
 
 	// Calculate fallback level and determine selected path
-	fallbackLevel := m.calculateFallbackLevel(context, paths)
+	fallbackLevel := m.calculateFallbackLevel(context, ChainTypeEnhanced, paths)
 	selectedPath := paths[0] // Default to first path
 	if fallbackLevel > 0 && fallbackLevel <= len(paths) {
 		selectedPath = paths[fallbackLevel-1] // Convert 1-based to 0-based index
@@ -358,23 +358,26 @@ func (m *SoundMapper) extractSuffixFromOperation(operation string) string {
 	}
 }
 
-// calculateFallbackLevel determines which level in the fallback chain would be selected
-func (m *SoundMapper) calculateFallbackLevel(context *hooks.EventContext, paths []string) int {
+// calculateFallbackLevel determines which level in the fallback chain would be selected.
+// chainType identifies WHICH chain these paths came from so the SoundChecker hooks
+// can record chain-scoped sequence values instead of conflating positions across
+// chain shapes (see review finding #20).
+func (m *SoundMapper) calculateFallbackLevel(context *hooks.EventContext, chainType string, paths []string) int {
 	// If no SoundChecker is configured, return 1 (backward compatibility)
 	if m.soundChecker == nil {
 		return 1
 	}
-	
+
 	// Use SoundChecker to check all paths and determine which level exists
-	results := m.soundChecker.CheckPaths(context, paths)
-	
+	results := m.soundChecker.CheckPaths(context, chainType, paths)
+
 	// Find the first existing path (1-based level)
 	for i, exists := range results {
 		if exists {
 			return i + 1 // Convert to 1-based level
 		}
 	}
-	
+
 	// If no files exist, fallback to the last level (default.wav)
 	return len(paths)
 }
@@ -446,7 +449,7 @@ func (m *SoundMapper) mapPostToolSound(context *hooks.EventContext) *SoundMappin
 	}
 
 	// Calculate fallback level and determine selected path
-	fallbackLevel := m.calculateFallbackLevel(context, paths)
+	fallbackLevel := m.calculateFallbackLevel(context, ChainTypePostTool, paths)
 	selectedPath := paths[0] // Default to first path
 	if fallbackLevel > 0 && fallbackLevel <= len(paths) {
 		selectedPath = paths[fallbackLevel-1] // Convert 1-based to 0-based index
@@ -515,7 +518,7 @@ func (m *SoundMapper) mapSimpleSound(context *hooks.EventContext) *SoundMappingR
 	}
 
 	// Calculate fallback level and determine selected path
-	fallbackLevel := m.calculateFallbackLevel(context, paths)
+	fallbackLevel := m.calculateFallbackLevel(context, ChainTypeSimple, paths)
 	selectedPath := paths[0] // Default to first path
 	if fallbackLevel > 0 && fallbackLevel <= len(paths) {
 		selectedPath = paths[fallbackLevel-1] // Convert 1-based to 0-based index

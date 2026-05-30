@@ -42,9 +42,9 @@ func TestDBHookLogPathCheck(t *testing.T) {
 	}
 
 	// Log some path checks
-	hook.LogPathCheck("success/git-commit-success.wav", false, 1, context)
-	hook.LogPathCheck("success/git-success.wav", false, 2, context)
-	hook.LogPathCheck("success/success.wav", true, 3, context)
+	hook.LogPathCheck("success/git-commit-success.wav", false, 1, "posttool", context)
+	hook.LogPathCheck("success/git-success.wav", false, 2, "posttool", context)
+	hook.LogPathCheck("success/success.wav", true, 3, "posttool", context)
 
 	// Verify data was inserted correctly
 	var eventCount int
@@ -79,15 +79,15 @@ func TestDBHookTransactionHandling(t *testing.T) {
 	}
 
 	// Log multiple path checks that should be grouped into a single event
-	hook.LogPathCheck("error/bash-error.wav", false, 1, context)
-	hook.LogPathCheck("error/bash.wav", false, 2, context)
-	hook.LogPathCheck("error/error.wav", true, 3, context)
+	hook.LogPathCheck("error/bash-error.wav", false, 1, "posttool", context)
+	hook.LogPathCheck("error/bash.wav", false, 2, "posttool", context)
+	hook.LogPathCheck("error/error.wav", true, 3, "posttool", context)
 
 	// Verify all paths are associated with the same event
 	rows, err := db.Query(`
-		SELECT pl.path, pl.sequence, pl.found, he.selected_path, he.fallback_level
-		FROM path_lookups pl 
-		JOIN hook_events he ON pl.event_id = he.id 
+		SELECT pl.path, pl.sequence, pl.found, he.selected_path
+		FROM path_lookups pl
+		JOIN hook_events he ON pl.event_id = he.id
 		WHERE he.session_id = ?
 		ORDER BY pl.sequence`, sessionID)
 	if err != nil {
@@ -96,15 +96,14 @@ func TestDBHookTransactionHandling(t *testing.T) {
 	defer rows.Close()
 
 	expectedPaths := []struct {
-		path          string
-		sequence      int
-		found         bool
-		selectedPath  string
-		fallbackLevel int
+		path         string
+		sequence     int
+		found        bool
+		selectedPath string
 	}{
-		{"error/bash-error.wav", 1, false, "error/error.wav", 3},
-		{"error/bash.wav", 2, false, "error/error.wav", 3},
-		{"error/error.wav", 3, true, "error/error.wav", 3},
+		{"error/bash-error.wav", 1, false, "error/error.wav"},
+		{"error/bash.wav", 2, false, "error/error.wav"},
+		{"error/error.wav", 3, true, "error/error.wav"},
 	}
 
 	i := 0
@@ -115,10 +114,10 @@ func TestDBHookTransactionHandling(t *testing.T) {
 		}
 
 		var path, selectedPath string
-		var sequence, fallbackLevel int
+		var sequence int
 		var found bool
 
-		err := rows.Scan(&path, &sequence, &found, &selectedPath, &fallbackLevel)
+		err := rows.Scan(&path, &sequence, &found, &selectedPath)
 		if err != nil {
 			t.Fatalf("Failed to scan row: %v", err)
 		}
@@ -135,9 +134,6 @@ func TestDBHookTransactionHandling(t *testing.T) {
 		}
 		if selectedPath != expected.selectedPath {
 			t.Errorf("Row %d: expected selectedPath %s, got %s", i, expected.selectedPath, selectedPath)
-		}
-		if fallbackLevel != expected.fallbackLevel {
-			t.Errorf("Row %d: expected fallbackLevel %d, got %d", i, expected.fallbackLevel, fallbackLevel)
 		}
 		i++
 	}
@@ -163,7 +159,7 @@ func TestDBHookJSONContextMarshaling(t *testing.T) {
 		Operation:    "tool-start",
 	}
 
-	hook.LogPathCheck("loading/git-commit-start.wav", true, 1, context)
+	hook.LogPathCheck("loading/git-commit-start.wav", true, 1, "enhanced", context)
 
 	// Verify context was stored as valid JSON
 	var contextJSON string
@@ -209,11 +205,11 @@ func TestDBHookEventGrouping(t *testing.T) {
 	}
 
 	// First event - multiple paths
-	hook.LogPathCheck("success/git.wav", true, 1, context1)
-	hook.LogPathCheck("success/success.wav", false, 2, context1)
+	hook.LogPathCheck("success/git.wav", true, 1, "posttool", context1)
+	hook.LogPathCheck("success/success.wav", false, 2, "posttool", context1)
 
 	// Second event - different context
-	hook.LogPathCheck("loading/bash.wav", false, 1, context2)
+	hook.LogPathCheck("loading/bash.wav", false, 1, "enhanced", context2)
 
 	// Should have 2 events total
 	var eventCount int
@@ -285,7 +281,7 @@ func TestDBHookGracefulDegradation(t *testing.T) {
 	}
 
 	// This should not panic or cause the program to fail
-	hook.LogPathCheck("error/test.wav", false, 1, context)
+	hook.LogPathCheck("error/test.wav", false, 1, "posttool", context)
 
 	// Hook should be disabled after failure
 	if !hook.disabled {
@@ -293,7 +289,7 @@ func TestDBHookGracefulDegradation(t *testing.T) {
 	}
 
 	// Subsequent calls should be no-ops
-	hook.LogPathCheck("error/test2.wav", false, 2, context)
+	hook.LogPathCheck("error/test2.wav", false, 2, "posttool", context)
 	// Should not panic
 }
 
@@ -315,7 +311,7 @@ func TestDBHookGetHook(t *testing.T) {
 	}
 
 	// Should not panic
-	hook("success/test.wav", true, 1, context)
+	hook("success/test.wav", true, 1, "posttool", context)
 
 	// Verify data was inserted
 	var count int
@@ -339,7 +335,7 @@ func TestDBHookTimestampHandling(t *testing.T) {
 	}
 
 	startTime := time.Now().Unix()
-	hook.LogPathCheck("success/test.wav", true, 1, context)
+	hook.LogPathCheck("success/test.wav", true, 1, "posttool", context)
 	endTime := time.Now().Unix()
 
 	var timestamp int64
@@ -350,5 +346,80 @@ func TestDBHookTimestampHandling(t *testing.T) {
 
 	if timestamp < startTime || timestamp > endTime {
 		t.Errorf("Timestamp %d is not within expected range [%d, %d]", timestamp, startTime, endTime)
+	}
+}
+
+// TestDBHook_WritesChainType pins the contract that the chain type passed
+// to LogPathCheck lands on the hook_events row (and survives the
+// "later-existing-path wins" update path).
+func TestDBHook_WritesChainType(t *testing.T) {
+	db := setupTestDB(t)
+	sessionID := "test-chain-type"
+	hook := NewDBHook(db, sessionID)
+
+	context := &hooks.EventContext{
+		Category:  hooks.Loading,
+		ToolName:  "git",
+		Operation: "tool-start",
+	}
+
+	// Simulate a 3-path enhanced chain where the second path exists.
+	hook.LogPathCheck("loading/git-commit-start.wav", false, 1, "enhanced", context)
+	hook.LogPathCheck("loading/git-start.wav", true, 2, "enhanced", context)
+	hook.LogPathCheck("loading/loading.wav", false, 3, "enhanced", context)
+
+	var chainType string
+	if err := db.QueryRow(
+		"SELECT chain_type FROM hook_events WHERE session_id = ?",
+		sessionID).Scan(&chainType); err != nil {
+		t.Fatalf("query chain_type: %v", err)
+	}
+	if chainType != "enhanced" {
+		t.Errorf("expected chain_type 'enhanced', got %q", chainType)
+	}
+
+	// selected_path should reflect the existing path (level 2).
+	var selectedPath string
+	if err := db.QueryRow(
+		"SELECT selected_path FROM hook_events WHERE session_id = ?",
+		sessionID).Scan(&selectedPath); err != nil {
+		t.Fatalf("query selected_path: %v", err)
+	}
+	if selectedPath != "loading/git-start.wav" {
+		t.Errorf("expected selected_path 'loading/git-start.wav', got %q", selectedPath)
+	}
+
+	// path_lookups should record all three sequence numbers.
+	rows, err := db.Query(
+		`SELECT path, sequence, found FROM path_lookups pl
+		JOIN hook_events he ON pl.event_id = he.id
+		WHERE he.session_id = ? ORDER BY sequence`, sessionID)
+	if err != nil {
+		t.Fatalf("query path_lookups: %v", err)
+	}
+	defer rows.Close()
+
+	var lookups []struct {
+		path     string
+		sequence int
+		found    int
+	}
+	for rows.Next() {
+		var p string
+		var s, f int
+		if err := rows.Scan(&p, &s, &f); err != nil {
+			t.Fatalf("scan path lookup: %v", err)
+		}
+		lookups = append(lookups, struct {
+			path     string
+			sequence int
+			found    int
+		}{p, s, f})
+	}
+	if len(lookups) != 3 {
+		t.Fatalf("expected 3 path_lookups, got %d", len(lookups))
+	}
+	if lookups[1].sequence != 2 || lookups[1].found != 1 {
+		t.Errorf("expected sequence=2 found=1 at lookup[1], got %+v", lookups[1])
 	}
 }

@@ -557,8 +557,8 @@ func outputUsageStatistics(w io.Writer, usage []tracking.SoundUsage, filter trac
 		if dbConn, ok := db.(*sql.DB); ok {
 			summary, err := tracking.GetUsageSummary(dbConn, filter)
 			if err == nil {
-				fmt.Fprintf(w, "Summary: %d total events, %d unique sounds, avg fallback %.1f\n\n", 
-					summary.TotalEvents, summary.UniqueSounds, summary.AvgFallbackLevel)
+				fmt.Fprintf(w, "Summary: %d total events, %d unique sounds\n\n",
+					summary.TotalEvents, summary.UniqueSounds)
 			}
 		}
 	}
@@ -566,18 +566,17 @@ func outputUsageStatistics(w io.Writer, usage []tracking.SoundUsage, filter trac
 	// Show most used sounds
 	fmt.Fprintln(w, "Most Frequently Used Sounds:")
 	fmt.Fprintln(w, "----------------------------")
-	
+
 	for i, sound := range usage {
 		if i >= filter.Limit {
 			break
 		}
 
-		// Format: rank. path (play_count times, fallback level X) - tool/category
+		// Format: rank. path (play_count times) - tool/category
 		rank := i + 1
-		fallbackDesc := getFallbackLevelDescription(sound.FallbackLevel)
-		
-		fmt.Fprintf(w, "%2d. %s (%d times, %s)",
-			rank, sound.Path, sound.PlayCount, fallbackDesc)
+
+		fmt.Fprintf(w, "%2d. %s (%d times)",
+			rank, sound.Path, sound.PlayCount)
 		
 		// Add tool/category info if available
 		if sound.ToolName != "" || sound.Category != "" {

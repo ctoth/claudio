@@ -24,7 +24,7 @@ func TestSlogHook_WithCustomLogger(t *testing.T) {
 		Operation: "tool-complete",
 	}
 
-	hookFunc("test/path.wav", true, 1, context)
+	hookFunc("test/path.wav", true, 1, "posttool", context)
 
 	output := buf.String()
 	if !strings.Contains(output, "path=test/path.wav") {
@@ -58,7 +58,7 @@ func TestSlogHook_WithNilLogger(t *testing.T) {
 		Operation: "file-error",
 	}
 
-	hookFunc("missing/file.wav", false, 2, context)
+	hookFunc("missing/file.wav", false, 2, "simple", context)
 
 	output := buf.String()
 	if !strings.Contains(output, "path=missing/file.wav") {
@@ -80,8 +80,8 @@ func TestNopHook_DoesNothing(t *testing.T) {
 	}
 
 	// This should not panic or cause any side effects
-	hookFunc("any/path.wav", true, 3, context)
-	hookFunc("another/path.wav", false, 4, context)
+	hookFunc("any/path.wav", true, 3, "enhanced", context)
+	hookFunc("another/path.wav", false, 4, "enhanced", context)
 
 	// Test passes if no panic occurs
 }
@@ -102,7 +102,7 @@ func TestSlogHook_IntegratesWithSoundChecker(t *testing.T) {
 	}
 
 	paths := []string{"interactive/edit.wav", "interactive/interactive.wav"}
-	results := checker.CheckPaths(context, paths)
+	results := checker.CheckPaths(context, "simple", paths)
 
 	// Both paths should be checked (return false since no real files)
 	if len(results) != 2 {
@@ -128,7 +128,7 @@ func TestNopHook_IntegratesWithSoundChecker(t *testing.T) {
 	}
 
 	paths := []string{"success/write.wav", "success/success.wav", "default.wav"}
-	results := checker.CheckPaths(context, paths)
+	results := checker.CheckPaths(context, "simple", paths)
 
 	// All paths should be checked (return false since no real files)
 	if len(results) != 3 {
@@ -159,7 +159,7 @@ func TestMultipleHooks_CoexistProperly(t *testing.T) {
 	}
 
 	paths := []string{"loading/bash-thinking.wav"}
-	results := checker.CheckPaths(context, paths)
+	results := checker.CheckPaths(context, "simple", paths)
 
 	if len(results) != 1 {
 		t.Errorf("Expected 1 result, got %d", len(results))
@@ -189,7 +189,7 @@ func TestSlogHook_LogsAllContextFields(t *testing.T) {
 		Operation: "pattern-error",
 	}
 
-	hookFunc("error/glob-error.wav", false, 5, context)
+	hookFunc("error/glob-error.wav", false, 5, "posttool", context)
 
 	output := buf.String()
 	expectedFields := []string{

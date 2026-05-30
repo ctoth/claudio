@@ -24,11 +24,12 @@ func NewSlogHook(logger *slog.Logger) *SlogHook {
 
 // GetHook returns the PathCheckedHook function for integration with SoundChecker
 func (s *SlogHook) GetHook() PathCheckedHook {
-	return func(path string, exists bool, sequence int, context *hooks.EventContext) {
+	return func(path string, exists bool, sequence int, chainType string, context *hooks.EventContext) {
 		s.logger.Debug("path check",
 			"path", path,
 			"exists", exists,
 			"sequence", sequence,
+			"chain_type", chainType,
 			"category", context.Category.String(),
 			"tool_name", context.ToolName,
 			"operation", context.Operation,
@@ -46,7 +47,7 @@ func NewNopHook() *NopHook {
 
 // GetHook returns the PathCheckedHook function that does nothing
 func (n *NopHook) GetHook() PathCheckedHook {
-	return func(path string, exists bool, sequence int, context *hooks.EventContext) {
+	return func(path string, exists bool, sequence int, chainType string, context *hooks.EventContext) {
 		// No-op: do nothing
 	}
 }
