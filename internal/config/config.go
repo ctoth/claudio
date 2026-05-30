@@ -17,7 +17,7 @@ import (
 	"claudio.click/internal/platform"
 )
 
-//go:embed windows.json wsl.json darwin.json
+//go:embed windows.json wsl.json darwin.json linux.json
 var platformSoundpacks embed.FS
 
 // FileLoggingConfig represents file-based logging configuration

@@ -1,0 +1,12 @@
+{
+  "name": "linux-default",
+  "description": "Default Linux platform soundpack -- relative paths resolved under the installed XDG soundpack directory",
+  "version": "1.0",
+  "mappings": {
+    "success/default": "default-success.wav",
+    "error/default": "default-error.wav",
+    "loading/default": "default-loading.wav",
+    "interactive/default": "default-interactive.wav",
+    "default.wav": "default.wav"
+  }
+}

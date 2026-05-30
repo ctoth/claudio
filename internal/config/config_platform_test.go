@@ -263,6 +263,42 @@ func TestPlatformSoundpackHelpers(t *testing.T) {
 	})
 }
 
+// TestGetEmbeddedPlatformSoundpackData_LinuxEmbedded asserts that
+// linux.json is present in the embed.FS so native non-WSL Linux
+// runtimes receive a real platform soundpack instead of falling
+// back to "default". Before this fix the //go:embed directive
+// listed only windows.json wsl.json darwin.json.
+func TestGetEmbeddedPlatformSoundpackData_LinuxEmbedded(t *testing.T) {
+	if !hasEmbeddedPlatformFile("linux.json") {
+		t.Fatal("linux.json must be embedded so non-WSL Linux gets a platform soundpack")
+	}
+
+	data, err := GetEmbeddedPlatformSoundpackData("linux.json")
+	if err != nil {
+		t.Fatalf("GetEmbeddedPlatformSoundpackData(linux.json) returned error: %v", err)
+	}
+	if len(data) == 0 {
+		t.Error("embedded linux.json is empty")
+	}
+	// Sanity: the file is JSON with a "mappings" key
+	if !strings.Contains(string(data), "\"mappings\"") {
+		t.Errorf("embedded linux.json does not look like a soundpack JSON (no 'mappings' key); got: %s", string(data))
+	}
+}
+
+// TestGetEmbeddedPlatformSoundpackData_AllPlatformsEmbedded confirms
+// every platform soundpack the runtime ever asks for is embeddable.
+// Pre-fix this would fail for "linux.json".
+func TestGetEmbeddedPlatformSoundpackData_AllPlatformsEmbedded(t *testing.T) {
+	for _, name := range []string{"windows.json", "wsl.json", "darwin.json", "linux.json"} {
+		t.Run(name, func(t *testing.T) {
+			if !hasEmbeddedPlatformFile(name) {
+				t.Errorf("expected %s to be embedded", name)
+			}
+		})
+	}
+}
+
 // TestIsGoTestTempExecutable_PortableAcrossPlatforms asserts that the
 // go-test temp-build detection works on Windows (where go test stages
 // binaries under %TEMP%\go-buildNNN\...) as well as POSIX. The pre-fix
