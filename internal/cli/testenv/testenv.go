@@ -52,6 +52,14 @@ func IsolateXDG(t *testing.T) string {
 	// ApplyEnvironmentOverrides after every load path.
 	t.Setenv("CLAUDIO_FILE_LOGGING", "false")
 
+	// Route every cli.Run call through the fake audio backend so the
+	// test binary does not depend on cgo (malgo) being built and never
+	// blocks waiting for a real audio device. Tests that want to assert
+	// on Play invocations read audio.LastFakeBackend().Plays(); tests
+	// that don't care simply benefit from the fake's no-op
+	// implementation.
+	t.Setenv("CLAUDIO_AUDIO_BACKEND", "fake")
+
 	xdg.Reload()
 	t.Cleanup(func() { xdg.Reload() })
 

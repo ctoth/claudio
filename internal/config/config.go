@@ -479,9 +479,12 @@ func (cm *ConfigManager) ApplyLogLevelWithWriter(logLevel string, writer io.Writ
 	return nil
 }
 
-// GetSupportedAudioBackends returns a list of all supported audio backend types
+// GetSupportedAudioBackends returns a list of all supported audio backend types.
+// "fake" is the test-only backend registered by internal/audio/fake_backend.go;
+// it is listed here so cli tests can set cfg.AudioBackend = "fake" without
+// tripping ConfigManager.ValidateConfig.
 func (cm *ConfigManager) GetSupportedAudioBackends() []string {
-	return []string{"auto", "system_command", "malgo"}
+	return []string{"auto", "system_command", "malgo", "fake"}
 }
 
 // IsValidAudioBackend checks if an audio backend type is supported

@@ -145,6 +145,12 @@ func TestStatusCommand_VolumeFromEnv_AnnotatesSource(t *testing.T) {
 
 func TestStatusCommand_PrintsAllExpectedFields(t *testing.T) {
 	testenv.IsolateXDG(t)
+	// This test asserts the configured AudioBackend ("malgo") appears
+	// in status output. testenv.IsolateXDG sets CLAUDIO_AUDIO_BACKEND=fake
+	// to keep cgo-less test runs green; clear it here so the seeded
+	// config value is the one we read back.
+	t.Setenv("CLAUDIO_AUDIO_BACKEND", "")
+
 	tmp := t.TempDir()
 	configPath := filepath.Join(tmp, "config.json")
 
