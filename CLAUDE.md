@@ -178,7 +178,14 @@ rm -f claudio
      directory in `$XDG_CONFIG_DIRS` (typically `/etc/xdg/claudio/config.json` on
      Linux/macOS). Windows uses the Windows-native XDG mapping; `/etc/xdg` is
      not checked there.
-   - Environment variable overrides: `CLAUDIO_VOLUME`, `CLAUDIO_SOUNDPACK`, etc.
+   - Environment variable precedence: CLI flag > env var > config file > default.
+   - Production env vars (full reference in `docs/cli-reference.md`): `CLAUDIO_VOLUME`,
+     `CLAUDIO_ENABLED`, `CLAUDIO_SOUNDPACK`, `CLAUDIO_LOG_LEVEL`,
+     `CLAUDIO_AUDIO_BACKEND`, `CLAUDIO_FILE_LOGGING`, `CLAUDIO_SOUND_TRACKING`,
+     `CLAUDIO_SOUND_TRACKING_DB`.
+   - Test-only env vars (NEVER set in production): `CLAUDIO_DETACH_DISABLE`,
+     `CLAUDIO_TEST_RECOGNIZE_GO_TEST`. Both weaken protections that exist for a
+     reason; the CLI test suite is the only legitimate consumer.
 
 5. **File Logging System** (`internal/config/`)
    - Simple idiomatic Go logging using `io.MultiWriter` + `lumberjack.v2`
