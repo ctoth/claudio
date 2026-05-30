@@ -588,30 +588,31 @@ func (c *CLI) processHookEvent(hookEvent *hooks.HookEvent, cfg *config.Config, s
 	slog.Debug("processing hook event", "event_name", hookEvent.EventName)
 
 	// Extract hook context directly from event
-	context := hookEvent.GetContext()
+	eventCtx := hookEvent.GetContext()
 
 	slog.Debug("hook context parsed",
-		"category", context.Category.String(),
-		"operation", context.Operation,
-		"tool", context.ToolName,
-		"hint", context.SoundHint)
+		"category", eventCtx.Category.String(),
+		"operation", eventCtx.Operation,
+		"tool", eventCtx.ToolName,
+		"hint", eventCtx.SoundHint)
 
-	// Create SoundMapper with resolver-enabled SoundChecker for proper path resolution
+	// Create SoundMapper with resolver-enabled SoundChecker for proper path resolution.
+	// DBHook is injected as an EventRecorder (one RecordEvent call per resolved
+	// chain, transactional). When no tracking DB is wired the recorder is nil
+	// — the mapper treats that as "tracking off" and skips the call entirely.
 	var soundMapper *sounds.SoundMapper
 	if c.trackingDB != nil {
-		// Create DBHook with actual session ID from hook event
 		dbHook := tracking.NewDBHook(c.trackingDB, hookEvent.SessionID)
-		soundMapper = sounds.NewSoundMapperWithResolver(c.soundpackResolver, tracking.WithHook(dbHook.GetHook()))
-		slog.Debug("created SoundMapper with resolver and DBHook", "session_id", hookEvent.SessionID)
+		soundMapper = sounds.NewSoundMapperWithResolver(c.soundpackResolver, sounds.WithRecorder(dbHook))
+		slog.Debug("created SoundMapper with resolver and DBHook recorder", "session_id", hookEvent.SessionID)
 	} else {
-		// Create NopHook for no-op tracking
-		nopHook := tracking.NewNopHook()
-		soundMapper = sounds.NewSoundMapperWithResolver(c.soundpackResolver, tracking.WithHook(nopHook.GetHook()))
-		slog.Debug("created SoundMapper with resolver and NopHook (tracking disabled)")
+		soundMapper = sounds.NewSoundMapperWithResolver(c.soundpackResolver)
+		slog.Debug("created SoundMapper with resolver and no recorder (tracking disabled)")
 	}
 
-	// Map to sound file
-	result := soundMapper.MapSound(context)
+	// Map to sound file. context.Background() is fine here — the hook-driven
+	// CLI has no cancellation story yet; recorder calls just inherit it.
+	result := soundMapper.MapSound(context.Background(), eventCtx)
 	if result == nil {
 		slog.Warn("no sound mapping found for event")
 		return
