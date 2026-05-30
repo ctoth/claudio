@@ -1039,3 +1039,81 @@ func createMinimalWAV() []byte {
 		0, 0, 0x7F, 0x7F, 0, 0, 0x7F, 0x7F, // 4 samples of audio data
 	}
 }
+
+// TestSetupLogging_DualOutputWithExistingVerboseHandler covers finding #47:
+// when a test installs a DEBUG-level default handler AND file logging is
+// configured, BOTH outputs must receive records. The previous early-return
+// dropped file logging in that scenario.
+func TestSetupLogging_DualOutputWithExistingVerboseHandler(t *testing.T) {
+	testenv.IsolateXDG(t)
+
+	// Preserve and restore slog default. The cleanup must run BEFORE
+	// t.TempDir's removal so lumberjack's open file handle can be replaced
+	// (otherwise Windows refuses to delete the still-open file).
+	prev := slog.Default()
+	defer slog.SetDefault(prev)
+
+	// Use a manually-managed tempdir so we can guarantee slog is reset
+	// before the directory is removed.
+	logDir, err := os.MkdirTemp("", "claudio-setuplogging-")
+	if err != nil {
+		t.Fatalf("mkdir temp: %v", err)
+	}
+	logFile := filepath.Join(logDir, "claudio.log")
+	defer func() {
+		// Drop slog reference to the lumberjack writer so the OS releases
+		// the handle, then remove the directory.
+		slog.SetDefault(prev)
+		_ = os.RemoveAll(logDir)
+	}()
+
+	// Install a verbose (DEBUG-level) default handler that writes to a
+	// known buffer — this is the shape used by test harnesses.
+	var existingBuf bytes.Buffer
+	existingHandler := slog.NewTextHandler(&existingBuf, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	})
+	slog.SetDefault(slog.New(existingHandler))
+
+	cfg := &config.Config{
+		LogLevel: "warn", // higher than DEBUG so the early-return previously triggered
+		FileLogging: &config.FileLoggingConfig{
+			Enabled:    true,
+			Filename:   logFile,
+			MaxSizeMB:  1,
+			MaxBackups: 1,
+			MaxAgeDays: 1,
+			Compress:   false,
+		},
+	}
+
+	var stderrBuf bytes.Buffer
+	setupLogging(cfg, &stderrBuf)
+
+	// Emit logs that should reach BOTH outputs:
+	// - DEBUG must hit the preserved existing handler (its buffer)
+	// - WARN must hit the file (LogLevel=warn)
+	slog.Debug("debug to existing")
+	slog.Warn("warn to file")
+	slog.Error("error to stderr and file")
+
+	data, err := os.ReadFile(logFile)
+	if err != nil {
+		t.Fatalf("failed to read log file: %v", err)
+	}
+	fileOutput := string(data)
+	if !strings.Contains(fileOutput, "warn to file") {
+		t.Errorf("file should contain 'warn to file' (file logging dropped); got: %q", fileOutput)
+	}
+	if !strings.Contains(fileOutput, "error to stderr and file") {
+		t.Errorf("file should contain error message; got: %q", fileOutput)
+	}
+
+	if got := existingBuf.String(); !strings.Contains(got, "debug to existing") {
+		t.Errorf("preserved existing handler should still receive DEBUG; got: %q", got)
+	}
+
+	if got := stderrBuf.String(); !strings.Contains(got, "error to stderr and file") {
+		t.Errorf("stderr should contain ERROR; got: %q", got)
+	}
+}

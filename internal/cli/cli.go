@@ -688,19 +688,20 @@ func setupLogging(cfg *config.Config, stderrWriter io.Writer) {
 		fileLevel = slog.LevelInfo // Default level if parsing fails
 	}
 
-	// Check if current logger is already more verbose than config specifies
-	// This preserves test logger setup
+	var handlers []slog.Handler
+
+	// Preserve an already-installed verbose handler (test setup) by adding it
+	// as one of the multi-handler outputs instead of returning early. The
+	// previous early-return silently dropped file logging whenever a test
+	// installed a DEBUG-level default handler, violating the chunk-1
+	// "Dual Output" contract.
 	currentHandler := slog.Default().Handler()
 	if textHandler, ok := currentHandler.(*slog.TextHandler); ok {
-		// Check if current handler allows DEBUG level but config wants higher level
 		if textHandler.Enabled(context.Background(), slog.LevelDebug) && fileLevel > slog.LevelDebug {
-			// Current handler allows DEBUG but config wants higher level - preserve current handler
-			slog.Debug("preserving existing verbose logger setup", "config_level", fileLevel.String(), "current_allows", "DEBUG")
-			return
+			slog.Debug("preserving existing verbose logger as additional handler", "config_level", fileLevel.String(), "current_allows", "DEBUG")
+			handlers = append(handlers, currentHandler)
 		}
 	}
-
-	var handlers []slog.Handler
 
 	// Always create stderr handler with ERROR level only
 	// This ensures users only see genuine errors, not debug/info/warn spam
