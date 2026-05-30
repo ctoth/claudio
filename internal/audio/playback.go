@@ -32,6 +32,13 @@ type AudioPlayer struct {
 	mutex       sync.RWMutex
 	deviceMutex sync.Mutex
 	closed      bool
+	// contextInitOnce gates the lazy malgo.InitContext allocation in
+	// PlaySoundWithContext. Two concurrent first-Play goroutines used to both
+	// observe p.context==nil and both call NewContext(), leaking the loser's
+	// C-side handle. Once also publishes the p.context/contextInitErr writes
+	// to every later observer.
+	contextInitOnce sync.Once
+	contextInitErr  error
 }
 
 // NewAudioPlayer creates a new audio player instance
@@ -201,15 +208,27 @@ func (p *AudioPlayer) PlaySoundWithContext(ctx context.Context, soundID string) 
 	default:
 	}
 	
-	// Initialize audio context if needed
-	if p.context == nil {
+	// Initialize audio context if needed. sync.Once guarantees exactly one
+	// NewContext() / malgo.InitContext call across concurrent first-Play
+	// goroutines — preventing the C-side handle leak that occurred when the
+	// nil-check + assignment was racy.
+	p.contextInitOnce.Do(func() {
 		slog.Debug("initializing audio context for playback")
 		audioCtx, err := NewContext()
 		if err != nil {
-			slog.Error("failed to initialize audio context", "sound_id", soundID, "error", err)
-			return fmt.Errorf("failed to initialize audio context: %w", err)
+			p.contextInitErr = err
+			return
 		}
 		p.context = audioCtx
+	})
+	if p.contextInitErr != nil {
+		slog.Error("failed to initialize audio context", "sound_id", soundID, "error", p.contextInitErr)
+		return fmt.Errorf("failed to initialize audio context: %w", p.contextInitErr)
+	}
+	if p.context == nil {
+		err := fmt.Errorf("audio context not initialized")
+		slog.Error("audio context unexpectedly nil", "sound_id", soundID, "error", err)
+		return err
 	}
 	
 	// Create device configuration for this sound

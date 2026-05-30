@@ -513,3 +513,57 @@ func TestPlayWithConcurrentSetVolume_NoRace(t *testing.T) {
 	}
 	<-done
 }
+
+// TestPlaySound_ContextInitOnce_NoRace asserts the sync.Once gate on
+// PlaySoundWithContext's lazy malgo context init prevents the prior
+// write/write race and the matching C-side handle leak. Regression for
+// review finding #2. Run with `go test -race -count=3`.
+//
+// The test fires N concurrent first-Play goroutines against the same fresh
+// AudioPlayer. Without the Once gate, the race detector flagged this; with
+// the Once gate, all goroutines either succeed (real audio device present)
+// or fail uniformly with the same init error (no device on CI).
+func TestPlaySound_ContextInitOnce_NoRace(t *testing.T) {
+	player := NewAudioPlayer()
+	defer func() { _ = player.Close() }()
+
+	testData := &AudioData{
+		Samples:    []byte{0x00, 0x01, 0x00, 0x02},
+		Channels:   1,
+		SampleRate: 44100,
+		Format:     malgo.FormatS16,
+	}
+	const N = 8
+	for i := 0; i < N; i++ {
+		id := "ctx-init-once-" + string(rune('a'+i))
+		if err := player.PreloadSound(id, testData); err != nil {
+			t.Fatalf("PreloadSound(%s): %v", id, err)
+		}
+	}
+
+	var wg sync.WaitGroup
+	errs := make(chan error, N)
+	wg.Add(N)
+	for i := 0; i < N; i++ {
+		id := "ctx-init-once-" + string(rune('a'+i))
+		go func(soundID string) {
+			defer wg.Done()
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			errs <- player.PlaySoundWithContext(ctx, soundID)
+		}(id)
+	}
+	wg.Wait()
+	close(errs)
+
+	// Either every goroutine succeeded (device present) or every goroutine
+	// observed the same init failure (no device). With the Once gate, the
+	// outcome is uniform; without it, the race detector would have already
+	// failed the test before we get here.
+	for err := range errs {
+		skipIfNoAudioDevice(t, err)
+		if err != nil {
+			t.Errorf("PlaySoundWithContext race goroutine returned: %v", err)
+		}
+	}
+}
