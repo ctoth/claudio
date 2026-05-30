@@ -14,7 +14,7 @@ import (
 
 	"github.com/spf13/afero"
 
-	"claudio.click/internal/audio"
+	"claudio.click/internal/platform"
 )
 
 //go:embed windows.json wsl.json darwin.json
@@ -506,11 +506,11 @@ func GetEmbeddedPlatformSoundpackData(filename string) ([]byte, error) {
 func (cm *ConfigManager) GetPlatformSoundpack(fs afero.Fs, executableDir string) string {
 	slog.Debug("detecting platform soundpack with enhanced detection", 
 		"executable_dir", executableDir, 
-		"is_wsl", audio.IsWSL(), 
+		"is_wsl", platform.IsWSL(), 
 		"runtime_goos", runtime.GOOS)
 	
 	// WSL detection first - prefer wsl.json over linux.json when in WSL
-	if audio.IsWSL() {
+	if platform.IsWSL() {
 		if wslPath := checkPlatformFile(fs, executableDir, "wsl.json"); wslPath != "" {
 			slog.Debug("WSL platform soundpack found", "path", wslPath)
 			return wslPath
@@ -527,7 +527,7 @@ func (cm *ConfigManager) GetPlatformSoundpack(fs afero.Fs, executableDir string)
 	
 	// Check embedded platform files as fallback
 	var embeddedPlatformFile string
-	if audio.IsWSL() {
+	if platform.IsWSL() {
 		embeddedPlatformFile = "wsl.json"
 	} else {
 		embeddedPlatformFile = runtime.GOOS + ".json"
@@ -536,14 +536,14 @@ func (cm *ConfigManager) GetPlatformSoundpack(fs afero.Fs, executableDir string)
 	if hasEmbeddedPlatformFile(embeddedPlatformFile) {
 		slog.Debug("using embedded platform soundpack", 
 			"platform_file", embeddedPlatformFile,
-			"is_wsl", audio.IsWSL(),
+			"is_wsl", platform.IsWSL(),
 			"runtime_goos", runtime.GOOS)
 		return "embedded:" + embeddedPlatformFile
 	}
 	
 	slog.Debug("no platform soundpack found (file or embedded), using default", 
 		"platform", runtime.GOOS, 
-		"wsl_detection", audio.IsWSL(),
+		"wsl_detection", platform.IsWSL(),
 		"exec_dir", executableDir,
 		"embedded_file_checked", embeddedPlatformFile)
 	return "default"

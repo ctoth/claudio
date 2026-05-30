@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+
+	"claudio.click/internal/platform"
 )
 
 // Factory errors
@@ -65,7 +67,7 @@ func lookupBackendConstructor(name string) (BackendConstructor, bool) {
 // select between two concrete backends; three types and one constructor for
 // what is now a switch statement.
 func NewBackend(backendType string) (AudioBackend, error) {
-	return newBackendWithChecker(backendType, IsWSL, CommandExists)
+	return newBackendWithChecker(backendType, platform.IsWSL, CommandExists)
 }
 
 // newBackendWithChecker is the seam used by tests to inject platform detection

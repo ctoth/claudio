@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/spf13/afero"
-	"claudio.click/internal/audio"
+	"claudio.click/internal/platform"
 )
 
 // TDD GREEN: Test platform soundpack detection with afero memory filesystem
@@ -37,7 +37,7 @@ func TestGetPlatformSoundpackExecutableDirectory(t *testing.T) {
 		
 		t.Logf("Mock executable directory: %s", execDir)
 		t.Logf("WSL JSON path: %s", wslJsonPath)
-		t.Logf("WSL detection: %v", audio.IsWSL())
+		t.Logf("WSL detection: %v", platform.IsWSL())
 		
 		// Test checkPlatformFile helper function
 		result := checkPlatformFile(memFS, execDir, "wsl.json")
@@ -52,7 +52,7 @@ func TestGetPlatformSoundpackExecutableDirectory(t *testing.T) {
 		
 		// Test platform detection logic
 		// Since we're in WSL, it should find wsl.json
-		if audio.IsWSL() {
+		if platform.IsWSL() {
 			platformResult := mgr.GetPlatformSoundpack(memFS, execDir)
 			t.Logf("Platform detection result: %s", platformResult)
 			
@@ -144,12 +144,12 @@ func TestGetPlatformSoundpackWSLDetection(t *testing.T) {
 		
 		t.Logf("Created WSL JSON: %s", wslJsonPath)
 		t.Logf("Created Linux JSON: %s", linuxJsonPath)
-		t.Logf("Actual WSL detection: %v", audio.IsWSL())
+		t.Logf("Actual WSL detection: %v", platform.IsWSL())
 		
 		// Test platform detection
 		result := mgr.GetPlatformSoundpack(memFS, execDir)
 		
-		if audio.IsWSL() {
+		if platform.IsWSL() {
 			// In real WSL, should prefer wsl.json
 			if result != wslJsonPath {
 				t.Errorf("TDD: In WSL, expected GetPlatformSoundpack to prefer %s, but got %s", wslJsonPath, result)

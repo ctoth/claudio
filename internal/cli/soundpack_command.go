@@ -11,8 +11,8 @@ import (
 	"sort"
 	"strings"
 
-	"claudio.click/internal/audio"
 	"claudio.click/internal/config"
+	"claudio.click/internal/platform"
 	"claudio.click/internal/soundpack"
 	"github.com/adrg/xdg"
 	"github.com/spf13/cobra"
@@ -532,7 +532,7 @@ func ExtractAllSoundKeys() ([]string, error) {
 
 // detectPlatformFile returns the platform-specific embedded JSON filename
 func detectPlatformFile() string {
-	if audio.IsWSL() {
+	if platform.IsWSL() {
 		return "wsl.json"
 	}
 	platformFile := runtime.GOOS + ".json"
