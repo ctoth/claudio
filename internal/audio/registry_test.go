@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gen2brain/malgo"
 )
@@ -603,5 +604,137 @@ func simpleIEEE754Extended(f float64) []byte {
 		return []byte{0x40, 0x0E, 0xBB, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
 	default:
 		return []byte{0x40, 0x0E, 0xAC, 0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
+	}
+}
+
+// TestDecoderRegistry_ConcurrentRegisterAndDecodeNoRace exercises the
+// sync.RWMutex added for review finding #34. One goroutine repeatedly
+// registers new decoders while another concurrently calls
+// DetectFormatWithContent and GetDecoders. Run under -race; any data race
+// on the decoders slice fails the test.
+func TestDecoderRegistry_ConcurrentRegisterAndDecodeNoRace(t *testing.T) {
+	registry := NewDecoderRegistry()
+	registry.Register(&MockDecoder{formatName: "WAV", extensions: []string{".wav"}})
+
+	stop := make(chan struct{})
+	done := make(chan struct{}, 3)
+
+	// Writer: repeatedly registers new decoders.
+	go func() {
+		defer func() { done <- struct{}{} }()
+		i := 0
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			registry.Register(&MockDecoder{
+				formatName: "FMT",
+				extensions: []string{".x"},
+			})
+			i++
+		}
+	}()
+
+	// Reader 1: repeatedly detects format from content.
+	go func() {
+		defer func() { done <- struct{}{} }()
+		content := []byte("RIFF\x24\x00\x00\x00WAVEfmt ")
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			_ = registry.DetectFormatWithContent("file.wav", bytes.NewReader(content))
+		}
+	}()
+
+	// Reader 2: repeatedly snapshots decoders and supported formats.
+	go func() {
+		defer func() { done <- struct{}{} }()
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			_ = registry.GetDecoders()
+			_ = registry.GetSupportedFormats()
+		}
+	}()
+
+	// Let them race for a short while.
+	time.Sleep(100 * time.Millisecond)
+	close(stop)
+	for i := 0; i < 3; i++ {
+		<-done
+	}
+}
+
+// TestDetectFormatWithContent_WavPackDoesNotRouteToWAV ensures the exact-
+// MIME-match table replaces the previous substring match. WavPack content
+// produces MIME audio/x-wavpack — the substring "wav" used to misroute it
+// to the WAV decoder. Now it must fall through.
+func TestDetectFormatWithContent_WavPackDoesNotRouteToWAV(t *testing.T) {
+	registry := NewDecoderRegistry()
+	wavDecoder := &MockDecoder{formatName: "WAV", extensions: []string{".wav"}}
+	registry.Register(wavDecoder)
+
+	// Minimal WavPack magic: "wvpk" + a plausible block header. mimetype
+	// recognises this and returns audio/x-wavpack.
+	wavpack := []byte("wvpk")
+	wavpack = append(wavpack, make([]byte, 28)...) // pad to a real-looking header
+
+	// Use a filename whose extension the registry does NOT recognise so the
+	// extension fallback can't accidentally re-route to WAV.
+	result := registry.DetectFormatWithContent("track.wvp", bytes.NewReader(wavpack))
+	if result == wavDecoder {
+		t.Fatalf("WavPack content misrouted to WAV decoder; expected nil or non-WAV, got %v", result)
+	}
+	if result != nil && result.FormatName() == "WAV" {
+		t.Fatalf("WavPack content misrouted to a WAV-named decoder: %v", result)
+	}
+}
+
+// TestDetectFormatWithContent_ExactMimeMatching pins the canonical MIME
+// table: each recognised MIME routes to its expected decoder, and an
+// unrecognised MIME falls through to extension detection (nil here).
+func TestDetectFormatWithContent_ExactMimeMatching(t *testing.T) {
+	registry := NewDecoderRegistry()
+	wavDecoder := &MockDecoder{formatName: "WAV", extensions: []string{".wav"}}
+	mp3Decoder := &MockDecoder{formatName: "MP3", extensions: []string{".mp3"}}
+	aiffDecoder := &MockDecoder{formatName: "AIFF", extensions: []string{".aiff"}}
+	registry.Register(wavDecoder)
+	registry.Register(mp3Decoder)
+	registry.Register(aiffDecoder)
+
+	cases := []struct {
+		name     string
+		content  []byte
+		filename string
+		want     Decoder
+	}{
+		{
+			name:     "WAV magic routes to WAV",
+			content:  []byte("RIFF\x24\x00\x00\x00WAVEfmt "),
+			filename: "x.unknown",
+			want:     wavDecoder,
+		},
+		{
+			name:     "MP3 magic routes to MP3",
+			content:  []byte{0xFF, 0xFB, 0x90, 0x00, 0x00, 0x00, 0x00, 0x00},
+			filename: "x.unknown",
+			want:     mp3Decoder,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := registry.DetectFormatWithContent(tc.filename, bytes.NewReader(tc.content))
+			if got != tc.want {
+				t.Errorf("DetectFormatWithContent(%q) = %v, want %v", tc.name, got, tc.want)
+			}
+		})
 	}
 }

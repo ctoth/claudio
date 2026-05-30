@@ -8,13 +8,34 @@ import (
 	"io"
 	"log/slog"
 	"strings"
+	"sync"
 
 	"claudio.click/internal/safeio"
 	"github.com/gabriel-vasile/mimetype"
 )
 
-// DecoderRegistry manages audio format decoders and provides format detection
+// mimeToFormat maps canonical MIME types to format names recognized by the
+// registry. The match is exact (no substring), so e.g. audio/x-wavpack does
+// not collide with the WAV decoder.
+var mimeToFormat = map[string]string{
+	"audio/wav":      "WAV",
+	"audio/x-wav":    "WAV",
+	"audio/vnd.wave": "WAV",
+	"audio/wave":     "WAV",
+	"audio/mpeg":     "MP3",
+	"audio/x-mpeg":   "MP3",
+	"audio/mp3":      "MP3",
+	"audio/aiff":     "AIFF",
+	"audio/x-aiff":   "AIFF",
+}
+
+// DecoderRegistry manages audio format decoders and provides format detection.
+//
+// All public methods are safe to call concurrently. Register takes a write
+// lock; the detection / decode helpers take read locks while they iterate
+// the decoders slice.
 type DecoderRegistry struct {
+	mu       sync.RWMutex
 	decoders []Decoder
 }
 
@@ -53,20 +74,31 @@ func (r *DecoderRegistry) Register(decoder Decoder) {
 	formatName := decoder.FormatName()
 	slog.Debug("registering decoder", "format", formatName)
 
+	r.mu.Lock()
 	r.decoders = append(r.decoders, decoder)
+	total := len(r.decoders)
+	r.mu.Unlock()
 
 	slog.Debug("decoder registered successfully",
 		"format", formatName,
-		"total_decoders", len(r.decoders))
+		"total_decoders", total)
 }
 
-// GetDecoders returns all registered decoders
+// GetDecoders returns a snapshot of the registered decoders. The returned
+// slice is safe to iterate even if Register is called concurrently afterwards.
 func (r *DecoderRegistry) GetDecoders() []Decoder {
-	return r.decoders
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	snapshot := make([]Decoder, len(r.decoders))
+	copy(snapshot, r.decoders)
+	return snapshot
 }
 
 // GetSupportedFormats returns a list of all supported format names
 func (r *DecoderRegistry) GetSupportedFormats() []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
 	formats := make([]string, 0, len(r.decoders))
 
 	for _, decoder := range r.decoders {
@@ -85,6 +117,9 @@ func (r *DecoderRegistry) DetectFormat(filename string) Decoder {
 		slog.Debug("empty filename provided")
 		return nil
 	}
+
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 
 	// Try each decoder in registration order (first registered has priority)
 	for _, decoder := range r.decoders {
@@ -108,15 +143,22 @@ func (r *DecoderRegistry) DetectFormatWithContent(filename string, reader io.Rea
 	// We need to buffer this so we can still use the reader for decoding
 	buffer := make([]byte, 512)
 	n, err := reader.Read(buffer)
-	if err != nil && err != io.EOF {
+	readFailed := err != nil && err != io.EOF
+	if readFailed {
 		slog.Error("failed to read header for magic detection", "error", err)
-		// Fallback to extension-based detection
-		return r.DetectFormat(filename)
+	}
+
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if readFailed {
+		// Fallback to extension-based detection (lock-free helper)
+		return r.detectFormatLocked(filename)
 	}
 
 	if n == 0 {
 		slog.Debug("empty content, using extension fallback")
-		return r.DetectFormat(filename)
+		return r.detectFormatLocked(filename)
 	}
 
 	// Use mimetype for magic byte detection
@@ -128,24 +170,14 @@ func (r *DecoderRegistry) DetectFormatWithContent(filename string, reader io.Rea
 		"detected_mime", detectedMime,
 		"bytes_analyzed", n)
 
-	// Map MIME types to our decoders with comprehensive matching
-	var formatDecoder Decoder
+	// Exact-match the canonical MIME set. Substring matching previously
+	// allowed e.g. audio/x-wavpack to misroute to the WAV decoder.
 	mimeStr := strings.ToLower(detectedMime)
-
-	switch {
-	case strings.Contains(mimeStr, "wav") || mimeStr == "audio/wav" || mimeStr == "audio/x-wav" || mimeStr == "audio/vnd.wave":
-		formatDecoder = r.findDecoderByFormat("WAV")
-		slog.Debug("magic bytes indicate WAV format", "mime", detectedMime)
-
-	case strings.Contains(mimeStr, "mpeg") || strings.Contains(mimeStr, "mp3") || mimeStr == "audio/mpeg" || mimeStr == "audio/x-mpeg" || mimeStr == "audio/mp3":
-		formatDecoder = r.findDecoderByFormat("MP3")
-		slog.Debug("magic bytes indicate MP3 format", "mime", detectedMime)
-
-	case strings.Contains(mimeStr, "aiff") || mimeStr == "audio/aiff" || mimeStr == "audio/x-aiff" || strings.Contains(mimeStr, "audio-interchange-file-format"):
-		formatDecoder = r.findDecoderByFormat("AIFF")
-		slog.Debug("magic bytes indicate AIFF format", "mime", detectedMime)
-
-	default:
+	var formatDecoder Decoder
+	if formatName, ok := mimeToFormat[mimeStr]; ok {
+		formatDecoder = r.findDecoderByFormatLocked(formatName)
+		slog.Debug("magic bytes recognized", "mime", detectedMime, "format", formatName)
+	} else {
 		slog.Debug("unsupported or unrecognized magic bytes", "mime_type", detectedMime)
 	}
 
@@ -158,9 +190,9 @@ func (r *DecoderRegistry) DetectFormatWithContent(filename string, reader io.Rea
 		return formatDecoder
 	}
 
-	// Fallback to extension-based detection
+	// Fallback to extension-based detection (lock-free helper)
 	slog.Debug("magic detection failed, falling back to extension", "filename", filename)
-	extensionDecoder := r.DetectFormat(filename)
+	extensionDecoder := r.detectFormatLocked(filename)
 
 	if extensionDecoder != nil {
 		slog.Debug("format detected by extension fallback",
@@ -173,8 +205,23 @@ func (r *DecoderRegistry) DetectFormatWithContent(filename string, reader io.Rea
 	return extensionDecoder
 }
 
-// findDecoderByFormat finds a decoder by its format name
-func (r *DecoderRegistry) findDecoderByFormat(formatName string) Decoder {
+// detectFormatLocked is the lock-free extension-only detection used by
+// callers that already hold r.mu (read or write).
+func (r *DecoderRegistry) detectFormatLocked(filename string) Decoder {
+	if filename == "" {
+		return nil
+	}
+	for _, decoder := range r.decoders {
+		if decoder.CanDecode(filename) {
+			return decoder
+		}
+	}
+	return nil
+}
+
+// findDecoderByFormatLocked finds a decoder by its format name. Caller must
+// already hold r.mu (read or write).
+func (r *DecoderRegistry) findDecoderByFormatLocked(formatName string) Decoder {
 	for _, decoder := range r.decoders {
 		if strings.EqualFold(decoder.FormatName(), formatName) {
 			return decoder
