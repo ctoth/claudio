@@ -1,11 +1,10 @@
-//go:build cgo
-
 package audio
 
 import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 )
 
 // Factory errors
@@ -32,12 +31,39 @@ func IsValidBackendType(backendType string) bool {
 	return false
 }
 
+// BackendConstructor builds an AudioBackend instance.
+type BackendConstructor func() (AudioBackend, error)
+
+var (
+	backendCtorMu sync.RWMutex
+	backendCtors  = map[string]BackendConstructor{}
+)
+
+// RegisterBackend registers a constructor for the given backend type. It
+// is intended to be called from an init() in a backend's subpackage so
+// the top-level audio package does not need to import the backend's
+// implementation. Concretely: the malgo subpackage registers itself
+// under "malgo" via an init(), guarded by //go:build cgo. Under !cgo no
+// registration happens and NewBackend("malgo") returns errCGORequired.
+func RegisterBackend(name string, ctor BackendConstructor) {
+	backendCtorMu.Lock()
+	defer backendCtorMu.Unlock()
+	backendCtors[name] = ctor
+}
+
+func lookupBackendConstructor(name string) (BackendConstructor, bool) {
+	backendCtorMu.RLock()
+	defer backendCtorMu.RUnlock()
+	ctor, ok := backendCtors[name]
+	return ctor, ok
+}
+
 // NewBackend constructs an audio backend by name. "auto" (or empty) delegates
 // to platform-aware selection via platform.go.
 //
 // The previous BackendFactory + DefaultBackendFactory + DI pattern existed to
 // select between two concrete backends; three types and one constructor for
-// what's now a switch statement.
+// what is now a switch statement.
 func NewBackend(backendType string) (AudioBackend, error) {
 	return newBackendWithChecker(backendType, IsWSL, CommandExists)
 }
@@ -60,7 +86,7 @@ func newBackendWithChecker(backendType string, isWSLFunc func() bool, commandExi
 		case "system_command":
 			return createSystemCommandBackendWithChecker(commandExists)
 		case "malgo":
-			return NewMalgoBackend(), nil
+			return createRegisteredBackend("malgo")
 		default:
 			slog.Error("auto-detection returned invalid backend type", "type", optimal)
 			return nil, fmt.Errorf("%w: auto-detection failed", ErrBackendCreationFailed)
@@ -68,8 +94,7 @@ func newBackendWithChecker(backendType string, isWSLFunc func() bool, commandExi
 	case "system_command":
 		return createSystemCommandBackendWithChecker(commandExists)
 	case "malgo":
-		slog.Debug("creating malgo backend")
-		return NewMalgoBackend(), nil
+		return createRegisteredBackend("malgo")
 	default:
 		slog.Error("invalid backend type requested", "type", backendType)
 		return nil, fmt.Errorf("%w: %s", ErrInvalidBackendType, backendType)
@@ -86,4 +111,17 @@ func createSystemCommandBackendWithChecker(commandExists func(string) bool) (Aud
 	}
 	slog.Debug("system command backend created", "command", preferred)
 	return NewSystemCommandBackend(preferred), nil
+}
+
+// createRegisteredBackend instantiates a backend whose constructor was
+// registered via RegisterBackend. Returns ErrBackendNotAvailable if no
+// registration is present — this is how the !cgo build communicates
+// "malgo unavailable, you need to build with cgo" without dragging the
+// malgo subpackage into the audio package's import graph.
+func createRegisteredBackend(name string) (AudioBackend, error) {
+	ctor, ok := lookupBackendConstructor(name)
+	if !ok {
+		return nil, fmt.Errorf("%w: %s backend not registered (build with cgo?)", ErrBackendNotAvailable, name)
+	}
+	return ctor()
 }

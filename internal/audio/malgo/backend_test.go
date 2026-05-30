@@ -1,4 +1,4 @@
-package audio
+package malgo
 
 import (
 	"bytes"
@@ -8,10 +8,12 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"claudio.click/internal/audio"
 )
 
 // TestPlay_NoGoroutineLeak asserts the cleanup goroutine that used to wait
-// on ctx.Done() inside MalgoBackend.Play has been removed. Per review
+// on ctx.Done() inside Backend.Play has been removed. Per review
 // finding #3, the production caller passed context.Background(), whose
 // Done() channel is nil, so the spawned receive blocked forever — one
 // leaked goroutine per Play. After the fix, UnloadSound runs inline after
@@ -22,12 +24,12 @@ import (
 // bounded by a small constant. Skips if no audio device is present (the
 // underlying PlaySoundWithContext opens a real malgo device).
 func TestPlay_NoGoroutineLeak(t *testing.T) {
-	backend := NewMalgoBackend()
+	backend := NewBackend()
 	defer backend.Close()
 
 	wavBytes := generateTestWAV()
-	makeSource := func() AudioSource {
-		return NewReaderSource(io.NopCloser(bytes.NewReader(wavBytes)), "wav")
+	makeSource := func() audio.AudioSource {
+		return audio.NewReaderSource(io.NopCloser(bytes.NewReader(wavBytes)), "wav")
 	}
 
 	// Warm up: one Play to drive any one-time goroutine spawns (cgo workers,
@@ -70,7 +72,7 @@ func TestPlay_NoGoroutineLeak(t *testing.T) {
 	}
 }
 
-// TestMalgoBackend_SoundIDCounter_Unique exercises the atomic counter
+// TestBackend_SoundIDCounter_Unique exercises the atomic counter
 // added for review finding #40. The previous implementation built the
 // soundID from len(audioData.Samples), which collides whenever two
 // concurrent Plays decode to byte-identical lengths. The new counter is a
@@ -79,8 +81,8 @@ func TestPlay_NoGoroutineLeak(t *testing.T) {
 // goroutines and asserts all values are distinct, with no hardware
 // dependency. Verifies the counter itself; integration with Play is
 // covered by the existing TestPlay_NoGoroutineLeak under -race.
-func TestMalgoBackend_SoundIDCounter_Unique(t *testing.T) {
-	backend := NewMalgoBackend()
+func TestBackend_SoundIDCounter_Unique(t *testing.T) {
+	backend := NewBackend()
 	defer backend.Close()
 
 	const goroutines = 32
@@ -113,7 +115,7 @@ func TestMalgoBackend_SoundIDCounter_Unique(t *testing.T) {
 	}
 }
 
-// TestMalgoBackend_Play_ConcurrentSameLengthBuffers_NoCollision drives
+// TestBackend_Play_ConcurrentSameLengthBuffers_NoCollision drives
 // two concurrent Plays with the SAME audio bytes (so len(Samples) is
 // identical for both). Before #40's fix, both Plays computed the same
 // soundID and the second overwrote the first's deviceEntry in
@@ -121,13 +123,13 @@ func TestMalgoBackend_SoundIDCounter_Unique(t *testing.T) {
 // atomic counter makes the IDs distinct. Skips if no audio device is
 // present — the underlying PlaySoundWithContext opens a real malgo
 // device.
-func TestMalgoBackend_Play_ConcurrentSameLengthBuffers_NoCollision(t *testing.T) {
-	backend := NewMalgoBackend()
+func TestBackend_Play_ConcurrentSameLengthBuffers_NoCollision(t *testing.T) {
+	backend := NewBackend()
 	defer backend.Close()
 
 	wavBytes := generateTestWAV()
-	makeSource := func() AudioSource {
-		return NewReaderSource(io.NopCloser(bytes.NewReader(wavBytes)), "wav")
+	makeSource := func() audio.AudioSource {
+		return audio.NewReaderSource(io.NopCloser(bytes.NewReader(wavBytes)), "wav")
 	}
 
 	// Warmup to bypass first-Play hardware probe; lets us skipIfNoAudioDevice early.

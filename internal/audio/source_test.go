@@ -51,7 +51,7 @@ func TestFileSource_FilePath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fs := NewFileSource(tt.path, NewDefaultRegistry())
+			fs := NewFileSource(tt.path)
 
 			// Must satisfy FilePather.
 			var _ FilePather = fs
@@ -78,21 +78,15 @@ func TestFileSource_Reader(t *testing.T) {
 		wantErr        bool
 	}{
 		{
-			name:           "wav file format detection",
+			name:           "wav file extension hint",
 			path:           "/test/sound.wav",
 			expectedFormat: "wav",
-			wantErr:        true, // File doesn't exist, expect error
+			wantErr:        true, // File doesn't exist
 		},
 		{
-			name:           "mp3 file format detection",
+			name:           "mp3 file extension hint",
 			path:           "/test/sound.mp3",
 			expectedFormat: "mp3",
-			wantErr:        true,
-		},
-		{
-			name:           "unknown extension",
-			path:           "/test/sound.xyz",
-			expectedFormat: "",
 			wantErr:        true,
 		},
 		{
@@ -105,7 +99,7 @@ func TestFileSource_Reader(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fs := NewFileSource(tt.path, NewDefaultRegistry())
+			fs := NewFileSource(tt.path)
 			reader, _, err := fs.Reader()
 
 			if tt.wantErr && err == nil {
@@ -115,12 +109,10 @@ func TestFileSource_Reader(t *testing.T) {
 				t.Errorf("unexpected error: %v", err)
 			}
 
-			// For non-existent files, format detection should still work
-			// before file opening fails.
-			if tt.path != "" && !strings.Contains(tt.path, ".xyz") {
-				expectedFormat := fs.DetectFormat()
-				if expectedFormat != tt.expectedFormat {
-					t.Errorf("format detection failed: expected %q, got %q", tt.expectedFormat, expectedFormat)
+			if tt.path != "" {
+				hint := fs.FormatHint()
+				if hint != tt.expectedFormat {
+					t.Errorf("format hint mismatch: expected %q, got %q", tt.expectedFormat, hint)
 				}
 			}
 
@@ -131,44 +123,28 @@ func TestFileSource_Reader(t *testing.T) {
 	}
 }
 
-// TestFileSource_FormatDetection tests format detection independently
-func TestFileSource_FormatDetection(t *testing.T) {
+// TestFileSource_FormatHint tests extension-based hint mapping.
+func TestFileSource_FormatHint(t *testing.T) {
 	tests := []struct {
 		name     string
 		path     string
 		expected string
 	}{
 		{"wav extension", "/test/file.wav", "wav"},
-		{"wave extension", "/test/file.wave", "wav"},
 		{"mp3 extension", "/test/file.mp3", "mp3"},
 		{"aiff extension", "/test/file.aiff", "aiff"},
-		{"aif extension", "/test/file.aif", "aiff"},
-		{"uppercase AIFF", "/test/file.AIFF", "aiff"},
-		{"flac extension (unsupported)", "/test/file.flac", ""},
-		{"ogg extension (unsupported)", "/test/file.ogg", ""},
-		{"unknown extension", "/test/file.xyz", ""},
+		{"uppercase WAV becomes wav", "/test/file.WAV", "wav"},
 		{"no extension", "/test/file", ""},
-		{"uppercase extension", "/test/file.WAV", "wav"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fs := NewFileSource(tt.path, NewDefaultRegistry())
-			result := fs.DetectFormat()
+			fs := NewFileSource(tt.path)
+			result := fs.FormatHint()
 			if result != tt.expected {
 				t.Errorf("expected %q, got %q", tt.expected, result)
 			}
 		})
-	}
-}
-
-// TestFileSource_UsesRegistry tests that FileSource uses registry for format detection
-func TestFileSource_UsesRegistry(t *testing.T) {
-	registry := NewDefaultRegistry()
-	fs := NewFileSource("/test/file.aiff", registry)
-	format := fs.DetectFormat()
-	if format != "aiff" {
-		t.Errorf("expected 'aiff', got '%s'", format)
 	}
 }
 
@@ -202,14 +178,12 @@ func TestReaderSource_Reader(t *testing.T) {
 		t.Error("expected non-nil reader")
 	}
 
-	// Clean up
 	if returnedReader != nil {
 		returnedReader.Close()
 	}
 }
 
 func TestErrorDefinitions(t *testing.T) {
-	// Test that our error types are properly defined
 	if ErrNotSupported == nil {
 		t.Error("ErrNotSupported should be defined")
 	}
@@ -220,7 +194,6 @@ func TestErrorDefinitions(t *testing.T) {
 		t.Error("ErrSourceClosed should be defined")
 	}
 
-	// Test error messages
 	if ErrNotSupported.Error() != "operation not supported by this source" {
 		t.Errorf("unexpected ErrNotSupported message: %s", ErrNotSupported.Error())
 	}

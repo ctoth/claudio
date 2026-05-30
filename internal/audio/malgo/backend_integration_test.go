@@ -1,4 +1,4 @@
-package audio
+package malgo
 
 import (
 	"context"
@@ -6,17 +6,19 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"claudio.click/internal/audio"
 )
 
-// TestMalgoBackendAIFFSupport tests that MalgoBackend can detect AIFF files
+// TestBackendAIFFSupport tests that Backend can detect AIFF files
 // This test verifies the unified system recognizes AIFF format (even if decode fails on mock data)
-func TestMalgoBackendAIFFSupport(t *testing.T) {
-	backend := NewMalgoBackend()
+func TestBackendAIFFSupport(t *testing.T) {
+	backend := NewBackend()
 	defer backend.Close()
 
 	// Create a mock AIFF file content (simplified but recognizable)
 	aiffContent := "FORM....AIFF" // Minimal AIFF header
-	source := NewReaderSource(io.NopCloser(strings.NewReader(aiffContent)), "aiff")
+	source := audio.NewReaderSource(io.NopCloser(strings.NewReader(aiffContent)), "aiff")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -39,17 +41,17 @@ func TestMalgoBackendAIFFSupport(t *testing.T) {
 	t.Error("Expected decode error with mock AIFF data")
 }
 
-// TestMalgoBackendUsesRegistrySystem tests that MalgoBackend uses DecoderRegistry
-func TestMalgoBackendUsesRegistrySystem(t *testing.T) {
-	backend := NewMalgoBackend()
+// TestBackendUsesRegistrySystem tests that Backend uses DecoderRegistry
+func TestBackendUsesRegistrySystem(t *testing.T) {
+	backend := NewBackend()
 	defer backend.Close()
 	
-	// Verify that MalgoBackend has both unified components initialized
+	// Verify that Backend has both unified components initialized
 	if backend.audioPlayer == nil {
-		t.Error("MalgoBackend should have audioPlayer initialized")
+		t.Error("Backend should have audioPlayer initialized")
 	}
 	if backend.registry == nil {
-		t.Error("MalgoBackend should have registry initialized") 
+		t.Error("Backend should have registry initialized") 
 	}
 	
 	// Verify registry supports the unified formats (including AIFF)
@@ -72,9 +74,9 @@ func TestMalgoBackendUsesRegistrySystem(t *testing.T) {
 	t.Logf("Unified system verification passed - supported formats: %v", supportedFormats)
 }
 
-// TestMalgoBackendUnifiedSystemEndToEnd tests the complete unified audio system
-func TestMalgoBackendUnifiedSystemEndToEnd(t *testing.T) {
-	backend := NewMalgoBackend()
+// TestBackendUnifiedSystemEndToEnd tests the complete unified audio system
+func TestBackendUnifiedSystemEndToEnd(t *testing.T) {
+	backend := NewBackend()
 	defer backend.Close()
 	
 	// Test that the unified system handles all supported formats
@@ -92,7 +94,7 @@ func TestMalgoBackendUnifiedSystemEndToEnd(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Use empty content to safely test format recognition without triggering decoder panics
 			mockContent := ""
-			source := NewReaderSource(io.NopCloser(strings.NewReader(mockContent)), tc.format)
+			source := audio.NewReaderSource(io.NopCloser(strings.NewReader(mockContent)), tc.format)
 			
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 			defer cancel()

@@ -1,6 +1,6 @@
 //go:build cgo
 
-package audio
+package malgo
 
 import (
 	"context"

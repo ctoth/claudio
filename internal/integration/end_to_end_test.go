@@ -38,7 +38,7 @@ func TestEndToEndAIFFSupport(t *testing.T) {
 	
 	for _, path := range aiffPaths {
 		t.Run("aiff_path_"+path, func(t *testing.T) {
-			source := audio.NewFileSource(path, audio.NewDefaultRegistry())
+			source := audio.NewFileSource(path)
 			
 			err := malgoBackend.Play(ctx, source)
 			if err != nil {

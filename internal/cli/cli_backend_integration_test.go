@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"claudio.click/internal/audio"
+	malgobackend "claudio.click/internal/audio/malgo"
 )
 
 // TestCLIBackendIntegration tests that CLI properly integrates with audio backend system
@@ -35,7 +36,7 @@ func TestCLIInitializeAudioSystemWithBackend(t *testing.T) {
 			name:                "explicit malgo backend",
 			audioBackend:        "malgo",
 			expectError:         false,
-			expectedBackendType: "*audio.MalgoBackend",
+			expectedBackendType: "*malgo.Backend",
 		},
 		{
 			name:                "explicit system_command backend",
@@ -242,8 +243,8 @@ func getTypeName(v interface{}) string {
 func getType(v interface{}) string {
 	// This is a simple type name extractor for testing
 	switch v.(type) {
-	case *audio.MalgoBackend:
-		return "*audio.MalgoBackend"
+	case *malgobackend.Backend:
+		return "*malgo.Backend"
 	case *audio.SystemCommandBackend:
 		return "*audio.SystemCommandBackend"
 	default:
@@ -268,9 +269,9 @@ func TestCLIAIFFSupportViaUnifiedSystem(t *testing.T) {
 	defer cli.audioBackend.Close()
 
 	// Verify that the CLI's audio backend supports AIFF
-	malgoBackend, ok := cli.audioBackend.(*audio.MalgoBackend)
+	malgoBackend, ok := cli.audioBackend.(*malgobackend.Backend)
 	if !ok {
-		t.Fatalf("expected MalgoBackend, got %T", cli.audioBackend)
+		t.Fatalf("expected *malgo.Backend, got %T", cli.audioBackend)
 	}
 
 	// Access the registry through the backend (this tests our unified system)
@@ -280,7 +281,7 @@ func TestCLIAIFFSupportViaUnifiedSystem(t *testing.T) {
 	
 	// Test that an AIFF file path would be processed (even if file doesn't exist)
 	ctx := context.Background()
-	source := audio.NewFileSource("/test/nonexistent.aiff", audio.NewDefaultRegistry())
+	source := audio.NewFileSource("/test/nonexistent.aiff")
 	
 	err = malgoBackend.Play(ctx, source)
 	if err != nil {

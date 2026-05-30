@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -39,18 +40,18 @@ type FilePather interface {
 }
 
 // FileSource represents an audio source backed by a file on disk.
+// FileSource no longer carries a *DecoderRegistry; the decoding seam lives
+// in the malgo subpackage (review finding #5). FileSource derives a naive
+// format hint from filepath.Ext so SystemCommandBackend's temp-file
+// fallback can name the temp with the right extension.
 type FileSource struct {
-	path     string
-	registry *DecoderRegistry
+	path string
 }
 
 // NewFileSource creates a new FileSource for the given file path.
-func NewFileSource(path string, registry *DecoderRegistry) *FileSource {
+func NewFileSource(path string) *FileSource {
 	slog.Debug("creating new FileSource", "path", path)
-	return &FileSource{
-		path:     path,
-		registry: registry,
-	}
+	return &FileSource{path: path}
 }
 
 // FilePath returns the file path directly. Satisfies FilePather so exec
@@ -64,47 +65,38 @@ func (fs *FileSource) FilePath() (string, error) {
 	return fs.path, nil
 }
 
-// Reader opens the file and returns a reader with format detection.
+// Reader opens the file and returns a reader. The returned format is a
+// naive extension-based hint (lowercase, dot stripped, e.g. "wav"); the
+// authoritative decoder selection happens inside the decoding backend
+// against the full filename.
 func (fs *FileSource) Reader() (io.ReadCloser, string, error) {
 	if fs.path == "" {
 		slog.Error("FileSource has empty path for reader")
 		return nil, "", fmt.Errorf("file path is empty")
 	}
 
-	// Detect format from file extension
-	format := fs.DetectFormat()
-	if format == "" {
-		slog.Error("unsupported audio format", "path", fs.path)
-		return nil, "", ErrInvalidFormat
-	}
-
-	// Open the file
 	file, err := os.Open(fs.path)
 	if err != nil {
 		slog.Error("failed to open file", "path", fs.path, "error", err)
 		return nil, "", fmt.Errorf("failed to open file: %w", err)
 	}
 
+	format := fs.FormatHint()
 	slog.Debug("FileSource providing reader", "path", fs.path, "format", format)
 	return file, format, nil
 }
 
-// DetectFormat determines the audio format using the registry.
-func (fs *FileSource) DetectFormat() string {
-	if fs.registry == nil {
-		slog.Warn("no registry available for format detection", "path", fs.path)
+// FormatHint returns a lowercase extension-based format hint (without
+// the leading dot) for the source's path. Returns empty string if the
+// path has no extension. Callers needing authoritative format detection
+// should pass the full path to their decoder registry — this hint is for
+// naming temp files in the exec-backend fallback path.
+func (fs *FileSource) FormatHint() string {
+	ext := filepath.Ext(fs.path)
+	if ext == "" {
 		return ""
 	}
-
-	decoder := fs.registry.DetectFormat(fs.path)
-	if decoder != nil {
-		format := strings.ToLower(decoder.FormatName())
-		slog.Debug("format detected via registry", "path", fs.path, "format", format)
-		return format
-	}
-
-	slog.Warn("unknown audio format via registry", "path", fs.path)
-	return ""
+	return strings.ToLower(strings.TrimPrefix(ext, "."))
 }
 
 // ReaderSource represents an audio source backed by an io.ReadCloser. It

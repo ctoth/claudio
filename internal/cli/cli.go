@@ -664,8 +664,8 @@ func (c *CLI) playSoundWithBackend(soundPath string, volume float64) error {
 		return fmt.Errorf("failed to resolve sound path: %w", err)
 	}
 
-	// Create audio source from file path
-	source := audio.NewFileSource(fullPath, audio.NewDefaultRegistry())
+	// Create audio source from file path; the backend owns decoding.
+	source := audio.NewFileSource(fullPath)
 
 	// Play using audio backend
 	ctx := context.Background()
