@@ -60,7 +60,9 @@ func (d *DBHook) RecordEvent(
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
-	defer tx.Rollback() //nolint:errcheck // no-op after Commit
+	// Best-effort rollback; turns into a no-op after a successful Commit.
+	// Explicit `_ =` discard is clearer than //nolint:errcheck. Chunk 13 F5.
+	defer func() { _ = tx.Rollback() }()
 
 	contextJSON, err := json.Marshal(eventCtx)
 	if err != nil {

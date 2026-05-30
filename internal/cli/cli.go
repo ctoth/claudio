@@ -590,8 +590,13 @@ func (c *CLI) initializeSystems() {
 	// Note: Tracking initialization is done later in runStdinModeE after logging is configured
 	// to avoid log messages appearing before the dual-level handler is set up
 
-	// Don't create global SoundMapper - it will be created per-request with session-specific SoundChecker
-	// soundpackResolver and audioBackend are initialized in initializeAudioSystem when needed
+	// Don't create a global SoundMapper here — it is built per-request in
+	// processHookEvent so each request gets its own session-scoped
+	// EventRecorder threaded through the soundpack PathObserver. (Chunk 14
+	// inverted the old SoundChecker hook ecosystem; this comment used to
+	// say "session-specific SoundChecker" — that type no longer exists.)
+	// soundpackResolver and audioBackend are initialized in
+	// initializeAudioSystem when needed.
 }
 
 // processHookEvent processes the parsed hook event

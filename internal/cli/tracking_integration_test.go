@@ -470,9 +470,12 @@ func TestMultipleSessionsCreateSeparateEntries(t *testing.T) {
 	}
 }
 
-func TestPerRequestSoundCheckerInitialization(t *testing.T) {
+func TestPerRequestEventRecorderInitialization(t *testing.T) {
 	testenv.IsolateXDG(t)
-	// This test verifies that each request gets its own SoundChecker with the correct session ID
+	// This test verifies that each request gets its own per-session
+	// EventRecorder (formerly per-session SoundChecker, now stateless
+	// via tracking.NewEventRecorder threaded through PathObserver).
+	// Chunk 14 F6 renamed the test along with the type it guards.
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "per_request_test.db")
 	

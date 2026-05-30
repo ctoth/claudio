@@ -422,12 +422,18 @@ func (m *SoundMapper) finalizeResult(ctx context.Context, paths []string, chainT
 			soundpack.WithObserver(tracker),
 		)
 		if err == nil {
-			selectedPath = resolved
-			// Resolver returned a physical path. Map back to the logical
-			// chain index by trusting the observer's winnerIdx.
+			// Prefer the observer's logical chain index when present, so the
+			// SelectedPath we surface to the caller and the chain index used
+			// for tracking always agree. Fall back to the resolver's physical
+			// path only when no observer winner was captured. Chunk 14 F3:
+			// the previous shape unconditionally assigned `selectedPath =
+			// resolved` and then overwrote it whenever winnerIdx > 0 — dead
+			// store in the common branch.
 			if winnerIdx > 0 {
 				fallbackLevel = winnerIdx
 				selectedPath = paths[winnerIdx-1]
+			} else {
+				selectedPath = resolved
 			}
 		} else {
 			// Nothing existed; fall back to the last chain entry (default).

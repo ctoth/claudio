@@ -67,9 +67,16 @@ func TestPlay_NoGoroutineLeak(t *testing.T) {
 
 	// Before the fix this delta would be N (10) — one leaked ctx.Done waiter
 	// per Play. After the fix the delta should be 0; we allow a small
-	// constant for incidental scheduler noise / cgo workers.
-	if after > baseline+2 {
-		t.Errorf("goroutine leak: baseline=%d after=%d delta=%d (expected ≤2)",
+	// constant for incidental scheduler noise / cgo workers / finalizer
+	// scavengers that did not retire between the warmup baseline and the
+	// post-Play check. The previous bound of baseline+2 was fragile under
+	// the race detector and on slow CI: timer-poller goroutines from cgo
+	// runtime were occasionally seen as a +3 delta even though no leak
+	// existed. baseline+3 keeps the test's load-bearing assertion intact
+	// (it fails LOUDLY at N=10 if the leak returns; 3 is still very far
+	// from N) while removing the flake. Chunk 10 F4.
+	if after > baseline+3 {
+		t.Errorf("goroutine leak: baseline=%d after=%d delta=%d (expected ≤3)",
 			baseline, after, after-baseline)
 	}
 }

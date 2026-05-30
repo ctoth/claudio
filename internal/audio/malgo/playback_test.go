@@ -406,8 +406,12 @@ func TestAudioLoggingLevels(t *testing.T) {
 //
 // Run with `go test -race -count=3` — must produce zero data races. Before
 // the atomic.Uint32 conversion, GetVolume acquired an RLock from inside the
-// malgo onSamples callback, which is racy by design (realtime audio callbacks
-// must never lock) and likely contributed to the documented crackling.
+// malgo onSamples callback. The race detector was clean (mutexes serialize
+// access by construction), but the lock in the realtime path was a
+// realtime-correctness violation: it could let the callback block on the
+// SetVolume writer, miss its frame deadline, and starve the audio device
+// — the documented crackling. The data was never racing; the schedule was.
+// Chunk 9 analyst L-1 wording correction.
 //
 // This is the load-bearing regression guard against future de-atomicisation
 // of the volume read path.
@@ -624,12 +628,16 @@ func TestStopAll_NoDoubleFree(t *testing.T) {
 	}
 }
 
-// TestStop_ActuallyHaltsPlayback asserts Stop now halts playback the way
-// every caller assumed. Before this change Stop only flipped an isPlaying
-// flag without touching any malgo device — playback continued, but
-// IsPlaying reported false. Now Stop delegates to StopAll. Regression for
-// review finding #36.
-func TestStop_ActuallyHaltsPlayback(t *testing.T) {
+// TestStop_HaltsAndReleasesDevices asserts Stop now halts playback the
+// way every caller assumed AND releases each active device. Before this
+// change Stop only flipped an isPlaying flag without touching any malgo
+// device — playback continued, but IsPlaying reported false. Now Stop
+// delegates to StopAll which uninits every active device. Regression
+// for review finding #36. (Chunk 10 F3 — the previous name
+// "ActuallyHaltsPlayback" oversold a single assertion; the test really
+// guards both the halt AND the device release, since IsPlaying is now
+// derived from len(p.devices).)
+func TestStop_HaltsAndReleasesDevices(t *testing.T) {
 	player := NewAudioPlayer()
 	defer func() { _ = player.Close() }()
 
