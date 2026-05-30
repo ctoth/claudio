@@ -121,13 +121,17 @@ func (scb *SystemCommandBackend) Play(ctx context.Context, source AudioSource) e
 
 	slog.Debug("SystemCommandBackend starting playback", "command", scb.command)
 
-	// Try file path first (most efficient for system commands)
-	if filePath, err := source.AsFilePath(); err == nil {
-		return scb.playFile(ctx, filePath)
+	// Fast path: source can provide a file path directly (FileSource). Exec
+	// the player binary against the path without the read-then-write-temp
+	// dance.
+	if fp, ok := source.(FilePather); ok {
+		if filePath, err := fp.FilePath(); err == nil {
+			return scb.playFile(ctx, filePath)
+		}
 	}
 
-	// Fall back to reader via temporary file
-	reader, format, err := source.AsReader()
+	// Fall back to reader via temporary file.
+	reader, format, err := source.Reader()
 	if err != nil {
 		slog.Error("failed to get reader from source", "error", err)
 		return fmt.Errorf("failed to get audio data from source: %w", err)

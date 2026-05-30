@@ -5,9 +5,7 @@ package audio
 import (
 	"context"
 	"fmt"
-	"io"
 	"log/slog"
-	"os"
 	"sync"
 	"sync/atomic"
 )
@@ -127,28 +125,34 @@ func (mb *MalgoBackend) Play(ctx context.Context, source AudioSource) error {
 
 	slog.Debug("MalgoBackend starting playback with unified system")
 
-	// Get audio data from source
-	var audioData *AudioData
+	// Get audio data from source. malgo always goes through the registry
+	// decoder, so we use the reader path uniformly — FileSource gives us a
+	// real os.File via Reader(), ReaderSource gives us its in-memory
+	// stream. The dual AsFilePath/AsReader fork that lived here was
+	// finding #42's main consumer; both branches ultimately called
+	// registry.DecodeFile, so the fork was paying for nothing on the malgo
+	// side.
 	var err error
 
-	// Try file path first (most efficient)
-	var loadErr error
-	if filePath, fpErr := source.AsFilePath(); fpErr == nil {
-		audioData, loadErr = mb.loadAudioFile(ctx, filePath)
-	} else {
-		// Use reader
-		reader, format, rErr := source.AsReader()
-		if rErr != nil {
-			slog.Error("failed to get reader from source", "error", rErr)
-			return fmt.Errorf("failed to get audio data from source: %w", rErr)
-		}
-		defer reader.Close()
+	reader, format, rErr := source.Reader()
+	if rErr != nil {
+		slog.Error("failed to get reader from source", "error", rErr)
+		return fmt.Errorf("failed to get audio data from source: %w", rErr)
+	}
+	defer reader.Close()
 
-		audioData, loadErr = mb.loadAudioFromReader(ctx, reader, format)
+	// Prefer the file path for format detection when available (FileSource);
+	// otherwise rely on the stream's declared format (ReaderSource).
+	detectFilename := "stream." + format
+	if fp, ok := source.(FilePather); ok {
+		if filePath, pathErr := fp.FilePath(); pathErr == nil {
+			detectFilename = filePath
+		}
 	}
 
+	audioData, loadErr := mb.registry.DecodeFile(ctx, detectFilename, reader)
 	if loadErr != nil {
-		slog.Error("failed to load audio data", "error", loadErr)
+		slog.Error("failed to load audio data", "filename", detectFilename, "error", loadErr)
 		return fmt.Errorf("failed to load audio data: %w", loadErr)
 	}
 
@@ -191,52 +195,3 @@ func (mb *MalgoBackend) Play(ctx context.Context, source AudioSource) error {
 	return nil
 }
 
-// loadAudioFile loads an audio file using the registry
-func (mb *MalgoBackend) loadAudioFile(ctx context.Context, filePath string) (*AudioData, error) {
-	slog.Debug("loading audio file with registry", "file", filePath)
-
-	file, err := os.Open(filePath)
-	if err != nil {
-		slog.Error("failed to open audio file", "file", filePath, "error", err)
-		return nil, fmt.Errorf("failed to open file: %w", err)
-	}
-	defer file.Close()
-
-	// Use registry to decode - this handles AIFF/WAV/MP3 automatically
-	audioData, err := mb.registry.DecodeFile(ctx, filePath, file)
-	if err != nil {
-		slog.Error("registry decode failed", "file", filePath, "error", err)
-		return nil, fmt.Errorf("decode failed: %w", err)
-	}
-
-	slog.Debug("audio file loaded successfully via registry",
-		"file", filePath,
-		"channels", audioData.Channels,
-		"sample_rate", audioData.SampleRate,
-		"data_size", len(audioData.Samples))
-
-	return audioData, nil
-}
-
-// loadAudioFromReader loads audio from a reader using the registry
-func (mb *MalgoBackend) loadAudioFromReader(ctx context.Context, reader io.Reader, format string) (*AudioData, error) {
-	slog.Debug("loading audio from reader with registry", "format", format)
-
-	// Create filename for format detection
-	filename := "stream." + format
-
-	// Use registry to decode
-	audioData, err := mb.registry.DecodeFile(ctx, filename, reader)
-	if err != nil {
-		slog.Error("registry decode from reader failed", "format", format, "error", err)
-		return nil, fmt.Errorf("decode from reader failed: %w", err)
-	}
-
-	slog.Debug("audio reader loaded successfully via registry",
-		"format", format,
-		"channels", audioData.Channels,
-		"sample_rate", audioData.SampleRate,
-		"data_size", len(audioData.Samples))
-
-	return audioData, nil
-}
