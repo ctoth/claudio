@@ -95,22 +95,13 @@ func RunUninstallWorkflow(filesystem afero.Fs, scope string, agent install.Agent
 
 	slog.Info("wrote updated settings to file", "path", settingsPath)
 
-	// Step 7: Verify uninstall by reading back and checking for claudio hooks
-	slog.Debug("verifying uninstall by reading back settings")
-	verifySettings, err := install.ReadSettingsFile(filesystem, settingsPath)
-	if err != nil {
-		return fmt.Errorf("failed to verify uninstall by reading %s: %w", settingsPath, err)
-	}
-
-	// Check that no claudio hooks remain
-	remainingClaudioHooks := DetectClaudioHooks(verifySettings)
-	if len(remainingClaudioHooks) > 0 {
-		return fmt.Errorf("verification failed: claudio hooks still present after uninstall: %v", remainingClaudioHooks)
-	}
-
-	slog.Info("uninstall verification successful",
-		"no_claudio_hooks_remaining", true,
-		"settings_path", settingsPath)
+	// Note: the previous implementation read the settings back and called
+	// DetectClaudioHooks again to "verify" the removal. That was
+	// self-confirming — the read-back used the same detector that had
+	// just produced the input to the removal primitives, so a detector
+	// bug could not be caught. The post-condition is instead enforced as
+	// a unit invariant on removeSimpleClaudioHooks / removeComplexClaudioHooks
+	// (see hook_removal_test.go: TestRemoveClaudioHooks_NoClaudioHooksRemain).
 
 	slog.Info("Claudio uninstall workflow completed successfully",
 		"scope", scope,

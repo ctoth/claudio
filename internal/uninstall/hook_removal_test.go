@@ -820,3 +820,103 @@ func TestRemoveNewFormatClaudioHooks(t *testing.T) {
 		})
 	}
 }
+
+// TestRemoveClaudioHooks_NoClaudioHooksRemain is the load-bearing post-
+// condition that was previously enforced as a self-confirming read-back
+// inside RunUninstallWorkflow (finding #92). It asserts the actual
+// invariant — after running both removal primitives over a settings
+// map, DetectClaudioHooks returns the empty set regardless of the
+// input shape (string form, array form, mixed, multiple-claudio).
+func TestRemoveClaudioHooks_NoClaudioHooksRemain(t *testing.T) {
+	cases := []struct {
+		name  string
+		input *install.SettingsMap
+	}{
+		{
+			name: "simple string hooks pointing at claudio",
+			input: &install.SettingsMap{
+				"hooks": map[string]interface{}{
+					"PreToolUse":  "/usr/local/bin/claudio",
+					"PostToolUse": "claudio",
+					"OtherCmd":    "git push",
+				},
+			},
+		},
+		{
+			name: "array form claudio hooks",
+			input: &install.SettingsMap{
+				"hooks": map[string]interface{}{
+					"PreToolUse": []interface{}{
+						map[string]interface{}{
+							"matcher": ".*",
+							"hooks": []interface{}{
+								map[string]interface{}{
+									"type":    "command",
+									"command": "/usr/local/bin/claudio",
+								},
+							},
+						},
+					},
+					"Other": []interface{}{
+						map[string]interface{}{
+							"matcher": ".*",
+							"hooks": []interface{}{
+								map[string]interface{}{
+									"type":    "command",
+									"command": "/usr/bin/echo",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "mixed string and array claudio hooks",
+			input: &install.SettingsMap{
+				"hooks": map[string]interface{}{
+					"PreToolUse":  "claudio",
+					"PostToolUse": []interface{}{
+						map[string]interface{}{
+							"matcher": ".*",
+							"hooks": []interface{}{
+								map[string]interface{}{
+									"type":    "command",
+									"command": "claudio.exe",
+								},
+							},
+						},
+					},
+					"keep": "echo hi",
+				},
+			},
+		},
+		{
+			name: "no claudio hooks at all (idempotent)",
+			input: &install.SettingsMap{
+				"hooks": map[string]interface{}{
+					"PreToolUse":  "echo hi",
+					"PostToolUse": "git push",
+				},
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Detect, then remove (both primitives, mirroring the
+			// workflow's order).
+			claudioHooks := DetectClaudioHooks(tc.input)
+			removeSimpleClaudioHooks(tc.input, claudioHooks)
+			removeComplexClaudioHooks(tc.input, claudioHooks)
+
+			// Invariant: no claudio hooks remain after removal,
+			// regardless of input shape.
+			remaining := DetectClaudioHooks(tc.input)
+			if len(remaining) != 0 {
+				t.Errorf("invariant violated: claudio hooks still detected after removal: %v\nresulting settings: %+v", remaining, *tc.input)
+			}
+		})
+	}
+
+}
