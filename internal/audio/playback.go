@@ -388,13 +388,17 @@ func (p *AudioPlayer) PlaySoundWithContext(ctx context.Context, soundID string) 
 	}
 
 	// Cleanup device — idempotent via deviceEntry.uninitOnce. Map removal
-	// must precede the IsPlaying-derived state observation.
-	entry.uninit()
-
+	// must precede the IsPlaying-derived state observation: with IsPlaying
+	// now derived from len(p.devices), deleting first means concurrent
+	// observers see false the instant the device is logically gone, and
+	// the subsequent uninit (which can be slow — it joins the malgo worker
+	// thread) proceeds at its own pace without lying about IsPlaying.
 	p.deviceMutex.Lock()
 	delete(p.devices, soundID)
 	stillPlaying := len(p.devices) > 0
 	p.deviceMutex.Unlock()
+
+	entry.uninit()
 	
 	slog.Debug("sound playback cleanup completed", "sound_id", soundID, "still_playing", stillPlaying)
 	return nil
@@ -438,7 +442,15 @@ func (p *AudioPlayer) StopAll() error {
 // Close shuts down the audio player and releases resources
 func (p *AudioPlayer) Close() error {
 	slog.Debug("closing audio player")
-	
+
+	// Synchronize with any in-flight PlaySoundWithContext that's mid
+	// context-init. If init has already completed, this Do is a free no-op
+	// (sync.Once is one-shot). If init is racing, Close's no-op Do
+	// participates in the Once barrier so the subsequent read of p.context
+	// observes a settled state — closing the publication race the scout
+	// flagged where Close read p.context without going through the Once.
+	p.contextInitOnce.Do(func() {})
+
 	p.mutex.Lock()
 	if p.closed {
 		p.mutex.Unlock()
