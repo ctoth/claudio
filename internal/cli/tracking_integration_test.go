@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"claudio.click/internal/cli/testenv"
 	"claudio.click/internal/hooks"
 )
 
@@ -17,6 +18,7 @@ import (
 // These tests verify that tracking is properly integrated into the CLI lifecycle
 
 func TestCLIWithTrackingEnabled(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// Create temporary directory for database
 	tempDir := t.TempDir()
 	
@@ -97,7 +99,8 @@ func TestCLIWithTrackingEnabled(t *testing.T) {
 }
 
 func TestCLIWithTrackingDisabled(t *testing.T) {
-	// Create temporary directory  
+	testenv.IsolateXDG(t)
+	// Create temporary directory
 	tempDir := t.TempDir()
 	
 	// Set environment variable to disable tracking
@@ -150,6 +153,7 @@ func TestCLIWithTrackingDisabled(t *testing.T) {
 }
 
 func TestCLITrackingEnvironmentVariableOverride(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// Create temporary directory for database
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "override.db")
@@ -196,6 +200,7 @@ func TestCLITrackingEnvironmentVariableOverride(t *testing.T) {
 }
 
 func TestCLIGracefulDegradationOnDBFailures(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// Test that CLI continues to work even if database operations fail
 	
 	// Set environment to enable tracking but use invalid database path
@@ -244,6 +249,7 @@ func TestCLIGracefulDegradationOnDBFailures(t *testing.T) {
 }
 
 func TestCLIProperCleanup(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// Test that CLI properly cleans up tracking resources
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "cleanup.db")
@@ -317,6 +323,7 @@ func TestCLIProperCleanup(t *testing.T) {
 // These tests verify that session IDs are properly propagated from hook events to database
 
 func TestSessionIDPropagationToDatabase(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// Create temporary directory for database
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "session_test.db")
@@ -381,6 +388,7 @@ func TestSessionIDPropagationToDatabase(t *testing.T) {
 }
 
 func TestMultipleSessionsCreateSeparateEntries(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// Create temporary directory for database
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "multi_session_test.db")
@@ -463,6 +471,7 @@ func TestMultipleSessionsCreateSeparateEntries(t *testing.T) {
 }
 
 func TestPerRequestSoundCheckerInitialization(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// This test verifies that each request gets its own SoundChecker with the correct session ID
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "per_request_test.db")

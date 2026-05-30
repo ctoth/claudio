@@ -18,6 +18,12 @@ import (
 // XDG_CONFIG_HOME to subdirectories under t.TempDir() and calls
 // xdg.Reload() so the adrg/xdg library picks up the new values.
 //
+// It also sets CLAUDIO_FILE_LOGGING=false so the lumberjack file
+// handle does not block t.TempDir() cleanup on Windows (where an
+// open file cannot be removed). The override applies regardless of
+// which config path the test follows because
+// ApplyEnvironmentOverrides runs after every load path.
+//
 // Environment restoration is handled by t.Setenv (auto-restores via
 // t.Cleanup). A final xdg.Reload() is registered via t.Cleanup so the
 // xdg package's cached paths are reset back to the host environment
@@ -38,6 +44,13 @@ func IsolateXDG(t *testing.T) string {
 	t.Setenv("XDG_CACHE_HOME", filepath.Join(root, ".cache"))
 	t.Setenv("XDG_DATA_HOME", filepath.Join(root, ".local", "share"))
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, ".config"))
+
+	// Disable file logging via env var so the lumberjack file handle
+	// does not block t.TempDir() cleanup on Windows. This applies
+	// regardless of whether the test passes an explicit --config or
+	// relies on XDG autodiscovery, because the override runs in
+	// ApplyEnvironmentOverrides after every load path.
+	t.Setenv("CLAUDIO_FILE_LOGGING", "false")
 
 	xdg.Reload()
 	t.Cleanup(func() { xdg.Reload() })

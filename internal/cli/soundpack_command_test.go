@@ -10,12 +10,13 @@ import (
 	"strings"
 	"testing"
 
+	"claudio.click/internal/cli/testenv"
 	"claudio.click/internal/config"
 	"claudio.click/internal/soundpack"
-	"github.com/adrg/xdg"
 )
 
 func TestSoundpackInit_CreatesValidJSON(t *testing.T) {
+	testenv.IsolateXDG(t)
 	tmpDir := t.TempDir()
 
 	cli := NewCLI()
@@ -44,6 +45,7 @@ func TestSoundpackInit_CreatesValidJSON(t *testing.T) {
 }
 
 func TestSoundpackInit_ContainsAllCategories(t *testing.T) {
+	testenv.IsolateXDG(t)
 	tmpDir := t.TempDir()
 
 	cli := NewCLI()
@@ -698,32 +700,24 @@ func TestExtractAllSoundKeys(t *testing.T) {
 
 // --- Soundpack Install Tests ---
 
-// setupInstallTestEnv sets XDG_DATA_HOME and XDG_CONFIG_HOME to temp dirs,
-// calls xdg.Reload() so the library picks up the new values, and returns
-// a cleanup function that restores the original env vars and reloads.
+// setupInstallTestEnv delegates to testenv.IsolateXDG to sandbox HOME
+// and all XDG_* env vars under t.TempDir(), then returns the
+// data/config directory paths derived from the sandbox root. Cleanup
+// is registered automatically by testenv.IsolateXDG via t.Cleanup, so
+// the returned cleanup func is a no-op kept for caller-signature
+// compatibility.
 func setupInstallTestEnv(t *testing.T) (dataDir, configDir string, cleanup func()) {
 	t.Helper()
-	dataDir = filepath.Join(t.TempDir(), "data")
-	configDir = filepath.Join(t.TempDir(), "config")
+	root := testenv.IsolateXDG(t)
+	dataDir = filepath.Join(root, ".local", "share")
+	configDir = filepath.Join(root, ".config")
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		t.Fatalf("failed to create data dir: %v", err)
 	}
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		t.Fatalf("failed to create config dir: %v", err)
 	}
-
-	oldDataHome := os.Getenv("XDG_DATA_HOME")
-	oldConfigHome := os.Getenv("XDG_CONFIG_HOME")
-	os.Setenv("XDG_DATA_HOME", dataDir)
-	os.Setenv("XDG_CONFIG_HOME", configDir)
-	xdg.Reload()
-
-	cleanup = func() {
-		os.Setenv("XDG_DATA_HOME", oldDataHome)
-		os.Setenv("XDG_CONFIG_HOME", oldConfigHome)
-		xdg.Reload()
-	}
-	return dataDir, configDir, cleanup
+	return dataDir, configDir, func() {}
 }
 
 // createTestJSONSoundpack creates a minimal valid JSON soundpack file in the given directory.

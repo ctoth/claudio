@@ -3,9 +3,12 @@ package cli
 import (
 	"strings"
 	"testing"
+
+	"claudio.click/internal/cli/testenv"
 )
 
 func TestCLIWithRealHookJSON(t *testing.T) {
+	testenv.IsolateXDG(t)
 	cli := NewCLI()
 
 	// Real hook JSON from our logs (simplified)
@@ -47,6 +50,7 @@ func TestCLIWithRealHookJSON(t *testing.T) {
 }
 
 func TestCLIEmptyInput(t *testing.T) {
+	testenv.IsolateXDG(t)
 	cli := NewCLI()
 
 	// Empty input should trigger configuration test mode

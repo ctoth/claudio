@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"claudio.click/internal/cli/testenv"
 	"claudio.click/internal/safeio"
 )
 
@@ -38,6 +39,7 @@ func (o *oversizedReader) Read(p []byte) (int, error) {
 // attempting to parse them. The stdin contains MaxHookPayloadBytes+1
 // non-JSON bytes; the cap fires first.
 func TestCLI_StdinPayloadCap(t *testing.T) {
+	testenv.IsolateXDG(t)
 	cli := NewCLI()
 
 	r := &oversizedReader{remaining: safeio.MaxHookPayloadBytes + 1}

@@ -6,10 +6,12 @@ import (
 	"strings"
 	"testing"
 
+	"claudio.click/internal/cli/testenv"
 	"claudio.click/internal/config"
 )
 
 func TestStatusCommand_EnabledTrue_NoMutedToken(t *testing.T) {
+	testenv.IsolateXDG(t)
 	tmp := t.TempDir()
 	configPath := filepath.Join(tmp, "config.json")
 
@@ -50,6 +52,7 @@ func TestStatusCommand_EnabledTrue_NoMutedToken(t *testing.T) {
 // screen-reader assertion. The literal token "MUTED" MUST appear in
 // the output when enabled=false. Do not soften this test.
 func TestStatusCommand_EnabledFalse_HasMutedToken(t *testing.T) {
+	testenv.IsolateXDG(t)
 	tmp := t.TempDir()
 	configPath := filepath.Join(tmp, "config.json")
 
@@ -79,6 +82,7 @@ func TestStatusCommand_EnabledFalse_HasMutedToken(t *testing.T) {
 }
 
 func TestStatusCommand_VolumeUnset_PrintsDefault(t *testing.T) {
+	testenv.IsolateXDG(t)
 	tmp := t.TempDir()
 	configPath := filepath.Join(tmp, "config.json")
 
@@ -106,6 +110,7 @@ func TestStatusCommand_VolumeUnset_PrintsDefault(t *testing.T) {
 }
 
 func TestStatusCommand_VolumeFromEnv_AnnotatesSource(t *testing.T) {
+	testenv.IsolateXDG(t)
 	tmp := t.TempDir()
 	configPath := filepath.Join(tmp, "config.json")
 
@@ -139,6 +144,7 @@ func TestStatusCommand_VolumeFromEnv_AnnotatesSource(t *testing.T) {
 }
 
 func TestStatusCommand_PrintsAllExpectedFields(t *testing.T) {
+	testenv.IsolateXDG(t)
 	tmp := t.TempDir()
 	configPath := filepath.Join(tmp, "config.json")
 

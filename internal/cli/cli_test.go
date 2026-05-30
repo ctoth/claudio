@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"claudio.click/internal/cli/testenv"
 	"claudio.click/internal/config"
 	"claudio.click/internal/hooks"
 	"claudio.click/internal/soundpack"
@@ -46,6 +47,7 @@ func TestCLI(t *testing.T) {
 }
 
 func TestCLIBasicUsage(t *testing.T) {
+	testenv.IsolateXDG(t)
 	cli := NewCLI()
 
 	// Test basic hook processing from stdin
@@ -82,6 +84,7 @@ func TestCLIBasicUsage(t *testing.T) {
 }
 
 func TestCLIFlags(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// Preserve original slog configuration to avoid test interference
 	originalHandler := slog.Default().Handler()
 	defer slog.SetDefault(slog.New(originalHandler))
@@ -165,6 +168,7 @@ func TestCLIFlags(t *testing.T) {
 }
 
 func TestCLIJSONProcessing(t *testing.T) {
+	testenv.IsolateXDG(t)
 	cli := NewCLI()
 
 	testCases := []struct {
@@ -255,6 +259,7 @@ func TestCLIJSONProcessing(t *testing.T) {
 }
 
 func TestCLIConfigOverrides(t *testing.T) {
+	testenv.IsolateXDG(t)
 	cli := NewCLI()
 
 	// Create a temporary config file
@@ -321,6 +326,7 @@ func TestCLIConfigOverrides(t *testing.T) {
 }
 
 func TestCLISilentMode(t *testing.T) {
+	testenv.IsolateXDG(t)
 	cli := NewCLI()
 
 	hookJSON := `{
@@ -371,6 +377,7 @@ func TestShouldDetachHookProcessing_DisabledViaEnvVar(t *testing.T) {
 }
 
 func TestCLIEnvironmentVariables(t *testing.T) {
+	testenv.IsolateXDG(t)
 	cli := NewCLI()
 
 	// Set environment variables
@@ -405,6 +412,7 @@ func TestCLIEnvironmentVariables(t *testing.T) {
 }
 
 func TestCLIErrorHandling(t *testing.T) {
+	testenv.IsolateXDG(t)
 	cli := NewCLI()
 
 	testCases := []struct {
@@ -448,6 +456,7 @@ func TestCLIErrorHandling(t *testing.T) {
 }
 
 func TestCLIVersionAndHelp(t *testing.T) {
+	testenv.IsolateXDG(t)
 	cli := NewCLI()
 
 	t.Run("version output", func(t *testing.T) {
@@ -507,6 +516,7 @@ func TestCLIVersionAndHelp(t *testing.T) {
 }
 
 func TestCLI_ResolvesDefaultSoundpackToPaths(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// TDD Test: Verify CLI resolves DefaultSoundpack to actual XDG paths
 	cli := NewCLI()
 
@@ -573,6 +583,7 @@ func (e *errorReader) Read(p []byte) (n int, err error) {
 }
 
 func TestVersionFlagEarlyExit(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// TDD RED: This test should FAIL because version flag currently initializes audio systems
 	// We expect version flag to show version info without any system initialization logging
 
@@ -633,6 +644,7 @@ func stringPtr(s string) *string {
 }
 
 func TestHookProcessingLoggingIsolated(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// Isolated test for hook processing logging without CLI.Run() overhead
 	// This provides more reliable, focused testing of logging behavior
 
@@ -710,6 +722,7 @@ func TestHookProcessingLoggingIsolated(t *testing.T) {
 }
 
 func TestCLIUnifiedSoundpackIntegration(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// TDD Test: CLI integration with new unified soundpack system
 
 	t.Run("supports directory soundpack with unified system", func(t *testing.T) {
@@ -874,6 +887,7 @@ func TestCLIUnifiedSoundpackIntegration(t *testing.T) {
 }
 
 func TestCLILoggingLevels(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// TDD RED: This test should FAIL because CLI system initialization currently uses INFO logging
 	// We expect routine CLI operations to use DEBUG level, not INFO level
 

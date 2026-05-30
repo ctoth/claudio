@@ -367,6 +367,22 @@ func (cm *ConfigManager) ApplyEnvironmentOverrides(config *Config) *Config {
 		}
 	}
 
+	// CLAUDIO_FILE_LOGGING — opt-out switch so test environments can
+	// disable the lumberjack file handle that would otherwise block
+	// t.TempDir() cleanup on Windows. Recognised values match
+	// strconv.ParseBool ("1"/"0", "true"/"false", etc.).
+	if fileLoggingStr := os.Getenv("CLAUDIO_FILE_LOGGING"); fileLoggingStr != "" {
+		if enabled, err := strconv.ParseBool(fileLoggingStr); err == nil {
+			if result.FileLogging == nil {
+				result.FileLogging = &FileLoggingConfig{}
+			}
+			result.FileLogging.Enabled = enabled
+			slog.Debug("applied file_logging override from environment", "value", enabled)
+		} else {
+			slog.Warn("invalid CLAUDIO_FILE_LOGGING environment variable", "value", fileLoggingStr, "error", err)
+		}
+	}
+
 	// Apply sound tracking environment overrides
 	if result.SoundTracking == nil {
 		result.SoundTracking = GetDefaultSoundTrackingConfig()

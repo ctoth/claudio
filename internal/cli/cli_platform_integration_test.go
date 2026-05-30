@@ -6,11 +6,13 @@ import (
 	"strings"
 	"testing"
 
+	"claudio.click/internal/cli/testenv"
 	"claudio.click/internal/config"
 )
 
 // TDD RED: Test unconfigured claudio uses platform JSON
 func TestCLIUnconfiguredUsePlatformSoundpack(t *testing.T) {
+	testenv.IsolateXDG(t)
 	t.Run("unconfigured CLI should auto-detect and use wsl.json in WSL", func(t *testing.T) {
 		// Test should succeed with embedded WSL soundpack when no file found
 		
@@ -108,6 +110,7 @@ func TestCLIUnconfiguredUsePlatformSoundpack(t *testing.T) {
 
 // TDD RED: Test configured claudio with platform fallback
 func TestCLIConfiguredWithPlatformFallback(t *testing.T) {
+	testenv.IsolateXDG(t)
 	t.Run("configured CLI should fallback to platform JSON when configured soundpack missing", func(t *testing.T) {
 		// Test should succeed with embedded WSL soundpack as fallback when configured soundpack missing
 		
@@ -258,6 +261,7 @@ func TestCLIConfiguredWithPlatformFallback(t *testing.T) {
 
 // TDD RED: Test platform detection integration in CLI initialization
 func TestCLIPlatformDetectionIntegration(t *testing.T) {
+	testenv.IsolateXDG(t)
 	t.Run("CLI should integrate platform detection into soundpack resolution", func(t *testing.T) {
 		// This tests that the CLI actually calls the platform detection logic
 		

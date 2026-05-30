@@ -6,10 +6,12 @@ import (
 	"strings"
 	"testing"
 
+	"claudio.click/internal/cli/testenv"
 	"claudio.click/internal/config"
 )
 
 func TestMuteCommand_SetsEnabledFalse(t *testing.T) {
+	testenv.IsolateXDG(t)
 	tmp := t.TempDir()
 	configPath := filepath.Join(tmp, "config.json")
 
@@ -40,6 +42,7 @@ func TestMuteCommand_SetsEnabledFalse(t *testing.T) {
 }
 
 func TestUnmuteCommand_SetsEnabledTrue(t *testing.T) {
+	testenv.IsolateXDG(t)
 	tmp := t.TempDir()
 	configPath := filepath.Join(tmp, "config.json")
 
@@ -72,6 +75,7 @@ func TestUnmuteCommand_SetsEnabledTrue(t *testing.T) {
 // TestMuteThenUnmute exercises the symmetric pair and verifies the
 // final state is true.
 func TestMuteThenUnmute(t *testing.T) {
+	testenv.IsolateXDG(t)
 	tmp := t.TempDir()
 	configPath := filepath.Join(tmp, "config.json")
 
@@ -105,6 +109,7 @@ func TestMuteThenUnmute(t *testing.T) {
 
 // TestMuteIdempotent verifies running mute twice does not error.
 func TestMuteIdempotent(t *testing.T) {
+	testenv.IsolateXDG(t)
 	tmp := t.TempDir()
 	configPath := filepath.Join(tmp, "config.json")
 

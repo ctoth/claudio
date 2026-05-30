@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"claudio.click/internal/cli/testenv"
 	"claudio.click/internal/config"
 )
 
@@ -43,6 +44,7 @@ func readPersistedConfig(t *testing.T, path string) *config.Config {
 }
 
 func TestVolumeCommand_NoArgsPrintsCurrent(t *testing.T) {
+	testenv.IsolateXDG(t)
 	tmp := t.TempDir()
 	configPath := filepath.Join(tmp, "config.json")
 
@@ -72,6 +74,7 @@ func TestVolumeCommand_NoArgsPrintsCurrent(t *testing.T) {
 }
 
 func TestVolumeCommand_NoArgsPrintsDefaultWhenUnset(t *testing.T) {
+	testenv.IsolateXDG(t)
 	tmp := t.TempDir()
 	configPath := filepath.Join(tmp, "config.json")
 
@@ -100,6 +103,7 @@ func TestVolumeCommand_NoArgsPrintsDefaultWhenUnset(t *testing.T) {
 }
 
 func TestVolumeCommand_ValidLevelPersists(t *testing.T) {
+	testenv.IsolateXDG(t)
 	tmp := t.TempDir()
 	configPath := filepath.Join(tmp, "config.json")
 
@@ -135,6 +139,7 @@ func TestVolumeCommand_ValidLevelPersists(t *testing.T) {
 }
 
 func TestVolumeCommand_RejectsOutOfRange(t *testing.T) {
+	testenv.IsolateXDG(t)
 	tmp := t.TempDir()
 	configPath := filepath.Join(tmp, "config.json")
 
@@ -165,6 +170,7 @@ func TestVolumeCommand_RejectsOutOfRange(t *testing.T) {
 }
 
 func TestVolumeCommand_RejectsNonFloat(t *testing.T) {
+	testenv.IsolateXDG(t)
 	tmp := t.TempDir()
 	configPath := filepath.Join(tmp, "config.json")
 
@@ -190,6 +196,7 @@ func TestVolumeCommand_RejectsNonFloat(t *testing.T) {
 }
 
 func TestVolumeCommand_RejectsNegative(t *testing.T) {
+	testenv.IsolateXDG(t)
 	tmp := t.TempDir()
 	configPath := filepath.Join(tmp, "config.json")
 
@@ -233,6 +240,7 @@ func TestVolumeCommand_RejectsNegative(t *testing.T) {
 }
 
 func TestVolumeCommand_RejectsNaN(t *testing.T) {
+	testenv.IsolateXDG(t)
 	tmp := t.TempDir()
 	configPath := filepath.Join(tmp, "config.json")
 
@@ -272,6 +280,7 @@ func TestVolumeCommand_RejectsNaN(t *testing.T) {
 }
 
 func TestVolumeCommand_RejectsInf(t *testing.T) {
+	testenv.IsolateXDG(t)
 	tmp := t.TempDir()
 	configPath := filepath.Join(tmp, "config.json")
 
@@ -314,6 +323,7 @@ func TestVolumeCommand_RejectsInf(t *testing.T) {
 // does — otherwise the two read commands disagree about the effective volume.
 // The WRITE path is covered separately by TestVolumeCommand_WriteIgnoresEnvVar.
 func TestVolumeCommand_NoArgsRespectsEnvVar(t *testing.T) {
+	testenv.IsolateXDG(t)
 	tmp := t.TempDir()
 	configPath := filepath.Join(tmp, "config.json")
 
@@ -355,6 +365,7 @@ func TestVolumeCommand_NoArgsRespectsEnvVar(t *testing.T) {
 // with CLAUDIO_VOLUME set, `claudio volume 0.4` persists 0.4 verbatim.
 // Persistence must be deterministic regardless of env state.
 func TestVolumeCommand_WriteIgnoresEnvVar(t *testing.T) {
+	testenv.IsolateXDG(t)
 	tmp := t.TempDir()
 	configPath := filepath.Join(tmp, "config.json")
 

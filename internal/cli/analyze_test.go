@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"claudio.click/internal/cli/testenv"
 	"claudio.click/internal/tracking"
 )
 
@@ -17,6 +18,7 @@ import (
 // TDD RED: Test analyze missing command functionality
 
 func TestAnalyzeMissingCommand(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// Create temporary directory for test database
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "analyze_test.db")
@@ -154,6 +156,7 @@ func TestAnalyzeMissingCommand(t *testing.T) {
 }
 
 func TestAnalyzeMissingCommandWithFilters(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// Create temporary directory for test database
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "analyze_filter_test.db")
@@ -246,6 +249,7 @@ func TestAnalyzeMissingCommandWithFilters(t *testing.T) {
 }
 
 func TestAnalyzeMissingCommandWithToolFilter(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// Create temporary directory for test database
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "analyze_tool_test.db")
@@ -334,6 +338,7 @@ func TestAnalyzeMissingCommandWithToolFilter(t *testing.T) {
 }
 
 func TestAnalyzeMissingCommandNoDatabase(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// Test behavior when tracking is disabled or database doesn't exist
 	os.Setenv("CLAUDIO_SOUND_TRACKING", "false")
 	defer os.Unsetenv("CLAUDIO_SOUND_TRACKING")
@@ -359,6 +364,7 @@ func TestAnalyzeMissingCommandNoDatabase(t *testing.T) {
 }
 
 func TestAnalyzeMissingCommandHelp(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// Test help output for analyze missing command
 	cli := NewCLI()
 	stdin := strings.NewReader("")
@@ -520,6 +526,7 @@ func TestGroupMissingSoundsByTool(t *testing.T) {
 // TDD RED: Test analyze usage command functionality
 
 func TestAnalyzeUsageCommand(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// Create temporary directory for test database
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "usage_test.db")
@@ -646,6 +653,7 @@ func TestAnalyzeUsageCommand(t *testing.T) {
 }
 
 func TestAnalyzeUsageCommandWithFilters(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// Create temporary directory for test database
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "usage_filter_test.db")
@@ -735,6 +743,7 @@ func TestAnalyzeUsageCommandWithFilters(t *testing.T) {
 }
 
 func TestAnalyzeUsageCommandWithSummaryAndFallbacks(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// Create temporary directory for test database
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "usage_summary_test.db")
@@ -814,6 +823,7 @@ func TestAnalyzeUsageCommandWithSummaryAndFallbacks(t *testing.T) {
 }
 
 func TestAnalyzeUsageCommandWithPresets(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// Create temporary directory for test database
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "usage_preset_test.db")
@@ -891,6 +901,7 @@ func TestAnalyzeUsageCommandWithPresets(t *testing.T) {
 }
 
 func TestAnalyzeUsageCommandNoDatabase(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// Test behavior when tracking is disabled
 	os.Setenv("CLAUDIO_SOUND_TRACKING", "false")
 	defer os.Unsetenv("CLAUDIO_SOUND_TRACKING")
@@ -919,6 +930,7 @@ func TestAnalyzeUsageCommandNoDatabase(t *testing.T) {
 }
 
 func TestAnalyzeUsageCommandNoData(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// Create empty database
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "empty_test.db")
@@ -965,6 +977,7 @@ func TestAnalyzeUsageCommandNoData(t *testing.T) {
 }
 
 func TestAnalyzeUsageCommandHelp(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// Test help output for analyze usage command
 	cli := NewCLI()
 	stdin := strings.NewReader("")
