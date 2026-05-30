@@ -8,13 +8,8 @@ import (
 	"claudio.click/internal/install"
 )
 
-// DetectClaudioHooks finds all hook names that reference claudio (public interface)
+// DetectClaudioHooks finds all hook names that reference claudio.
 func DetectClaudioHooks(settings *install.SettingsMap) []string {
-	return detectClaudioHooks(settings)
-}
-
-// detectClaudioHooks finds all hook names that reference claudio
-func detectClaudioHooks(settings *install.SettingsMap) []string {
 	slog.Debug("detecting claudio hooks in settings")
 
 	if settings == nil {

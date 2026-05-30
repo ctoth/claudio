@@ -16,18 +16,12 @@ var agentResolver = func(agent install.Agent, scope string) (string, error) {
 	return agent.BestConfigPath(scope)
 }
 
-// RunUninstallWorkflow orchestrates the complete Claudio uninstall process (public interface).
+// RunUninstallWorkflow orchestrates the complete Claudio uninstall process.
 // The settings-file path is resolved internally from the agent and the
 // validated scope, so the scope check becomes load-bearing: a caller cannot
 // pass scope=user with a path that does not belong to that scope.
 // Workflow: Validate scope → Resolve path → Read settings → Detect hooks → Remove hooks → Write → Verify
 func RunUninstallWorkflow(filesystem afero.Fs, scope string, agent install.Agent) error {
-	return runUninstallWorkflow(filesystem, scope, agent)
-}
-
-// runUninstallWorkflow orchestrates the complete Claudio uninstall process.
-// Workflow: Validate scope → Resolve path → Read settings → Detect hooks → Remove hooks → Write → Verify
-func runUninstallWorkflow(filesystem afero.Fs, scope string, agent install.Agent) error {
 	slog.Info("starting Claudio uninstall workflow",
 		"scope", scope,
 		"agent", agent)
@@ -74,7 +68,7 @@ func runUninstallWorkflow(filesystem afero.Fs, scope string, agent install.Agent
 
 	// Step 3: Detect Claudio hooks in settings
 	slog.Debug("detecting claudio hooks in settings")
-	claudioHooks := detectClaudioHooks(existingSettings)
+	claudioHooks := DetectClaudioHooks(existingSettings)
 
 	if len(claudioHooks) == 0 {
 		slog.Info("no claudio hooks found, uninstall is idempotent",
@@ -109,7 +103,7 @@ func runUninstallWorkflow(filesystem afero.Fs, scope string, agent install.Agent
 	}
 
 	// Check that no claudio hooks remain
-	remainingClaudioHooks := detectClaudioHooks(verifySettings)
+	remainingClaudioHooks := DetectClaudioHooks(verifySettings)
 	if len(remainingClaudioHooks) > 0 {
 		return fmt.Errorf("verification failed: claudio hooks still present after uninstall: %v", remainingClaudioHooks)
 	}

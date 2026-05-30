@@ -113,7 +113,7 @@ func TestDetectClaudioHooksWithFullPaths(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := detectClaudioHooks(tc.settings)
+			result := DetectClaudioHooks(tc.settings)
 
 			// Check length
 			if len(result) != len(tc.expected) {
@@ -223,7 +223,7 @@ func TestDetectClaudioHooks(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := detectClaudioHooks(tc.settings)
+			result := DetectClaudioHooks(tc.settings)
 
 			// Check length
 			if len(result) != len(tc.expected) {
