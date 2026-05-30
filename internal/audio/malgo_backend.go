@@ -37,19 +37,6 @@ func NewMalgoBackend() *MalgoBackend {
 	}
 }
 
-// Start initializes the backend
-func (mb *MalgoBackend) Start() error {
-	mb.mutex.Lock()
-	defer mb.mutex.Unlock()
-
-	if mb.closed {
-		return ErrBackendClosed
-	}
-
-	slog.Debug("MalgoBackend started with unified audio system")
-	return nil
-}
-
 // Stop stops any ongoing playback
 func (mb *MalgoBackend) Stop() error {
 	mb.mutex.Lock()

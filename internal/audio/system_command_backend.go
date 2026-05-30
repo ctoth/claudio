@@ -32,19 +32,6 @@ func NewSystemCommandBackend(command string) *SystemCommandBackend {
 	}
 }
 
-// Start initializes the backend (no-op for system commands)
-func (scb *SystemCommandBackend) Start() error {
-	scb.mutex.Lock()
-	defer scb.mutex.Unlock()
-
-	if scb.closed {
-		return ErrBackendClosed
-	}
-
-	slog.Debug("SystemCommandBackend started", "command", scb.command)
-	return nil
-}
-
 // Stop stops any ongoing playback (limited control with system commands)
 func (scb *SystemCommandBackend) Stop() error {
 	scb.mutex.Lock()

@@ -156,17 +156,12 @@ func TestCLIBackendLifecycleManagement(t *testing.T) {
 		t.Fatalf("failed to initialize backend: %v", err)
 	}
 
-	// Backend should be started
+	// Backend should be initialized
 	if cli.audioBackend == nil {
 		t.Error("backend should be initialized")
 	}
 
-	// Test that backend lifecycle is managed properly
-	err = cli.audioBackend.Start()
-	if err != nil {
-		t.Errorf("backend start failed: %v", err)
-	}
-
+	// Test that Stop and Close lifecycle calls succeed.
 	err = cli.audioBackend.Stop()
 	if err != nil {
 		t.Errorf("backend stop failed: %v", err)

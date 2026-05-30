@@ -20,17 +20,9 @@ type mockAudioBackend struct {
 	volume    float32
 	isPlaying bool
 	closed    bool
-	startErr  error
 	stopErr   error
 	closeErr  error
 	playErr   error
-}
-
-func (m *mockAudioBackend) Start() error {
-	if m.closed {
-		return ErrBackendClosed
-	}
-	return m.startErr
 }
 
 func (m *mockAudioBackend) Stop() error {
@@ -137,22 +129,17 @@ func TestSystemCommandBackend_Play(t *testing.T) {
 
 func TestSystemCommandBackend_Lifecycle(t *testing.T) {
 	backend := NewSystemCommandBackend("paplay")
-	
-	// Test Start
-	if err := backend.Start(); err != nil {
-		t.Errorf("Start() failed: %v", err)
-	}
-	
+
 	// Test Stop
 	if err := backend.Stop(); err != nil {
 		t.Errorf("Stop() failed: %v", err)
 	}
-	
+
 	// Test Close
 	if err := backend.Close(); err != nil {
 		t.Errorf("Close() failed: %v", err)
 	}
-	
+
 	// Operations after close should fail
 	err := backend.Play(context.Background(), NewFileSource("/test/sound.wav", NewDefaultRegistry()))
 	if !errors.Is(err, ErrBackendClosed) {
@@ -206,12 +193,11 @@ func TestMalgoBackend_Play(t *testing.T) {
 
 func TestMalgoBackend_Lifecycle(t *testing.T) {
 	backend := NewMalgoBackend()
-	
+
 	// Test lifecycle methods exist and can be called
-	_ = backend.Start()
-	_ = backend.Stop() 
+	_ = backend.Stop()
 	_ = backend.Close()
-	
+
 	// Test state methods
 	_ = backend.IsPlaying()
 	_ = backend.GetVolume()

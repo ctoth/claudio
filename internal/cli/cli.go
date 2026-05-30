@@ -351,13 +351,6 @@ func (c *CLI) initializeAudioSystemWithBackend(cfg *config.Config) error {
 
 	c.audioBackend = backend
 
-	// Start the backend
-	err = c.audioBackend.Start()
-	if err != nil {
-		slog.Error("failed to start audio backend", "error", err)
-		return fmt.Errorf("failed to start audio backend: %w", err)
-	}
-
 	// Set volume on backend (use default 0.5 if not set)
 	volume := 0.5
 	if cfg.Volume != nil {
