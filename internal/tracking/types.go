@@ -4,12 +4,18 @@ import (
 	"os"
 
 	"claudio.click/internal/hooks"
+	"claudio.click/internal/soundpack"
 )
 
-// SoundpackResolver interface for resolving logical paths to physical paths
+// SoundpackResolver interface for resolving logical paths to physical paths.
+//
+// DEPRECATED: structural duplicate of soundpack.SoundpackResolver. Scheduled
+// for deletion in the next commit; the signature is being kept in lockstep
+// with soundpack.SoundpackResolver here so the duplicate compiles against
+// the shared real implementation during the migration.
 type SoundpackResolver interface {
 	ResolveSound(relativePath string) (string, error)
-	ResolveSoundWithFallback(paths []string) (string, error)
+	ResolveSoundWithFallback(paths []string, opts ...soundpack.ResolveOption) (string, error)
 	GetName() string
 	GetType() string
 }

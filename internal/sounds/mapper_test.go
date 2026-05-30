@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"claudio.click/internal/hooks"
+	"claudio.click/internal/soundpack"
 	"claudio.click/internal/tracking"
 )
 
@@ -1113,7 +1114,11 @@ func (m *MockSoundpackResolver) ResolveSound(relativePath string) (string, error
 	return "", fmt.Errorf("sound not found: %s", relativePath)
 }
 
-func (m *MockSoundpackResolver) ResolveSoundWithFallback(paths []string) (string, error) {
+// ResolveSoundWithFallback satisfies the soundpack.SoundpackResolver
+// interface. The mock ignores opts — observer-driven tests use the real
+// UnifiedSoundpackResolver against a tmpdir; the mock only needs to choose
+// a winner among logical paths against its mapping table.
+func (m *MockSoundpackResolver) ResolveSoundWithFallback(paths []string, opts ...soundpack.ResolveOption) (string, error) {
 	for _, path := range paths {
 		if resolved, err := m.ResolveSound(path); err == nil {
 			return resolved, nil

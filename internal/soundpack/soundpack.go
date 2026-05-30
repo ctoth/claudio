@@ -22,9 +22,46 @@ type PathMapper interface {
 // SoundpackResolver resolves sound paths using a configurable mapping strategy
 type SoundpackResolver interface {
 	ResolveSound(relativePath string) (string, error)
-	ResolveSoundWithFallback(paths []string) (string, error)
+	ResolveSoundWithFallback(paths []string, opts ...ResolveOption) (string, error)
 	GetName() string
 	GetType() string
+}
+
+// PathObserver receives one callback per logical-path candidate the resolver
+// inspects during a fallback resolution. sequence is 1-based (loop index over
+// the input candidates slice); exists indicates whether the candidate resolved
+// to a file present on disk. Observers MUST NOT mutate the path or block —
+// resolution is on the hot hook path.
+type PathObserver func(path string, sequence int, exists bool)
+
+// ResolveOption configures a single ResolveSoundWithFallback call.
+type ResolveOption func(*resolveConfig)
+
+// WithObserver attaches an observer to a ResolveSoundWithFallback call. The
+// observer fires once per candidate path in order, regardless of whether the
+// resolver found a winner before reaching that candidate or kept walking.
+//
+// Use this to instrument resolution (e.g. tracking telemetry) without
+// duplicating the os.Stat I/O that the resolver already performs.
+func WithObserver(obs PathObserver) ResolveOption {
+	return func(c *resolveConfig) { c.observer = obs }
+}
+
+// resolveConfig is the private config struct built from the variadic
+// ResolveOptions passed to ResolveSoundWithFallback.
+type resolveConfig struct {
+	observer PathObserver
+}
+
+// buildResolveConfig folds the variadic options into a resolveConfig.
+func buildResolveConfig(opts []ResolveOption) resolveConfig {
+	cfg := resolveConfig{}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&cfg)
+		}
+	}
+	return cfg
 }
 
 // UnifiedSoundpackResolver implements SoundpackResolver using any PathMapper
@@ -99,8 +136,19 @@ func (u *UnifiedSoundpackResolver) ResolveSound(relativePath string) (string, er
 	return "", err
 }
 
-// ResolveSoundWithFallback tries multiple sound paths in order until one is found
-func (u *UnifiedSoundpackResolver) ResolveSoundWithFallback(paths []string) (string, error) {
+// ResolveSoundWithFallback tries multiple sound paths in order until one is
+// found. Optional ResolveOptions configure per-call behavior — most notably
+// WithObserver(...) which fires a PathObserver callback for every candidate
+// the resolver inspects, in input order, regardless of whether resolution
+// short-circuited on an earlier win. The observer is invoked once per input
+// candidate (deduplication and chain composition is the caller's concern).
+//
+// The observer is invoked with exists=true ONLY when the candidate resolved
+// to a physical file present on disk. A mapping miss (ResolveSound returns
+// an error) is reported as exists=false.
+func (u *UnifiedSoundpackResolver) ResolveSoundWithFallback(paths []string, opts ...ResolveOption) (string, error) {
+	cfg := buildResolveConfig(opts)
+
 	if len(paths) == 0 {
 		err := fmt.Errorf("no fallback paths provided")
 		slog.Error("fallback resolution failed", "error", err)
@@ -112,22 +160,51 @@ func (u *UnifiedSoundpackResolver) ResolveSoundWithFallback(paths []string) (str
 		"mapper_type", u.mapper.GetType())
 
 	var lastErr error
+	var winner string
+	winnerFound := false
 	for i, path := range paths {
+		sequence := i + 1
 		slog.Debug("trying fallback path", "index", i, "path", path)
+
+		// Once a winner is found, observer still fires for remaining
+		// candidates with exists=false — the observer's contract is one
+		// call per INPUT candidate, in order. (Today no caller depends
+		// on the post-winner tail; emitting it preserves the "lookups
+		// reflect the full chain shape" telemetry intent of Chunk 12.)
+		if winnerFound {
+			if cfg.observer != nil {
+				cfg.observer(path, sequence, false)
+			}
+			continue
+		}
 
 		resolved, err := u.ResolveSound(path)
 		if err == nil {
+			if cfg.observer != nil {
+				cfg.observer(path, sequence, true)
+			}
+
 			slog.Debug("fallback resolution successful",
 				"resolved_path", resolved,
 				"fallback_index", i,
 				"fallback_path", path,
 				"mapper_type", u.mapper.GetType())
 
-			return resolved, nil
+			winner = resolved
+			winnerFound = true
+			continue
+		}
+
+		if cfg.observer != nil {
+			cfg.observer(path, sequence, false)
 		}
 
 		lastErr = err
 		slog.Debug("fallback path failed", "index", i, "path", path, "error", err)
+	}
+
+	if winnerFound {
+		return winner, nil
 	}
 
 	slog.Warn("all fallback paths failed",

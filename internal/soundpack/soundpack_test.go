@@ -804,3 +804,135 @@ func TestLoadJSONSoundpackFromBytes(t *testing.T) {
 		}
 	})
 }
+
+// observerCall captures one PathObserver invocation for assertions.
+type observerCall struct {
+	path     string
+	sequence int
+	exists   bool
+}
+
+// TestResolveWithObserver_FiresForEachPath asserts that WithObserver attaches
+// a callback that fires exactly once per candidate the resolver walks, in
+// input order, with 1-based sequence numbering.
+func TestResolveWithObserver_FiresForEachPath(t *testing.T) {
+	tempDir := t.TempDir()
+	soundpackDir := filepath.Join(tempDir, "success")
+	if err := os.MkdirAll(soundpackDir, 0755); err != nil {
+		t.Fatalf("mkdir soundpack: %v", err)
+	}
+	// Place the LAST candidate on disk so the observer fires for every
+	// preceding candidate before the winner is hit.
+	last := filepath.Join(soundpackDir, "success.wav")
+	if err := os.WriteFile(last, []byte("data"), 0644); err != nil {
+		t.Fatalf("write success.wav: %v", err)
+	}
+
+	mapper := NewDirectoryMapper("test", []string{tempDir})
+	resolver := NewSoundpackResolver(mapper)
+
+	paths := []string{
+		"success/missing-a.wav",
+		"success/missing-b.wav",
+		"success/success.wav",
+	}
+
+	var calls []observerCall
+	obs := func(path string, sequence int, exists bool) {
+		calls = append(calls, observerCall{path: path, sequence: sequence, exists: exists})
+	}
+
+	winner, err := resolver.ResolveSoundWithFallback(paths, WithObserver(obs))
+	if err != nil {
+		t.Fatalf("ResolveSoundWithFallback failed: %v", err)
+	}
+	if winner != last {
+		t.Errorf("winner=%q want %q", winner, last)
+	}
+
+	if len(calls) != len(paths) {
+		t.Fatalf("observer fired %d times, want %d", len(calls), len(paths))
+	}
+	for i, c := range calls {
+		if c.path != paths[i] {
+			t.Errorf("calls[%d].path = %q, want %q", i, c.path, paths[i])
+		}
+		if c.sequence != i+1 {
+			t.Errorf("calls[%d].sequence = %d, want %d (1-based)", i, c.sequence, i+1)
+		}
+	}
+}
+
+// TestResolveWithObserver_ObservesExistenceAccurately asserts the observer's
+// exists flag matches on-disk reality: false for the missing candidate(s),
+// true for the candidate that resolves successfully.
+func TestResolveWithObserver_ObservesExistenceAccurately(t *testing.T) {
+	tempDir := t.TempDir()
+	soundpackDir := filepath.Join(tempDir, "success")
+	if err := os.MkdirAll(soundpackDir, 0755); err != nil {
+		t.Fatalf("mkdir soundpack: %v", err)
+	}
+	// path[0] missing, path[1] present.
+	present := filepath.Join(soundpackDir, "present.wav")
+	if err := os.WriteFile(present, []byte("data"), 0644); err != nil {
+		t.Fatalf("write present.wav: %v", err)
+	}
+
+	mapper := NewDirectoryMapper("test", []string{tempDir})
+	resolver := NewSoundpackResolver(mapper)
+
+	paths := []string{
+		"success/missing.wav",
+		"success/present.wav",
+	}
+
+	var calls []observerCall
+	obs := func(path string, sequence int, exists bool) {
+		calls = append(calls, observerCall{path: path, sequence: sequence, exists: exists})
+	}
+
+	winner, err := resolver.ResolveSoundWithFallback(paths, WithObserver(obs))
+	if err != nil {
+		t.Fatalf("ResolveSoundWithFallback failed: %v", err)
+	}
+	if winner != present {
+		t.Errorf("winner=%q want %q", winner, present)
+	}
+
+	if len(calls) != 2 {
+		t.Fatalf("observer fired %d times, want 2", len(calls))
+	}
+	if calls[0].exists {
+		t.Errorf("calls[0] exists=true, want false (path %q does not exist)", calls[0].path)
+	}
+	if !calls[1].exists {
+		t.Errorf("calls[1] exists=false, want true (path %q exists)", calls[1].path)
+	}
+}
+
+// TestResolveWithObserver_NilOptionsBackwardCompat pins that the option is
+// optional — callers that don't pass any options must continue to work
+// exactly as before. Backward compatibility for the existing callers.
+func TestResolveWithObserver_NilOptionsBackwardCompat(t *testing.T) {
+	tempDir := t.TempDir()
+	soundpackDir := filepath.Join(tempDir, "success")
+	if err := os.MkdirAll(soundpackDir, 0755); err != nil {
+		t.Fatalf("mkdir soundpack: %v", err)
+	}
+	soundFile := filepath.Join(soundpackDir, "success.wav")
+	if err := os.WriteFile(soundFile, []byte("data"), 0644); err != nil {
+		t.Fatalf("write success.wav: %v", err)
+	}
+
+	mapper := NewDirectoryMapper("test", []string{tempDir})
+	resolver := NewSoundpackResolver(mapper)
+
+	// No options passed — original-style call.
+	winner, err := resolver.ResolveSoundWithFallback([]string{"success/success.wav"})
+	if err != nil {
+		t.Fatalf("ResolveSoundWithFallback (no opts) failed: %v", err)
+	}
+	if winner != soundFile {
+		t.Errorf("winner=%q want %q", winner, soundFile)
+	}
+}

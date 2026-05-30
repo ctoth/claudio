@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"claudio.click/internal/hooks"
+	"claudio.click/internal/soundpack"
 )
 
 func TestNewSoundChecker(t *testing.T) {
@@ -201,7 +202,7 @@ func (m *MockSoundpackResolver) ResolveSound(relativePath string) (string, error
 	return "", fmt.Errorf("sound not found: %s", relativePath)
 }
 
-func (m *MockSoundpackResolver) ResolveSoundWithFallback(paths []string) (string, error) {
+func (m *MockSoundpackResolver) ResolveSoundWithFallback(paths []string, opts ...soundpack.ResolveOption) (string, error) {
 	for _, path := range paths {
 		if resolved, err := m.ResolveSound(path); err == nil {
 			return resolved, nil
