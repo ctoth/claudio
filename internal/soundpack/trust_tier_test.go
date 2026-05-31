@@ -153,6 +153,39 @@ func TestLoadEmbeddedPlatformSoundpack_AcceptsAbsolutePaths(t *testing.T) {
 	}
 }
 
+func TestLoadEmbeddedPlatformSoundpack_ResolvesRelativePathsAgainstBasePaths(t *testing.T) {
+	baseWithoutFile := t.TempDir()
+	baseWithFile := t.TempDir()
+	soundFile := filepath.Join(baseWithFile, "embedded-relative.wav")
+	if err := os.WriteFile(soundFile, []byte("fake wav"), 0644); err != nil {
+		t.Fatalf("write wav: %v", err)
+	}
+
+	soundpackData := map[string]interface{}{
+		"name": "embedded-relative-test",
+		"mappings": map[string]string{
+			"success/test.wav": "embedded-relative.wav",
+		},
+	}
+	jsonContent, err := json.MarshalIndent(soundpackData, "", "\t")
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	mapper, err := LoadEmbeddedPlatformSoundpack(jsonContent, baseWithoutFile, baseWithFile)
+	if err != nil {
+		t.Fatalf("trusted loader should resolve relative mappings against base paths, got: %v", err)
+	}
+
+	got, err := mapper.MapPath("success/test.wav")
+	if err != nil {
+		t.Fatalf("MapPath: %v", err)
+	}
+	if len(got) != 1 || filepath.Clean(got[0]) != filepath.Clean(soundFile) {
+		t.Errorf("got %v, want [%s]", got, soundFile)
+	}
+}
+
 // TestValidateMappingValue_RejectsSymlinkEscapingBase asserts the
 // trust-boundary validator looks through symlinks. A symlink placed
 // inside the soundpack root that points outside the root is the

@@ -322,13 +322,17 @@ func LoadJSONSoundpackFromBytes(data []byte, baseDir string) (PathMapper, error)
 // under-baseDir resolution) because shipped platform soundpacks
 // legitimately reference absolute system paths like
 // /System/Library/Sounds/Purr.aiff.
+// Relative mapping values are resolved against the optional basePaths
+// before the existence check. This lets embedded platform packs point at
+// files installed under XDG soundpack directories without depending on
+// the hook process's current working directory.
 //
 // The mappings-count cap and the existence check still apply — those
 // are DoS guards, not trust checks. The byte-size cap is the caller's
 // responsibility (embedded bytes are usually trusted to be small).
-func LoadEmbeddedPlatformSoundpack(data []byte) (PathMapper, error) {
+func LoadEmbeddedPlatformSoundpack(data []byte, basePaths ...string) (PathMapper, error) {
 	slog.Debug("loading trusted embedded platform soundpack", "data_size", len(data))
-	return loadJSONSoundpackTrusted(data)
+	return loadJSONSoundpackTrusted(data, basePaths)
 }
 
 // loadJSONSoundpackUntrusted is the internal entry point for untrusted
@@ -378,7 +382,7 @@ func loadJSONSoundpackUntrusted(data []byte, baseDir string) (PathMapper, error)
 // embedded JSONs. It applies the mappings-count cap and the existence
 // check but skips path-syntax validation, since embedded JSONs legitimately
 // reference absolute system paths.
-func loadJSONSoundpackTrusted(data []byte) (PathMapper, error) {
+func loadJSONSoundpackTrusted(data []byte, basePaths []string) (PathMapper, error) {
 	var soundpack JSONSoundpackFile
 	if err := json.Unmarshal(data, &soundpack); err != nil {
 		slog.Error("failed to parse trusted JSON soundpack", "error", err)
@@ -389,6 +393,8 @@ func loadJSONSoundpackTrusted(data []byte) (PathMapper, error) {
 		return nil, err
 	}
 
+	resolveTrustedRelativeMappings(&soundpack, basePaths)
+
 	if err := validateMappingFilesExist(soundpack); err != nil {
 		return nil, err
 	}
@@ -398,6 +404,36 @@ func loadJSONSoundpackTrusted(data []byte) (PathMapper, error) {
 		"mappings_count", len(soundpack.Mappings))
 
 	return NewJSONMapper(soundpack.Name, soundpack.Mappings), nil
+}
+
+func resolveTrustedRelativeMappings(soundpack *JSONSoundpackFile, basePaths []string) {
+	if soundpack == nil || len(basePaths) == 0 {
+		return
+	}
+
+	for key, value := range soundpack.Mappings {
+		if value == "" || isAnyPlatformAbsolute(value) {
+			continue
+		}
+
+		var firstCandidate string
+		for _, basePath := range basePaths {
+			if basePath == "" {
+				continue
+			}
+			candidate := filepath.Clean(filepath.Join(basePath, value))
+			if firstCandidate == "" {
+				firstCandidate = candidate
+			}
+			if _, err := os.Stat(candidate); err == nil {
+				soundpack.Mappings[key] = candidate
+				break
+			}
+		}
+		if soundpack.Mappings[key] == value && firstCandidate != "" {
+			soundpack.Mappings[key] = firstCandidate
+		}
+	}
 }
 
 // ResolveJSONSoundpackMappings converts non-empty relative mapping values to

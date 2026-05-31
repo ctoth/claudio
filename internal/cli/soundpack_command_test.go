@@ -292,6 +292,39 @@ func TestSoundpackList_ExitsCleanly(t *testing.T) {
 	}
 }
 
+func TestLoadEmbeddedLinuxSoundpackResolvesRelativeMappingsAgainstXDG(t *testing.T) {
+	testenv.IsolateXDG(t)
+
+	linuxPaths := config.NewXDGDirs().GetSoundpackPaths("linux-default")
+	if len(linuxPaths) == 0 {
+		t.Fatal("expected at least one XDG soundpack path for linux-default")
+	}
+	basePath := linuxPaths[0]
+	for _, name := range []string{
+		"default-success.wav",
+		"default-error.wav",
+		"default-loading.wav",
+		"default-interactive.wav",
+		"default.wav",
+	} {
+		createDummyWAV(t, filepath.Join(basePath, name))
+	}
+
+	mapper, err := loadEmbeddedPlatformSoundpack("embedded:linux.json")
+	if err != nil {
+		t.Fatalf("loadEmbeddedPlatformSoundpack(embedded:linux.json) failed: %v", err)
+	}
+
+	got, err := mapper.MapPath("success/default")
+	if err != nil {
+		t.Fatalf("MapPath(success/default): %v", err)
+	}
+	want := filepath.Join(basePath, "default-success.wav")
+	if len(got) != 1 || filepath.Clean(got[0]) != filepath.Clean(want) {
+		t.Errorf("success/default resolved to %v, want [%s]", got, want)
+	}
+}
+
 // createDummyWAV creates a minimal non-empty file with .wav extension for testing
 func createDummyWAV(t *testing.T, path string) {
 	t.Helper()
@@ -581,6 +614,29 @@ func TestSoundpackValidate_DirectorySoundpack(t *testing.T) {
 	}
 	if !strings.Contains(output, "success:") {
 		t.Errorf("expected output to contain 'success:' category, got: %s", output)
+	}
+}
+
+func TestSoundpackValidate_DirectorySoundpackRejectsSymlinkedAudio(t *testing.T) {
+	tmpDir := t.TempDir()
+	packDir := filepath.Join(tmpDir, "mypack")
+	if err := os.MkdirAll(packDir, 0755); err != nil {
+		t.Fatalf("failed to create soundpack dir: %v", err)
+	}
+
+	outside := filepath.Join(t.TempDir(), "outside.wav")
+	createDummyWAV(t, outside)
+	link := filepath.Join(packDir, "default.wav")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Skipf("symlink unsupported on this platform: %v", err)
+	}
+
+	_, err := validateDirectorySoundpack(packDir)
+	if err == nil {
+		t.Fatal("expected directory validation to reject symlinked audio")
+	}
+	if !strings.Contains(err.Error(), "symlinked audio file") {
+		t.Errorf("expected symlink rejection error, got: %v", err)
 	}
 }
 

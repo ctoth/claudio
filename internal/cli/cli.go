@@ -888,11 +888,41 @@ func loadEmbeddedPlatformSoundpack(identifier string) (soundpack.PathMapper, err
 		return nil, fmt.Errorf("failed to read embedded platform soundpack: %w", err)
 	}
 
-	mapper, err := soundpack.LoadEmbeddedPlatformSoundpack(data)
+	basePaths := embeddedPlatformSoundpackBasePaths(filename, data)
+	mapper, err := soundpack.LoadEmbeddedPlatformSoundpack(data, basePaths...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load embedded platform soundpack: %w", err)
 	}
 
 	slog.Debug("embedded platform soundpack loaded successfully", "filename", filename)
 	return mapper, nil
+}
+
+func embeddedPlatformSoundpackBasePaths(filename string, data []byte) []string {
+	xdgDirs := config.NewXDGDirs()
+	ids := []string{}
+
+	if spFile, err := soundpack.PeekJSONSoundpackFromBytes(data); err == nil {
+		ids = append(ids, spFile.Name)
+		if strings.HasSuffix(spFile.Name, "-default") {
+			ids = append(ids, strings.TrimSuffix(spFile.Name, "-default"))
+		}
+	}
+
+	fileID := strings.TrimSuffix(filename, filepath.Ext(filename))
+	ids = append(ids, fileID, fileID+"-default", "default", "")
+
+	seen := make(map[string]struct{})
+	var paths []string
+	for _, id := range ids {
+		for _, path := range xdgDirs.GetSoundpackPaths(id) {
+			cleaned := filepath.Clean(path)
+			if _, exists := seen[cleaned]; exists {
+				continue
+			}
+			seen[cleaned] = struct{}{}
+			paths = append(paths, cleaned)
+		}
+	}
+	return paths
 }

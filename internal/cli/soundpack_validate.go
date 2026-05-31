@@ -167,9 +167,9 @@ func validateDirectorySoundpack(dirPath string) (validateResult, error) {
 	}
 
 	// Walk directory to find audio files
-	_ = filepath.Walk(dirPath, func(path string, info os.FileInfo, walkErr error) error {
+	walkErr := filepath.Walk(dirPath, func(path string, info os.FileInfo, walkErr error) error {
 		if walkErr != nil {
-			return nil
+			return walkErr
 		}
 		if info.IsDir() {
 			return nil
@@ -178,6 +178,9 @@ func validateDirectorySoundpack(dirPath string) (validateResult, error) {
 		ext := strings.ToLower(filepath.Ext(path))
 		if ext != ".wav" && ext != ".mp3" && ext != ".aiff" {
 			return nil
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("directory soundpack contains symlinked audio file: %s", path)
 		}
 
 		// Build the key from relative path components
@@ -195,6 +198,9 @@ func validateDirectorySoundpack(dirPath string) (validateResult, error) {
 
 		return nil
 	})
+	if walkErr != nil {
+		return validateResult{}, fmt.Errorf("failed to scan directory soundpack: %w", walkErr)
+	}
 
 	name := filepath.Base(dirPath)
 	slog.Info("scanned directory soundpack", "name", name, "found_files", len(mappedKeys))
