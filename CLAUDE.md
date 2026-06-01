@@ -268,7 +268,8 @@ Beyond the default stdin-mode hook executor, claudio ships these subcommands
 
 - `claudio install` / `claudio uninstall` — manage Claude/Codex/Antigravity hooks
 - `claudio install-commands` / `claudio uninstall-commands` — manage the
-  Claude Code `/claudio` slash command or Codex `$claudio` skill
+  Claude Code `/claudio` slash command, Codex `$claudio` skill, or Antigravity
+  skill/CLI command artifacts
 - `claudio analyze usage` / `claudio analyze missing` — query the sound-tracking
   database for playback patterns and missing-sound gaps
 - `claudio soundpack` — manage soundpacks:

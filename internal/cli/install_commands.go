@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"claudio.click/internal/install"
 	"github.com/spf13/cobra"
 )
 
@@ -42,13 +41,21 @@ Commands:
 - ` + "`claudio status`" + `: Show current settings
 `
 
+type commandArtifactAgent string
+
+const (
+	commandArtifactAgentClaude      commandArtifactAgent = "claude"
+	commandArtifactAgentCodex       commandArtifactAgent = "codex"
+	commandArtifactAgentAntigravity commandArtifactAgent = "antigravity"
+)
+
 type commandArtifact struct {
-	Agent      install.Agent
-	Kind       string
-	Directory  string
-	Path       string
-	Invocation string
-	Content    string
+	Agent           commandArtifactAgent
+	Kind            string
+	Directory       string
+	Path            string
+	Content         string
+	RemoveDirectory bool
 }
 
 // newInstallCommandsCommand creates the install-commands subcommand
@@ -60,6 +67,8 @@ func newInstallCommandsCommand() *cobra.Command {
 
 For Claude Code, this command creates ~/.claude/commands/claudio.md.
 For Codex, this command creates $HOME/.agents/skills/claudio/SKILL.md.
+For Antigravity, this command creates ~/.gemini/config/skills/claudio/SKILL.md
+and ~/.gemini/antigravity-cli/skills/claudio.md.
 
 After Claude Code installation, you can use commands like:
   /claudio volume 0.5
@@ -71,7 +80,7 @@ After Codex installation, invoke the skill as $claudio.`,
 		RunE: runInstallCommandsE,
 	}
 
-	cmd.Flags().StringP("agent", "a", "claude", "Target agent: 'claude' for Claude Code, 'codex' for OpenAI Codex")
+	cmd.Flags().StringP("agent", "a", "claude", "Target agent: 'claude' for Claude Code, 'codex' for OpenAI Codex, 'antigravity' for Google Antigravity")
 
 	return cmd
 }
@@ -84,11 +93,13 @@ func newUninstallCommandsCommand() *cobra.Command {
 		Long: `Uninstall command artifacts created by install-commands.
 
 For Claude Code, this removes ~/.claude/commands/claudio.md.
-For Codex, this removes $HOME/.agents/skills/claudio/SKILL.md and the empty claudio skill directory.`,
+For Codex, this removes $HOME/.agents/skills/claudio/SKILL.md and the empty claudio skill directory.
+For Antigravity, this removes ~/.gemini/config/skills/claudio/SKILL.md,
+~/.gemini/antigravity-cli/skills/claudio.md, and the empty claudio skill directory.`,
 		RunE: runUninstallCommandsE,
 	}
 
-	cmd.Flags().StringP("agent", "a", "claude", "Target agent: 'claude' for Claude Code, 'codex' for OpenAI Codex")
+	cmd.Flags().StringP("agent", "a", "claude", "Target agent: 'claude' for Claude Code, 'codex' for OpenAI Codex, 'antigravity' for Google Antigravity")
 
 	return cmd
 }
@@ -97,24 +108,27 @@ For Codex, this removes $HOME/.agents/skills/claudio/SKILL.md and the empty clau
 func runInstallCommandsE(cmd *cobra.Command, args []string) error {
 	slog.Debug("install-commands started")
 
-	agent, err := commandArtifactAgent(cmd)
+	agent, err := commandArtifactAgentFlag(cmd)
 	if err != nil {
 		return err
 	}
 
-	artifact, err := resolveCommandArtifact(agent)
+	artifacts, err := resolveCommandArtifacts(agent)
 	if err != nil {
 		return err
 	}
 
-	if err := installCommandArtifact(artifact); err != nil {
-		return fmt.Errorf("failed to install %s: %w", artifact.Kind, err)
+	for _, artifact := range artifacts {
+		if err := installCommandArtifact(artifact); err != nil {
+			return fmt.Errorf("failed to install %s: %w", artifact.Kind, err)
+		}
+		cmd.Printf("Installed %s for %s: %s\n", artifact.Kind, artifact.Agent.String(), artifact.Path)
 	}
+	cmd.Println()
 
-	cmd.Printf("Installed %s for %s: %s\n\n", artifact.Kind, artifact.Agent.String(), artifact.Path)
-	printCommandArtifactUsage(cmd, artifact)
+	printCommandArtifactUsage(cmd, agent)
 
-	slog.Info("command artifact installed successfully", "agent", artifact.Agent, "path", artifact.Path)
+	slog.Info("command artifacts installed successfully", "agent", agent, "count", len(artifacts))
 
 	return nil
 }
@@ -123,76 +137,110 @@ func runInstallCommandsE(cmd *cobra.Command, args []string) error {
 func runUninstallCommandsE(cmd *cobra.Command, args []string) error {
 	slog.Debug("uninstall-commands started")
 
-	agent, err := commandArtifactAgent(cmd)
+	agent, err := commandArtifactAgentFlag(cmd)
 	if err != nil {
 		return err
 	}
 
-	artifact, err := resolveCommandArtifact(agent)
+	artifacts, err := resolveCommandArtifacts(agent)
 	if err != nil {
 		return err
 	}
 
-	removed, err := uninstallCommandArtifact(artifact)
-	if err != nil {
-		return fmt.Errorf("failed to uninstall %s: %w", artifact.Kind, err)
+	removedCount := 0
+	for _, artifact := range artifacts {
+		removed, err := uninstallCommandArtifact(artifact)
+		if err != nil {
+			return fmt.Errorf("failed to uninstall %s: %w", artifact.Kind, err)
+		}
+
+		if removed {
+			removedCount++
+			cmd.Printf("Removed %s for %s: %s\n", artifact.Kind, artifact.Agent.String(), artifact.Path)
+		} else {
+			cmd.Printf("No %s for %s found at %s\n", artifact.Kind, artifact.Agent.String(), artifact.Path)
+		}
 	}
 
-	if removed {
-		cmd.Printf("Removed %s for %s: %s\n", artifact.Kind, artifact.Agent.String(), artifact.Path)
-	} else {
-		cmd.Printf("No %s for %s found at %s\n", artifact.Kind, artifact.Agent.String(), artifact.Path)
-	}
-
-	slog.Info("command artifact uninstall completed", "agent", artifact.Agent, "path", artifact.Path, "removed", removed)
+	slog.Info("command artifact uninstall completed", "agent", agent, "removed_count", removedCount, "count", len(artifacts))
 
 	return nil
 }
 
-func commandArtifactAgent(cmd *cobra.Command) (install.Agent, error) {
+func commandArtifactAgentFlag(cmd *cobra.Command) (commandArtifactAgent, error) {
 	agentStr, err := cmd.Flags().GetString("agent")
 	if err != nil {
 		return "", fmt.Errorf("failed to read agent flag: %w", err)
 	}
-	return install.ParseAgent(agentStr)
+	return parseCommandArtifactAgent(agentStr)
 }
 
-func resolveCommandArtifact(agent install.Agent) (commandArtifact, error) {
+func parseCommandArtifactAgent(s string) (commandArtifactAgent, error) {
+	switch commandArtifactAgent(s) {
+	case commandArtifactAgentClaude, commandArtifactAgentCodex, commandArtifactAgentAntigravity:
+		return commandArtifactAgent(s), nil
+	default:
+		return "", fmt.Errorf("invalid agent '%s': must be 'claude', 'codex', or 'antigravity'", s)
+	}
+}
+
+func (a commandArtifactAgent) String() string { return string(a) }
+
+func resolveCommandArtifacts(agent commandArtifactAgent) ([]commandArtifact, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return commandArtifact{}, fmt.Errorf("failed to get home directory: %w", err)
+		return nil, fmt.Errorf("failed to get home directory: %w", err)
 	}
 
 	switch agent {
-	case install.AgentClaude:
+	case commandArtifactAgentClaude:
 		commandsDir := filepath.Join(homeDir, ".claude", "commands")
-		return commandArtifact{
-			Agent:      agent,
-			Kind:       "slash command",
-			Directory:  commandsDir,
-			Path:       filepath.Join(commandsDir, "claudio.md"),
-			Invocation: "/claudio",
-			Content:    claudioCommandContent,
-		}, nil
-	case install.AgentCodex:
+		return []commandArtifact{{
+			Agent:     agent,
+			Kind:      "slash command",
+			Directory: commandsDir,
+			Path:      filepath.Join(commandsDir, "claudio.md"),
+			Content:   claudioCommandContent,
+		}}, nil
+	case commandArtifactAgentCodex:
 		skillDir := filepath.Join(homeDir, ".agents", "skills", "claudio")
-		return commandArtifact{
-			Agent:      agent,
-			Kind:       "skill",
-			Directory:  skillDir,
-			Path:       filepath.Join(skillDir, "SKILL.md"),
-			Invocation: "$claudio",
-			Content:    claudioSkillContent,
+		return []commandArtifact{{
+			Agent:           agent,
+			Kind:            "skill",
+			Directory:       skillDir,
+			Path:            filepath.Join(skillDir, "SKILL.md"),
+			Content:         claudioSkillContent,
+			RemoveDirectory: true,
+		}}, nil
+	case commandArtifactAgentAntigravity:
+		agentSkillDir := filepath.Join(homeDir, ".gemini", "config", "skills", "claudio")
+		cliSkillDir := filepath.Join(homeDir, ".gemini", "antigravity-cli", "skills")
+		return []commandArtifact{
+			{
+				Agent:           agent,
+				Kind:            "Antigravity global skill",
+				Directory:       agentSkillDir,
+				Path:            filepath.Join(agentSkillDir, "SKILL.md"),
+				Content:         claudioSkillContent,
+				RemoveDirectory: true,
+			},
+			{
+				Agent:     agent,
+				Kind:      "Antigravity CLI slash command",
+				Directory: cliSkillDir,
+				Path:      filepath.Join(cliSkillDir, "claudio.md"),
+				Content:   claudioSkillContent,
+			},
 		}, nil
 	default:
-		return commandArtifact{}, fmt.Errorf("unsupported agent %q", agent)
+		return nil, fmt.Errorf("unsupported agent %q", agent)
 	}
 }
 
 // installCommandsToPath creates the commands directory and writes claudio.md.
 func installCommandsToPath(commandsDir, claudioMdPath string) error {
 	return installCommandArtifact(commandArtifact{
-		Agent:     install.AgentClaude,
+		Agent:     commandArtifactAgentClaude,
 		Kind:      "slash command",
 		Directory: commandsDir,
 		Path:      claudioMdPath,
@@ -233,21 +281,24 @@ func uninstallCommandArtifact(artifact commandArtifact) (bool, error) {
 		return false, fmt.Errorf("failed to remove command artifact: %w", err)
 	}
 
-	if artifact.Agent == install.AgentCodex {
+	if artifact.RemoveDirectory {
 		if err := os.Remove(artifact.Directory); err != nil && !os.IsNotExist(err) {
-			slog.Debug("codex skill directory left in place", "path", artifact.Directory, "error", err)
+			slog.Debug("command artifact directory left in place", "path", artifact.Directory, "error", err)
 		}
 	}
 
 	return true, nil
 }
 
-func printCommandArtifactUsage(cmd *cobra.Command, artifact commandArtifact) {
-	switch artifact.Agent {
-	case install.AgentCodex:
-		cmd.Printf("You can now use %s in Codex to control Claudio.\n", artifact.Invocation)
+func printCommandArtifactUsage(cmd *cobra.Command, agent commandArtifactAgent) {
+	switch agent {
+	case commandArtifactAgentCodex:
+		cmd.Printf("You can now use $claudio in Codex to control Claudio.\n")
+	case commandArtifactAgentAntigravity:
+		cmd.Printf("You can now use /claudio in Antigravity CLI.\n")
+		cmd.Printf("Antigravity agents can also select the claudio skill when audio control is requested.\n")
 	default:
-		cmd.Printf("You can now use %s in Claude Code:\n", artifact.Invocation)
+		cmd.Printf("You can now use /claudio in Claude Code:\n")
 		cmd.Printf("  /claudio volume 0.5   - Set volume to 50%%\n")
 		cmd.Printf("  /claudio mute         - Disable audio\n")
 		cmd.Printf("  /claudio unmute       - Enable audio\n")

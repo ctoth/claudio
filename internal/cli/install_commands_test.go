@@ -48,6 +48,9 @@ func TestInstallCommandsHelp(t *testing.T) {
 	if !strings.Contains(output, "Codex") {
 		t.Error("help output should describe Codex skill installation")
 	}
+	if !strings.Contains(output, "Antigravity") {
+		t.Error("help output should describe Antigravity command artifact installation")
+	}
 }
 
 // TestInstallCommandsCreatesDirectory verifies the ~/.claude/commands/ directory is created
@@ -234,6 +237,58 @@ func TestInstallCommandsCodexInstallsSkill(t *testing.T) {
 	}
 }
 
+func TestInstallCommandsAntigravityInstallsSkillAndCLICommand(t *testing.T) {
+	tmpHome := t.TempDir()
+	t.Setenv("HOME", tmpHome)
+	t.Setenv("USERPROFILE", tmpHome)
+
+	cmd := newInstallCommandsCommand()
+
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetArgs([]string{"--agent", "antigravity"})
+
+	err := cmd.Execute()
+	if err != nil {
+		t.Fatalf("install-commands --agent antigravity failed: %v", err)
+	}
+
+	agentSkillPath := filepath.Join(tmpHome, ".gemini", "config", "skills", "claudio", "SKILL.md")
+	agentSkillContent, err := os.ReadFile(agentSkillPath)
+	if err != nil {
+		t.Fatalf("failed to read Antigravity agent skill: %v", err)
+	}
+	if !strings.Contains(string(agentSkillContent), "name: claudio") {
+		t.Error("Antigravity agent skill should contain claudio name metadata")
+	}
+	if !strings.Contains(string(agentSkillContent), "claudio status") {
+		t.Error("Antigravity agent skill should document claudio status command")
+	}
+
+	cliSkillPath := filepath.Join(tmpHome, ".gemini", "antigravity-cli", "skills", "claudio.md")
+	cliSkillContent, err := os.ReadFile(cliSkillPath)
+	if err != nil {
+		t.Fatalf("failed to read Antigravity CLI skill: %v", err)
+	}
+	if !strings.Contains(string(cliSkillContent), "name: claudio") {
+		t.Error("Antigravity CLI skill should contain claudio name metadata")
+	}
+	if !strings.Contains(string(cliSkillContent), "claudio volume <0.0-1.0>") {
+		t.Error("Antigravity CLI skill should document claudio volume command")
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "Antigravity global skill for antigravity") {
+		t.Errorf("success message should mention Antigravity global skill, got: %s", output)
+	}
+	if !strings.Contains(output, "Antigravity CLI slash command for antigravity") {
+		t.Errorf("success message should mention Antigravity CLI slash command, got: %s", output)
+	}
+	if !strings.Contains(output, "/claudio") {
+		t.Errorf("success message should show Antigravity CLI invocation, got: %s", output)
+	}
+}
+
 // TestInstallCommandsIdempotent verifies running twice doesn't cause errors
 func TestInstallCommandsIdempotent(t *testing.T) {
 	// Create a temporary directory to act as home
@@ -363,6 +418,53 @@ func TestUninstallCommandsRemovesCodexSkill(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "Removed skill for codex") {
 		t.Errorf("expected Codex removal output, got: %s", stdout.String())
+	}
+}
+
+func TestUninstallCommandsRemovesAntigravityArtifacts(t *testing.T) {
+	tmpHome := t.TempDir()
+	t.Setenv("HOME", tmpHome)
+	t.Setenv("USERPROFILE", tmpHome)
+
+	installCmd := newInstallCommandsCommand()
+	var installStdout bytes.Buffer
+	installCmd.SetOut(&installStdout)
+	installCmd.SetArgs([]string{"--agent", "antigravity"})
+	if err := installCmd.Execute(); err != nil {
+		t.Fatalf("install-commands --agent antigravity failed: %v", err)
+	}
+
+	agentSkillPath := filepath.Join(tmpHome, ".gemini", "config", "skills", "claudio", "SKILL.md")
+	cliSkillPath := filepath.Join(tmpHome, ".gemini", "antigravity-cli", "skills", "claudio.md")
+	if _, err := os.Stat(agentSkillPath); err != nil {
+		t.Fatalf("expected Antigravity agent skill before uninstall, stat err: %v", err)
+	}
+	if _, err := os.Stat(cliSkillPath); err != nil {
+		t.Fatalf("expected Antigravity CLI skill before uninstall, stat err: %v", err)
+	}
+
+	uninstallCmd := newUninstallCommandsCommand()
+
+	var stdout bytes.Buffer
+	uninstallCmd.SetOut(&stdout)
+	uninstallCmd.SetArgs([]string{"--agent", "antigravity"})
+
+	err := uninstallCmd.Execute()
+	if err != nil {
+		t.Fatalf("uninstall-commands --agent antigravity failed: %v", err)
+	}
+
+	if _, err := os.Stat(agentSkillPath); !os.IsNotExist(err) {
+		t.Fatalf("expected Antigravity agent skill to be removed, stat err: %v", err)
+	}
+	if _, err := os.Stat(cliSkillPath); !os.IsNotExist(err) {
+		t.Fatalf("expected Antigravity CLI skill to be removed, stat err: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "Removed Antigravity global skill for antigravity") {
+		t.Errorf("expected Antigravity agent skill removal output, got: %s", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "Removed Antigravity CLI slash command for antigravity") {
+		t.Errorf("expected Antigravity CLI skill removal output, got: %s", stdout.String())
 	}
 }
 

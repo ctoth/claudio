@@ -95,9 +95,10 @@ claudio install-commands [flags]
 
 **--agent, -a** `string` (default: "claude")
 : Target agent for the command artifact
-: **Options:** `claude`, `codex`
+: **Options:** `claude`, `codex`, `antigravity`
 : **claude:** Write `~/.claude/commands/claudio.md` for `/claudio`
 : **codex:** Write `$HOME/.agents/skills/claudio/SKILL.md` for `$claudio`
+: **antigravity:** Write `~/.gemini/config/skills/claudio/SKILL.md` for agent skills and `~/.gemini/antigravity-cli/skills/claudio.md` for the Antigravity CLI `/claudio` command
 
 ### Examples
 
@@ -107,6 +108,9 @@ claudio install-commands
 
 # Install the Codex skill
 claudio install-commands --agent codex
+
+# Install Antigravity skill and CLI command artifacts
+claudio install-commands --agent antigravity
 ```
 
 ## claudio uninstall-commands
@@ -123,9 +127,10 @@ claudio uninstall-commands [flags]
 
 **--agent, -a** `string` (default: "claude")
 : Target agent for command artifact removal
-: **Options:** `claude`, `codex`
+: **Options:** `claude`, `codex`, `antigravity`
 : **claude:** Remove `~/.claude/commands/claudio.md`
 : **codex:** Remove `$HOME/.agents/skills/claudio/SKILL.md` and the empty `claudio` skill directory
+: **antigravity:** Remove `~/.gemini/config/skills/claudio/SKILL.md`, `~/.gemini/antigravity-cli/skills/claudio.md`, and the empty `claudio` skill directory
 
 ### Examples
 
@@ -135,6 +140,9 @@ claudio uninstall-commands
 
 # Remove the Codex skill
 claudio uninstall-commands --agent codex
+
+# Remove Antigravity skill and CLI command artifacts
+claudio uninstall-commands --agent antigravity
 ```
 
 ## claudio analyze
