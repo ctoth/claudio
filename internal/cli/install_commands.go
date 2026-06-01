@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"claudio.click/internal/install"
 	"github.com/spf13/cobra"
 )
 
@@ -26,23 +27,68 @@ Available commands:
 Run: claudio $ARGUMENTS
 `
 
+// claudioSkillContent is the content of the Codex skill file.
+const claudioSkillContent = `---
+name: claudio
+description: Use this skill when the user wants to control Claudio audio feedback: set volume, mute, unmute, or check status through the claudio CLI.
+---
+
+Use the ` + "`claudio`" + ` CLI to control Claudio audio feedback.
+
+Commands:
+- ` + "`claudio volume <0.0-1.0>`" + `: Set volume level
+- ` + "`claudio mute`" + `: Disable audio persistently
+- ` + "`claudio unmute`" + `: Enable audio persistently
+- ` + "`claudio status`" + `: Show current settings
+`
+
+type commandArtifact struct {
+	Agent      install.Agent
+	Kind       string
+	Directory  string
+	Path       string
+	Invocation string
+	Content    string
+}
+
 // newInstallCommandsCommand creates the install-commands subcommand
 func newInstallCommandsCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "install-commands",
-		Short: "Install slash commands for Claude Code",
-		Long: `Install slash commands for controlling Claudio from within Claude Code.
+		Short: "Install agent command artifacts",
+		Long: `Install command artifacts for controlling Claudio from supported coding agents.
 
-This command creates a claudio.md file in ~/.claude/commands/ that enables
-you to use /claudio slash commands directly in Claude Code sessions.
+For Claude Code, this command creates ~/.claude/commands/claudio.md.
+For Codex, this command creates $HOME/.agents/skills/claudio/SKILL.md.
 
-After installation, you can use commands like:
+After Claude Code installation, you can use commands like:
   /claudio volume 0.5
   /claudio mute
   /claudio unmute
-  /claudio status`,
+  /claudio status
+
+After Codex installation, invoke the skill as $claudio.`,
 		RunE: runInstallCommandsE,
 	}
+
+	cmd.Flags().StringP("agent", "a", "claude", "Target agent: 'claude' for Claude Code, 'codex' for OpenAI Codex")
+
+	return cmd
+}
+
+// newUninstallCommandsCommand creates the uninstall-commands subcommand.
+func newUninstallCommandsCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "uninstall-commands",
+		Short: "Uninstall agent command artifacts",
+		Long: `Uninstall command artifacts created by install-commands.
+
+For Claude Code, this removes ~/.claude/commands/claudio.md.
+For Codex, this removes $HOME/.agents/skills/claudio/SKILL.md and the empty claudio skill directory.`,
+		RunE: runUninstallCommandsE,
+	}
+
+	cmd.Flags().StringP("agent", "a", "claude", "Target agent: 'claude' for Claude Code, 'codex' for OpenAI Codex")
 
 	return cmd
 }
@@ -51,57 +97,160 @@ After installation, you can use commands like:
 func runInstallCommandsE(cmd *cobra.Command, args []string) error {
 	slog.Debug("install-commands started")
 
-	// Get user home directory
-	homeDir, err := os.UserHomeDir()
+	agent, err := commandArtifactAgent(cmd)
 	if err != nil {
-		return fmt.Errorf("failed to get home directory: %w", err)
+		return err
 	}
 
-	// Build paths
-	commandsDir := filepath.Join(homeDir, ".claude", "commands")
-	claudioMdPath := filepath.Join(commandsDir, "claudio.md")
-
-	// Install the command file
-	err = installCommandsToPath(commandsDir, claudioMdPath)
+	artifact, err := resolveCommandArtifact(agent)
 	if err != nil {
-		return fmt.Errorf("failed to install slash commands: %w", err)
+		return err
 	}
 
-	// Print success message
-	cmd.Printf("Installed slash command: %s\n\n", claudioMdPath)
-	cmd.Printf("You can now use /claudio in Claude Code:\n")
-	cmd.Printf("  /claudio volume 0.5   - Set volume to 50%%\n")
-	cmd.Printf("  /claudio mute         - Disable audio\n")
-	cmd.Printf("  /claudio unmute       - Enable audio\n")
-	cmd.Printf("  /claudio status       - Show current settings\n")
+	if err := installCommandArtifact(artifact); err != nil {
+		return fmt.Errorf("failed to install %s: %w", artifact.Kind, err)
+	}
 
-	slog.Info("slash commands installed successfully", "path", claudioMdPath)
+	cmd.Printf("Installed %s for %s: %s\n\n", artifact.Kind, artifact.Agent.String(), artifact.Path)
+	printCommandArtifactUsage(cmd, artifact)
+
+	slog.Info("command artifact installed successfully", "agent", artifact.Agent, "path", artifact.Path)
 
 	return nil
 }
 
-// installCommandsToPath creates the commands directory and writes claudio.md
-// This function is exported for testing
-func installCommandsToPath(commandsDir, claudioMdPath string) error {
-	slog.Debug("installing commands", "dir", commandsDir, "file", claudioMdPath)
+// runUninstallCommandsE handles the uninstall-commands subcommand execution.
+func runUninstallCommandsE(cmd *cobra.Command, args []string) error {
+	slog.Debug("uninstall-commands started")
 
-	// Create commands directory if it doesn't exist
-	err := os.MkdirAll(commandsDir, 0755)
+	agent, err := commandArtifactAgent(cmd)
 	if err != nil {
-		slog.Error("failed to create commands directory", "path", commandsDir, "error", err)
-		return fmt.Errorf("failed to create commands directory: %w", err)
+		return err
 	}
 
-	slog.Debug("commands directory ready", "path", commandsDir)
-
-	// Write claudio.md file
-	err = os.WriteFile(claudioMdPath, []byte(claudioCommandContent), 0644)
+	artifact, err := resolveCommandArtifact(agent)
 	if err != nil {
-		slog.Error("failed to write claudio.md", "path", claudioMdPath, "error", err)
-		return fmt.Errorf("failed to write claudio.md: %w", err)
+		return err
 	}
 
-	slog.Debug("claudio.md written successfully", "path", claudioMdPath)
+	removed, err := uninstallCommandArtifact(artifact)
+	if err != nil {
+		return fmt.Errorf("failed to uninstall %s: %w", artifact.Kind, err)
+	}
+
+	if removed {
+		cmd.Printf("Removed %s for %s: %s\n", artifact.Kind, artifact.Agent.String(), artifact.Path)
+	} else {
+		cmd.Printf("No %s for %s found at %s\n", artifact.Kind, artifact.Agent.String(), artifact.Path)
+	}
+
+	slog.Info("command artifact uninstall completed", "agent", artifact.Agent, "path", artifact.Path, "removed", removed)
 
 	return nil
+}
+
+func commandArtifactAgent(cmd *cobra.Command) (install.Agent, error) {
+	agentStr, err := cmd.Flags().GetString("agent")
+	if err != nil {
+		return "", fmt.Errorf("failed to read agent flag: %w", err)
+	}
+	return install.ParseAgent(agentStr)
+}
+
+func resolveCommandArtifact(agent install.Agent) (commandArtifact, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return commandArtifact{}, fmt.Errorf("failed to get home directory: %w", err)
+	}
+
+	switch agent {
+	case install.AgentClaude:
+		commandsDir := filepath.Join(homeDir, ".claude", "commands")
+		return commandArtifact{
+			Agent:      agent,
+			Kind:       "slash command",
+			Directory:  commandsDir,
+			Path:       filepath.Join(commandsDir, "claudio.md"),
+			Invocation: "/claudio",
+			Content:    claudioCommandContent,
+		}, nil
+	case install.AgentCodex:
+		skillDir := filepath.Join(homeDir, ".agents", "skills", "claudio")
+		return commandArtifact{
+			Agent:      agent,
+			Kind:       "skill",
+			Directory:  skillDir,
+			Path:       filepath.Join(skillDir, "SKILL.md"),
+			Invocation: "$claudio",
+			Content:    claudioSkillContent,
+		}, nil
+	default:
+		return commandArtifact{}, fmt.Errorf("unsupported agent %q", agent)
+	}
+}
+
+// installCommandsToPath creates the commands directory and writes claudio.md.
+func installCommandsToPath(commandsDir, claudioMdPath string) error {
+	return installCommandArtifact(commandArtifact{
+		Agent:     install.AgentClaude,
+		Kind:      "slash command",
+		Directory: commandsDir,
+		Path:      claudioMdPath,
+		Content:   claudioCommandContent,
+	})
+}
+
+func installCommandArtifact(artifact commandArtifact) error {
+	slog.Debug("installing command artifact", "agent", artifact.Agent, "dir", artifact.Directory, "file", artifact.Path)
+
+	err := os.MkdirAll(artifact.Directory, 0755)
+	if err != nil {
+		slog.Error("failed to create command artifact directory", "path", artifact.Directory, "error", err)
+		return fmt.Errorf("failed to create command artifact directory: %w", err)
+	}
+
+	slog.Debug("command artifact directory ready", "path", artifact.Directory)
+
+	err = os.WriteFile(artifact.Path, []byte(artifact.Content), 0644)
+	if err != nil {
+		slog.Error("failed to write command artifact", "path", artifact.Path, "error", err)
+		return fmt.Errorf("failed to write command artifact: %w", err)
+	}
+
+	slog.Debug("command artifact written successfully", "path", artifact.Path)
+
+	return nil
+}
+
+func uninstallCommandArtifact(artifact commandArtifact) (bool, error) {
+	slog.Debug("uninstalling command artifact", "agent", artifact.Agent, "file", artifact.Path)
+
+	err := os.Remove(artifact.Path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to remove command artifact: %w", err)
+	}
+
+	if artifact.Agent == install.AgentCodex {
+		if err := os.Remove(artifact.Directory); err != nil && !os.IsNotExist(err) {
+			slog.Debug("codex skill directory left in place", "path", artifact.Directory, "error", err)
+		}
+	}
+
+	return true, nil
+}
+
+func printCommandArtifactUsage(cmd *cobra.Command, artifact commandArtifact) {
+	switch artifact.Agent {
+	case install.AgentCodex:
+		cmd.Printf("You can now use %s in Codex to control Claudio.\n", artifact.Invocation)
+	default:
+		cmd.Printf("You can now use %s in Claude Code:\n", artifact.Invocation)
+		cmd.Printf("  /claudio volume 0.5   - Set volume to 50%%\n")
+		cmd.Printf("  /claudio mute         - Disable audio\n")
+		cmd.Printf("  /claudio unmute       - Enable audio\n")
+		cmd.Printf("  /claudio status       - Show current settings\n")
+	}
 }

@@ -78,6 +78,9 @@ func NewCLI() *CLI {
 	// Add install-commands subcommand (writes the /claudio slash command markdown)
 	rootCmd.AddCommand(newInstallCommandsCommand())
 
+	// Add uninstall-commands subcommand (removes the command artifact installed above)
+	rootCmd.AddCommand(newUninstallCommandsCommand())
+
 	// Add persistent flags to root command for backward compatibility
 	rootCmd.PersistentFlags().String("config", "", "Path to config file")
 	rootCmd.PersistentFlags().String("volume", "", "Set volume (0.0 to 1.0)")

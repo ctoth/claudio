@@ -20,6 +20,7 @@ func TestNewCLI_RegistersAllExpectedSubcommands(t *testing.T) {
 		"analyze",
 		"soundpack",
 		"install-commands",
+		"uninstall-commands",
 		"volume",
 		"mute",
 		"unmute",

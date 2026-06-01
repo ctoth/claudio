@@ -42,8 +42,11 @@ func TestInstallCommandsHelp(t *testing.T) {
 	if !strings.Contains(output, "install-commands") {
 		t.Error("help output should contain 'install-commands'")
 	}
-	if !strings.Contains(output, "slash command") || !strings.Contains(output, "Claude Code") {
-		t.Error("help output should describe slash command installation")
+	if !strings.Contains(output, "command artifacts") {
+		t.Error("help output should describe command artifact installation")
+	}
+	if !strings.Contains(output, "Codex") {
+		t.Error("help output should describe Codex skill installation")
 	}
 }
 
@@ -175,6 +178,62 @@ func TestInstallCommandsOutputMessage(t *testing.T) {
 	}
 }
 
+func TestInstallCommandsRejectsInvalidAgent(t *testing.T) {
+	cmd := newInstallCommandsCommand()
+
+	cmd.SetArgs([]string{"--agent", "gemini"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected invalid agent error, got nil")
+	}
+	if !strings.Contains(err.Error(), "invalid agent") {
+		t.Fatalf("expected invalid agent error, got: %v", err)
+	}
+}
+
+func TestInstallCommandsCodexInstallsSkill(t *testing.T) {
+	tmpHome := t.TempDir()
+	t.Setenv("HOME", tmpHome)
+	t.Setenv("USERPROFILE", tmpHome)
+
+	cmd := newInstallCommandsCommand()
+
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetArgs([]string{"--agent", "codex"})
+
+	err := cmd.Execute()
+	if err != nil {
+		t.Fatalf("install-commands --agent codex failed: %v", err)
+	}
+
+	skillPath := filepath.Join(tmpHome, ".agents", "skills", "claudio", "SKILL.md")
+	content, err := os.ReadFile(skillPath)
+	if err != nil {
+		t.Fatalf("failed to read Codex skill: %v", err)
+	}
+
+	contentStr := string(content)
+	if !strings.Contains(contentStr, "name: claudio") {
+		t.Error("skill should contain claudio name metadata")
+	}
+	if !strings.Contains(contentStr, "description:") {
+		t.Error("skill should contain description metadata")
+	}
+	if !strings.Contains(contentStr, "claudio volume <0.0-1.0>") {
+		t.Error("skill should document claudio volume command")
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "skill for codex") {
+		t.Errorf("success message should mention Codex skill, got: %s", output)
+	}
+	if !strings.Contains(output, "$claudio") {
+		t.Errorf("success message should show Codex invocation, got: %s", output)
+	}
+}
+
 // TestInstallCommandsIdempotent verifies running twice doesn't cause errors
 func TestInstallCommandsIdempotent(t *testing.T) {
 	// Create a temporary directory to act as home
@@ -207,5 +266,122 @@ func TestInstallCommandsIdempotent(t *testing.T) {
 
 	if !strings.Contains(string(content), "allowed-tools: Bash(claudio:*)") {
 		t.Error("content should still be correct after second install")
+	}
+}
+
+func TestUninstallCommandsCreation(t *testing.T) {
+	cmd := newUninstallCommandsCommand()
+
+	if cmd == nil {
+		t.Fatal("newUninstallCommandsCommand() returned nil")
+	}
+
+	if cmd.Use != "uninstall-commands" {
+		t.Errorf("expected Use 'uninstall-commands', got %s", cmd.Use)
+	}
+
+	if cmd.Short == "" {
+		t.Error("expected Short description to be set")
+	}
+}
+
+func TestUninstallCommandsRejectsInvalidAgent(t *testing.T) {
+	cmd := newUninstallCommandsCommand()
+
+	cmd.SetArgs([]string{"--agent", "gemini"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected invalid agent error, got nil")
+	}
+	if !strings.Contains(err.Error(), "invalid agent") {
+		t.Fatalf("expected invalid agent error, got: %v", err)
+	}
+}
+
+func TestUninstallCommandsRemovesClaudeSlashCommand(t *testing.T) {
+	tmpHome := t.TempDir()
+	t.Setenv("HOME", tmpHome)
+	t.Setenv("USERPROFILE", tmpHome)
+
+	commandsDir := filepath.Join(tmpHome, ".claude", "commands")
+	claudioMdPath := filepath.Join(commandsDir, "claudio.md")
+	if err := installCommandsToPath(commandsDir, claudioMdPath); err != nil {
+		t.Fatalf("installCommandsToPath failed: %v", err)
+	}
+
+	cmd := newUninstallCommandsCommand()
+
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetArgs([]string{})
+
+	err := cmd.Execute()
+	if err != nil {
+		t.Fatalf("uninstall-commands failed: %v", err)
+	}
+
+	if _, err := os.Stat(claudioMdPath); !os.IsNotExist(err) {
+		t.Fatalf("expected claudio.md to be removed, stat err: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "Removed slash command for claude") {
+		t.Errorf("expected removal output, got: %s", stdout.String())
+	}
+}
+
+func TestUninstallCommandsRemovesCodexSkill(t *testing.T) {
+	tmpHome := t.TempDir()
+	t.Setenv("HOME", tmpHome)
+	t.Setenv("USERPROFILE", tmpHome)
+
+	installCmd := newInstallCommandsCommand()
+	var installStdout bytes.Buffer
+	installCmd.SetOut(&installStdout)
+	installCmd.SetArgs([]string{"--agent", "codex"})
+	if err := installCmd.Execute(); err != nil {
+		t.Fatalf("install-commands --agent codex failed: %v", err)
+	}
+
+	skillPath := filepath.Join(tmpHome, ".agents", "skills", "claudio", "SKILL.md")
+	if _, err := os.Stat(skillPath); err != nil {
+		t.Fatalf("expected Codex skill before uninstall, stat err: %v", err)
+	}
+
+	uninstallCmd := newUninstallCommandsCommand()
+
+	var stdout bytes.Buffer
+	uninstallCmd.SetOut(&stdout)
+	uninstallCmd.SetArgs([]string{"--agent", "codex"})
+
+	err := uninstallCmd.Execute()
+	if err != nil {
+		t.Fatalf("uninstall-commands --agent codex failed: %v", err)
+	}
+
+	if _, err := os.Stat(skillPath); !os.IsNotExist(err) {
+		t.Fatalf("expected Codex skill to be removed, stat err: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "Removed skill for codex") {
+		t.Errorf("expected Codex removal output, got: %s", stdout.String())
+	}
+}
+
+func TestUninstallCommandsMissingArtifactIsIdempotent(t *testing.T) {
+	tmpHome := t.TempDir()
+	t.Setenv("HOME", tmpHome)
+	t.Setenv("USERPROFILE", tmpHome)
+
+	cmd := newUninstallCommandsCommand()
+
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetArgs([]string{"--agent", "codex"})
+
+	err := cmd.Execute()
+	if err != nil {
+		t.Fatalf("uninstall-commands should tolerate missing artifact: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "No skill for codex found") {
+		t.Errorf("expected missing artifact output, got: %s", stdout.String())
 	}
 }

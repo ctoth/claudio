@@ -81,6 +81,62 @@ The install command performs these steps:
 5. **Write updated settings** - Saves merged configuration with file locking
 6. **Verify installation** - Confirms all hooks were installed correctly
 
+## claudio install-commands
+
+Installs Claudio command artifacts for supported coding agents.
+
+### Usage
+
+```bash
+claudio install-commands [flags]
+```
+
+### Flags
+
+**--agent, -a** `string` (default: "claude")
+: Target agent for the command artifact
+: **Options:** `claude`, `codex`
+: **claude:** Write `~/.claude/commands/claudio.md` for `/claudio`
+: **codex:** Write `$HOME/.agents/skills/claudio/SKILL.md` for `$claudio`
+
+### Examples
+
+```bash
+# Install the Claude Code slash command
+claudio install-commands
+
+# Install the Codex skill
+claudio install-commands --agent codex
+```
+
+## claudio uninstall-commands
+
+Removes Claudio command artifacts created by `install-commands`.
+
+### Usage
+
+```bash
+claudio uninstall-commands [flags]
+```
+
+### Flags
+
+**--agent, -a** `string` (default: "claude")
+: Target agent for command artifact removal
+: **Options:** `claude`, `codex`
+: **claude:** Remove `~/.claude/commands/claudio.md`
+: **codex:** Remove `$HOME/.agents/skills/claudio/SKILL.md` and the empty `claudio` skill directory
+
+### Examples
+
+```bash
+# Remove the Claude Code slash command
+claudio uninstall-commands
+
+# Remove the Codex skill
+claudio uninstall-commands --agent codex
+```
+
 ## claudio analyze
 
 Analyze sound usage patterns and identify missing sounds from tracking database.
