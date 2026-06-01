@@ -15,6 +15,11 @@ test_temp_file.txt
 /hook-logger.exe
 /test_cli.exe
 *.exe
+/dist/
+
+# Coverage outputs
+/coverage.out
+/coverage.html
 
 # Logs
 *.log
