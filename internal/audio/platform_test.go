@@ -1,6 +1,7 @@
 package audio
 
 import (
+	"runtime"
 	"testing"
 )
 
@@ -13,19 +14,20 @@ func TestPlatformDetectionInterface(t *testing.T) {
 }
 
 func TestCommandExists(t *testing.T) {
+	firstExisting, secondExisting := existingCommandFixtures()
 	tests := []struct {
 		name     string
 		command  string
 		expected bool
 	}{
 		{
-			name:     "existing command - echo",
-			command:  "echo",
+			name:     "existing command - primary",
+			command:  firstExisting,
 			expected: true,
 		},
 		{
-			name:     "existing command - ls",
-			command:  "ls",
+			name:     "existing command - secondary",
+			command:  secondExisting,
 			expected: true,
 		},
 		{
@@ -190,15 +192,13 @@ func TestGetPreferredSystemCommand(t *testing.T) {
 // TestRealSystemIntegration tests against the real system (these may vary by environment)
 func TestRealSystemIntegration(t *testing.T) {
 	t.Run("real command detection", func(t *testing.T) {
-		// Test some commands that should exist on most systems
-		echoExists := CommandExists("echo")
-		if !echoExists {
-			t.Error("echo command should exist on most systems")
+		firstExisting, secondExisting := existingCommandFixtures()
+		if !CommandExists(firstExisting) {
+			t.Errorf("%s command should exist on this system", firstExisting)
 		}
 
-		lsExists := CommandExists("ls")
-		if !lsExists {
-			t.Error("ls command should exist on most Unix-like systems")
+		if !CommandExists(secondExisting) {
+			t.Errorf("%s command should exist on this system", secondExisting)
 		}
 
 		fakeExists := CommandExists("definitely-does-not-exist-12345")
@@ -221,4 +221,11 @@ func TestRealSystemIntegration(t *testing.T) {
 			t.Errorf("DetectOptimalBackend returned invalid backend: %s", backend)
 		}
 	})
+}
+
+func existingCommandFixtures() (string, string) {
+	if runtime.GOOS == "windows" {
+		return "cmd.exe", "where.exe"
+	}
+	return "sh", "true"
 }

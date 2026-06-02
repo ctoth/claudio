@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -83,6 +84,7 @@ func TestSystemCommandBackend_Interface(t *testing.T) {
 }
 
 func TestSystemCommandBackend_Play(t *testing.T) {
+	successCommand := successfulNoopCommand()
 	tests := []struct {
 		name    string
 		command string
@@ -91,15 +93,15 @@ func TestSystemCommandBackend_Play(t *testing.T) {
 	}{
 		{
 			name:    "play file source with nonexistent file",
-			command: "echo", // Use echo instead of paplay to avoid system dependencies
+			command: successCommand,
 			source:  NewFileSource("/test/sound.wav"),
-			wantErr: false, // echo will succeed even with nonexistent args
+			wantErr: false,
 		},
 		{
 			name:    "play reader source",
-			command: "echo", // Use echo instead of paplay
+			command: successCommand,
 			source:  NewReaderSource(io.NopCloser(strings.NewReader("test")), "wav"),
-			wantErr: false, // echo will succeed
+			wantErr: false,
 		},
 		{
 			name:    "invalid command",
@@ -125,6 +127,13 @@ func TestSystemCommandBackend_Play(t *testing.T) {
 			}
 		})
 	}
+}
+
+func successfulNoopCommand() string {
+	if runtime.GOOS == "windows" {
+		return "cmd.exe"
+	}
+	return "true"
 }
 
 func TestSystemCommandBackend_Lifecycle(t *testing.T) {
