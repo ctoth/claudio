@@ -21,6 +21,15 @@ import (
 //go:embed windows.json wsl.json darwin.json linux.json
 var platformSoundpacks embed.FS
 
+// embeddedSounds holds the synthesized default WAV tones that back the
+// native-Linux platform pack. Unlike Windows/macOS — which point at system
+// sound files that always exist — a bare Linux box ships no guaranteed WAVs,
+// so linux.json references these by bare filename and they are extracted to
+// the cache dir at load time. Regenerate with embedded_sounds/generate.go.
+//
+//go:embed embedded_sounds/*.wav
+var embeddedSounds embed.FS
+
 // FileLoggingConfig represents file-based logging configuration
 type FileLoggingConfig struct {
 	Enabled    bool   `json:"enabled"`      // Whether file logging is enabled
@@ -524,6 +533,19 @@ func GetEmbeddedPlatformSoundpackData(filename string) ([]byte, error) {
 	data, err := platformSoundpacks.ReadFile(filename)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read embedded platform soundpack file '%s': %w", filename, err)
+	}
+	return data, nil
+}
+
+// GetEmbeddedSoundData returns the bytes of an embedded default sound by its
+// bare filename (e.g. "default-success.wav"), or an error if no such sound is
+// embedded. A soundpack mapping value that names an absolute system path is
+// not an embedded sound, so callers can use the error to distinguish the two:
+// only the native-Linux pack references these embedded tones by bare name.
+func GetEmbeddedSoundData(name string) ([]byte, error) {
+	data, err := embeddedSounds.ReadFile("embedded_sounds/" + name)
+	if err != nil {
+		return nil, fmt.Errorf("no embedded sound %q: %w", name, err)
 	}
 	return data, nil
 }

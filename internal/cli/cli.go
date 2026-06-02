@@ -927,5 +927,87 @@ func embeddedPlatformSoundpackBasePaths(filename string, data []byte) []string {
 			paths = append(paths, cleaned)
 		}
 	}
+
+	// The native-Linux pack references its default tones by bare filename
+	// (e.g. "default-success.wav") because a bare Linux box ships no
+	// guaranteed system WAVs. Those tones are embedded in the binary and
+	// materialized to the cache dir here, appended LAST so the shipped
+	// defaults are a fallback only: a user who installs linux-default sounds
+	// in their XDG data dir still wins. Packs that map to absolute system
+	// paths (Windows/macOS/WSL) name no embedded sound, so this is a no-op.
+	if extracted := ensureEmbeddedDefaultSoundsExtracted(data); extracted != "" {
+		cleaned := filepath.Clean(extracted)
+		if _, exists := seen[cleaned]; !exists {
+			paths = append(paths, cleaned)
+		}
+	}
 	return paths
+}
+
+// ensureEmbeddedDefaultSoundsExtracted materializes any of the pack's mapping
+// values that name an embedded default sound into a cache directory and
+// returns that directory (or "" if the pack references none). The shipped
+// tones back the native-Linux platform pack; Windows/macOS/WSL packs map to
+// absolute system paths that name no embedded sound, so this is a no-op for
+// them. Extraction targets the cache dir — not the user's data dir — because
+// these bytes are regenerable from the binary, not user-installed content.
+func ensureEmbeddedDefaultSoundsExtracted(data []byte) string {
+	spFile, err := soundpack.PeekJSONSoundpackFromBytes(data)
+	if err != nil {
+		return ""
+	}
+
+	destDir := config.NewXDGDirs().GetCachePath(filepath.Join("embedded-soundpacks", spFile.Name))
+	var wrote bool
+	for _, value := range spFile.Mappings {
+		soundBytes, err := config.GetEmbeddedSoundData(value)
+		if err != nil {
+			continue // absolute path or otherwise not an embedded sound
+		}
+		if err := writeCachedSoundIfMissing(filepath.Join(destDir, value), soundBytes); err != nil {
+			slog.Warn("failed to materialize embedded default sound",
+				"name", value, "dir", destDir, "error", err)
+			continue
+		}
+		wrote = true
+	}
+
+	if !wrote {
+		return ""
+	}
+	slog.Debug("materialized embedded default sounds", "pack", spFile.Name, "dir", destDir)
+	return destDir
+}
+
+// writeCachedSoundIfMissing writes data to path only when it is not already
+// present, via a temp file + rename so concurrent claudio hook processes
+// never observe a torn file. The embedded bytes are identical across runs, so
+// a redundant write under a race is harmless.
+func writeCachedSoundIfMissing(path string, data []byte) error {
+	if _, err := os.Stat(path); err == nil {
+		return nil
+	}
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(dir, ".sound-*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		os.Remove(tmpName)
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpName)
+		return err
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		os.Remove(tmpName)
+		return err
+	}
+	return nil
 }
