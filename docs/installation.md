@@ -5,161 +5,179 @@ title: "Installation"
 
 # Installation
 
-Claudio installation is a two-step process: install the binary, then configure Claude Code integration.
+Installation has two parts:
 
-## Step 1: Install the Binary
+1. Install the `claudio` binary.
+2. Register hooks for the agent you want Claudio to listen to.
 
-Install Claudio using Go's package manager:
+## Install The Binary
 
 ```bash
 go install claudio.click/cmd/claudio@latest
 ```
 
-This downloads and builds Claudio, placing the binary in your `$GOPATH/bin` directory (usually `~/go/bin`). Make sure this directory is in your system PATH.
-
-## Step 2: Configure Claude Code Integration
-
-Claudio provides a simple CLI command to automatically configure Claude Code hooks:
+Make sure Go's binary directory is on `PATH`:
 
 ```bash
-claudio install --scope user
+go env GOPATH
 ```
 
-This command:
-- Finds your Claude Code settings file
-- Adds Claudio hooks for every default-enabled Claude Code event in the registry
-  (see "What Gets Installed" below for the full list)
-- Preserves any existing hooks
-- Creates a backup of your settings before making changes
+The binary normally lands in `$(go env GOPATH)/bin`.
 
-### Installation Scopes
+## Claude Code Hooks
 
-You can install Claudio at different scopes:
+Install user-wide Claude Code hooks:
 
-**User Scope (Recommended)**
 ```bash
-claudio install --scope user
+claudio install --agent claude --scope user
 ```
-Installs hooks in your personal Claude Code settings. Affects all Claude Code sessions for your user account.
 
-**Project Scope**
+Install hooks only for the current project:
+
 ```bash
-claudio install --scope project
+claudio install --agent claude --scope project
 ```
-Installs hooks in the current project's Claude Code settings. Only affects Claude Code when working in this specific project directory.
 
-### Installation Options
+User scope writes `~/.claude/settings.json` on every platform. On Windows that
+resolves through the native user profile path.
 
-**Dry Run Mode**
+Project scope writes `./.claude/settings.json`.
+
+## Codex Hooks
+
+Install user-wide Codex hooks:
+
 ```bash
-claudio install --dry-run --scope user
+claudio install --agent codex --scope user
 ```
-Shows what would be installed without making any changes. Perfect for testing.
 
-**Standard Installation**
+Install hooks only for the current project:
+
 ```bash
-claudio install --scope user
+claudio install --agent codex --scope project
 ```
-Installs or updates Claudio hooks (automatically overwrites existing Claudio hooks).
 
-**Quiet Mode**
+User scope uses `$CODEX_HOME/hooks.json` when `CODEX_HOME` is set, otherwise
+`~/.codex/hooks.json`.
+
+Project scope writes `./.codex/hooks.json`.
+
+After installing Codex hooks, run `/hooks` in Codex and trust the Claudio hook.
+
+## Inspect Before Writing
+
+Dry run:
+
 ```bash
-claudio install --quiet --scope user
+claudio install --agent claude --scope user --dry-run
+claudio install --agent codex --scope user --dry-run
 ```
-Installs with minimal output messages.
 
-**Print Configuration**
+Print the target path and mode:
+
 ```bash
-claudio install --print --scope user
-```
-Shows the configuration details that would be written.
-
-## Verification
-
-After installation, verify Claudio is working:
-
-1. **Check the installation:**
-   ```bash
-   claudio install --dry-run --scope user
-   ```
-   Should show that Claudio hooks are already installed.
-
-2. **Test audio playback:**
-   ```bash
-   echo '{"session_id":"test","transcript_path":"/test","cwd":"/test","hook_event_name":"PostToolUse","tool_name":"Bash","tool_response":{"stdout":"success","stderr":"","interrupted":false}}' | claudio
-   ```
-   You should hear a success sound.
-
-3. **Test with Claude Code:**
-   Run any Claude Code command that uses tools. You should hear audio feedback when tools start and complete.
-
-## Claude Code Settings Location
-
-Claudio writes Claude Code hooks to these locations:
-
-**User Settings:** `~/.claude/settings.json` (all platforms; on Windows, `%USERPROFILE%\.claude\settings.json`).
-
-**Project Settings:** `./.claude/settings.json` relative to the current working directory.
-
-The canonical resolution lives in `internal/install/claude_settings.go`.
-
-## What Gets Installed
-
-The installation adds Claudio entries for every default-enabled event in the
-Claude Code hook registry (see `internal/install/hook_registry.go`). At the
-time of writing that is **14 events** (additional events are registered but
-disabled by default so Claudio does not chatter):
-
-- **SessionStart** — Claude Code session starts or resumes
-- **UserPromptSubmit** — you send a prompt
-- **PreToolUse** — before a tool runs (loading / thinking sounds)
-- **PermissionRequest** — a permission dialog appears
-- **PermissionDenied** — a tool call is denied
-- **PostToolUse** — a tool call succeeds
-- **PostToolUseFailure** — a tool call fails
-- **PreCompact** / **PostCompact** — before/after context compaction
-- **Stop** — main agent finishes responding
-- **StopFailure** — a turn ends due to an API error
-- **SubagentStart** / **SubagentStop** — a Task-tool subagent starts / finishes
-- **Notification** — permission requests and idle notifications
-
-Each entry is written in Claude Code's canonical array form, e.g.:
-
-```json
-{
-  "hooks": {
-    "PreToolUse": [
-      {
-        "hooks": [
-          { "type": "command", "command": "claudio" }
-        ]
-      }
-    ]
-  }
-}
+claudio install --agent claude --scope user --print
 ```
 
-## Troubleshooting Installation
+Quiet mode:
 
-**"claudio: command not found"**
-- Ensure `~/go/bin` is in your PATH
-- Run `go env GOPATH` to find your Go workspace
-- Add `$GOPATH/bin` to your PATH in `.bashrc` or `.zshrc`
+```bash
+claudio install --agent claude --scope user --quiet
+```
 
-**"No Claude Code settings found"**
-- Make sure Claude Code is installed and has been run at least once
-- Try specifying the other scope: `--scope project` vs `--scope user`
-- Check that you have permission to write to the settings directory
+The installer takes an advisory lock around the read, merge, write, and verify
+cycle. It preserves non-Claudio hooks and replaces prior Claudio hook entries
+with the current generated form.
 
-**Installation succeeds but no sounds**
-- Check your system audio volume
-- Verify audio system is working with other applications
-- Run Claudio with debug logging: `export CLAUDIO_LOG_LEVEL=debug`
+## Installed Hook Sets
 
-See the [Troubleshooting](/troubleshooting) page for more detailed solutions.
+Claude Code defaults:
 
-## Next Steps
+| Hook | Category |
+| --- | --- |
+| `PreToolUse` | loading |
+| `PostToolUse` | success or error |
+| `UserPromptSubmit` | interactive |
+| `Notification` | interactive |
+| `Stop` | completion |
+| `SubagentStop` | completion |
+| `PreCompact` | system |
+| `SessionStart` | system |
 
-- **[CLI Reference](/cli-reference)** - Complete command documentation
-- **[Configuration](/configuration)** - Customize volume and behavior
-- **[Soundpacks](/soundpacks)** - Learn about sound customization
+Codex defaults:
+
+| Hook | Category |
+| --- | --- |
+| `PreToolUse` | loading |
+| `PostToolUse` | success or error |
+| `UserPromptSubmit` | interactive |
+| `Stop` | completion |
+| `SubagentStop` | completion |
+| `SubagentStart` | loading |
+| `PreCompact` | system |
+| `PostCompact` | system |
+| `SessionStart` | system |
+| `PermissionRequest` | interactive |
+
+## Optional Agent Commands
+
+These commands install control artifacts so you can ask an agent to adjust
+Claudio without leaving the session.
+
+```bash
+claudio install-commands --agent claude
+claudio install-commands --agent codex
+claudio install-commands --agent antigravity
+```
+
+Artifacts:
+
+| Agent | Installed artifact |
+| --- | --- |
+| Claude Code | `~/.claude/commands/claudio.md` |
+| Codex | `$HOME/.agents/skills/claudio/SKILL.md` |
+| Antigravity | `~/.gemini/config/skills/claudio/SKILL.md` and `~/.gemini/antigravity-cli/skills/claudio.md` |
+
+Remove them with:
+
+```bash
+claudio uninstall-commands --agent claude
+claudio uninstall-commands --agent codex
+claudio uninstall-commands --agent antigravity
+```
+
+## Verify
+
+Check effective config:
+
+```bash
+claudio status
+```
+
+Run one hook payload manually:
+
+```bash
+echo '{"session_id":"test","cwd":".","hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"git status"},"tool_response":{"stdout":"ok","stderr":"","interrupted":false}}' | claudio
+```
+
+If you do not want audio during a test run:
+
+```bash
+echo '{"session_id":"test","cwd":".","hook_event_name":"PostToolUse","tool_name":"Bash","tool_response":{"stdout":"ok","stderr":"","interrupted":false}}' | claudio --silent
+```
+
+## Uninstall Hooks
+
+```bash
+claudio uninstall --agent claude --scope user
+claudio uninstall --agent codex --scope user
+```
+
+Use `--dry-run`, `--print`, or `--quiet` the same way as `install`.
+
+## Next
+
+- [Configuration](configuration)
+- [CLI Reference](cli-reference)
+- [Soundpacks](soundpacks)
+- [Troubleshooting](troubleshooting)

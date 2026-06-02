@@ -3,341 +3,236 @@ layout: default
 title: "Examples"
 ---
 
-# Examples & Usage Scenarios
+# Examples
 
-See how Claudio integrates into real development workflows with contextual audio feedback.
+These examples are meant to be copied into a terminal and adjusted for your
+paths.
 
-## Git Workflow Scenarios
+## Install For Claude Code
 
-### Scenario 1: Successful Commit Flow
-
-**What Claude Does:**
 ```bash
-git add src/main.go
-git commit -m "Fix authentication bug"
-git push origin main
+go install claudio.click/cmd/claudio@latest
+claudio install --agent claude --scope user
+claudio status
 ```
 
-**What You Hear:**
-1. `loading/git-start.wav` - Git add starting
-2. `success/git-success.wav` - Git add succeeded
-3. `loading/git-commit-start.wav` - Git commit starting  
-4. `success/git-commit-success.wav` - Git commit succeeded
-5. `loading/git-push-start.wav` - Git push starting
-6. `success/git-push-success.wav` - Git push succeeded
+Install only for one repository:
 
-### Scenario 2: Merge Conflict Resolution
-
-**What Claude Does:**
 ```bash
-git pull origin main
-# (merge conflict occurs)
-# Claude edits files to resolve conflicts
-git add .
-git commit -m "Resolve merge conflicts"
+cd /path/to/project
+claudio install --agent claude --scope project
 ```
 
-**What You Hear:**
-1. `loading/git-start.wav` - Git pull starting
-2. `error/git-error.wav` - Git pull failed (merge conflicts)
-3. `loading/git-start.wav` - Git add starting (after conflict resolution)
-4. `success/git-success.wav` - Git add succeeded
-5. `loading/git-commit-start.wav` - Git commit starting
-6. `success/git-commit-success.wav` - Merge conflicts resolved
+## Install For Codex
 
-## Development Workflow Scenarios
-
-### Scenario 3: NPM Package Development
-
-**What Claude Does:**
 ```bash
-npm install express
-npm run test
-npm run build
-npm publish
+go install claudio.click/cmd/claudio@latest
+claudio install --agent codex --scope user
 ```
 
-**What You Hear:**
-1. `loading/npm-install-start.wav` - NPM install starting
-2. `success/npm-install-success.wav` - Dependencies installed
-3. `loading/npm-test-start.wav` - Test suite starting
-4. `success/npm-test-success.wav` - All tests passed
-5. `loading/npm-build-start.wav` - Build process starting
-6. `success/npm-build-success.wav` - Build completed
-7. `loading/npm-start.wav` - NPM publish starting
-8. `success/npm-success.wav` - Package published
+Then open Codex, run `/hooks`, and trust the Claudio hook.
 
-### Scenario 4: Docker Development
+Project-only Codex install:
 
-**What Claude Does:**
 ```bash
-docker build -t myapp .
-docker run -p 3000:3000 myapp
-docker ps
+cd /path/to/project
+claudio install --agent codex --scope project
 ```
 
-**What You Hear:**
-1. `loading/docker-build-start.wav` - Docker build starting
-2. `success/docker-build-success.wav` - Image built successfully
-3. `loading/docker-start.wav` - Docker run starting
-4. `success/docker-success.wav` - Container started
-5. `loading/docker-start.wav` - Docker ps starting
-6. `success/docker-success.wav` - Container status displayed
+## Add Agent Control Commands
 
-## Error Handling Scenarios
+Claude Code:
 
-### Scenario 5: Test Failure Investigation
-
-**What Claude Does:**
 ```bash
-npm test
-# (tests fail)
-# Claude investigates the failing test file
-cat tests/user.test.js
-# Claude fixes the test
-npm test
+claudio install-commands --agent claude
 ```
 
-**What You Hear:**
-1. `loading/npm-test-start.wav` - Test suite starting
-2. `error/npm-test-error.wav` - Tests failed
-3. `loading/bash-start.wav` - File read starting
-4. `success/bash-success.wav` - File read completed
-5. `loading/npm-test-start.wav` - Test suite starting again
-6. `success/npm-test-success.wav` - Tests now pass
+Then use:
 
-### Scenario 6: Build System Errors
+```text
+/claudio status
+/claudio volume 0.35
+/claudio mute
+/claudio unmute
+```
 
-**What Claude Does:**
+Codex:
+
 ```bash
-make build
-# (compilation errors)
-# Claude examines error logs
-make clean
-make build
+claudio install-commands --agent codex
 ```
 
-**What You Hear:**
-1. `loading/bash-start.wav` - Make build starting
-2. `error/build-error.wav` - Compilation failed
-3. `loading/bash-start.wav` - Make clean starting
-4. `success/bash-success.wav` - Clean completed
-5. `loading/bash-start.wav` - Make build starting again
-6. `success/build-success.wav` - Build succeeded
+Then ask Codex to use `$claudio`.
 
-## Interactive Development Scenarios
+## Manually Test A Hook Payload
 
-### Scenario 7: Code Review Session
+Prompt event:
 
-**User Actions and Sounds:**
-
-**You:** "Review this function for potential bugs"
-- **Sound:** `interactive/message-sent.wav`
-
-**Claude analyzes code, runs tests:**
 ```bash
-go test ./internal/auth
-go vet ./internal/auth
+echo '{"session_id":"manual","cwd":".","hook_event_name":"UserPromptSubmit","prompt":"test"}' | claudio
 ```
-- **Sounds:** `loading/go-test-start.wav` → `success/go-test-success.wav`
 
-**You:** "Fix the race condition you found"
-- **Sound:** `interactive/message-sent.wav`
+Successful Bash event:
 
-**Claude implements fix, verifies:**
 ```bash
-go test -race ./internal/auth
+echo '{"session_id":"manual","cwd":".","hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"git status"},"tool_response":{"stdout":"clean","stderr":"","interrupted":false}}' | claudio
 ```
-- **Sounds:** `loading/go-test-start.wav` → `success/go-test-success.wav`
 
-### Scenario 8: Feature Development Session
+Failed Bash event:
 
-**You:** "Add user authentication to the API"
-- **Sound:** `interactive/message-sent.wav`
-
-**Claude creates files, installs dependencies:**
 ```bash
-touch internal/auth/middleware.go
-go mod tidy
-go test ./internal/auth
+echo '{"session_id":"manual","cwd":".","hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"npm test"},"tool_response":{"stdout":"","stderr":"tests failed","interrupted":false}}' | claudio
 ```
-- **Sounds:** Multiple loading/success cycles as Claude builds the feature
 
-**You:** "Test it with a real request"
-- **Sound:** `interactive/message-sent.wav`
+Run without audio:
 
-**Claude tests the implementation:**
 ```bash
-curl -X POST localhost:8080/auth/login
+echo '{"session_id":"manual","cwd":".","hook_event_name":"Stop"}' | claudio --silent
 ```
-- **Sounds:** `loading/bash-start.wav` → `success/bash-success.wav`
 
-## Multitasking Benefits
+## Tune Volume
 
-### Background Development Awareness
+Persist a quieter default:
 
-While Claude works on complex tasks, audio feedback lets you:
-
-**Stay Informed Without Watching:**
-- Continue other work while Claude builds/tests
-- Know immediately when operations complete
-- Hear when errors occur that need attention
-
-**Example: Long Build Process**
 ```bash
-# Claude starts a complex build
-npm run build:production
+claudio volume 0.25
 ```
-- You hear `loading/npm-build-start.wav` and can switch to other tasks
-- 5 minutes later, `success/npm-build-success.wav` tells you it's done
-- No need to check terminal constantly
 
-### Multi-Step Operation Tracking
+Temporarily override one invocation:
 
-**Example: Database Migration**
 ```bash
-# Claude performs multi-step database update
-npm run migrate:backup
-npm run migrate:run
-npm run migrate:verify
-npm run test:integration
+CLAUDIO_VOLUME=0.8 claudio status
 ```
 
-**Audio Timeline:**
-1. `loading/npm-start.wav` → `success/npm-success.wav` (backup)
-2. `loading/npm-start.wav` → `success/npm-success.wav` (migrate) 
-3. `loading/npm-start.wav` → `success/npm-success.wav` (verify)
-4. `loading/npm-test-start.wav` → `success/npm-test-success.wav` (tests)
+Disable and re-enable:
 
-You know each step completed successfully without monitoring the screen.
-
-## Common Development Patterns
-
-### Pattern 1: Code-Test-Fix Cycle
-
-**Typical Flow:**
 ```bash
-# Claude writes code
-# Tests the code
-go test ./...
-# Test fails, Claude investigates
-go test -v ./pkg/utils
-# Claude fixes issue
-# Tests again
-go test ./...
+claudio mute
+claudio status
+claudio unmute
 ```
 
-**Audio Pattern:**
-- Loading sound → Error sound (test fails)
-- Loading sound → Success sound (investigation complete)  
-- Loading sound → Success sound (tests now pass)
+## Create A Minimal JSON Soundpack
 
-### Pattern 2: Dependency Management
+Create files:
 
-**Typical Flow:**
 ```bash
-# Add new dependency
-npm install lodash
-# Update lockfile
-npm audit fix
-# Verify everything works
-npm test
+mkdir -p ~/sounds/claudio
+# Put real .wav, .mp3, or .aiff files in this directory.
 ```
 
-**Audio Pattern:**
-- Loading sound → Success sound (install)
-- Loading sound → Success sound (audit)
-- Loading sound → Success sound (tests)
+Create `~/sounds/claudio/minimal.json`:
 
-### Pattern 3: Deployment Pipeline
-
-**Typical Flow:**
-```bash
-# Build application
-npm run build
-# Run security scan
-npm audit
-# Deploy to staging
-npm run deploy:staging
-# Run smoke tests
-npm run test:smoke
-```
-
-**Audio Pattern:**
-- Series of loading → success sounds indicating pipeline progress
-- Any error sound alerts you to investigate specific stage
-
-## Customization for Your Workflow
-
-### Tool-Specific Soundpacks
-
-Create sounds that match your most common tools:
-
-**Python Development:**
-```
-loading/
-├── pytest-start.wav
-├── pip-install-start.wav
-└── python-start.wav
-
-success/
-├── pytest-success.wav
-├── pip-install-success.wav
-└── python-success.wav
-```
-
-**Frontend Development:**
-```
-loading/
-├── webpack-start.wav
-├── jest-start.wav
-└── yarn-start.wav
-
-success/
-├── webpack-success.wav
-├── jest-success.wav
-└── yarn-success.wav
-```
-
-### Environment-Specific Configurations
-
-**Development Environment (Detailed Feedback):**
 ```json
 {
-  "volume": 0.8,
-  "default_soundpack": "detailed",
-  "log_level": "debug"
+  "name": "minimal",
+  "description": "Small soundpack with category-level fallbacks",
+  "version": "1.0.0",
+  "mappings": {
+    "loading/loading.wav": "./loading.wav",
+    "success/success.wav": "./success.wav",
+    "error/error.wav": "./error.wav",
+    "interactive/interactive.wav": "./interactive.wav",
+    "completion/completion.wav": "./completion.wav",
+    "system/system.wav": "./system.wav",
+    "default.wav": "./default.wav"
+  }
 }
 ```
 
-**Production Environment (Minimal Sounds):**
-```json
-{
-  "volume": 0.3,
-  "default_soundpack": "minimal",
-  "log_level": "error"
-}
+Validate and install:
+
+```bash
+claudio soundpack validate ~/sounds/claudio/minimal.json
+claudio soundpack install ~/sounds/claudio/minimal.json --default
 ```
 
-## Productivity Benefits
+## Create A Directory Soundpack
 
-### Immediate Error Awareness
-- No need to constantly check terminal output
-- Audio alerts draw attention to failures immediately
-- Faster response to issues that need investigation
+```bash
+mkdir -p my-pack/{loading,success,error,interactive,completion,system}
+cp /path/to/default.wav my-pack/default.wav
+cp /path/to/loading.wav my-pack/loading/loading.wav
+cp /path/to/success.wav my-pack/success/success.wav
+cp /path/to/error.wav my-pack/error/error.wav
+cp /path/to/interactive.wav my-pack/interactive/interactive.wav
+cp /path/to/completion.wav my-pack/completion/completion.wav
+cp /path/to/system.wav my-pack/system/system.wav
 
-### Multi-Step Process Confidence
-- Know when long operations complete
-- Confidence that each step in complex workflows succeeded
-- Early warning when processes stall or fail
+claudio soundpack validate ./my-pack
+claudio soundpack install ./my-pack --default
+```
 
-### Reduced Context Switching
-- Stay focused on other tasks while Claude works
-- Audio feedback reduces need to monitor progress visually
-- Smoother development flow with less interruption
+Add specific sounds as you learn what you miss:
+
+```text
+success/git-commit-success.wav
+error/npm-test-error.wav
+loading/go-test-start.wav
+completion/agent-complete.wav
+system/session-start.wav
+```
+
+## Use Tracking To Improve A Pack
+
+After using Claudio for a while:
+
+```bash
+claudio analyze missing --preset all-time --limit 30
+```
+
+Add sounds for the highest-requested missing keys, validate, and reinstall:
+
+```bash
+claudio soundpack validate ./my-pack
+claudio soundpack install ./my-pack --default
+```
+
+Inspect actual use:
+
+```bash
+claudio analyze usage --show-summary --show-chains
+claudio analyze usage --tool Bash --preset last-week
+```
+
+## Managed Git Soundpack
+
+```bash
+claudio soundpack add gh:owner/repo --name retro --default
+claudio soundpack status retro
+claudio soundpack update retro
+```
+
+If the pack lives below the repository root:
+
+```bash
+claudio soundpack add gh:owner/repo --subdir packs/retro --name retro --default
+```
+
+## Debug Logging
+
+Enable debug logs:
+
+```bash
+export CLAUDIO_LOG_LEVEL=debug
+```
+
+Run a hook payload, then inspect:
+
+```text
+<XDG cache home>/claudio/logs/claudio.log
+```
+
+For a one-off run without editing config:
+
+```bash
+CLAUDIO_LOG_LEVEL=debug claudio status
+```
 
 ## See Also
 
-- **[Soundpacks](/soundpacks)** - Create custom sounds for your workflow
-- **[Configuration](/configuration)** - Adjust volume and behavior for your environment
-- **[Installation](/installation)** - Get started with Claudio
+- [Installation](installation)
+- [CLI Reference](cli-reference)
+- [Configuration](configuration)
+- [Soundpacks](soundpacks)
+- [Troubleshooting](troubleshooting)

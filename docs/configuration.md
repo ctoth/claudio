@@ -5,23 +5,38 @@ title: "Configuration"
 
 # Configuration
 
-Claudio can be configured through configuration files, environment variables, and command-line flags.
+Claudio works with no config file. When no file exists it uses platform-aware
+defaults, including embedded platform soundpacks where available.
 
-## Configuration File
+Configuration is resolved in this order:
 
-Claudio follows the XDG Base Directory specification for configuration. The
-config file is discovered by searching, in order:
+1. CLI flags for a single invocation
+2. Environment variables
+3. The first XDG config file found
+4. Built-in defaults
 
-1. `$XDG_CONFIG_HOME/claudio/config.json` (typically `~/.config/claudio/config.json`
-   on Linux, the Windows-native XDG mapping on Windows)
-2. Each directory in `$XDG_CONFIG_DIRS`, with `claudio/config.json` appended —
-   on Linux/macOS this typically resolves to `/etc/xdg/claudio/config.json`;
-   `/etc/xdg` is **not** checked on Windows.
+Use `claudio status` to see the effective runtime values after environment
+overrides.
 
-The first existing file wins. If no file is found, Claudio runs with its
-built-in defaults (see "Configuration Format" below).
+## Config File
 
-### Configuration Format
+Claudio searches XDG config paths for `claudio/config.json`. The first existing
+file wins.
+
+Typical user path:
+
+```text
+~/.config/claudio/config.json
+```
+
+On Windows, Claudio uses the Windows-native XDG location supplied by the XDG
+library, not a hardcoded Unix path.
+
+Commands that persist settings, such as `claudio volume`, `claudio mute`,
+`claudio unmute`, and `claudio soundpack use`, write to the first user config
+path.
+
+## Full Example
 
 ```json
 {
@@ -38,250 +53,148 @@ built-in defaults (see "Configuration Format" below).
     "max_backups": 5,
     "max_age_days": 30,
     "compress": true
+  },
+  "sound_tracking": {
+    "enabled": true,
+    "database_path": ""
   }
 }
 ```
 
-### Configuration Options
+Every field is optional when defaults are acceptable, but `default_soundpack`
+must not be empty if you set it.
 
-**volume** `float` (default: 0.5)
-: Audio playback volume from 0.0 (silent) to 1.0 (maximum)
-: Values outside this range are clamped to valid limits
+## Fields
 
-**default_soundpack** `string` (default: "default")
-: Name of the soundpack to use
-: Must correspond to a directory in one of the soundpack paths
-
-**soundpack_paths** `array of strings` (default: `[]`)
-: Extra paths to search for soundpacks (added on top of XDG defaults)
-: Searched in order; first match wins
-: When empty, Claudio uses the XDG defaults. Soundpacks live under the literal
-  `claudio/soundpacks/` subdirectory of each XDG data dir (e.g.
-  `~/.local/share/claudio/soundpacks/<id>`,
-  `/usr/local/share/claudio/soundpacks/<id>`,
-  `/usr/share/claudio/soundpacks/<id>`).
-  The `soundpacks/` segment is hardcoded in `internal/config/xdg.go`.
-
-**enabled** `boolean` (default: true)
-: Whether Claudio should produce audio output
-: When false, Claudio processes hooks but plays no sounds
-
-**log_level** `string` (default: "warn")
-: Logging verbosity level
-: Options: `debug`, `info`, `warn`, `error`
-: `debug` provides extensive logging for troubleshooting
-
-**audio_backend** `string` (default: "auto")
-: Audio backend to use for playback
-: Options: `auto`, `malgo`, `system_command`
-: `auto` automatically selects the best available backend
-
-**file_logging** `object` (optional)
-: Configuration for file-based logging
-: **enabled** `boolean` (default: true) - Whether file logging is active
-: **filename** `string` (default: "") - Custom log file path (empty = XDG cache path)
-: **max_size_mb** `integer` (default: 10) - Max file size before rotation
-: **max_backups** `integer` (default: 5) - Max number of backup files
-: **max_age_days** `integer` (default: 30) - Max age before deletion
-: **compress** `boolean` (default: true) - Whether to compress rotated files
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `volume` | `0.5` | Playback volume from `0.0` to `1.0`. Invalid file values fail validation. |
+| `default_soundpack` | platform-specific | Soundpack name, path, managed git name, or embedded platform id. |
+| `soundpack_paths` | `[]` | Extra JSON files or directories to search in addition to XDG soundpack paths. |
+| `enabled` | `true` | When false, Claudio processes hooks but plays no audio. |
+| `log_level` | `warn` | `debug`, `info`, `warn`, or `error`. |
+| `audio_backend` | `auto` | `auto`, `malgo`, or `system_command`. `fake` exists for tests. |
+| `file_logging` | enabled | Rotated file logging configuration. |
+| `sound_tracking` | enabled | SQLite tracking for usage and missing-sound analysis. |
 
 ## Environment Variables
 
-Environment variables override configuration file settings:
+| Variable | Effect |
+| --- | --- |
+| `CLAUDIO_VOLUME` | Overrides `volume`. |
+| `CLAUDIO_ENABLED` | Overrides `enabled`. Accepts Go boolean forms such as `true`, `false`, `1`, and `0`. |
+| `CLAUDIO_SOUNDPACK` | Overrides `default_soundpack`. |
+| `CLAUDIO_LOG_LEVEL` | Overrides `log_level`. |
+| `CLAUDIO_AUDIO_BACKEND` | Overrides `audio_backend` when the value is valid. |
+| `CLAUDIO_FILE_LOGGING` | Enables or disables file logging for the process. |
+| `CLAUDIO_SOUND_TRACKING` | Enables or disables tracking for the process. |
+| `CLAUDIO_SOUND_TRACKING_DB` | Sets the tracking database path. |
+| `XDG_CONFIG_HOME` | Changes user config discovery. |
+| `XDG_DATA_HOME` | Changes user soundpack and managed soundpack storage. |
+| `XDG_CACHE_HOME` | Changes log, tracking, and extracted embedded-sound cache storage. |
 
-**CLAUDIO_VOLUME**
-: Sets audio volume (0.0 to 1.0)
+## CLI Flags
+
+These global flags apply to direct hook execution:
+
 ```bash
-export CLAUDIO_VOLUME=0.5
+claudio --config /path/to/config.json
+claudio --volume 0.8
+claudio --soundpack my-pack
+claudio --silent
 ```
 
-**CLAUDIO_ENABLED**
-: Enable/disable Claudio entirely
+They are transient. They do not rewrite `config.json`.
+
+## Persistent Controls
+
 ```bash
-export CLAUDIO_ENABLED=false  # Disable audio
-export CLAUDIO_ENABLED=true   # Enable audio
+claudio volume          # print persisted volume
+claudio volume 0.35     # persist new volume
+claudio mute            # set enabled=false
+claudio unmute          # set enabled=true
+claudio status          # print effective config
 ```
 
-**CLAUDIO_SOUNDPACK**
-: Default soundpack to use
-```bash
-export CLAUDIO_SOUNDPACK=custom
+If an environment variable is set, it still wins at runtime. For example,
+`CLAUDIO_VOLUME=1.0` overrides a persisted `volume` of `0.35`.
+
+## Soundpack Search
+
+Directory soundpacks are searched under:
+
+```text
+<XDG data home>/claudio/soundpacks/<name>
+<XDG data dir>/claudio/soundpacks/<name>
 ```
 
-**CLAUDIO_LOG_LEVEL**
-: Logging verbosity
-```bash
-export CLAUDIO_LOG_LEVEL=debug
+JSON soundpacks and arbitrary soundpack directories can also be added directly
+to `soundpack_paths`. The soundpack install commands update this list for you.
+
+## Logging
+
+Stderr logging is intentionally quiet. Debug and info logs are written to the
+rotated file logger when file logging is enabled.
+
+Default log path:
+
+```text
+<XDG cache home>/claudio/logs/claudio.log
 ```
 
-**XDG_CONFIG_HOME**
-: Override config directory location
+To debug one session:
+
 ```bash
-export XDG_CONFIG_HOME=/custom/config/path
+CLAUDIO_LOG_LEVEL=debug claudio status
 ```
 
-**XDG_DATA_HOME**
-: Override data directory location (affects soundpack search)
-```bash
-export XDG_DATA_HOME=/custom/data/path
+For hook playback debugging, inspect the log file after the hook fires.
+
+## Tracking
+
+Tracking records sound lookup chains in SQLite. It is on by default.
+
+Default database path:
+
+```text
+<XDG cache home>/claudio/sounds.db
 ```
 
-## Command-Line Flags
+Useful reports:
 
-Command-line flags take highest precedence:
-
-**Direct Hook Execution:**
 ```bash
-# Override volume for single execution
-echo '...' | claudio --volume 0.8
-
-# Run in silent mode
-echo '...' | claudio --silent
-
-# Use specific soundpack
-echo '...' | claudio --soundpack retro
+claudio analyze usage --show-summary --show-chains
+claudio analyze missing --preset all-time --limit 50
 ```
 
-**Install/Uninstall Commands:**
-```bash
-# Quiet installation
-claudio install --quiet --scope user
-
-# Standard installation (overwrites existing Claudio hooks)
-claudio install --scope user
-```
-
-## Priority Order
-
-Configuration values are resolved in this order (highest to lowest priority):
-
-1. **Command-line flags** (immediate override)
-2. **Environment variables** (session-specific)
-3. **Configuration file** (persistent settings)
-4. **Default values** (built-in fallbacks)
-
-## Configuration Examples
-
-### Development Setup
-
-For development with debug logging:
+Disable tracking:
 
 ```json
 {
-  "volume": 0.5,
-  "default_soundpack": "dev",
-  "enabled": true,
-  "log_level": "debug"
+  "sound_tracking": {
+    "enabled": false
+  }
 }
 ```
 
-### Quiet Environment
-
-For shared workspaces or focused work:
-
-```json
-{
-  "volume": 0.2,
-  "default_soundpack": "minimal",
-  "enabled": true,
-  "log_level": "error"
-}
-```
-
-### Custom Soundpack Setup
-
-Using custom soundpacks:
-
-```json
-{
-  "volume": 0.8,
-  "default_soundpack": "cyberpunk",
-  "soundpack_paths": [
-    "/home/user/my-sounds",
-    "/usr/local/share/claudio"
-  ],
-  "enabled": true,
-  "log_level": "warn"
-}
-```
-
-### Temporary Disable
-
-Temporarily disable without changing config:
+or:
 
 ```bash
-export CLAUDIO_ENABLED=false
-# Claudio will process hooks but play no sounds
+CLAUDIO_SOUND_TRACKING=false claudio status
 ```
 
-## Soundpack Path Resolution
+## Test-Only Environment Variables
 
-Claudio searches for soundpacks in this order:
+These are for Claudio's own test suite. Do not set them in normal use.
 
-1. **Explicit paths** from `soundpack_paths` configuration
-2. **XDG data directories**, each under the literal `claudio/soundpacks/<id>` subpath:
-   - `$XDG_DATA_HOME/claudio/soundpacks/<id>` (typically `~/.local/share/claudio/soundpacks/<id>`)
-   - `/usr/local/share/claudio/soundpacks/<id>`
-   - `/usr/share/claudio/soundpacks/<id>`
-
-For a soundpack named `custom`, Claudio looks for:
-- `~/.local/share/claudio/soundpacks/custom/` (or the equivalent under another XDG data dir)
-- Or any explicit path you listed in `soundpack_paths`
-- Must contain at least a `default.wav` file
-
-## Validation
-
-Claudio validates configuration on startup:
-
-**Volume Validation:**
-- Must be between 0.0 and 1.0
-- Invalid values are clamped to valid range
-- Logged as warning if clamping occurs
-
-**Soundpack Validation:**
-- Specified soundpack must exist in search paths
-- Falls back to "default" soundpack if not found
-- Warning logged if fallback occurs
-
-**Path Validation:**
-- Soundpack paths must be readable directories
-- Invalid paths are silently ignored
-- Warning logged if no valid paths found
-
-## Troubleshooting Configuration
-
-**Check current configuration:**
-```bash
-export CLAUDIO_LOG_LEVEL=debug
-echo '...' | claudio
-# Debug output shows resolved configuration values
-```
-
-**Verify soundpack paths:**
-```bash
-# List available soundpacks (note the soundpacks/ subdir is required)
-ls ~/.local/share/claudio/soundpacks/
-ls /usr/local/share/claudio/soundpacks/
-```
-
-**Test configuration changes:**
-```bash
-# Test with environment override
-CLAUDIO_VOLUME=0.1 echo '...' | claudio
-
-# Test with different soundpack
-CLAUDIO_SOUNDPACK=minimal echo '...' | claudio
-```
-
-**Common Issues:**
-
-- **No sound**: Check `enabled: true` and `volume > 0.0`
-- **Wrong sounds**: Verify `default_soundpack` exists in `soundpack_paths`
-- **Permission errors**: Ensure config file is readable, soundpack directories accessible
+| Variable | Purpose |
+| --- | --- |
+| `CLAUDIO_DETACH_DISABLE` | Runs hook processing synchronously for tests. |
+| `CLAUDIO_TEST_RECOGNIZE_GO_TEST` | Lets install tests treat a Go test binary as the Claudio executable. |
 
 ## See Also
 
-- **[Installation Guide](/installation)** - Setting up Claudio
-- **[Soundpacks](/soundpacks)** - Custom sound configuration
-- **[CLI Reference](/cli-reference)** - Command-line options
-- **[Troubleshooting](/troubleshooting)** - Common configuration issues
+- [Installation](installation)
+- [CLI Reference](cli-reference)
+- [Soundpacks](soundpacks)
+- [Troubleshooting](troubleshooting)

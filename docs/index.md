@@ -1,256 +1,159 @@
 ---
 layout: default
-title: "Claudio - Audio Feedback for Claude Code"
-description: "Add contextual sound effects to your Claude Code sessions. Hear git commits, bash commands, and tool operations with intelligent audio feedback."
-keywords: "Claude Code, audio feedback, sound effects, developer tools, AI assistant, command line interface"
-
-# Open Graph / Facebook
-og:type: "website"
-og:title: "Claudio - Audio Feedback for Claude Code"
-og:description: "Add contextual sound effects to your Claude Code sessions. Hear git commits, bash commands, and tool operations with intelligent audio feedback."
-og:url: "https://claudio.click"
-og:image: "https://claudio.click/assets/claudio-preview.png"
-
-# Twitter Card
-twitter:card: "summary_large_image"
-twitter:title: "Claudio - Audio Feedback for Claude Code"
-twitter:description: "Add contextual sound effects to your Claude Code sessions. Hear git commits, bash commands, and tool operations with intelligent audio feedback."
-twitter:image: "https://claudio.click/assets/claudio-preview.png"
-
-# Additional Meta
+title: "Claudio"
+description: "Hook-based audio feedback for Claude Code and OpenAI Codex CLI."
+keywords: "Claude Code, Codex CLI, hooks, audio feedback, soundpacks, developer tools"
 canonical_url: "https://claudio.click"
 ---
 
 # Claudio
 
-Your Claude Code sessions, now with sound effects.
+Claudio adds contextual audio feedback to coding-agent sessions. It runs as a
+hook command, reads the hook event JSON from stdin, chooses a sound through a
+fallback chain, starts playback in the background, and returns control to the
+agent quickly.
 
-Spending hours watching Claude Code work gets mind-numbing. Claudio fixes that by playing sounds when stuff happens. Claude runs `git commit`? You get a sound. File operation fails? Different sound. It's like having a very quiet DJ for your AI coding session.
+It is built for long agent runs where watching the terminal is wasteful but
+silent failure is also bad. A prompt submission, tool start, successful edit,
+failed test, permission request, context compaction, and final response can all
+sound different.
 
-The cool part is how smart it gets. When Claude runs `git commit -m "fix bug"`, Claudio doesn't just play a generic "bash command" sound. It knows Claude is doing git stuff, specifically a commit, and picks sounds accordingly. If that specific sound doesn't exist, it falls back through git → bash → generic success → default. Nobody wants silence when their AI assistant's code works.
+## Quick Start
 
 ```bash
 go install claudio.click/cmd/claudio@latest
-claudio install
+claudio install --agent claude --scope user
+claudio status
 ```
 
-That's it. The install command finds your Claude Code settings and adds the hooks automatically.
-
-Or manually configure Claude Code (this is the canonical array form
-`claudio install` would have written; see `internal/install/hooks.go`):
-
-```json
-{
-  "hooks": {
-    "PreToolUse": [
-      { "hooks": [ { "type": "command", "command": "claudio" } ] }
-    ],
-    "PostToolUse": [
-      { "hooks": [ { "type": "command", "command": "claudio" } ] }
-    ],
-    "UserPromptSubmit": [
-      { "hooks": [ { "type": "command", "command": "claudio" } ] }
-    ]
-  }
-}
-```
-
-## How Fallback Works
-
-**For tool completion** (PostToolUse), when Claude runs `git commit`:
-
-```
-1. Look for: success/git-commit-success.wav
-2. Not found? Try: success/git-success.wav  
-3. Still nothing? Try: success/bash-success.wav
-4. Nope? Try: success/tool-complete.wav
-5. Come on: success/success.wav
-6. Fine: default.wav
-```
-
-**For tool startup** (PreToolUse), the fallback is more detailed:
-
-```
-1. Look for: loading/git-commit-start.wav
-2. Not found? Try: loading/git-commit.wav  
-3. Still nothing? Try: loading/git-start.wav
-4. Nope? Try: loading/git.wav (command-only)
-5. How about: loading/bash-start.wav
-6. Maybe: loading/bash.wav  
-7. OK: loading/tool-start.wav
-8. Come on: loading/loading.wav
-9. Fine: default.wav
-```
-
-You can be as specific or as lazy as you want with your sound pack. Got a sound for every git subcommand? Great. Just want success/error/loading sounds? That works too.
-
-## What Actually Happens
-
-**Before a tool runs** - plays "start" sounds
-- `git-commit-start.wav` if you're committing
-- `git-start.wav` or `bash-start.wav` fallbacks
-- `loading.wav` if nothing else matches
-
-**After success** - plays success sounds
-- `git-commit-success.wav` → `git-success.wav` → `bash-success.wav` → etc.
-
-**After errors** - plays error sounds  
-- `git-error.wav` when git fails
-- `bash-error.wav` for general bash failures
-- `error.wav` when all else fails
-
-**When you send Claude a message** - plays interaction sounds
-- `prompt-submit.wav` → `interactive.wav`
-
-The parsing is pretty clever. It knows that `npm install express` should trigger npm sounds, not just bash sounds. Same with docker, cargo, go test, whatever.
-
-## Sounds Go Here
-
-**By default, Claudio just works.** It automatically detects your platform and uses system sounds:
-
-- **macOS:** Uses built-in system sounds like Glass.aiff, Purr.aiff, Hero.aiff
-- **Windows:** Uses Windows Media sounds (Windows Ding.wav, Windows Error.wav, etc.)  
-- **WSL:** Maps to Windows sounds via `/mnt/c/Windows/Media/`
-- **Linux:** Falls back to basic directory soundpack
-
-No setup required - install and sounds work immediately.
-
-If you want custom sounds, the default directory structure is:
-
-```
-loading/     # stuff that's about to happen
-success/     # stuff that worked  
-error/       # stuff that didn't work
-interactive/ # you did something
-default.wav  # the sound of giving up
-```
-
-You can make your own soundpack two ways:
-
-**Directory soundpack:** Organize files the same way and point to it in the config.
-
-**JSON soundpack:** Map virtual sound paths to any actual files on your system:
-
-```json
-{
-  "name": "my-custom-sounds",
-  "description": "Maps to my favorite sounds",
-  "mappings": {
-    "success/git-commit-success.wav": "/System/Library/Sounds/Glass.aiff",
-    "success/bash-success.wav": "/usr/share/sounds/alsa/Front_Right.wav", 
-    "error/bash-error.wav": "/mnt/c/Windows/Media/Windows Error.wav",
-    "loading/loading.wav": "/home/user/my-sounds/thinking.mp3",
-    "default.wav": "/usr/share/sounds/alsa/Front_Center.wav"
-  }
-}
-```
-
-This way your sounds can be anywhere on the filesystem - no need to copy or reorganize files.
-
-## Config
-
-Loaded from XDG-compliant locations (typically
-`~/.config/claudio/config.json` on Linux, the Windows-native XDG mapping on
-Windows). See [Configuration](/configuration) for the full search order.
-
-Default values look like this (every field is optional):
-
-```json
-{
-  "volume": 0.5,
-  "default_soundpack": "default", 
-  "soundpack_paths": [],
-  "enabled": true,
-  "log_level": "warn",
-  "audio_backend": "auto",
-  "file_logging": {
-    "enabled": true,
-    "filename": "",
-    "max_size_mb": 10,
-    "max_backups": 5,
-    "max_age_days": 30,
-    "compress": true
-  }
-}
-```
-
-Or use environment variables if you're into that:
+For Codex:
 
 ```bash
-export CLAUDIO_VOLUME=0.7
-export CLAUDIO_ENABLED=false  # for when you need quiet
+go install claudio.click/cmd/claudio@latest
+claudio install --agent codex --scope user
 ```
 
-Command line works too:
-```bash
-claudio --volume 0.8
-claudio --silent  # just pretend to work
-```
+Then run `/hooks` in Codex and trust the Claudio hook.
 
-## Examples That Actually Work
+## What Claudio Installs
 
-```bash
-# Claude runs: git status
-# Claudio plays: loading/git-start.wav, then success/git-success.wav
+`claudio install` writes hook entries into the selected agent's settings file
+and preserves non-Claudio hooks.
 
-# Claude runs: git commit (but forgot to stage files)
-# Claudio plays: loading/git-commit-start.wav, then error/git-commit-error.wav
+| Agent | Command | User settings | Project settings |
+| --- | --- | --- | --- |
+| Claude Code | `claudio install --agent claude` | `~/.claude/settings.json` | `./.claude/settings.json` |
+| Codex | `claudio install --agent codex` | `$CODEX_HOME/hooks.json` or `~/.codex/hooks.json` | `./.codex/hooks.json` |
 
-# Claude runs: npm test (tests fail)
-# Claudio plays: loading/npm-test-start.wav, then error/npm-test-error.wav
-```
-
-The JSON that Claude Code sends looks like this:
-```json
-{
-  "hook_event_name": "PostToolUse",
-  "tool_name": "Bash", 
-  "tool_input": {"command": "git commit -m 'fix'"},
-  "tool_response": {"stdout": "committed", "stderr": ""}
-}
-```
-
-Claudio parses that, figures out you ran git commit, checks if it worked (no stderr), and plays the right success sound.
-
-## Technical Stuff
-
-Uses malgo for audio because cross-platform audio in Go is otherwise a nightmare. Preloads sounds into memory so there's no delay when playing them. Supports WAV, MP3, and AIFF formats.
-
-The command parsing knows about git, npm, docker, cargo, go, pip, yarn, kubectl, and more. It can extract subcommands so `docker build` gets different sounds than `docker run`.
-
-Follows XDG directory specs and includes comprehensive test coverage.
-
-## Building It
+Antigravity support is command-artifact only:
 
 ```bash
-go build -o claudio .
+claudio install-commands --agent antigravity
 ```
 
-Tests:
+## Event Coverage
+
+Claude Code installs these default-enabled hooks:
+
+- `PreToolUse`
+- `PostToolUse`
+- `UserPromptSubmit`
+- `Notification`
+- `Stop`
+- `SubagentStop`
+- `PreCompact`
+- `SessionStart`
+
+Codex installs these default-enabled hooks:
+
+- `PreToolUse`
+- `PostToolUse`
+- `UserPromptSubmit`
+- `Stop`
+- `SubagentStop`
+- `SubagentStart`
+- `PreCompact`
+- `PostCompact`
+- `SessionStart`
+- `PermissionRequest`
+
+## How Sound Selection Works
+
+For a Bash tool call like `git commit -m "fix"`, Claudio extracts `git` as the
+command and `commit` as the subcommand. It then walks a most-specific to
+least-specific chain.
+
+Pre-tool loading chain:
+
+```text
+loading/git-commit-start.wav
+loading/git-commit.wav
+loading/git-start.wav
+loading/git.wav
+loading/bash-start.wav
+loading/bash.wav
+loading/tool-start.wav
+loading/loading.wav
+default.wav
+```
+
+Post-tool success or failure chain:
+
+```text
+success/git-commit-success.wav
+success/git-success.wav
+success/bash-success.wav
+success/tool-complete.wav
+success/success.wav
+default.wav
+```
+
+Simple events such as prompts, notifications, completion, and compaction use
+event-specific chains under `interactive/`, `completion/`, or `system/`.
+
+## Everyday Control
+
 ```bash
-go test ./...
+claudio status
+claudio volume 0.5
+claudio mute
+claudio unmute
+claudio soundpack list
+claudio analyze missing
 ```
 
-Debug what's happening:
+Install an optional in-agent control command:
+
 ```bash
-export CLAUDIO_LOG_LEVEL=debug
-echo '...' | claudio
+claudio install-commands --agent claude
+claudio install-commands --agent codex
 ```
 
-## Problems?
+Claude Code gets `/claudio`. Codex gets a `$claudio` skill.
 
-**No sound?** Check your volume isn't zero and your audio system works.
+## Configuration
 
-**Wrong sounds?** Turn on debug logging and see what fallback chain it's using.
+Claudio works without a config file. Defaults are platform-aware: Windows,
+macOS, WSL, and Linux get embedded or system-backed sound mappings when
+available.
 
-**Something broken?** Logs are at `~/.cache/claudio/logs/claudio.log`
+Persistent configuration lives at the first XDG config path, normally
+`~/.config/claudio/config.json` on Unix-like systems and the platform XDG
+equivalent on Windows.
 
-**Silence is golden?** `export CLAUDIO_ENABLED=false`
+The fastest way to inspect the active result is:
 
-## The Point
+```bash
+claudio status
+```
 
-Every `git push` deserves a victory sound. Every failed test deserves a sad trombone. Claudio delivers both.
+See [Configuration](configuration) for every field and override.
 
----
+## Documentation
 
-*Built with comprehensive test coverage and structured logging.*
+- [Installation](installation)
+- [CLI Reference](cli-reference)
+- [Configuration](configuration)
+- [Soundpacks](soundpacks)
+- [Examples](examples)
+- [Troubleshooting](troubleshooting)

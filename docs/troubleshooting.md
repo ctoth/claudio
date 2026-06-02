@@ -5,462 +5,293 @@ title: "Troubleshooting"
 
 # Troubleshooting
 
-Common issues and solutions for Claudio installation and usage.
-
-## Installation Issues
-
-### "claudio: command not found"
-
-**Problem:** The claudio binary isn't found in your PATH.
-
-**Solutions:**
-
-1. **Check Go installation:**
-   ```bash
-   go version
-   ```
-   If Go isn't installed, install it from [golang.org](https://golang.org).
-
-2. **Check GOPATH/GOBIN:**
-   ```bash
-   go env GOPATH
-   go env GOBIN
-   ```
-   The binary is installed to `$GOPATH/bin` (usually `~/go/bin`).
-
-3. **Add Go bin to PATH:**
-   ```bash
-   # Add to ~/.bashrc or ~/.zshrc
-   export PATH=$PATH:$(go env GOPATH)/bin
-   
-   # Reload shell
-   source ~/.bashrc
-   ```
-
-4. **Verify installation:**
-   ```bash
-   ls -la $(go env GOPATH)/bin/claudio
-   claudio --help
-   ```
-
-### "No Claude Code settings found"
-
-**Problem:** Claudio can't locate Claude Code settings files.
-
-**Solutions:**
-
-1. **Verify Claude Code is installed:**
-   - Make sure Claude Code has been run at least once
-   - Check that settings directory exists
-
-2. **Check settings locations:**
-   ```bash
-   # User settings (all platforms; Windows resolves to %USERPROFILE%\.claude\settings.json)
-   ls -la ~/.claude/settings.json
-
-   # Project settings
-   ls -la .claude/settings.json
-   ```
-
-3. **Try different scope:**
-   ```bash
-   # If user scope fails, try project scope
-   claudio install --scope project
-   
-   # If project scope fails, try user scope
-   claudio install --scope user
-   ```
-
-4. **Create settings manually:**
-   ```bash
-   # Create settings directory
-   mkdir -p ~/.claude
-
-   # Create minimal settings file
-   echo '{}' > ~/.claude/settings.json
-
-   # Try installation again
-   claudio install
-   ```
-
-### Installation Permission Errors
-
-**Problem:** Permission denied when installing hooks.
-
-**Solutions:**
-
-1. **Check file permissions:**
-   ```bash
-   ls -la ~/.claude/settings.json
-   ```
-
-2. **Fix permissions:**
-   ```bash
-   chmod 644 ~/.claude/settings.json
-   chmod 755 ~/.claude
-   ```
-
-3. **Run with correct user:**
-   ```bash
-   # Don't use sudo for user-scope installation
-   claudio install
-   ```
-
-## Audio Issues
-
-### No Sound Output
-
-**Problem:** Claudio runs but produces no audio.
-
-**Solutions:**
-
-1. **Check system audio:**
-   ```bash
-   # Test system audio works
-   speaker-test -t sine -f 1000 -l 1  # Linux
-   afplay /System/Library/Sounds/Ping.aiff  # macOS
-   ```
-
-2. **Check Claudio configuration:**
-   ```bash
-   # Verify Claudio is enabled
-   export CLAUDIO_LOG_LEVEL=debug
-   echo '{"hook_event_name":"PostToolUse","tool_name":"Bash","tool_response":{"stdout":"test"}}' | claudio
-   ```
-
-3. **Check volume settings:**
-   ```bash
-   # Test with higher volume
-   echo '...' | claudio --volume 1.0
-   
-   # Check configuration volume
-   export CLAUDIO_VOLUME=0.8
-   ```
-
-4. **Verify soundpack exists:**
-   ```bash
-   # Check default soundpack (note the soundpacks/ subdir is required)
-   ls -la /usr/local/share/claudio/soundpacks/default/
-   ls -la ~/.local/share/claudio/soundpacks/default/
-
-   # Test with explicit soundpack
-   CLAUDIO_SOUNDPACK=default echo '...' | claudio
-   ```
-
-### Audio Crackling or Distortion
-
-**Problem:** Sound plays but has crackling or distortion.
-
-**Solutions:**
-
-1. **Lower volume:**
-   ```bash
-   # Try lower volume levels
-   echo '...' | claudio --volume 0.3
-   echo '...' | claudio --volume 0.5
-   ```
-
-2. **Check sound file quality:**
-   ```bash
-   # Verify sound files aren't corrupted
-   file /usr/local/share/claudio/soundpacks/default/default.wav
-
-   # Play sound file directly
-   aplay /usr/local/share/claudio/soundpacks/default/default.wav  # Linux
-   afplay /usr/local/share/claudio/soundpacks/default/default.wav  # macOS
-   ```
-
-3. **Update audio configuration:**
-   ```json
-   {
-     "volume": 0.3,
-     "log_level": "debug"
-   }
-   ```
-
-### "No audio device available"
-
-**Problem:** Claudio reports no audio devices found.
-
-**Solutions:**
-
-1. **Check audio system:**
-   ```bash
-   # Linux: Check ALSA/PulseAudio
-   aplay -l
-   pulseaudio --check
-   
-   # WSL: Install audio utilities if missing
-   sudo apt update && sudo apt install pulseaudio-utils
-   
-   # macOS: Check system preferences
-   system_profiler SPAudioDataType
-   ```
-
-2. **Try different audio backends:**
-   ```bash
-   # Run with debug to see audio system info
-   export CLAUDIO_LOG_LEVEL=debug
-   echo '...' | claudio
-   ```
-
-3. **Restart audio services:**
-   ```bash
-   # Linux
-   sudo systemctl restart pulseaudio
-   sudo systemctl restart alsa-state
-   
-   # macOS
-   sudo killall coreaudiod
-   ```
-
-## Claude Code Integration Issues
-
-### Hooks Not Triggering
-
-**Problem:** Claudio installed but no sounds during Claude Code usage.
-
-**Solutions:**
-
-1. **Verify hook installation:**
-   ```bash
-   # Check what's installed
-   claudio install --dry-run
-   
-   # Print current configuration
-   claudio install --print
-   ```
-
-2. **Check Claude Code settings:**
-   ```bash
-   # Examine settings file directly
-   cat ~/.claude/settings.json
-
-   # Look for a hooks section like:
-   # "hooks": {
-   #   "PreToolUse": [{"hooks": [{"type": "command", "command": "claudio"}]}],
-   #   "PostToolUse": [{"hooks": [{"type": "command", "command": "claudio"}]}],
-   #   ...
-   # }
-   ```
-
-3. **Reinstall hooks:**
-   ```bash
-   # Reinstall hooks (overwrites existing Claudio hooks)
-   claudio install
-   ```
-
-4. **Test hook execution manually:**
-   ```bash
-   # Test PostToolUse hook
-   echo '{"session_id":"test","transcript_path":"/test","cwd":"/test","hook_event_name":"PostToolUse","tool_name":"Bash","tool_response":{"stdout":"test","stderr":"","interrupted":false}}' | claudio
-   ```
-
-### Wrong Sounds Playing
-
-**Problem:** Sounds play but aren't appropriate for the tool being used.
-
-**Solutions:**
-
-1. **Enable debug logging:**
-   ```bash
-   export CLAUDIO_LOG_LEVEL=debug
-   # Use Claude Code normally to see sound selection process
-   ```
-
-2. **Check soundpack contents:**
-   ```bash
-   # List available sounds
-   find /usr/local/share/claudio/soundpacks/default -name "*.wav" | sort
-
-   # Verify tool-specific sounds exist
-   ls -la /usr/local/share/claudio/soundpacks/default/success/git-*
-   ls -la /usr/local/share/claudio/soundpacks/default/success/npm-*
-   ```
-
-3. **Test fallback chain:**
-   ```bash
-   # Create test hook JSON with specific tool
-   echo '{"hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"git status"},"tool_response":{"stdout":"clean","stderr":""}}' | claudio
-   ```
-
-## Configuration Issues
-
-### Configuration Not Loading
-
-**Problem:** Configuration changes don't take effect.
-
-**Solutions:**
-
-1. **Check configuration file location:**
-   ```bash
-   # Find where Claudio looks for config
-   export CLAUDIO_LOG_LEVEL=debug
-   echo '...' | claudio 2>&1 | grep -i config
-   ```
-
-2. **Verify JSON syntax:**
-   ```bash
-   # Validate configuration file
-   cat /etc/xdg/claudio/config.json | jq .
-   cat ~/.config/claudio/config.json | jq .
-   ```
-
-3. **Check file permissions:**
-   ```bash
-   ls -la /etc/xdg/claudio/config.json
-   ls -la ~/.config/claudio/config.json
-   ```
-
-4. **Test with environment variables:**
-   ```bash
-   # Override configuration temporarily
-   CLAUDIO_VOLUME=0.1 CLAUDIO_LOG_LEVEL=debug echo '...' | claudio
-   ```
-
-### Environment Variables Not Working
-
-**Problem:** Environment variables don't override configuration.
-
-**Solutions:**
-
-1. **Check variable names:**
-   ```bash
-   # Correct names (case-sensitive)
-   export CLAUDIO_VOLUME=0.5
-   export CLAUDIO_ENABLED=true
-   export CLAUDIO_SOUNDPACK=default
-   export CLAUDIO_LOG_LEVEL=debug
-   ```
-
-2. **Verify variables are set:**
-   ```bash
-   env | grep CLAUDIO
-   ```
-
-3. **Test individual variables:**
-   ```bash
-   # Test each variable separately
-   CLAUDIO_VOLUME=0.1 echo '...' | claudio
-   CLAUDIO_ENABLED=false echo '...' | claudio
-   ```
-
-## Soundpack Issues
-
-### Custom Soundpack Not Found
-
-**Problem:** Custom soundpack can't be loaded.
-
-**Solutions:**
-
-1. **Check soundpack structure:**
-   ```bash
-   # Verify directory structure (note the soundpacks/ subdir is required)
-   find ~/.local/share/claudio/soundpacks/my-pack -type f
-
-   # Must contain at least:
-   # default.wav
-   # success/success.wav
-   # error/error.wav
-   # loading/loading.wav
-   ```
-
-2. **Check search paths:**
-   ```bash
-   # Debug soundpack discovery
-   export CLAUDIO_LOG_LEVEL=debug
-   CLAUDIO_SOUNDPACK=my-pack echo '...' | claudio
-   ```
-
-3. **Test with absolute path:**
-   ```json
-   {
-     "default_soundpack": "my-pack",
-     "soundpack_paths": ["/full/path/to/soundpack/directory"]
-   }
-   ```
-
-### Sound Files Not Playing
-
-**Problem:** Soundpack found but individual sounds don't play.
-
-**Solutions:**
-
-1. **Check audio format:**
-   ```bash
-   # Verify file format
-   file ~/.local/share/claudio/soundpacks/my-pack/default.wav
-
-   # Should be: WAVE audio, MP3, or AIFF
-   ```
-
-2. **Test files directly:**
-   ```bash
-   # Play sound file with system player
-   aplay ~/.local/share/claudio/soundpacks/my-pack/default.wav  # Linux
-   afplay ~/.local/share/claudio/soundpacks/my-pack/default.wav  # macOS
-   ```
-
-3. **Check file permissions:**
-   ```bash
-   ls -la ~/.local/share/claudio/soundpacks/my-pack/*.wav
-   # Should be readable (644 or similar)
-   ```
-
-## Debug Information Collection
-
-### Enabling Debug Mode
-
-For comprehensive troubleshooting, enable debug logging:
+Start with:
 
 ```bash
-export CLAUDIO_LOG_LEVEL=debug
+claudio status
 ```
 
-### Collecting System Information
+That shows the config file in use, whether audio is enabled, the effective
+volume, active soundpack, backend, logging, tracking, and Claudio version.
+
+## `claudio: command not found`
+
+Check where Go installed the binary:
 
 ```bash
-# System information
-uname -a
-go version
+go env GOPATH
+go env GOBIN
+```
 
-# Audio system information
-# Linux
-aplay -l
-pulseaudio --dump-conf
+Add the relevant bin directory to `PATH`, usually:
 
-# macOS
-system_profiler SPAudioDataType
+```bash
+export PATH="$PATH:$(go env GOPATH)/bin"
+```
 
-# Claudio configuration
-claudio install --print
-find /usr/local/share/claudio/soundpacks -name "*.wav" | head -10
+Then verify:
+
+```bash
+claudio --version
+```
+
+## Hooks Installed But No Sound
+
+Check that Claudio is not muted:
+
+```bash
+claudio status
+claudio unmute
+claudio volume 0.5
+```
+
+Check environment overrides:
+
+```bash
 env | grep CLAUDIO
 ```
 
-### Testing Hook Execution
+`CLAUDIO_ENABLED=false` or `CLAUDIO_VOLUME=0` can override the config file.
+
+Run a manual payload:
 
 ```bash
-# Test complete hook pipeline
-export CLAUDIO_LOG_LEVEL=debug
-echo '{"session_id":"debug","transcript_path":"/tmp/test","cwd":"/tmp","hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"echo test"},"tool_response":{"stdout":"test\n","stderr":"","interrupted":false}}' | claudio
+echo '{"session_id":"debug","cwd":".","hook_event_name":"PostToolUse","tool_name":"Bash","tool_response":{"stdout":"ok","stderr":"","interrupted":false}}' | claudio
 ```
 
-## Getting Help
+If that works, the issue is likely hook registration or agent trust. If it
+does not, inspect logging and audio backend configuration.
 
-If these solutions don't resolve your issue:
+## Codex Hooks Do Nothing
 
-1. **Check existing issues:** [GitHub Issues](https://github.com/ctoth/claudio/issues)
-2. **Create new issue:** Include debug output and system information
-3. **Include in issue report:**
-   - Operating system and version
-   - Go version
-   - Output of debug mode
-   - Claude Code version
-   - Steps to reproduce
+After installing Codex hooks:
+
+```bash
+claudio install --agent codex --scope user
+```
+
+Run `/hooks` in Codex and trust the Claudio hook. Codex will not run an
+untrusted hook.
+
+Dry-run the target path:
+
+```bash
+claudio install --agent codex --scope user --dry-run
+```
+
+For project hooks, make sure you installed from the project root:
+
+```bash
+claudio install --agent codex --scope project --dry-run
+```
+
+## Claude Code Hooks Do Nothing
+
+Inspect the target settings file:
+
+```bash
+claudio install --agent claude --scope user --dry-run
+claudio install --agent claude --scope user --print
+```
+
+For project hooks, run from the repository root:
+
+```bash
+claudio install --agent claude --scope project --dry-run
+```
+
+Reinstalling is idempotent for Claudio hooks:
+
+```bash
+claudio install --agent claude --scope user
+```
+
+## Wrong Sound Plays
+
+Use tracking first:
+
+```bash
+claudio analyze usage --show-chains --show-summary
+claudio analyze missing --preset all-time --limit 50
+```
+
+If a specific sound is missing, add that key to your soundpack. For example,
+when `git commit` falls back to `success/git-success.wav`, add:
+
+```text
+success/git-commit-success.wav
+```
+
+Validate after changes:
+
+```bash
+claudio soundpack validate ./my-pack
+```
+
+## Custom Soundpack Not Found
+
+List discovered soundpacks:
+
+```bash
+claudio soundpack list
+```
+
+If your pack is not listed, install it:
+
+```bash
+claudio soundpack install ./my-pack --default
+```
+
+or use a JSON path directly in config:
+
+```json
+{
+  "default_soundpack": "my-pack",
+  "soundpack_paths": ["/absolute/path/to/my-pack.json"]
+}
+```
+
+Directory packs in the standard data location must live under:
+
+```text
+<XDG_DATA_HOME>/claudio/soundpacks/<name>/
+```
+
+## JSON Soundpack Fails Validation
+
+Run:
+
+```bash
+claudio soundpack validate ./my-pack.json
+```
+
+Common causes:
+
+- Referenced files do not exist.
+- Relative paths are relative to the JSON file, not the shell's current directory.
+- File extensions are not WAV, MP3, or AIFF.
+- The JSON file is too large or malformed.
+
+Empty mappings are allowed. Broken references fail validation.
+
+## Directory Soundpack Fails Validation
+
+Run:
+
+```bash
+claudio soundpack validate ./my-pack
+```
+
+Check:
+
+- Audio files are regular files, not symlinks.
+- Extensions are `.wav`, `.mp3`, or `.aiff`.
+- Paths match Claudio keys, such as `success/git-success.wav`.
+- `default.wav` exists for final fallback.
+
+## Audio Backend Errors
+
+Show the configured backend:
+
+```bash
+claudio status
+```
+
+Try the system-command backend:
+
+```bash
+echo '{"session_id":"debug","cwd":".","hook_event_name":"Stop"}' | CLAUDIO_AUDIO_BACKEND=system_command claudio
+```
+
+`system_command` uses platform audio commands where available. On Linux, make
+sure tools such as `paplay`, `ffplay`, `afplay`, or `aplay` are installed as
+appropriate for your environment.
+
+The `fake` backend is for tests. It accepts playback calls but produces no
+audio.
+
+## Debug Logs
+
+Enable debug file logging:
+
+```bash
+export CLAUDIO_LOG_LEVEL=debug
+```
+
+Default log path:
+
+```text
+<XDG_CACHE_HOME>/claudio/logs/claudio.log
+```
+
+If you do not want a log file for a one-off run:
+
+```bash
+CLAUDIO_FILE_LOGGING=false claudio status
+```
+
+## Tracking Has No Data
+
+Check status:
+
+```bash
+claudio status
+```
+
+If tracking is disabled, enable it:
+
+```bash
+export CLAUDIO_SOUND_TRACKING=true
+```
+
+or in config:
+
+```json
+{
+  "sound_tracking": {
+    "enabled": true
+  }
+}
+```
+
+Then use Claudio normally and rerun:
+
+```bash
+claudio analyze usage
+claudio analyze missing
+```
+
+## Remove Claudio
+
+Remove hooks:
+
+```bash
+claudio uninstall --agent claude --scope user
+claudio uninstall --agent codex --scope user
+```
+
+Remove optional command artifacts:
+
+```bash
+claudio uninstall-commands --agent claude
+claudio uninstall-commands --agent codex
+claudio uninstall-commands --agent antigravity
+```
+
+## Report An Issue
+
+Include:
+
+- Operating system
+- `claudio --version`
+- `claudio status`
+- Agent and scope used for installation
+- Relevant debug log excerpt
+- A small hook payload that reproduces the issue, if possible
 
 ## See Also
 
-- **[Installation Guide](/installation)** - Proper setup procedures
-- **[Configuration](/configuration)** - Configuration file format and options
-- **[CLI Reference](/cli-reference)** - Command-line usage details
+- [Installation](installation)
+- [CLI Reference](cli-reference)
+- [Configuration](configuration)
+- [Soundpacks](soundpacks)

@@ -4,5 +4,17 @@
   "soundpack_paths": [],
   "enabled": true,
   "log_level": "warn",
-  "audio_backend": "auto"
+  "audio_backend": "auto",
+  "file_logging": {
+    "enabled": true,
+    "filename": "",
+    "max_size_mb": 10,
+    "max_backups": 5,
+    "max_age_days": 30,
+    "compress": true
+  },
+  "sound_tracking": {
+    "enabled": true,
+    "database_path": ""
+  }
 }

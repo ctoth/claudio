@@ -5,598 +5,281 @@ title: "Soundpacks"
 
 # Soundpacks
 
-Soundpacks are Claudio's system for organizing and playing contextual audio. Understanding the soundpack structure and fallback system is key to customizing your audio experience.
+A soundpack maps Claudio sound keys to audio files. Soundpacks can be
+directories, JSON files, or git repositories managed by Claudio.
 
-## Soundpack Directory Structure
+Supported audio formats are:
 
-A soundpack is a directory containing organized sound files. Here's the standard structure:
+- WAV
+- MP3
+- AIFF
 
+## Categories
+
+Claudio currently maps events into these categories:
+
+| Category | Typical events | Directory |
+| --- | --- | --- |
+| Loading | `PreToolUse`, `SubagentStart` | `loading/` |
+| Success | successful `PostToolUse` | `success/` |
+| Error | failed `PostToolUse` | `error/` |
+| Interactive | prompts, notifications, permission requests | `interactive/` |
+| Completion | `Stop`, `SubagentStop` | `completion/` |
+| System | session start and compaction | `system/` |
+
+`default.wav` is the final fallback for every chain.
+
+## Directory Soundpacks
+
+Directory soundpacks use the sound key as a relative file path.
+
+```text
+my-pack/
+  default.wav
+  loading/
+    git-commit-start.wav
+    git-start.wav
+    bash-start.wav
+    loading.wav
+  success/
+    git-commit-success.wav
+    git-success.wav
+    bash-success.wav
+    success.wav
+  error/
+    git-commit-error.wav
+    git-error.wav
+    bash-error.wav
+    error.wav
+  interactive/
+    message-sent.wav
+    notification.wav
+    permission-request.wav
+    interactive.wav
+  completion/
+    agent-complete.wav
+    subagent-complete.wav
+    completion.wav
+  system/
+    session-start.wav
+    compacting.wav
+    post-compact.wav
+    system.wav
 ```
-default/                    # Soundpack directory
-├── loading/               # PreToolUse event sounds  
-│   ├── git-commit-start.wav     # Git commit operations starting
-│   ├── git-start.wav            # Git operations starting
-│   ├── npm-start.wav            # NPM operations starting
-│   ├── bash-start.wav           # General bash operations
-│   └── loading.wav              # Generic loading sound
-├── success/               # PostToolUse success sounds
-│   ├── git-commit-success.wav  # Specific: git commit succeeded
-│   ├── git-success.wav         # Tool: any git operation succeeded
-│   ├── bash-success.wav        # Operation: any bash command succeeded
-│   └── success.wav             # Category: any successful operation
-├── error/                 # PostToolUse error sounds
-│   ├── git-error.wav          # Git operations failed
-│   ├── npm-error.wav          # NPM operations failed
-│   ├── bash-error.wav         # General bash failures
-│   └── error.wav              # Generic error sound
-├── interactive/           # UserPromptSubmit sounds
-│   ├── message-sent.wav       # User sent a message
-│   └── interactive.wav        # Generic interaction
-└── default.wav            # Ultimate fallback sound
+
+Install a directory pack:
+
+```bash
+claudio soundpack validate ./my-pack
+claudio soundpack install ./my-pack --default
 ```
 
-## Virtual (JSON) Soundpacks
+Directory packs are copied to:
 
-Want to use existing system sounds without copying files around? JSON soundpacks let you map Claudio's sound paths to any audio files on your system.
+```text
+<XDG_DATA_HOME>/claudio/soundpacks/<name>/
+```
 
-### How They Work
+## JSON Soundpacks
 
-Instead of organizing actual sound files in directories, you create a JSON file that maps Claudio sound keys to audio file paths. Mapped paths can be absolute, or relative to the JSON soundpack file:
+JSON soundpacks map sound keys to files anywhere on disk. Paths can be absolute
+or relative to the JSON file.
 
 ```json
 {
   "name": "system-sounds",
-  "description": "Uses existing system sounds",
+  "description": "Small pack using existing local sounds",
   "version": "1.0.0",
   "mappings": {
-    "success/bash-success.wav": "sounds/bash-success.wav",
-    "success/git-success.wav": "/usr/share/sounds/alsa/Front_Left.wav", 
-    "error/bash-error.wav": "/usr/share/sounds/alsa/Side_Right.wav",
-    "error/error.wav": "/usr/share/sounds/alsa/Side_Left.wav",
-    "loading/loading.wav": "/usr/share/sounds/alsa/Rear_Center.wav",
-    "default.wav": "/usr/share/sounds/alsa/Front_Center.wav"
+    "success/success.wav": "./sounds/success.wav",
+    "error/error.wav": "/home/me/sounds/error.mp3",
+    "loading/loading.wav": "./sounds/loading.wav",
+    "interactive/message-sent.wav": "./sounds/message-sent.aiff",
+    "default.wav": "./sounds/default.wav"
   }
 }
 ```
 
-Save this as `/path/to/my-sounds.json` and reference it in your config:
-
-```json
-{
-  "default_soundpack": "my-sounds",
-  "soundpack_paths": ["/path/to/my-sounds.json"]
-}
-```
-
-### JSON Soundpack Structure
-
-**Required fields:**
-- `name` - Identifier for the soundpack
-- `mappings` - Object mapping Claudio sound keys to absolute paths or paths relative to the JSON file
-
-**Optional fields:**
-- `description` - Human-readable description  
-- `version` - Version string for tracking
-
-**Validation:**
-- All mapped files must exist when the soundpack loads
-- Supports same audio formats as directory soundpacks (WAV, MP3, AIFF)
-
-### Use Cases
-
-**System Sound Integration:**
-```json
-{
-  "name": "macos-system", 
-  "mappings": {
-    "success/success.wav": "/System/Library/Sounds/Glass.aiff",
-    "error/error.wav": "/System/Library/Sounds/Sosumi.aiff",
-    "loading/loading.wav": "/System/Library/Sounds/Tink.aiff"
-  }
-}
-```
-
-**Reusing Files:**
-```json
-{
-  "name": "minimal-shared",
-  "mappings": {
-    "success/bash-success.wav": "/home/user/sounds/success.wav",
-    "success/git-success.wav": "/home/user/sounds/success.wav",
-    "success/success.wav": "/home/user/sounds/success.wav",
-    "error/bash-error.wav": "/home/user/sounds/error.wav", 
-    "error/git-error.wav": "/home/user/sounds/error.wav",
-    "error/error.wav": "/home/user/sounds/error.wav"
-  }
-}
-```
-
-**Mix and Match:**
-```json
-{
-  "name": "hybrid-pack",
-  "mappings": {
-    "success/git-commit-success.wav": "/home/user/custom/git-commit.wav",
-    "success/success.wav": "/usr/share/sounds/freedesktop/stereo/complete.oga",
-    "error/error.wav": "/usr/share/sounds/freedesktop/stereo/dialog-error.oga",
-    "default.wav": "/usr/share/sounds/freedesktop/stereo/bell.oga"
-  }
-}
-```
-
-### Creating JSON Soundpacks
-
-1. **Find your audio files:**
-   ```bash
-   find /usr/share/sounds -name "*.wav" -o -name "*.mp3" -o -name "*.oga"
-   ```
-
-2. **Create the JSON file:**
-   ```bash
-   cat > ~/.local/share/claudio/custom.json << 'EOF'
-   {
-     "name": "custom-sounds",
-     "description": "My custom sound mappings",
-     "mappings": {
-       "success/success.wav": "/path/to/my/success.wav",
-       "error/error.wav": "/path/to/my/error.wav", 
-       "default.wav": "/path/to/my/default.wav"
-     }
-   }
-   EOF
-   ```
-
-3. **Update your config:**
-   ```json
-   {
-     "default_soundpack": "custom-sounds",
-     "soundpack_paths": ["/home/user/.local/share/claudio/custom.json"]
-   }
-   ```
-
-4. **Test it:**
-   ```bash
-   echo '{"hook_event_name":"PostToolUse","tool_name":"Bash","tool_response":{"stdout":"test"}}' | claudio
-   ```
-
-### Benefits
-
-- **No file duplication** - Reference existing sounds anywhere on your system
-- **Easy distribution** - Share just a small JSON file instead of audio files
-- **Flexible mapping** - Multiple virtual sounds can use the same physical file
-- **System integration** - Use sounds that match your desktop environment
-
-### Same Fallback System
-
-JSON soundpacks use the exact same fallback system as directory soundpacks. The only difference is where the sounds come from.
-
-## The Multi-Level Fallback System
-
-Claudio uses different fallback chains depending on the event type. Each chain searches for the most specific sound available:
-
-### PostToolUse Success Events (6-Level Fallback)
-
-When Claude runs `git commit -m "fix bug"` and it succeeds:
-
-1. **Level 1 - Exact Hint Match**
-   ```
-   success/git-commit-success.wav
-   ```
-   Most specific: exact tool + subcommand + result
-
-2. **Level 2 - Command with Suffix**
-   ```
-   success/git-success.wav
-   ```
-   Tool-specific: git + success suffix
-
-3. **Level 3 - Original Tool with Suffix**
-   ```
-   success/bash-success.wav
-   ```
-   Original tool: bash + success suffix
-
-4. **Level 4 - Operation-Specific**
-   ```
-   success/tool-complete.wav
-   ```
-   Operation type: tool completion
-
-5. **Level 5 - Category-Specific**
-   ```
-   success/success.wav
-   ```
-   Result category: any successful operation
-
-6. **Level 6 - Default**
-   ```
-   default.wav
-   ```
-   Ultimate fallback: always present
-
-### PreToolUse Loading Events (9-Level Enhanced Fallback)
-
-When Claude is about to run `npm install express`:
-
-1. **Level 1 - Exact Hint Match**
-   ```
-   loading/npm-install-start.wav
-   ```
-   Most specific: npm install starting
-
-2. **Level 2 - Command-Subcommand**
-   ```
-   loading/npm-install.wav
-   ```
-   Tool + subcommand: npm install
-
-3. **Level 3 - Command with Suffix**
-   ```
-   loading/npm-start.wav
-   ```
-   Tool + start suffix: npm starting
-
-4. **Level 4 - Command-Only**
-   ```
-   loading/npm.wav
-   ```
-   Tool-specific: any npm operation
-
-5. **Level 5 - Original Tool with Suffix**
-   ```
-   loading/bash-start.wav
-   ```
-   Original tool + suffix: bash starting
-
-6. **Level 6 - Original Tool**
-   ```
-   loading/bash.wav
-   ```
-   Original tool: bash operations
-
-7. **Level 7 - Operation-Specific**
-   ```
-   loading/tool-start.wav
-   ```
-   Operation type: tool starting
-
-8. **Level 8 - Category-Specific**
-   ```
-   loading/loading.wav
-   ```
-   Event category: any operation starting
-
-9. **Level 9 - Default**
-   ```
-   default.wav
-   ```
-   Ultimate fallback
-
-### Simple Events (4-Level Fallback)
-
-For UserPromptSubmit and other simple events:
-
-1. **Level 1 - Specific Hint**
-   ```
-   interactive/message-sent.wav
-   ```
-   Event-specific sound
-
-2. **Level 2 - Event-Specific**
-   ```
-   interactive/prompt-submit.wav
-   ```
-   Operation-based sound
-
-3. **Level 3 - Category-Specific**
-   ```
-   interactive/interactive.wav
-   ```
-   Category fallback
-
-4. **Level 4 - Default**
-   ```
-   default.wav
-   ```
-   Ultimate fallback
-
-## Sound Categories
-
-### loading/ - PreToolUse Events
-
-Played when Claude Code is about to run a tool. These are "start" or "loading" sounds.
-
-**Common Files:**
-- `git-commit-start.wav` - Git commit operations starting
-- `git-start.wav` - Git operations starting
-- `npm-install-start.wav` - NPM install operations starting
-- `npm-start.wav` - NPM operations starting  
-- `docker-start.wav` - Docker operations starting
-- `bash-start.wav` - General bash commands starting
-- `tool-start.wav` - Generic tool starting
-- `loading.wav` - Generic loading sound
-
-### success/ - PostToolUse Success
-
-Played when a tool completes successfully (no stderr, zero exit code).
-
-**Common Files:**
-- `git-commit-success.wav` - Git commits succeeded
-- `git-push-success.wav` - Git pushes succeeded
-- `npm-install-success.wav` - NPM installs succeeded
-- `test-success.wav` - Test suites passed
-- `build-success.wav` - Build processes succeeded
-- `success.wav` - Generic success sound
-
-### error/ - PostToolUse Failures
-
-Played when a tool fails (stderr present, non-zero exit code).
-
-**Common Files:**
-- `git-error.wav` - Git operations failed
-- `npm-error.wav` - NPM operations failed
-- `test-error.wav` - Test suites failed
-- `build-error.wav` - Build processes failed
-- `error.wav` - Generic error sound
-
-### interactive/ - UserPromptSubmit
-
-Played when you send a message to Claude Code.
-
-**Common Files:**
-- `message-sent.wav` - User sent a message
-- `interactive.wav` - Generic interaction sound
-
-## Creating Custom Soundpacks
-
-You can create custom soundpacks in two ways: traditional directory-based soundpacks or virtual JSON soundpacks.
-
-### Option 1: Directory Soundpack
-
-**Step 1: Create Directory Structure**
-
-Directory soundpacks live under the literal `claudio/soundpacks/<id>`
-subpath inside an XDG data directory:
+Create a template:
 
 ```bash
-mkdir -p ~/.local/share/claudio/soundpacks/my-pack/{loading,success,error,interactive}
+claudio soundpack init my-pack
 ```
 
-**Step 2: Add Sound Files**
-
-Add `.wav`, `.mp3`, or `.aiff` files to appropriate directories. Start with essentials:
+Pre-fill the template with the current platform defaults:
 
 ```bash
-# Essential files for a functional soundpack
-touch ~/.local/share/claudio/soundpacks/my-pack/loading/loading.wav
-touch ~/.local/share/claudio/soundpacks/my-pack/success/success.wav
-touch ~/.local/share/claudio/soundpacks/my-pack/error/error.wav
-touch ~/.local/share/claudio/soundpacks/my-pack/interactive/interactive.wav
-touch ~/.local/share/claudio/soundpacks/my-pack/default.wav
+claudio soundpack init my-pack --from-platform
 ```
 
-**Step 3: Configure Claudio**
-
-```json
-{
-  "default_soundpack": "my-pack"
-}
-```
-
-You only need to add explicit entries to `soundpack_paths` for soundpacks that
-live OUTSIDE the standard XDG locations — Claudio searches the XDG data dirs
-automatically.
-
-### Option 2: JSON Soundpack (Recommended)
-
-**Step 1: Create JSON File**
+Install a JSON pack:
 
 ```bash
-cat > ~/.local/share/claudio/my-pack.json << 'EOF'
-{
-  "name": "my-pack",
-  "description": "My custom soundpack",
-  "mappings": {
-    "success/success.wav": "/usr/share/sounds/freedesktop/stereo/complete.oga",
-    "error/error.wav": "/usr/share/sounds/freedesktop/stereo/dialog-error.oga",
-    "loading/loading.wav": "/usr/share/sounds/freedesktop/stereo/bell.oga",
-    "default.wav": "/usr/share/sounds/freedesktop/stereo/bell.oga"
-  }
-}
-EOF
+claudio soundpack validate ./my-pack.json
+claudio soundpack install ./my-pack.json --default
 ```
 
-**Step 2: Configure Claudio**
+JSON packs are copied to:
 
-```json
-{
-  "default_soundpack": "my-pack",
-  "soundpack_paths": ["/home/user/.local/share/claudio/my-pack.json"]
-}
+```text
+<XDG_DATA_HOME>/claudio/<name>.json
 ```
 
-### Testing Your Soundpack
+## Managed Git Soundpacks
+
+Managed git soundpacks are cloned into Claudio's data directory and recorded in
+the managed soundpack registry. Claudio adds the playable subpath to
+`soundpack_paths`, so runtime resolution uses the same loader as local packs.
 
 ```bash
-# Test with your new soundpack
-echo '{"hook_event_name":"PostToolUse","tool_name":"Bash","tool_response":{"stdout":"success"}}' | claudio
+claudio soundpack add https://github.com/owner/repo --name my-pack --default
+claudio soundpack add gh:owner/repo --subdir packs/minimal --name minimal
 ```
 
-## Git Soundpacks
-
-Soundpacks can also be managed directly from git repositories. Claudio clones
-managed repositories into its data directory, records them in
-`soundpacks.json`, and adds the playable directory or JSON file to
-`soundpack_paths`.
+Update:
 
 ```bash
-# Add from a normal git URL
-claudio soundpack add https://github.com/ctoth/whatever --name whatever
-
-# Add with the GitHub shorthand alias
-claudio soundpack add gh:ctoth/whatever
-
-# Use a branch, tag, commit, or a subdirectory/file inside the repo
-claudio soundpack add gh:ctoth/whatever --ref main --subdir soundpack.json --default
-```
-
-Managed git soundpacks can be updated and removed:
-
-```bash
-claudio soundpack update whatever
+claudio soundpack update my-pack
 claudio soundpack update --all
-claudio soundpack status whatever
-claudio soundpack remove whatever
 ```
 
-Use `--force` with `update` to discard local changes in the managed clone, and
-`--keep-files` with `remove` to leave the clone on disk.
-
-## Advanced Soundpack Techniques
-
-### Tool-Specific Customization
-
-Create highly specific sounds for tools you use frequently:
-
-```
-success/
-├── git-commit-success.wav     # Git commits
-├── git-push-success.wav       # Git pushes
-├── git-pull-success.wav       # Git pulls
-├── npm-install-success.wav    # NPM installs
-├── npm-test-success.wav       # NPM tests
-├── docker-build-success.wav   # Docker builds
-└── pytest-success.wav        # Python tests
-```
-
-### Contextual Error Sounds
-
-Different sounds for different types of failures:
-
-```
-error/
-├── git-merge-error.wav        # Merge conflicts
-├── npm-install-error.wav      # Dependency issues
-├── test-error.wav             # Test failures
-├── build-error.wav            # Compilation errors
-└── network-error.wav          # Network timeouts
-```
-
-### Minimal Soundpacks
-
-For distraction-free environments, create minimal soundpacks:
-
-```
-minimal/
-├── success/
-│   └── success.wav           # Subtle success chime
-├── error/
-│   └── error.wav             # Gentle error tone
-└── default.wav               # Quiet notification
-```
-
-## Soundpack Discovery
-
-Claudio searches for soundpacks in these locations. Every XDG-derived path
-includes the literal `claudio/soundpacks/` segment (hardcoded in
-`internal/config/xdg.go`):
-
-1. **Custom paths** (from configuration `soundpack_paths`)
-2. **User directory:** `~/.local/share/claudio/soundpacks/<id>` (or `$XDG_DATA_HOME/claudio/soundpacks/<id>`)
-3. **System directory:** `/usr/local/share/claudio/soundpacks/<id>`
-4. **System fallback:** `/usr/share/claudio/soundpacks/<id>`
-
-### Listing Available Soundpacks
+Remove:
 
 ```bash
-# Check what soundpacks are available
-ls ~/.local/share/claudio/soundpacks/
-ls /usr/local/share/claudio/soundpacks/
+claudio soundpack remove my-pack
 ```
 
-### Testing Soundpack Availability
+Inspect:
 
 ```bash
-# Test if a soundpack exists and works
-CLAUDIO_SOUNDPACK=test-pack echo '...' | claudio
+claudio soundpack status
+claudio soundpack status my-pack
 ```
 
-## Audio Format Requirements
+## Fallback Chains
 
-**Supported Formats:**
-- WAV (recommended)
-- MP3
-- AIFF (16/24/32-bit, mono/stereo; auto-detected from magic bytes)
+Fallback chains are ordered from most specific to least specific. The first
+existing sound wins.
 
-The decoder registry that registers WAV/MP3/AIFF is at
-`internal/audio/registry.go`.
+### PreToolUse
 
-**Recommendations:**
-- **Sample Rate:** 44.1kHz or 48kHz
-- **Bit Depth:** 16-bit or 24-bit
-- **Length:** 0.5-3 seconds for UI sounds
-- **Volume:** Normalized to prevent clipping
+For `git commit` started through the Bash tool:
 
-**Avoid:**
-- Very long sounds (>5 seconds) for frequent events
-- Sounds with long fade-ins for immediate feedback
-- Extremely quiet or loud sounds (use consistent levels)
+```text
+loading/git-commit-start.wav
+loading/git-commit.wav
+loading/git-start.wav
+loading/git.wav
+loading/bash-start.wav
+loading/bash.wav
+loading/tool-start.wav
+loading/loading.wav
+default.wav
+```
 
-## Built-in Tool Detection
+### PostToolUse
 
-Claudio recognizes these tools and can provide specific sounds:
+For a successful `git commit`:
 
-**Version Control:**
-- git, svn, hg
+```text
+success/git-commit-success.wav
+success/git-success.wav
+success/bash-success.wav
+success/tool-complete.wav
+success/success.wav
+default.wav
+```
 
-**Package Managers:**
-- npm, yarn, pip, cargo, composer
+For a failed `git commit`, the category changes:
 
-**Build Tools:**
-- make, cmake, gradle, maven
+```text
+error/git-commit-error.wav
+error/git-error.wav
+error/bash-error.wav
+error/tool-complete.wav
+error/error.wav
+default.wav
+```
 
-**Containers:**
-- docker, podman, kubectl
+### Simple Events
 
-**Languages/Runtime:**
-- node, python, go, rust, java
+For `UserPromptSubmit`:
 
-**Testing:**
-- pytest, jest, mocha, cargo test
+```text
+interactive/message-sent.wav
+interactive/prompt-submit.wav
+interactive/interactive.wav
+default.wav
+```
 
-## Soundpack Best Practices
+For `Stop`:
 
-1. **Start Simple:** Begin with category-level sounds (success.wav, error.wav)
-2. **Add Gradually:** Add tool-specific sounds for frequently used tools
-3. **Stay Consistent:** Use similar audio characteristics across your soundpack
-4. **Test Thoroughly:** Verify sounds work for common development workflows
-5. **Consider Context:** Match sound mood to your development environment
+```text
+completion/agent-complete.wav
+completion/stop.wav
+completion/completion.wav
+default.wav
+```
 
-## Troubleshooting Soundpacks
+For `PreCompact`:
 
-**Soundpack not found:**
-- Check soundpack name matches directory name exactly
-- Verify soundpack directory is in search paths
-- Check directory permissions are readable
+```text
+system/compacting.wav
+system/pre-compact.wav
+system/system.wav
+default.wav
+```
 
-**No sounds playing:**
-- Ensure `default.wav` exists (required fallback)
-- Check audio file formats are supported (WAV/MP3)
-- Verify files aren't corrupted or empty
+## Command Parsing
 
-**Wrong sounds playing:**
-- Enable debug logging: `CLAUDIO_LOG_LEVEL=debug`
-- Check fallback chain in debug output
-- Verify file naming matches expected patterns
+For Bash tool events, Claudio parses the command string and recognizes common
+subcommands for tools such as:
 
-**JSON soundpack issues:**
-- Check JSON syntax is valid: `python -m json.tool my-pack.json`
-- Verify all mapped files exist and are readable
-- Ensure `name` field matches the soundpack identifier
-- Check file extensions in config match the JSON filename
+- `git`
+- `npm`
+- `docker`
+- `cargo`
+- `go`
+- `pip`
+- `yarn`
+- `kubectl`
+
+Unknown commands are handled conservatively. Claudio still tries command-level
+sounds such as `loading/systemctl-start.wav` when the words look like a command
+and subcommand rather than file paths or URLs.
+
+MCP tool names beginning with `mcp__` are normalized to `mcp` for sound lookup.
+
+## Validation
+
+```bash
+claudio soundpack validate ./my-pack.json
+claudio soundpack validate ./my-pack
+```
+
+Validation reports:
+
+- Total known-key coverage
+- Coverage by category
+- Broken JSON references
+- Unsupported file extensions
+- Empty mappings
+
+Broken references fail validation. Empty mappings do not.
+
+## Use Tracking To Improve A Pack
+
+Enable tracking, use Claudio normally, then inspect missing sounds:
+
+```bash
+claudio analyze missing --preset all-time --limit 50
+```
+
+The most frequent missing keys are usually the best next sounds to add.
 
 ## See Also
 
-- **[Configuration](/configuration)** - Setting up soundpack paths
-- **[Examples](/examples)** - Real-world soundpack usage scenarios
-- **[CLI Reference](/cli-reference)** - Command-line soundpack options
+- [CLI Reference](cli-reference)
+- [Configuration](configuration)
+- [Examples](examples)
+- [Troubleshooting](troubleshooting)
