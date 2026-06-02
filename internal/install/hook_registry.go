@@ -81,6 +81,21 @@ var CodexHooks = []HookDefinition{
 	{Name: "PermissionRequest", Category: hooks.Interactive, Description: "Play sounds for Codex permission requests", DefaultEnabled: true},
 }
 
+// GeminiHooks defines the registry of Gemini CLI hooks supported by Claudio.
+var GeminiHooks = []HookDefinition{
+	{Name: "BeforeTool", Category: hooks.Loading, Description: "Play loading sounds before Gemini tool execution", DefaultEnabled: true},
+	{Name: "AfterTool", Category: hooks.Success, Description: "Play success/error sounds after Gemini tool execution", DefaultEnabled: true},
+	{Name: "BeforeAgent", Category: hooks.Interactive, Description: "Play interaction sounds when a Gemini prompt starts", DefaultEnabled: true},
+	{Name: "AfterAgent", Category: hooks.Completion, Description: "Play sounds when Gemini finishes responding", DefaultEnabled: true},
+	{Name: "BeforeModel", Category: hooks.Silent, Description: "Install no-op Gemini hook before model requests", DefaultEnabled: true},
+	{Name: "AfterModel", Category: hooks.Silent, Description: "Install no-op Gemini hook after model responses", DefaultEnabled: true},
+	{Name: "BeforeToolSelection", Category: hooks.Silent, Description: "Install no-op Gemini hook before tool selection", DefaultEnabled: true},
+	{Name: "SessionStart", Category: hooks.System, Description: "Play sounds when a Gemini session starts or resumes", DefaultEnabled: true},
+	{Name: "SessionEnd", Category: hooks.Interactive, Description: "Play sounds when a Gemini session ends", DefaultEnabled: true},
+	{Name: "Notification", Category: hooks.Interactive, Description: "Play sounds for Gemini notifications", DefaultEnabled: true},
+	{Name: "PreCompress", Category: hooks.System, Description: "Play sounds before Gemini context compression", DefaultEnabled: true},
+}
+
 // GetAllHooks returns all hooks defined in the registry
 func GetAllHooks() []HookDefinition {
 	slog.Debug("retrieving all hooks from registry", "total_hooks", len(AllHooks))

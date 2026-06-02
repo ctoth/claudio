@@ -349,6 +349,12 @@ func TestIsClaudioHookFormats(t *testing.T) {
 	if !IsClaudioHook(`"/usr/local/bin/claudio.exe"`) {
 		t.Error("expected quoted windows claudio recognized")
 	}
+	if !IsClaudioHook(`/usr/local/bin/claudio --hook-agent gemini`) {
+		t.Error("expected claudio command with arguments recognized")
+	}
+	if !IsClaudioHook(`"C:\Program Files\claudio.exe" --hook-agent gemini`) {
+		t.Error("expected quoted claudio command with arguments recognized")
+	}
 	if IsClaudioHook("/usr/bin/other") {
 		t.Error("non-claudio command must not be recognized")
 	}

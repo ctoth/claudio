@@ -9,12 +9,30 @@ import (
 func TestFindCodexHooksPathsUserScope(t *testing.T) {
 	t.Setenv("CODEX_HOME", "")
 
+	paths, err := FindCodexHooksPaths("global")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(paths) == 0 {
+		t.Fatal("expected at least one global-scope path")
+	}
+	want := filepath.Join(".codex", "hooks.json")
+	for _, p := range paths {
+		if !strings.HasSuffix(p, want) {
+			t.Errorf("path %q does not end with %q", p, want)
+		}
+	}
+}
+
+func TestFindCodexHooksPathsLegacyUserScope(t *testing.T) {
+	t.Setenv("CODEX_HOME", "")
+
 	paths, err := FindCodexHooksPaths("user")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(paths) == 0 {
-		t.Fatal("expected at least one user-scope path")
+		t.Fatal("expected at least one legacy user-scope path")
 	}
 	want := filepath.Join(".codex", "hooks.json")
 	for _, p := range paths {

@@ -3,6 +3,7 @@ package hooks
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -96,6 +97,7 @@ func TestEventCategory_String_NewCategories(t *testing.T) {
 		{"Interactive category", Interactive, "interactive"},
 		{"Completion category", Completion, "completion"},
 		{"System category", System, "system"},
+		{"Silent category", Silent, "silent"},
 	}
 
 	for _, tt := range tests {
@@ -103,6 +105,27 @@ func TestEventCategory_String_NewCategories(t *testing.T) {
 			result := tt.category.String()
 			if result != tt.expected {
 				t.Errorf("EventCategory.String() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGeminiNoSoundEventsAreSilent(t *testing.T) {
+	for _, eventName := range []string{"BeforeModel", "AfterModel", "BeforeToolSelection"} {
+		t.Run(eventName, func(t *testing.T) {
+			event := &HookEvent{
+				SessionID:      "session",
+				TranscriptPath: "/tmp/transcript",
+				CWD:            "/tmp",
+				EventName:      eventName,
+			}
+
+			context := event.GetContext()
+			if context.Category != Silent {
+				t.Errorf("category = %v, want Silent", context.Category)
+			}
+			if context.Operation != strings.ToLower(eventName) {
+				t.Errorf("operation = %q, want %q", context.Operation, strings.ToLower(eventName))
 			}
 		})
 	}

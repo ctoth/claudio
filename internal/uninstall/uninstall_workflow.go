@@ -26,10 +26,11 @@ func RunUninstallWorkflow(filesystem afero.Fs, scope string, agent install.Agent
 		"scope", scope,
 		"agent", agent)
 
-	// Step 1: Validate scope
-	if scope != "user" && scope != "project" {
-		return fmt.Errorf("invalid scope '%s': must be 'user' or 'project'", scope)
+	normalizedScope, err := install.NormalizeScope(scope)
+	if err != nil {
+		return err
 	}
+	scope = normalizedScope
 
 	slog.Debug("validated uninstall scope", "scope", scope)
 
@@ -41,6 +42,16 @@ func RunUninstallWorkflow(filesystem afero.Fs, scope string, agent install.Agent
 		return fmt.Errorf("failed to resolve settings path for agent %s scope %s: %w", agent, scope, err)
 	}
 	slog.Debug("resolved settings path from agent", "agent", agent, "scope", scope, "path", settingsPath)
+
+	exists, err := afero.Exists(filesystem, settingsPath)
+	if err != nil {
+		return fmt.Errorf("failed to check settings path %s: %w", settingsPath, err)
+	}
+	if !exists {
+		slog.Info("settings file not found, uninstall is idempotent",
+			"settings_path", settingsPath)
+		return nil
+	}
 
 	// Acquire advisory lock around the full read-mutate-write window so
 	// concurrent install/uninstall processes serialise. See

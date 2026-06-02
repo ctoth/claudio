@@ -8,16 +8,21 @@ import (
 	"strings"
 )
 
-// FindClaudeSettingsPaths finds potential Claude Code settings file paths based on scope
-// Returns a list of paths in priority order for the given scope (user or project)
+// FindClaudeSettingsPaths finds potential Claude Code settings file paths based on scope.
+// Returns a list of paths in priority order for global or project scope.
+// The legacy user scope is accepted as an alias for global.
 func FindClaudeSettingsPaths(scope string) ([]string, error) {
-	switch scope {
-	case "user":
+	normalizedScope, err := NormalizeScope(scope)
+	if err != nil {
+		return nil, err
+	}
+	switch normalizedScope {
+	case ScopeGlobal:
 		return findUserScopePaths()
-	case "project":
+	case ScopeProject:
 		return findProjectScopePaths()
 	default:
-		return nil, fmt.Errorf("invalid scope '%s': must be 'user' or 'project'", scope)
+		return nil, fmt.Errorf("invalid scope '%s': must be 'global' or 'project'", scope)
 	}
 }
 

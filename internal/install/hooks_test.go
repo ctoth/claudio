@@ -362,7 +362,7 @@ func TestGenerateClaudioHooksCorrectFormat(t *testing.T) {
 
 			// Since generateTestHooks() uses mock path, expect mock path
 			expectedPath := "/test/mock/claudio"
-			
+
 			// The command should be unquoted (quotes are handled by JSON marshaling)
 			if commandStr != expectedPath {
 				t.Errorf("Hook %s command should be '%s', got '%s'", hookName, expectedPath, commandStr)
@@ -493,6 +493,35 @@ func TestGenerateClaudioHooksForCodexAgent(t *testing.T) {
 	cfg := arr[0].(map[string]interface{})
 	if cfg["matcher"] != "*" {
 		t.Errorf("codex matcher = %v, want *", cfg["matcher"])
+	}
+}
+
+func TestGenerateClaudioHooksForGeminiAgent(t *testing.T) {
+	result, err := GenerateClaudioHooksForAgent("/usr/local/bin/claudio", AgentGemini)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	hooks, ok := result.(HooksMap)
+	if !ok {
+		t.Fatalf("expected HooksMap, got %T", result)
+	}
+	if len(hooks) != len(GeminiHooks) {
+		t.Errorf("expected %d gemini hooks, got %d", len(GeminiHooks), len(hooks))
+	}
+	if _, ok := hooks["BeforeModel"]; !ok {
+		t.Error("expected BeforeModel in gemini hooks")
+	}
+
+	arr := hooks["BeforeTool"].([]interface{})
+	cfg := arr[0].(map[string]interface{})
+	if cfg["matcher"] != "" {
+		t.Errorf("gemini matcher = %v, want empty matcher", cfg["matcher"])
+	}
+
+	hookList := cfg["hooks"].([]interface{})
+	command := hookList[0].(map[string]interface{})["command"]
+	if command != "/usr/local/bin/claudio --hook-agent gemini" {
+		t.Errorf("gemini command = %v, want claudio with hook-agent flag", command)
 	}
 }
 

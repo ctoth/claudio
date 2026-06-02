@@ -72,7 +72,7 @@ jobs:
       # These packages have no cgo dependency, so no ALSA headers are needed.
       - name: Enforce coverage floor
         run: |
-          THRESHOLD=89.0
+          THRESHOLD=91.0
           status=0
           for pkg in ./internal/hooks ./internal/install; do
             line=$(go test "$pkg" -count=1 -cover)

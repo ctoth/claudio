@@ -128,20 +128,19 @@ later).
 
 ---
 
-## Codex install e2e variant not yet written
+## Codex and Gemini install e2e variants not yet written
 
 **Location:** `internal/cli/install_command_e2e_test.go` — covers
-Claude install end-to-end; the Codex variant (different agent registry,
-different settings.json schema) has no equivalent test.
+Claude install end-to-end; Codex and Gemini variants have no equivalent
+test.
 
-**Severity:** Low. The Codex install path is unit-tested via the
-agent registry; the gap is "we never ran the full install workflow
-against a Codex settings file under `CLAUDIO_TEST_RECOGNIZE_GO_TEST`."
-If the schemas drift (e.g. Codex's matcher syntax changes) we will
-catch it in unit tests, but the e2e assertion that the runtime hook
-actually fires is missing for Codex.
+**Severity:** Low. The Codex and Gemini install paths are unit-tested via
+the agent registry and settings merge tests. The missing piece is a full
+install workflow test against `.codex/hooks.json` and `.gemini/settings.json`
+under `CLAUDIO_TEST_RECOGNIZE_GO_TEST`. If a schema drifts, unit tests should
+catch most of it, but the full install path is still covered only for Claude.
 
 **Blast radius if fixed:** One new test file paralleling the existing
-Claude e2e test, using the Codex agent. The plumbing all exists.
+Claude e2e test, using Codex and Gemini targets. The plumbing exists.
 
 **Original finding:** Chunk 18 analyst F6.

@@ -35,7 +35,6 @@ var executableRecognizer = func(name string) bool {
 	return false
 }
 
-
 // GenerateClaudioHooks creates the Claude Code hook configuration (backward-compatible default).
 func GenerateClaudioHooks(executablePath string) (interface{}, error) {
 	return GenerateClaudioHooksForAgent(executablePath, AgentClaude)
@@ -61,7 +60,7 @@ func GenerateClaudioHooksForAgent(executablePath string, agent Agent) (interface
 				"hooks": []interface{}{
 					map[string]interface{}{
 						"type":    "command",
-						"command": executablePath,
+						"command": hookCommandForAgent(executablePath, agent),
 					},
 				},
 			},
@@ -84,6 +83,20 @@ func GenerateClaudioHooksForAgent(executablePath string, agent Agent) (interface
 		"hooks", getHookNamesList(hooks))
 
 	return hooks, nil
+}
+
+func hookCommandForAgent(executablePath string, agent Agent) string {
+	if agent != AgentGemini {
+		return executablePath
+	}
+	return quoteCommandArg(executablePath) + " --hook-agent gemini"
+}
+
+func quoteCommandArg(arg string) string {
+	if !strings.ContainsAny(arg, " \t\r\n\"") {
+		return arg
+	}
+	return `"` + strings.ReplaceAll(arg, `"`, `\"`) + `"`
 }
 
 // getHookNamesList returns a list of hook names for logging
@@ -361,11 +374,54 @@ func itemContainsClaudioCommand(item map[string]interface{}) bool {
 // uninstall maintained two recognizers with divergent code shapes;
 // they happened to agree on production inputs only by accident.)
 func IsClaudioCommandString(cmdStr string) bool {
-	// Strip surrounding quotes if present (for Windows compatibility)
-	if len(cmdStr) >= 2 && cmdStr[0] == '"' && cmdStr[len(cmdStr)-1] == '"' {
-		cmdStr = cmdStr[1 : len(cmdStr)-1]
+	cmdStr = strings.TrimSpace(cmdStr)
+	if cmdStr == "" {
+		return false
 	}
-	return executableRecognizer(commandBasename(cmdStr))
+
+	// Preserve support for legacy unquoted Windows paths with spaces, such as
+	// C:\Program Files\claudio.exe, by trying the full string before treating
+	// whitespace as argument separation.
+	if executableRecognizer(commandBasename(stripSurroundingQuotes(cmdStr))) {
+		return true
+	}
+
+	if executable, ok := leadingCommandToken(cmdStr); ok {
+		return executableRecognizer(commandBasename(executable))
+	}
+
+	return false
+}
+
+func stripSurroundingQuotes(s string) string {
+	if len(s) >= 2 {
+		if (s[0] == '"' && s[len(s)-1] == '"') || (s[0] == '\'' && s[len(s)-1] == '\'') {
+			return s[1 : len(s)-1]
+		}
+	}
+	return s
+}
+
+func leadingCommandToken(s string) (string, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "", false
+	}
+
+	if s[0] == '"' || s[0] == '\'' {
+		quote := s[0]
+		for i := 1; i < len(s); i++ {
+			if s[i] == quote {
+				return s[1:i], true
+			}
+		}
+		return stripSurroundingQuotes(s), true
+	}
+
+	if i := strings.IndexAny(s, " \t\r\n"); i >= 0 {
+		return s[:i], true
+	}
+	return s, true
 }
 
 // commandBasename returns the final path segment of a command string,
@@ -431,4 +487,3 @@ func GetExecutablePath() (string, error) {
 	}
 	return p, nil
 }
-

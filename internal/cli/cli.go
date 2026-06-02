@@ -88,8 +88,10 @@ func NewCLI() *CLI {
 	rootCmd.PersistentFlags().Bool("silent", false, "Silent mode - no audio playback")
 	rootCmd.PersistentFlags().Bool("daemon-child", false, "Internal: run as detached hook worker")
 	rootCmd.PersistentFlags().String("hook-input-file", "", "Internal: hook payload file for detached worker")
+	rootCmd.PersistentFlags().String("hook-agent", "", "Internal: agent that invoked this hook")
 	_ = rootCmd.PersistentFlags().MarkHidden("daemon-child")
 	_ = rootCmd.PersistentFlags().MarkHidden("hook-input-file")
+	_ = rootCmd.PersistentFlags().MarkHidden("hook-agent")
 
 	// Note: cobra automatically registers a `--version` boolean flag (and
 	// short `-v`) once rootCmd.Version is set. We do not register a manual
@@ -493,7 +495,7 @@ func runStdinModeE(cmd *cobra.Command, args []string) error {
 			slog.Error("detached hook worker start failed", "error", err)
 			return err
 		}
-		return nil
+		return writeGeminiHookSuccessResponse(cmd, inputData)
 	}
 
 	// Initialize tracking (before audio system initialization). Pass the
@@ -509,7 +511,23 @@ func runStdinModeE(cmd *cobra.Command, args []string) error {
 	}
 
 	// Process hook input payload.
-	return processHookInput(cmd, cli, cfg, inputData)
+	if err := processHookInput(cmd, cli, cfg, inputData); err != nil {
+		return err
+	}
+	return writeGeminiHookSuccessResponse(cmd, inputData)
+}
+
+func writeGeminiHookSuccessResponse(cmd *cobra.Command, inputData []byte) error {
+	if len(inputData) == 0 {
+		return nil
+	}
+	hookAgent, _ := cmd.Flags().GetString("hook-agent")
+	if strings.EqualFold(strings.TrimSpace(hookAgent), "gemini") {
+		if _, err := fmt.Fprintln(cmd.OutOrStdout(), "{}"); err != nil {
+			return fmt.Errorf("failed to write Gemini hook response: %w", err)
+		}
+	}
+	return nil
 }
 
 // Run executes the CLI with the given arguments and I/O streams
@@ -542,6 +560,7 @@ func (c *CLI) Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 	slog.Debug("about to call initializeSystems()")
 	c.initializeSystems()
 	slog.Debug("initializeSystems() completed")
+	setupDefaultCommandLogging(stderr)
 
 	// Ensure resources are cleaned up on exit
 	defer func() {
@@ -575,6 +594,12 @@ func (c *CLI) Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 	}
 
 	return 0
+}
+
+func setupDefaultCommandLogging(stderr io.Writer) {
+	slog.SetDefault(slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{
+		Level: slog.LevelError,
+	})))
 }
 
 // initializeConfigManager initializes only the config manager early for log level configuration
