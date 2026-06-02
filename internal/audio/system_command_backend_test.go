@@ -143,8 +143,8 @@ func TestBuildPlayerArgv_AplayFullVolumeNoWarn(t *testing.T) {
 }
 
 // TestBuildPlayerArgv_UnknownCommandFallsBack confirms the default branch
-// passes only filePath. The existing TestSystemCommandBackend_Play uses
-// command="echo" -- this guards that test from regressing.
+// passes only filePath. TestSystemCommandBackend_Play uses a harmless
+// platform command, but echo still exercises the default argv branch here.
 func TestBuildPlayerArgv_UnknownCommandFallsBack(t *testing.T) {
 	scb := NewSystemCommandBackend("echo")
 	argv := scb.buildPlayerArgv("/tmp/x.wav", 0.5)
