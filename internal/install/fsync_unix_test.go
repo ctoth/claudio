@@ -2,11 +2,14 @@
 
 package install
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+)
 
-func TestFsyncDir_RealOsPath(t *testing.T) {
-	dir := t.TempDir()
-	if err := fsyncDir(dir); err != nil {
-		t.Errorf("fsyncDir on real dir failed: %v", err)
+func TestFsyncDirReturnsOpenError(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "missing")
+	if err := fsyncDir(missing); err == nil {
+		t.Fatal("expected error for missing directory")
 	}
 }
