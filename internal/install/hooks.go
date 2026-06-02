@@ -365,7 +365,21 @@ func IsClaudioCommandString(cmdStr string) bool {
 	if len(cmdStr) >= 2 && cmdStr[0] == '"' && cmdStr[len(cmdStr)-1] == '"' {
 		cmdStr = cmdStr[1 : len(cmdStr)-1]
 	}
-	return executableRecognizer(filepath.Base(cmdStr))
+	return executableRecognizer(commandBasename(cmdStr))
+}
+
+// commandBasename returns the final path segment of a command string,
+// splitting on both '/' and '\' regardless of the host OS. filepath.Base
+// only honors the running platform's separator, so on Linux/macOS it left
+// a Windows-style hook command like `C:\Program Files\claudio.exe` intact
+// and the recognizer never saw the bare `claudio.exe`. settings.json is
+// portable data — a hook authored on Windows can be inspected on Linux and
+// vice versa — so recognition must not depend on the reader's OS.
+func commandBasename(cmdStr string) string {
+	if i := strings.LastIndexAny(cmdStr, `/\`); i >= 0 {
+		return cmdStr[i+1:]
+	}
+	return cmdStr
 }
 
 // isClaudioCommandString is the previous (unexported) spelling, kept as
