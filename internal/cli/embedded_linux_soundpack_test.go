@@ -1,10 +1,14 @@
 package cli
 
 import (
+	"context"
+	"encoding/json"
 	"os"
 	"testing"
 
 	"claudio.click/internal/cli/testenv"
+	"claudio.click/internal/hooks"
+	"claudio.click/internal/sounds"
 	"claudio.click/internal/soundpack"
 )
 
@@ -33,11 +37,14 @@ func TestEmbeddedLinuxSoundpackResolves(t *testing.T) {
 
 	resolver := soundpack.NewSoundpackResolver(mapper)
 
+	// These are the category-level keys the sound mapper's fallback chains
+	// emit (<category>/<category>.wav) plus the terminal default — i.e. the
+	// keys linux.json must map for events to resolve.
 	keys := []string{
-		"success/default",
-		"error/default",
-		"loading/default",
-		"interactive/default",
+		"success/success.wav",
+		"error/error.wav",
+		"loading/loading.wav",
+		"interactive/interactive.wav",
 		"default.wav",
 	}
 
@@ -62,5 +69,47 @@ func TestEmbeddedLinuxSoundpackResolves(t *testing.T) {
 	if len(distinct) < 2 {
 		t.Errorf("expected the default cues to resolve to distinct files, got %d unique path(s): %v",
 			len(distinct), resolved)
+	}
+}
+
+// TestEmbeddedLinuxSoundpackSelectsDistinctCuesPerCategory drives the sound
+// mapper — the same selection logic the integration suite's
+// TestEndToEndSoundPathTracking exercises — against the embedded Linux pack,
+// with the pack forced by name so it runs on any host (a developer box and
+// WSL are detected as WSL and would otherwise use wsl.json). It guards the
+// keys in linux.json: they must be the category-level paths the fallback
+// chains actually emit (<category>/<category>.wav), or every event collapses
+// to the terminal default.wav and Linux users hear one sound for everything.
+func TestEmbeddedLinuxSoundpackSelectsDistinctCuesPerCategory(t *testing.T) {
+	testenv.IsolateXDG(t)
+
+	mapper, err := loadEmbeddedPlatformSoundpack("embedded:linux.json")
+	if err != nil {
+		t.Fatalf("loadEmbeddedPlatformSoundpack(embedded:linux.json) failed: %v", err)
+	}
+	soundMapper := sounds.NewSoundMapperWithResolver(soundpack.NewSoundpackResolver(mapper))
+
+	success := json.RawMessage(`{"stdout":"ok","stderr":"","interrupted":false}`)
+	failure := json.RawMessage(`{"stdout":"","stderr":"boom","interrupted":false}`)
+	events := []hooks.HookEvent{
+		{EventName: "PostToolUse", ToolName: stringPtr("Edit"), ToolResponse: &success},
+		{EventName: "PostToolUse", ToolName: stringPtr("Read"), ToolResponse: &failure},
+		{EventName: "PreToolUse", ToolName: stringPtr("Write"), ToolResponse: &success},
+		{EventName: "UserPromptSubmit"},
+	}
+
+	selected := make(map[string]struct{})
+	for _, e := range events {
+		result := soundMapper.MapSound(context.Background(), e.GetContext())
+		selected[result.SelectedPath] = struct{}{}
+	}
+
+	if len(selected) < 2 {
+		paths := make([]string, 0, len(selected))
+		for p := range selected {
+			paths = append(paths, p)
+		}
+		t.Errorf("expected distinct cues across success/error/loading/interactive events, got %d: %v",
+			len(selected), paths)
 	}
 }

@@ -315,13 +315,13 @@ func TestLoadEmbeddedLinuxSoundpackResolvesRelativeMappingsAgainstXDG(t *testing
 		t.Fatalf("loadEmbeddedPlatformSoundpack(embedded:linux.json) failed: %v", err)
 	}
 
-	got, err := mapper.MapPath("success/default")
+	got, err := mapper.MapPath("success/success.wav")
 	if err != nil {
-		t.Fatalf("MapPath(success/default): %v", err)
+		t.Fatalf("MapPath(success/success.wav): %v", err)
 	}
 	want := filepath.Join(basePath, "default-success.wav")
 	if len(got) != 1 || filepath.Clean(got[0]) != filepath.Clean(want) {
-		t.Errorf("success/default resolved to %v, want [%s]", got, want)
+		t.Errorf("success/success.wav resolved to %v, want [%s]", got, want)
 	}
 }
 
