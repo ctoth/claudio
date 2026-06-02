@@ -28,6 +28,23 @@ func TestFindClaudeSettingsPathsGlobalScope(t *testing.T) {
 	}
 }
 
+func TestFindClaudeSettingsPathsGlobalFallbackWhenHomeMissing(t *testing.T) {
+	t.Setenv("HOME", "")
+	t.Setenv("USERPROFILE", "")
+	t.Setenv("HOMEDRIVE", "")
+	t.Setenv("HOMEPATH", "")
+
+	paths, err := FindClaudeSettingsPaths("global")
+	if err != nil {
+		t.Fatalf("FindClaudeSettingsPaths returned error: %v", err)
+	}
+
+	want := filepath.Join("~", ".claude", "settings.json")
+	if len(paths) != 1 || paths[0] != want {
+		t.Fatalf("fallback paths = %v, want [%q]", paths, want)
+	}
+}
+
 func TestFindClaudeSettings(t *testing.T) {
 	// TDD RED: Test Claude settings path detection for user and project scopes
 	testCases := []struct {
@@ -52,13 +69,9 @@ func TestFindClaudeSettings(t *testing.T) {
 					t.Fatalf("Failed to create temp Claude dir: %v", err)
 				}
 
-				// Set HOME environment variable for testing
-				originalHome := os.Getenv("HOME")
-				os.Setenv("HOME", tempDir)
+				t.Setenv("HOME", tempDir)
 
-				return tempDir, func() {
-					os.Setenv("HOME", originalHome)
-				}
+				return tempDir, func() {}
 			},
 		},
 		{
@@ -210,22 +223,12 @@ func TestFindClaudeSettingsExistingFiles(t *testing.T) {
 			// Set up environment for the scope - must mock ALL home-related env vars
 			var cleanup func()
 			if tc.scope == "user" {
-				originalHome := os.Getenv("HOME")
-				originalUserProfile := os.Getenv("USERPROFILE")
-				originalHomeDrive := os.Getenv("HOMEDRIVE")
-				originalHomePath := os.Getenv("HOMEPATH")
+				t.Setenv("HOME", tempDir)
+				t.Setenv("USERPROFILE", tempDir)
+				t.Setenv("HOMEDRIVE", "")
+				t.Setenv("HOMEPATH", "")
 
-				os.Setenv("HOME", tempDir)
-				os.Setenv("USERPROFILE", tempDir)
-				os.Setenv("HOMEDRIVE", "")
-				os.Setenv("HOMEPATH", "")
-
-				cleanup = func() {
-					os.Setenv("HOME", originalHome)
-					os.Setenv("USERPROFILE", originalUserProfile)
-					os.Setenv("HOMEDRIVE", originalHomeDrive)
-					os.Setenv("HOMEPATH", originalHomePath)
-				}
+				cleanup = func() {}
 			} else {
 				originalDir, _ := os.Getwd()
 				_ = os.Chdir(tempDir)
@@ -439,22 +442,10 @@ func TestFindBestSettingsPath(t *testing.T) {
 			t.Fatalf("Failed to create file: %v", err)
 		}
 
-		// Set HOME to a nonexistent path, USERPROFILE to the real one
-		originalHome := os.Getenv("HOME")
-		originalUserProfile := os.Getenv("USERPROFILE")
-		originalHomeDrive := os.Getenv("HOMEDRIVE")
-		originalHomePath := os.Getenv("HOMEPATH")
-		defer func() {
-			os.Setenv("HOME", originalHome)
-			os.Setenv("USERPROFILE", originalUserProfile)
-			os.Setenv("HOMEDRIVE", originalHomeDrive)
-			os.Setenv("HOMEPATH", originalHomePath)
-		}()
-
-		os.Setenv("HOME", tempDir)
-		os.Setenv("USERPROFILE", tempDir)
-		os.Setenv("HOMEDRIVE", "")
-		os.Setenv("HOMEPATH", "")
+		t.Setenv("HOME", tempDir)
+		t.Setenv("USERPROFILE", tempDir)
+		t.Setenv("HOMEDRIVE", "")
+		t.Setenv("HOMEPATH", "")
 
 		path, err := FindBestSettingsPath("user")
 		if err != nil {
@@ -469,21 +460,10 @@ func TestFindBestSettingsPath(t *testing.T) {
 	t.Run("returns first path when no file exists", func(t *testing.T) {
 		tempDir := t.TempDir()
 
-		originalHome := os.Getenv("HOME")
-		originalUserProfile := os.Getenv("USERPROFILE")
-		originalHomeDrive := os.Getenv("HOMEDRIVE")
-		originalHomePath := os.Getenv("HOMEPATH")
-		defer func() {
-			os.Setenv("HOME", originalHome)
-			os.Setenv("USERPROFILE", originalUserProfile)
-			os.Setenv("HOMEDRIVE", originalHomeDrive)
-			os.Setenv("HOMEPATH", originalHomePath)
-		}()
-
-		os.Setenv("HOME", tempDir)
-		os.Setenv("USERPROFILE", tempDir)
-		os.Setenv("HOMEDRIVE", "")
-		os.Setenv("HOMEPATH", "")
+		t.Setenv("HOME", tempDir)
+		t.Setenv("USERPROFILE", tempDir)
+		t.Setenv("HOMEDRIVE", "")
+		t.Setenv("HOMEPATH", "")
 
 		path, err := FindBestSettingsPath("user")
 		if err != nil {
@@ -509,16 +489,9 @@ func TestGetHomeDirectoryWindowsPrefersUserProfile(t *testing.T) {
 		t.Skip("Windows-specific test")
 	}
 
-	originalHome := os.Getenv("HOME")
-	originalUserProfile := os.Getenv("USERPROFILE")
-	defer func() {
-		os.Setenv("HOME", originalHome)
-		os.Setenv("USERPROFILE", originalUserProfile)
-	}()
-
 	// Simulate MSYS environment: HOME=/c/Users/Q, USERPROFILE=C:\Users\Q
-	os.Setenv("HOME", "/c/Users/TestUser")
-	os.Setenv("USERPROFILE", "C:\\Users\\TestUser")
+	t.Setenv("HOME", "/c/Users/TestUser")
+	t.Setenv("USERPROFILE", "C:\\Users\\TestUser")
 
 	result := getHomeDirectory()
 	if result != "C:\\Users\\TestUser" {
@@ -531,22 +504,11 @@ func TestGetHomeDirectoryMSYSFallback(t *testing.T) {
 		t.Skip("Windows-specific test")
 	}
 
-	originalHome := os.Getenv("HOME")
-	originalUserProfile := os.Getenv("USERPROFILE")
-	originalHomeDrive := os.Getenv("HOMEDRIVE")
-	originalHomePath := os.Getenv("HOMEPATH")
-	defer func() {
-		os.Setenv("HOME", originalHome)
-		os.Setenv("USERPROFILE", originalUserProfile)
-		os.Setenv("HOMEDRIVE", originalHomeDrive)
-		os.Setenv("HOMEPATH", originalHomePath)
-	}()
-
 	// No USERPROFILE, only MSYS HOME
-	os.Setenv("HOME", "/c/Users/TestUser")
-	os.Setenv("USERPROFILE", "")
-	os.Setenv("HOMEDRIVE", "")
-	os.Setenv("HOMEPATH", "")
+	t.Setenv("HOME", "/c/Users/TestUser")
+	t.Setenv("USERPROFILE", "")
+	t.Setenv("HOMEDRIVE", "")
+	t.Setenv("HOMEPATH", "")
 
 	result := getHomeDirectory()
 	if result != "C:\\Users\\TestUser" {
@@ -569,9 +531,8 @@ func TestFindClaudeSettingsEnvironmentIntegration(t *testing.T) {
 				"HOME": "/custom/home",
 			},
 			setup: func() func() {
-				original := os.Getenv("HOME")
-				os.Setenv("HOME", "/custom/home")
-				return func() { os.Setenv("HOME", original) }
+				t.Setenv("HOME", "/custom/home")
+				return func() {}
 			},
 		},
 		{
@@ -581,14 +542,9 @@ func TestFindClaudeSettingsEnvironmentIntegration(t *testing.T) {
 				"USERPROFILE": "C:\\Users\\testuser",
 			},
 			setup: func() func() {
-				originalHome := os.Getenv("HOME")
-				originalUserProfile := os.Getenv("USERPROFILE")
-				os.Setenv("HOME", "") // Clear HOME to test USERPROFILE
-				os.Setenv("USERPROFILE", "C:\\Users\\testuser")
-				return func() {
-					os.Setenv("HOME", originalHome)
-					os.Setenv("USERPROFILE", originalUserProfile)
-				}
+				t.Setenv("HOME", "")
+				t.Setenv("USERPROFILE", "C:\\Users\\testuser")
+				return func() {}
 			},
 		},
 	}
@@ -617,7 +573,7 @@ func TestFindClaudeSettingsEnvironmentIntegration(t *testing.T) {
 
 				found := false
 				for _, path := range paths {
-					if strings.Contains(path, envValue) || strings.Contains(path, strings.Replace(envValue, "\\", "/", -1)) {
+					if strings.Contains(path, envValue) || strings.Contains(path, strings.ReplaceAll(envValue, "\\", "/")) {
 						found = true
 						break
 					}

@@ -215,8 +215,48 @@ func TestAgentDetectionPrivateHelpersRejectInvalidInputs(t *testing.T) {
 	if pathExists("") {
 		t.Fatal("empty path should not exist")
 	}
+	if hasAgentConfigEvidence(AgentAuto, ScopeGlobal) {
+		t.Fatal("auto is not a concrete agent and should not have config evidence")
+	}
+	if hasExistingClaudioHooks(AgentAuto, ScopeGlobal) {
+		t.Fatal("auto is not a concrete agent and should not have hook evidence")
+	}
 	if _, err := agentConfigPaths(AgentAuto, ScopeGlobal); err == nil {
 		t.Fatal("expected invalid concrete agent error for auto")
+	}
+}
+
+func TestHasExistingClaudioHooksHandlesMissingUnreadableAndNonClaudioSettings(t *testing.T) {
+	home := t.TempDir()
+	setIsolatedAgentEnv(t, t.TempDir(), home)
+
+	if hasExistingClaudioHooks(AgentClaude, ScopeGlobal) {
+		t.Fatal("missing settings file should not count as Claudio hook evidence")
+	}
+
+	settingsPath := filepath.Join(home, ".claude", "settings.json")
+	if err := os.MkdirAll(filepath.Dir(settingsPath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(settingsPath, []byte(`{bad json`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if hasExistingClaudioHooks(AgentClaude, ScopeGlobal) {
+		t.Fatal("unreadable settings should not count as Claudio hook evidence")
+	}
+
+	if err := os.WriteFile(settingsPath, []byte(`{"hooks":{"PreToolUse":"/usr/bin/logger"}}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if hasExistingClaudioHooks(AgentClaude, ScopeGlobal) {
+		t.Fatal("non-Claudio hooks should not count as Claudio hook evidence")
+	}
+
+	if err := os.WriteFile(settingsPath, []byte(`{"hooks":{"PreToolUse":"/usr/local/bin/claudio"}}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if !hasExistingClaudioHooks(AgentClaude, ScopeGlobal) {
+		t.Fatal("Claudio hook should count as hook evidence")
 	}
 }
 
