@@ -140,6 +140,33 @@ func TestWriteSettingsFileRoundTrip(t *testing.T) {
 	}
 }
 
+func TestWriteSettingsFileMarshalError(t *testing.T) {
+	fsys := afero.NewMemMapFs()
+	settings := &SettingsMap{"bad": make(chan int)}
+	if err := WriteSettingsFile(fsys, "/settings.json", settings); err == nil {
+		t.Error("expected marshal error for unsupported settings value")
+	}
+}
+
+func TestWriteSettingsFilePreservesExistingPermissions(t *testing.T) {
+	fsys := afero.NewMemMapFs()
+	path := "/settings.json"
+	if err := afero.WriteFile(fsys, path, []byte(`{"old":true}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	settings := &SettingsMap{"new": true}
+	if err := WriteSettingsFile(fsys, path, settings); err != nil {
+		t.Fatal(err)
+	}
+	info, err := fsys.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode() & os.ModePerm; got != 0600 {
+		t.Errorf("mode = %v, want 0600", got)
+	}
+}
+
 func TestMergeHookValuesStringFormatExisting(t *testing.T) {
 	// Existing hook in legacy string format (non-claudio) must be preserved
 	// and merged into array form alongside the claudio command.
@@ -178,6 +205,129 @@ func TestMergeHookValuesStringFormatExisting(t *testing.T) {
 	}
 }
 
+func TestMergeHooksRefreshesClaudioWithoutDroppingExistingHooks(t *testing.T) {
+	existing := &SettingsMap{
+		"hooks": map[string]interface{}{
+			"PreToolUse": []interface{}{
+				map[string]interface{}{
+					"matcher": ".*",
+					"hooks": []interface{}{
+						map[string]interface{}{"command": "/usr/bin/logger"},
+					},
+				},
+				map[string]interface{}{
+					"matcher": "*",
+					"hooks": []interface{}{
+						map[string]interface{}{"command": "/old/claudio"},
+					},
+				},
+			},
+		},
+	}
+	claudioHooks, err := GenerateClaudioHooksForAgent(afero.NewMemMapFs(), "/new/claudio", AgentCodex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	merged, err := MergeHooksIntoSettings(existing, claudioHooks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hooksSection := (*merged)["hooks"].(map[string]interface{})
+	arr := hooksSection["PreToolUse"].([]interface{})
+
+	foundLogger := false
+	foundOldClaudio := false
+	foundNewClaudio := false
+	for _, e := range arr {
+		cfg := e.(map[string]interface{})
+		for _, h := range cfg["hooks"].([]interface{}) {
+			switch h.(map[string]interface{})["command"] {
+			case "/usr/bin/logger":
+				foundLogger = true
+			case "/old/claudio":
+				foundOldClaudio = true
+			case "/new/claudio":
+				foundNewClaudio = true
+			}
+		}
+	}
+	if !foundLogger {
+		t.Error("existing non-claudio hook was dropped")
+	}
+	if foundOldClaudio {
+		t.Error("old claudio hook was not refreshed")
+	}
+	if !foundNewClaudio {
+		t.Error("new claudio hook missing after refresh")
+	}
+}
+
+func TestRemoveClaudioCommandsPreservesNonClaudioEntries(t *testing.T) {
+	entries := []interface{}{
+		"raw-entry",
+		map[string]interface{}{"matcher": "*"},
+		map[string]interface{}{
+			"matcher": "mixed",
+			"hooks": []interface{}{
+				"raw-hook",
+				map[string]interface{}{"command": 42},
+				map[string]interface{}{"command": "/old/claudio"},
+				map[string]interface{}{"command": "/usr/bin/logger"},
+			},
+		},
+		map[string]interface{}{
+			"matcher": "claudio-only",
+			"hooks": []interface{}{
+				map[string]interface{}{"command": "/old/claudio"},
+			},
+		},
+	}
+
+	filtered := removeClaudioCommands(entries)
+	if len(filtered) != 3 {
+		t.Fatalf("filtered entry count = %d, want 3: %#v", len(filtered), filtered)
+	}
+
+	foundLogger := false
+	foundOldClaudio := false
+	foundRawHook := false
+	foundNumericCommand := false
+	for _, entry := range filtered {
+		cfg, ok := entry.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		hooksList, ok := cfg["hooks"].([]interface{})
+		if !ok {
+			continue
+		}
+		for _, hook := range hooksList {
+			if hook == "raw-hook" {
+				foundRawHook = true
+				continue
+			}
+			cmd, ok := hook.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			switch cmd["command"] {
+			case 42:
+				foundNumericCommand = true
+			case "/old/claudio":
+				foundOldClaudio = true
+			case "/usr/bin/logger":
+				foundLogger = true
+			}
+		}
+	}
+	if !foundLogger || !foundRawHook || !foundNumericCommand {
+		t.Errorf("non-claudio content not preserved: logger=%v raw=%v numeric=%v", foundLogger, foundRawHook, foundNumericCommand)
+	}
+	if foundOldClaudio {
+		t.Error("old claudio command was not removed")
+	}
+}
+
 func TestIsClaudioHookFormats(t *testing.T) {
 	if !IsClaudioHook("/usr/local/bin/claudio") {
 		t.Error("expected string claudio command recognized")
@@ -197,6 +347,55 @@ func TestIsClaudioHookFormats(t *testing.T) {
 	}
 	if !IsClaudioHook(arr) {
 		t.Error("expected array-format claudio recognized")
+	}
+}
+
+func TestIsClaudioHookFindsClaudioInMergedHookArrays(t *testing.T) {
+	cases := []struct {
+		name string
+		arr  []interface{}
+	}{
+		{
+			name: "claudio after existing hook",
+			arr: []interface{}{
+				map[string]interface{}{
+					"matcher": ".*",
+					"hooks": []interface{}{
+						map[string]interface{}{"command": "/usr/bin/logger"},
+					},
+				},
+				map[string]interface{}{
+					"matcher": "*",
+					"hooks": []interface{}{
+						map[string]interface{}{"command": "/usr/local/bin/claudio"},
+					},
+				},
+			},
+		},
+		{
+			name: "claudio before existing hook",
+			arr: []interface{}{
+				map[string]interface{}{
+					"matcher": "*",
+					"hooks": []interface{}{
+						map[string]interface{}{"command": `C:\tools\claudio.exe`},
+					},
+				},
+				map[string]interface{}{
+					"matcher": ".*",
+					"hooks": []interface{}{
+						map[string]interface{}{"command": "/usr/bin/logger"},
+					},
+				},
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if !IsClaudioHook(tc.arr) {
+				t.Error("expected merged hook array to be recognized when any entry is claudio")
+			}
+		})
 	}
 }
 

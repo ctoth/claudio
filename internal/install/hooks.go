@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"claudio.click/internal/fs"
 	"github.com/spf13/afero"
@@ -13,7 +14,6 @@ import (
 
 // HooksMap represents the hooks section of Claude Code settings
 type HooksMap map[string]interface{}
-
 
 // GenerateClaudioHooks creates the Claude Code hook configuration (backward-compatible default).
 func GenerateClaudioHooks(filesystem afero.Fs, executablePath string) (interface{}, error) {
@@ -138,15 +138,12 @@ func MergeHooksIntoSettings(existingSettings *SettingsMap, claudioHooks interfac
 	// Then, add/update Claudio hooks with proper merging
 	for hookName, claudioValue := range claudioHooksMap {
 		if existingValue, exists := mergedHooks[hookName]; exists {
-			if !IsClaudioHook(existingValue) {
-				// Merge existing non-Claudio hook with Claudio hook
-				mergedHooks[hookName] = mergeHookValues(existingValue, claudioValue)
+			mergedHooks[hookName] = mergeHookValues(existingValue, claudioValue)
+			if IsClaudioHook(existingValue) {
+				slog.Debug("refreshed existing Claudio hook", "hook_name", hookName)
+			} else {
 				slog.Info("merged existing non-Claudio hook with Claudio",
 					"hook_name", hookName, "action", "merging")
-			} else {
-				// Existing is Claudio - idempotent update
-				mergedHooks[hookName] = claudioValue
-				slog.Debug("updated existing Claudio hook", "hook_name", hookName)
 			}
 		} else {
 			// No conflict - add new Claudio hook
@@ -190,12 +187,6 @@ func deepCopySettings(original *SettingsMap) (*SettingsMap, error) {
 func mergeHookValues(existingValue, claudioValue interface{}) interface{} {
 	slog.Debug("merging hook values", "existing_type", fmt.Sprintf("%T", existingValue), "claudio_type", fmt.Sprintf("%T", claudioValue))
 
-	// If existing value is already a Claudio hook, don't duplicate - return Claudio value (idempotent)
-	if IsClaudioHook(existingValue) {
-		slog.Debug("existing value is Claudio hook, returning Claudio value (idempotent)")
-		return claudioValue
-	}
-
 	// Convert Claudio value to array format (it should already be, but be safe)
 	claudioArray, ok := claudioValue.([]interface{})
 	if !ok {
@@ -206,6 +197,10 @@ func mergeHookValues(existingValue, claudioValue interface{}) interface{} {
 	// Convert existing value to array format
 	var existingArray []interface{}
 	if existingStr, ok := existingValue.(string); ok {
+		if isClaudioCommand(existingStr) {
+			slog.Debug("replacing existing string Claudio hook")
+			return claudioValue
+		}
 		// Convert string hook to array format
 		existingArray = []interface{}{
 			map[string]interface{}{
@@ -221,7 +216,7 @@ func mergeHookValues(existingValue, claudioValue interface{}) interface{} {
 		slog.Debug("converted existing string hook to array format", "command", existingStr)
 	} else if existingArr, ok := existingValue.([]interface{}); ok {
 		// Already in array format
-		existingArray = existingArr
+		existingArray = removeClaudioCommands(existingArr)
 		slog.Debug("existing hook already in array format")
 	} else {
 		slog.Warn("unknown existing hook format, treating as string", "type", fmt.Sprintf("%T", existingValue))
@@ -248,7 +243,7 @@ func mergeHookValues(existingValue, claudioValue interface{}) interface{} {
 	// Add Claudio array elements
 	mergedArray = append(mergedArray, claudioArray...)
 
-	slog.Debug("completed hook value merge", 
+	slog.Debug("completed hook value merge",
 		"existing_elements", len(existingArray),
 		"claudio_elements", len(claudioArray),
 		"merged_elements", len(mergedArray))
@@ -256,20 +251,56 @@ func mergeHookValues(existingValue, claudioValue interface{}) interface{} {
 	return mergedArray
 }
 
+func removeClaudioCommands(entries []interface{}) []interface{} {
+	filtered := make([]interface{}, 0, len(entries))
+	for _, entry := range entries {
+		config, ok := entry.(map[string]interface{})
+		if !ok {
+			filtered = append(filtered, entry)
+			continue
+		}
+		hooksList, ok := config["hooks"].([]interface{})
+		if !ok {
+			filtered = append(filtered, entry)
+			continue
+		}
+
+		keptHooks := make([]interface{}, 0, len(hooksList))
+		removed := false
+		for _, hook := range hooksList {
+			cmd, ok := hook.(map[string]interface{})
+			if !ok {
+				keptHooks = append(keptHooks, hook)
+				continue
+			}
+			cmdStr, ok := cmd["command"].(string)
+			if ok && isClaudioCommand(cmdStr) {
+				removed = true
+				continue
+			}
+			keptHooks = append(keptHooks, hook)
+		}
+		if len(keptHooks) == 0 {
+			continue
+		}
+		if !removed {
+			filtered = append(filtered, entry)
+			continue
+		}
+
+		configCopy := make(map[string]interface{}, len(config))
+		for key, value := range config {
+			configCopy[key] = value
+		}
+		configCopy["hooks"] = keptHooks
+		filtered = append(filtered, configCopy)
+	}
+	return filtered
+}
+
 // IsClaudioHook checks if a hook value represents a claudio hook,
 // supporting both the old string format and new array format
 func IsClaudioHook(hookValue interface{}) bool {
-	// Helper function to check if command is a claudio executable
-	isClaudioCommand := func(cmdStr string) bool {
-		// Strip quotes if present (for Windows compatibility)
-		if len(cmdStr) >= 2 && cmdStr[0] == '"' && cmdStr[len(cmdStr)-1] == '"' {
-			cmdStr = cmdStr[1 : len(cmdStr)-1]
-		}
-		baseName := filepath.Base(cmdStr)
-		// Handle production "claudio" and "claudio.exe" (Windows) and test executables "install.test", "uninstall.test", "cli.test"
-		return baseName == "claudio" || baseName == "claudio.exe" || baseName == "install.test" || baseName == "uninstall.test" || baseName == "cli.test"
-	}
-
 	// Check old string format (backward compatibility)
 	if str, ok := hookValue.(string); ok {
 		return isClaudioCommand(str)
@@ -277,11 +308,21 @@ func IsClaudioHook(hookValue interface{}) bool {
 
 	// Check new array format
 	if arr, ok := hookValue.([]interface{}); ok && len(arr) > 0 {
-		if config, ok := arr[0].(map[string]interface{}); ok {
+		for _, item := range arr {
+			config, ok := item.(map[string]interface{})
+			if !ok {
+				continue
+			}
 			if hooks, ok := config["hooks"].([]interface{}); ok && len(hooks) > 0 {
-				if cmd, ok := hooks[0].(map[string]interface{}); ok {
+				for _, hook := range hooks {
+					cmd, ok := hook.(map[string]interface{})
+					if !ok {
+						continue
+					}
 					if cmdStr, ok := cmd["command"].(string); ok {
-						return isClaudioCommand(cmdStr)
+						if isClaudioCommand(cmdStr) {
+							return true
+						}
 					}
 				}
 			}
@@ -289,6 +330,17 @@ func IsClaudioHook(hookValue interface{}) bool {
 	}
 
 	return false
+}
+
+func isClaudioCommand(cmdStr string) bool {
+	// Strip quotes if present (for Windows compatibility)
+	if len(cmdStr) >= 2 && cmdStr[0] == '"' && cmdStr[len(cmdStr)-1] == '"' {
+		cmdStr = cmdStr[1 : len(cmdStr)-1]
+	}
+	cmdStr = strings.ReplaceAll(cmdStr, "\\", "/")
+	baseName := filepath.Base(cmdStr)
+	// Handle production "claudio" and "claudio.exe" (Windows) and test executables "install.test", "uninstall.test", "cli.test"
+	return baseName == "claudio" || baseName == "claudio.exe" || baseName == "install.test" || baseName == "uninstall.test" || baseName == "cli.test"
 }
 
 // GetExecutablePath returns the current executable path using filesystem abstraction.
