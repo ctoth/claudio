@@ -10,12 +10,13 @@ import (
 	"strings"
 	"testing"
 
+	"claudio.click/internal/cli/testenv"
 	"claudio.click/internal/config"
 	"claudio.click/internal/soundpack"
-	"github.com/adrg/xdg"
 )
 
 func TestSoundpackInit_CreatesValidJSON(t *testing.T) {
+	testenv.IsolateXDG(t)
 	tmpDir := t.TempDir()
 
 	cli := NewCLI()
@@ -44,6 +45,7 @@ func TestSoundpackInit_CreatesValidJSON(t *testing.T) {
 }
 
 func TestSoundpackInit_ContainsAllCategories(t *testing.T) {
+	testenv.IsolateXDG(t)
 	tmpDir := t.TempDir()
 
 	cli := NewCLI()
@@ -287,6 +289,39 @@ func TestSoundpackList_ExitsCleanly(t *testing.T) {
 	// stdout should have content (at least the headers + 3 embedded packs)
 	if stdout.Len() == 0 {
 		t.Error("expected non-empty stdout")
+	}
+}
+
+func TestLoadEmbeddedLinuxSoundpackResolvesRelativeMappingsAgainstXDG(t *testing.T) {
+	testenv.IsolateXDG(t)
+
+	linuxPaths := config.NewXDGDirs().GetSoundpackPaths("linux-default")
+	if len(linuxPaths) == 0 {
+		t.Fatal("expected at least one XDG soundpack path for linux-default")
+	}
+	basePath := linuxPaths[0]
+	for _, name := range []string{
+		"default-success.wav",
+		"default-error.wav",
+		"default-loading.wav",
+		"default-interactive.wav",
+		"default.wav",
+	} {
+		createDummyWAV(t, filepath.Join(basePath, name))
+	}
+
+	mapper, err := loadEmbeddedPlatformSoundpack("embedded:linux.json")
+	if err != nil {
+		t.Fatalf("loadEmbeddedPlatformSoundpack(embedded:linux.json) failed: %v", err)
+	}
+
+	got, err := mapper.MapPath("success/success.wav")
+	if err != nil {
+		t.Fatalf("MapPath(success/success.wav): %v", err)
+	}
+	want := filepath.Join(basePath, "default-success.wav")
+	if len(got) != 1 || filepath.Clean(got[0]) != filepath.Clean(want) {
+		t.Errorf("success/success.wav resolved to %v, want [%s]", got, want)
 	}
 }
 
@@ -582,6 +617,29 @@ func TestSoundpackValidate_DirectorySoundpack(t *testing.T) {
 	}
 }
 
+func TestSoundpackValidate_DirectorySoundpackRejectsSymlinkedAudio(t *testing.T) {
+	tmpDir := t.TempDir()
+	packDir := filepath.Join(tmpDir, "mypack")
+	if err := os.MkdirAll(packDir, 0755); err != nil {
+		t.Fatalf("failed to create soundpack dir: %v", err)
+	}
+
+	outside := filepath.Join(t.TempDir(), "outside.wav")
+	createDummyWAV(t, outside)
+	link := filepath.Join(packDir, "default.wav")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Skipf("symlink unsupported on this platform: %v", err)
+	}
+
+	_, err := validateDirectorySoundpack(packDir)
+	if err == nil {
+		t.Fatal("expected directory validation to reject symlinked audio")
+	}
+	if !strings.Contains(err.Error(), "symlinked audio file") {
+		t.Errorf("expected symlink rejection error, got: %v", err)
+	}
+}
+
 func TestSoundpackValidate_InvalidJSON(t *testing.T) {
 	tmpDir := t.TempDir()
 
@@ -698,32 +756,24 @@ func TestExtractAllSoundKeys(t *testing.T) {
 
 // --- Soundpack Install Tests ---
 
-// setupInstallTestEnv sets XDG_DATA_HOME and XDG_CONFIG_HOME to temp dirs,
-// calls xdg.Reload() so the library picks up the new values, and returns
-// a cleanup function that restores the original env vars and reloads.
+// setupInstallTestEnv delegates to testenv.IsolateXDG to sandbox HOME
+// and all XDG_* env vars under t.TempDir(), then returns the
+// data/config directory paths derived from the sandbox root. Cleanup
+// is registered automatically by testenv.IsolateXDG via t.Cleanup, so
+// the returned cleanup func is a no-op kept for caller-signature
+// compatibility.
 func setupInstallTestEnv(t *testing.T) (dataDir, configDir string, cleanup func()) {
 	t.Helper()
-	dataDir = filepath.Join(t.TempDir(), "data")
-	configDir = filepath.Join(t.TempDir(), "config")
+	root := testenv.IsolateXDG(t)
+	dataDir = filepath.Join(root, ".local", "share")
+	configDir = filepath.Join(root, ".config")
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		t.Fatalf("failed to create data dir: %v", err)
 	}
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		t.Fatalf("failed to create config dir: %v", err)
 	}
-
-	oldDataHome := os.Getenv("XDG_DATA_HOME")
-	oldConfigHome := os.Getenv("XDG_CONFIG_HOME")
-	os.Setenv("XDG_DATA_HOME", dataDir)
-	os.Setenv("XDG_CONFIG_HOME", configDir)
-	xdg.Reload()
-
-	cleanup = func() {
-		os.Setenv("XDG_DATA_HOME", oldDataHome)
-		os.Setenv("XDG_CONFIG_HOME", oldConfigHome)
-		xdg.Reload()
-	}
-	return dataDir, configDir, cleanup
+	return dataDir, configDir, func() {}
 }
 
 // createTestJSONSoundpack creates a minimal valid JSON soundpack file in the given directory.

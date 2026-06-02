@@ -91,15 +91,6 @@ func TestDetectClaudioHooksWithFullPaths(t *testing.T) {
 			expected: []string{"PreToolUse", "PostToolUse", "Stop"},
 		},
 		{
-			name: "test executable path (install.test)",
-			settings: &install.SettingsMap{
-				"hooks": map[string]interface{}{
-					"PreToolUse": "/tmp/install.test",
-				},
-			},
-			expected: []string{"PreToolUse"},
-		},
-		{
 			name: "no claudio paths - different executables",
 			settings: &install.SettingsMap{
 				"hooks": map[string]interface{}{
@@ -109,11 +100,20 @@ func TestDetectClaudioHooksWithFullPaths(t *testing.T) {
 			},
 			expected: []string{},
 		},
+		{
+			name: "user binary ending in .test is NOT a Claudio command",
+			settings: &install.SettingsMap{
+				"hooks": map[string]interface{}{
+					"PreToolUse": "/usr/local/bin/lint.test",
+				},
+			},
+			expected: []string{},
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := detectClaudioHooks(tc.settings)
+			result := DetectClaudioHooks(tc.settings)
 
 			// Check length
 			if len(result) != len(tc.expected) {
@@ -223,7 +223,7 @@ func TestDetectClaudioHooks(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := detectClaudioHooks(tc.settings)
+			result := DetectClaudioHooks(tc.settings)
 
 			// Check length
 			if len(result) != len(tc.expected) {

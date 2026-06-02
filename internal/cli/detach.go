@@ -1,12 +1,11 @@
 package cli
 
 import (
+	"bytes"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
-	"path/filepath"
-	"strings"
 
 	"claudio.click/internal/config"
 	"github.com/spf13/cobra"
@@ -28,17 +27,12 @@ func shouldDetachHookProcessing(cmd *cobra.Command, cfg *config.Config, inputDat
 		return false
 	}
 
-	// Keep unit/integration tests deterministic and in-process.
-	if isGoTestBinary() {
+	// Tests opt out of detach via env var to keep hook processing in-process.
+	if os.Getenv("CLAUDIO_DETACH_DISABLE") == "1" {
 		return false
 	}
 
 	return true
-}
-
-func isGoTestBinary() bool {
-	base := strings.ToLower(filepath.Base(os.Args[0]))
-	return strings.HasSuffix(base, ".test") || strings.HasSuffix(base, ".test.exe")
 }
 
 func spawnDetachedHookWorker(cmd *cobra.Command, inputData []byte) error {
@@ -71,12 +65,12 @@ func spawnDetachedHookWorker(cmd *cobra.Command, inputData []byte) error {
 	childCmd := exec.Command(executablePath, childArgs...)
 	configureDetachedProcess(childCmd)
 
-	// Keep detached worker independent from the caller's stdio.
-	if devNull, err := os.OpenFile(os.DevNull, os.O_RDWR, 0); err == nil {
-		defer devNull.Close()
-		childCmd.Stdout = devNull
-		childCmd.Stderr = devNull
-	}
+	// Keep detached worker independent from the caller's stdio. If the
+	// platform refuses to open os.DevNull (e.g. sandboxed Windows
+	// AppContainer), fall back to closed pipes / nil so the child still
+	// cannot chatter on the user's terminal — previously fell through to
+	// exec.Cmd's parent-stdio defaults, defeating detach.
+	detachStdio(childCmd)
 
 	childCmd.Env = append(os.Environ(), "CLAUDIO_DAEMON_CHILD=1")
 
@@ -87,6 +81,37 @@ func spawnDetachedHookWorker(cmd *cobra.Command, inputData []byte) error {
 
 	slog.Debug("detached hook worker started", "pid", childCmd.Process.Pid, "input_file", hookPath)
 	return nil
+}
+
+// detachStdio wires the child command's stdio so it can never inherit the
+// parent terminal. Preferred path: open os.DevNull and point all three
+// streams at it. Fallback (DevNull open fails): give stdin an empty reader
+// and stdout/stderr a write end of a pipe whose read end is closed —
+// writes go nowhere. Last resort: leave the fields nil, which makes
+// os/exec connect the child's stdio to the system DevNull on most
+// platforms; this is still strictly better than inheriting parent stdio.
+func detachStdio(childCmd *exec.Cmd) {
+	if devNull, err := os.OpenFile(os.DevNull, os.O_RDWR, 0); err == nil {
+		childCmd.Stdin = devNull
+		childCmd.Stdout = devNull
+		childCmd.Stderr = devNull
+		return
+	}
+
+	// Fallback: empty stdin, closed-pipe stdout/stderr.
+	childCmd.Stdin = bytes.NewReader(nil)
+	rNull, wNull, perr := os.Pipe()
+	if perr == nil {
+		_ = rNull.Close()
+		childCmd.Stdout = wNull
+		childCmd.Stderr = wNull
+		return
+	}
+
+	// Last resort: explicitly nil so the child does not inherit our
+	// terminal even though writes may fail at runtime.
+	childCmd.Stdout = nil
+	childCmd.Stderr = nil
 }
 
 func buildDetachedWorkerArgs(cmd *cobra.Command, hookInputFile string) []string {

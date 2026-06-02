@@ -4,26 +4,46 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 
 	"claudio.click/internal/fs"
-	"github.com/spf13/afero"
 )
 
 // HooksMap represents the hooks section of Claude Code settings
 type HooksMap map[string]interface{}
 
+// executableRecognizer decides whether a basename refers to the claudio
+// executable. Production matches only claudio and claudio.exe. End-to-end
+// install tests that thread the go test binary path through
+// GetExecutablePath need the recognizer to accept names like
+// "cli.test.exe"; those tests opt in by setting
+// CLAUDIO_TEST_RECOGNIZE_GO_TEST=1 via t.Setenv. The env var is read at
+// call time so the production binary never imports the testing package
+// for a test-only seam.
+var executableRecognizer = func(name string) bool {
+	if name == "claudio" || name == "claudio.exe" {
+		return true
+	}
+	if os.Getenv("CLAUDIO_TEST_RECOGNIZE_GO_TEST") == "1" {
+		if strings.HasSuffix(name, ".test") || strings.HasSuffix(name, ".test.exe") {
+			return true
+		}
+	}
+	return false
+}
+
+
 // GenerateClaudioHooks creates the Claude Code hook configuration (backward-compatible default).
-func GenerateClaudioHooks(filesystem afero.Fs, executablePath string) (interface{}, error) {
-	return GenerateClaudioHooksForAgent(filesystem, executablePath, AgentClaude)
+func GenerateClaudioHooks(executablePath string) (interface{}, error) {
+	return GenerateClaudioHooksForAgent(executablePath, AgentClaude)
 }
 
 // GenerateClaudioHooksForAgent creates hook configuration for the given agent using its
 // registry and matcher. Returns a hooks map suitable for Claude settings.json or Codex hooks.json.
-// Accepts filesystem and executable path parameters to prevent config corruption during testing.
-func GenerateClaudioHooksForAgent(filesystem afero.Fs, executablePath string, agent Agent) (interface{}, error) {
+func GenerateClaudioHooksForAgent(executablePath string, agent Agent) (interface{}, error) {
 	slog.Debug("generating Claudio hooks configuration",
 		"agent", agent, "executable_path", executablePath)
 
@@ -135,16 +155,16 @@ func MergeHooksIntoSettings(existingSettings *SettingsMap, claudioHooks interfac
 		slog.Debug("preserved existing hook", "hook_name", hookName, "hook_value", hookValue)
 	}
 
-	// Then, add/update Claudio hooks with proper merging
+	// Then, add/update Claudio hooks with strip-and-replace merging.
+	// mergeHookValues now handles both cases uniformly: it strips any
+	// pre-existing Claudio entries from the existing array and appends the
+	// new Claudio entries. This preserves the user's non-Claudio entries
+	// regardless of ordering and is idempotent across repeated merges.
 	for hookName, claudioValue := range claudioHooksMap {
 		if existingValue, exists := mergedHooks[hookName]; exists {
 			mergedHooks[hookName] = mergeHookValues(existingValue, claudioValue)
-			if IsClaudioHook(existingValue) {
-				slog.Debug("refreshed existing Claudio hook", "hook_name", hookName)
-			} else {
-				slog.Info("merged existing non-Claudio hook with Claudio",
-					"hook_name", hookName, "action", "merging")
-			}
+			slog.Debug("merged existing hook with Claudio (strip-and-replace)",
+				"hook_name", hookName)
 		} else {
 			// No conflict - add new Claudio hook
 			mergedHooks[hookName] = claudioValue
@@ -182,8 +202,11 @@ func deepCopySettings(original *SettingsMap) (*SettingsMap, error) {
 }
 
 // mergeHookValues merges an existing hook value with a Claudio hook value
-// Returns the merged result in array format, preserving existing commands and adding Claudio commands
-// Handles deduplication when the existing hook is already a Claudio hook
+// Returns the merged result in array format, preserving existing non-Claudio
+// commands and replacing any pre-existing Claudio entries with the new ones.
+// The merge is idempotent regardless of element ordering: any Claudio entry in
+// the existing array is filtered out before the new Claudio entries are
+// appended, so merge(merge(existing)) == merge(existing).
 func mergeHookValues(existingValue, claudioValue interface{}) interface{} {
 	slog.Debug("merging hook values", "existing_type", fmt.Sprintf("%T", existingValue), "claudio_type", fmt.Sprintf("%T", claudioValue))
 
@@ -197,10 +220,6 @@ func mergeHookValues(existingValue, claudioValue interface{}) interface{} {
 	// Convert existing value to array format
 	var existingArray []interface{}
 	if existingStr, ok := existingValue.(string); ok {
-		if isClaudioCommand(existingStr) {
-			slog.Debug("replacing existing string Claudio hook")
-			return claudioValue
-		}
 		// Convert string hook to array format
 		existingArray = []interface{}{
 			map[string]interface{}{
@@ -216,7 +235,7 @@ func mergeHookValues(existingValue, claudioValue interface{}) interface{} {
 		slog.Debug("converted existing string hook to array format", "command", existingStr)
 	} else if existingArr, ok := existingValue.([]interface{}); ok {
 		// Already in array format
-		existingArray = removeClaudioCommands(existingArr)
+		existingArray = existingArr
 		slog.Debug("existing hook already in array format")
 	} else {
 		slog.Warn("unknown existing hook format, treating as string", "type", fmt.Sprintf("%T", existingValue))
@@ -234,113 +253,169 @@ func mergeHookValues(existingValue, claudioValue interface{}) interface{} {
 		}
 	}
 
-	// Merge arrays: existing commands first, then Claudio commands
-	var mergedArray []interface{}
+	// Strip any pre-existing Claudio entries from the existing array, then
+	// append the new Claudio entries. Filtering operates at HOOK granularity
+	// inside each item's "hooks" sub-array (mirroring removeClaudioFromArray
+	// in internal/uninstall/hook_removal.go): for each existing item, build
+	// a new item whose hooks sub-array contains only the non-Claudio
+	// entries. Drop the item only when removal emptied its hooks sub-array.
+	// Items with no Claudio commands pass through verbatim. This preserves
+	// user non-Claudio hooks that share a matcher's hooks sub-array with a
+	// Claudio command (Chunk 5 analyst Finding 1).
+	filteredExisting := make([]interface{}, 0, len(existingArray))
+	strippedCount := 0
+	for _, item := range existingArray {
+		itemMap, ok := item.(map[string]interface{})
+		if !ok {
+			// Preserve non-map entries verbatim
+			filteredExisting = append(filteredExisting, item)
+			continue
+		}
+		hooks, ok := itemMap["hooks"].([]interface{})
+		if !ok {
+			// Preserve items without a hooks sub-array verbatim
+			filteredExisting = append(filteredExisting, item)
+			continue
+		}
+		keptHooks := make([]interface{}, 0, len(hooks))
+		itemStripped := 0
+		for _, h := range hooks {
+			hookMap, ok := h.(map[string]interface{})
+			if !ok {
+				keptHooks = append(keptHooks, h)
+				continue
+			}
+			cmdStr, ok := hookMap["command"].(string)
+			if !ok {
+				keptHooks = append(keptHooks, h)
+				continue
+			}
+			if isClaudioCommandString(cmdStr) {
+				itemStripped++
+				continue
+			}
+			keptHooks = append(keptHooks, h)
+		}
+		if itemStripped == 0 {
+			// No Claudio commands in this item; preserve verbatim.
+			filteredExisting = append(filteredExisting, item)
+			continue
+		}
+		strippedCount += itemStripped
+		if len(keptHooks) == 0 {
+			// Item was Claudio-only; drop it. The new Claudio entries will
+			// be appended below.
+			continue
+		}
+		// Item had Claudio + non-Claudio siblings; preserve the non-Claudio
+		// siblings in a copied item so we never mutate the input map.
+		newItem := make(map[string]interface{}, len(itemMap))
+		for k, v := range itemMap {
+			newItem[k] = v
+		}
+		newItem["hooks"] = keptHooks
+		filteredExisting = append(filteredExisting, newItem)
+	}
 
-	// Add all existing array elements
-	mergedArray = append(mergedArray, existingArray...)
-
-	// Add Claudio array elements
+	mergedArray := make([]interface{}, 0, len(filteredExisting)+len(claudioArray))
+	mergedArray = append(mergedArray, filteredExisting...)
 	mergedArray = append(mergedArray, claudioArray...)
 
 	slog.Debug("completed hook value merge",
 		"existing_elements", len(existingArray),
+		"existing_claudio_entries_stripped", strippedCount,
 		"claudio_elements", len(claudioArray),
 		"merged_elements", len(mergedArray))
 
 	return mergedArray
 }
 
-func removeClaudioCommands(entries []interface{}) []interface{} {
-	filtered := make([]interface{}, 0, len(entries))
-	for _, entry := range entries {
-		config, ok := entry.(map[string]interface{})
+// itemContainsClaudioCommand returns true if the given hook-array element
+// (a map with a "hooks" sub-array) contains any hook whose command resolves
+// to the claudio executable per executableRecognizer.
+func itemContainsClaudioCommand(item map[string]interface{}) bool {
+	hooks, ok := item["hooks"].([]interface{})
+	if !ok {
+		return false
+	}
+	for _, h := range hooks {
+		cmd, ok := h.(map[string]interface{})
 		if !ok {
-			filtered = append(filtered, entry)
 			continue
 		}
-		hooksList, ok := config["hooks"].([]interface{})
+		cmdStr, ok := cmd["command"].(string)
 		if !ok {
-			filtered = append(filtered, entry)
 			continue
 		}
-
-		keptHooks := make([]interface{}, 0, len(hooksList))
-		removed := false
-		for _, hook := range hooksList {
-			cmd, ok := hook.(map[string]interface{})
-			if !ok {
-				keptHooks = append(keptHooks, hook)
-				continue
-			}
-			cmdStr, ok := cmd["command"].(string)
-			if ok && isClaudioCommand(cmdStr) {
-				removed = true
-				continue
-			}
-			keptHooks = append(keptHooks, hook)
-		}
-		if len(keptHooks) == 0 {
-			continue
-		}
-		if !removed {
-			filtered = append(filtered, entry)
-			continue
-		}
-
-		configCopy := make(map[string]interface{}, len(config))
-		for key, value := range config {
-			configCopy[key] = value
-		}
-		configCopy["hooks"] = keptHooks
-		filtered = append(filtered, configCopy)
-	}
-	return filtered
-}
-
-// IsClaudioHook checks if a hook value represents a claudio hook,
-// supporting both the old string format and new array format
-func IsClaudioHook(hookValue interface{}) bool {
-	// Check old string format (backward compatibility)
-	if str, ok := hookValue.(string); ok {
-		return isClaudioCommand(str)
-	}
-
-	// Check new array format
-	if arr, ok := hookValue.([]interface{}); ok && len(arr) > 0 {
-		for _, item := range arr {
-			config, ok := item.(map[string]interface{})
-			if !ok {
-				continue
-			}
-			if hooks, ok := config["hooks"].([]interface{}); ok && len(hooks) > 0 {
-				for _, hook := range hooks {
-					cmd, ok := hook.(map[string]interface{})
-					if !ok {
-						continue
-					}
-					if cmdStr, ok := cmd["command"].(string); ok {
-						if isClaudioCommand(cmdStr) {
-							return true
-						}
-					}
-				}
-			}
+		if isClaudioCommandString(cmdStr) {
+			return true
 		}
 	}
-
 	return false
 }
 
-func isClaudioCommand(cmdStr string) bool {
-	// Strip quotes if present (for Windows compatibility)
+// IsClaudioCommandString reports whether a command string refers to the
+// claudio executable. Shared between IsClaudioHook, the merge filter,
+// and the uninstall package's hook detection so the three predicates
+// cannot drift apart. (Chunk 3 analyst F1: previously install and
+// uninstall maintained two recognizers with divergent code shapes;
+// they happened to agree on production inputs only by accident.)
+func IsClaudioCommandString(cmdStr string) bool {
+	// Strip surrounding quotes if present (for Windows compatibility)
 	if len(cmdStr) >= 2 && cmdStr[0] == '"' && cmdStr[len(cmdStr)-1] == '"' {
 		cmdStr = cmdStr[1 : len(cmdStr)-1]
 	}
-	cmdStr = strings.ReplaceAll(cmdStr, "\\", "/")
-	baseName := filepath.Base(cmdStr)
-	// Handle production "claudio" and "claudio.exe" (Windows) and test executables "install.test", "uninstall.test", "cli.test"
-	return baseName == "claudio" || baseName == "claudio.exe" || baseName == "install.test" || baseName == "uninstall.test" || baseName == "cli.test"
+	return executableRecognizer(commandBasename(cmdStr))
+}
+
+// commandBasename returns the final path segment of a command string,
+// splitting on both '/' and '\' regardless of the host OS. filepath.Base
+// only honors the running platform's separator, so on Linux/macOS it left
+// a Windows-style hook command like `C:\Program Files\claudio.exe` intact
+// and the recognizer never saw the bare `claudio.exe`. settings.json is
+// portable data — a hook authored on Windows can be inspected on Linux and
+// vice versa — so recognition must not depend on the reader's OS.
+func commandBasename(cmdStr string) string {
+	if i := strings.LastIndexAny(cmdStr, `/\`); i >= 0 {
+		return cmdStr[i+1:]
+	}
+	return cmdStr
+}
+
+// isClaudioCommandString is the previous (unexported) spelling, kept as
+// a thin alias so adjacent install-package call sites stay readable.
+func isClaudioCommandString(cmdStr string) bool {
+	return IsClaudioCommandString(cmdStr)
+}
+
+// IsClaudioHook reports whether a hook value contains any reference to the
+// claudio executable. Supports the old string format and the new array
+// format. The array form is scanned exhaustively — return true if ANY array
+// element contains ANY hooks-sub-array entry whose command refers to claudio.
+// This any-element semantics matches the merge-side filter so a mixed array
+// like [customHook, claudioHook] is correctly identified as containing
+// Claudio regardless of element ordering.
+func IsClaudioHook(hookValue interface{}) bool {
+	// Check old string format (backward compatibility)
+	if str, ok := hookValue.(string); ok {
+		return isClaudioCommandString(str)
+	}
+
+	// Check new array format — scan every element, not just arr[0].
+	if arr, ok := hookValue.([]interface{}); ok && len(arr) > 0 {
+		for _, item := range arr {
+			itemMap, ok := item.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if itemContainsClaudioCommand(itemMap) {
+				return true
+			}
+		}
+		return false
+	}
+
+	return false
 }
 
 // GetExecutablePath returns the current executable path using filesystem abstraction.
@@ -357,7 +432,3 @@ func GetExecutablePath() (string, error) {
 	return p, nil
 }
 
-// GetFilesystemFactory returns the default filesystem factory
-func GetFilesystemFactory() fs.Factory {
-	return fs.NewDefaultFactory()
-}

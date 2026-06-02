@@ -6,6 +6,7 @@ import (
 
 	"claudio.click/internal/install"
 	"claudio.click/internal/uninstall"
+	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 )
 
@@ -107,7 +108,7 @@ func runUninstallCommandE(cmd *cobra.Command, args []string) error {
 		cmd.Printf("Settings path: %s\n", settingsPath)
 	}
 
-	err = uninstall.RunUninstallWorkflow(scope.String(), settingsPath)
+	err = uninstall.RunUninstallWorkflow(afero.NewOsFs(), scope.String(), agent)
 	if err != nil {
 		return fmt.Errorf("uninstall failed: %w", err)
 	}
@@ -143,8 +144,7 @@ func handlePrintUninstall(cmd *cobra.Command, scope InstallScope, settingsPath s
 	cmd.Printf("  Settings Path: %s\n", settingsPath)
 
 	// Try to read settings and show what hooks would be removed
-	factory := install.GetFilesystemFactory()
-	prodFS := factory.Production()
+	prodFS := afero.NewOsFs()
 	settings, err := install.ReadSettingsFile(prodFS, settingsPath)
 	if err != nil {
 		cmd.Printf("  Warning: Could not read settings file: %v\n", err)
@@ -169,8 +169,7 @@ func handleDryRunUninstall(cmd *cobra.Command, scope InstallScope, settingsPath 
 	}
 
 	// Try to read settings and show what would be removed
-	factory := install.GetFilesystemFactory()
-	prodFS := factory.Production()
+	prodFS := afero.NewOsFs()
 	settings, err := install.ReadSettingsFile(prodFS, settingsPath)
 	if err != nil {
 		if !quiet {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -14,11 +15,20 @@ import (
 
 	"github.com/spf13/afero"
 
-	"claudio.click/internal/audio"
+	"claudio.click/internal/platform"
 )
 
-//go:embed windows.json wsl.json darwin.json
+//go:embed windows.json wsl.json darwin.json linux.json
 var platformSoundpacks embed.FS
+
+// embeddedSounds holds the synthesized default WAV tones that back the
+// native-Linux platform pack. Unlike Windows/macOS — which point at system
+// sound files that always exist — a bare Linux box ships no guaranteed WAVs,
+// so linux.json references these by bare filename and they are extracted to
+// the cache dir at load time. Regenerate with embedded_sounds/generate.go.
+//
+//go:embed embedded_sounds/*.wav
+var embeddedSounds embed.FS
 
 // FileLoggingConfig represents file-based logging configuration
 type FileLoggingConfig struct {
@@ -78,11 +88,12 @@ func NewConfigManagerWithFilesystem(fs afero.Fs) *ConfigManager {
 // GetDefaultConfig returns the default configuration
 func (cm *ConfigManager) GetDefaultConfig() *Config {
 	slog.Debug("GetDefaultConfig called - starting platform detection")
-	// Use platform-specific soundpack if it exists, otherwise default
-	// For default config, use real filesystem and current executable directory
-	executableDir := getExecutableDirectoryForDefault()
+	// Use platform-specific soundpack if it exists, otherwise default.
+	// getExecutableDirectoryForDefault is a method so the test-context CWD
+	// recheck honors cm.fs.
+	executableDir := cm.getExecutableDirectoryForDefault()
 	slog.Debug("GetDefaultConfig got executable directory", "executableDir", executableDir)
-	defaultSoundpack := cm.GetPlatformSoundpack(afero.NewOsFs(), executableDir)
+	defaultSoundpack := cm.GetPlatformSoundpack(executableDir)
 	slog.Debug("GetDefaultConfig platform detection result", "defaultSoundpack", defaultSoundpack)
 
 	defaultVolume := 0.5
@@ -215,9 +226,18 @@ func (cm *ConfigManager) LoadConfig() (*Config, error) {
 func (cm *ConfigManager) ValidateConfig(config *Config) error {
 	var errors []string
 
-	// Validate volume (nil is valid - means use default)
-	if config.Volume != nil && (*config.Volume < 0.0 || *config.Volume > 1.0) {
-		errors = append(errors, fmt.Sprintf("volume must be between 0.0 and 1.0, got %f", *config.Volume))
+	// Validate volume (nil is valid - means use default).
+	// Reject NaN/Inf before the range check to match the guards in
+	// SystemCommandBackend.SetVolume and AudioPlayer.SetVolume; the float
+	// comparison treats NaN as out-of-range silently, so without an explicit
+	// IsNaN/IsInf guard a configured NaN volume would slip through here.
+	if config.Volume != nil {
+		v := float64(*config.Volume)
+		if math.IsNaN(v) || math.IsInf(v, 0) {
+			errors = append(errors, fmt.Sprintf("volume must be finite, got %f", *config.Volume))
+		} else if v < 0.0 || v > 1.0 {
+			errors = append(errors, fmt.Sprintf("volume must be between 0.0 and 1.0, got %f", *config.Volume))
+		}
 	}
 
 	// Validate default soundpack
@@ -366,6 +386,22 @@ func (cm *ConfigManager) ApplyEnvironmentOverrides(config *Config) *Config {
 		}
 	}
 
+	// CLAUDIO_FILE_LOGGING — opt-out switch so test environments can
+	// disable the lumberjack file handle that would otherwise block
+	// t.TempDir() cleanup on Windows. Recognised values match
+	// strconv.ParseBool ("1"/"0", "true"/"false", etc.).
+	if fileLoggingStr := os.Getenv("CLAUDIO_FILE_LOGGING"); fileLoggingStr != "" {
+		if enabled, err := strconv.ParseBool(fileLoggingStr); err == nil {
+			if result.FileLogging == nil {
+				result.FileLogging = &FileLoggingConfig{}
+			}
+			result.FileLogging.Enabled = enabled
+			slog.Debug("applied file_logging override from environment", "value", enabled)
+		} else {
+			slog.Warn("invalid CLAUDIO_FILE_LOGGING environment variable", "value", fileLoggingStr, "error", err)
+		}
+	}
+
 	// Apply sound tracking environment overrides
 	if result.SoundTracking == nil {
 		result.SoundTracking = GetDefaultSoundTrackingConfig()
@@ -462,9 +498,12 @@ func (cm *ConfigManager) ApplyLogLevelWithWriter(logLevel string, writer io.Writ
 	return nil
 }
 
-// GetSupportedAudioBackends returns a list of all supported audio backend types
+// GetSupportedAudioBackends returns a list of all supported audio backend types.
+// "fake" is the test-only backend registered by internal/audio/fake_backend.go;
+// it is listed here so cli tests can set cfg.AudioBackend = "fake" without
+// tripping ConfigManager.ValidateConfig.
 func (cm *ConfigManager) GetSupportedAudioBackends() []string {
-	return []string{"auto", "system_command", "malgo"}
+	return []string{"auto", "system_command", "malgo", "fake"}
 }
 
 // IsValidAudioBackend checks if an audio backend type is supported
@@ -498,36 +537,54 @@ func GetEmbeddedPlatformSoundpackData(filename string) ([]byte, error) {
 	return data, nil
 }
 
-// GetPlatformSoundpack returns platform-specific soundpack if it exists, otherwise "default"
+// GetEmbeddedSoundData returns the bytes of an embedded default sound by its
+// bare filename (e.g. "default-success.wav"), or an error if no such sound is
+// embedded. A soundpack mapping value that names an absolute system path is
+// not an embedded sound, so callers can use the error to distinguish the two:
+// only the native-Linux pack references these embedded tones by bare name.
+func GetEmbeddedSoundData(name string) ([]byte, error) {
+	data, err := embeddedSounds.ReadFile("embedded_sounds/" + name)
+	if err != nil {
+		return nil, fmt.Errorf("no embedded sound %q: %w", name, err)
+	}
+	return data, nil
+}
+
+// GetPlatformSoundpack returns platform-specific soundpack if it exists, otherwise "default".
 // Enhanced version that:
-// 1. Checks WSL first (prefers wsl.json over linux.json)
-// 2. Looks in provided executable directory
-// 3. Returns full path to JSON file when found
-func (cm *ConfigManager) GetPlatformSoundpack(fs afero.Fs, executableDir string) string {
-	slog.Debug("detecting platform soundpack with enhanced detection", 
-		"executable_dir", executableDir, 
-		"is_wsl", audio.IsWSL(), 
+//  1. Checks WSL first (prefers wsl.json over linux.json)
+//  2. Looks in provided executable directory using cm.fs (the manager's
+//     own filesystem; set via NewConfigManagerWithFilesystem for tests)
+//  3. Returns full path to JSON file when found
+//
+// Pre-fix this method took an afero.Fs parameter that production code
+// always satisfied with afero.NewOsFs(), defeating the cm.fs seam tests
+// relied on. Drop the parameter; use cm.fs.
+func (cm *ConfigManager) GetPlatformSoundpack(executableDir string) string {
+	slog.Debug("detecting platform soundpack with enhanced detection",
+		"executable_dir", executableDir,
+		"is_wsl", platform.IsWSL(),
 		"runtime_goos", runtime.GOOS)
-	
+
 	// WSL detection first - prefer wsl.json over linux.json when in WSL
-	if audio.IsWSL() {
-		if wslPath := checkPlatformFile(fs, executableDir, "wsl.json"); wslPath != "" {
+	if platform.IsWSL() {
+		if wslPath := cm.checkPlatformFile(executableDir, "wsl.json"); wslPath != "" {
 			slog.Debug("WSL platform soundpack found", "path", wslPath)
 			return wslPath
 		}
 		slog.Debug("WSL detected but wsl.json not found in executable directory", "exec_dir", executableDir)
 	}
-	
+
 	// Regular OS-specific detection
 	platformFile := runtime.GOOS + ".json"
-	if platformPath := checkPlatformFile(fs, executableDir, platformFile); platformPath != "" {
+	if platformPath := cm.checkPlatformFile(executableDir, platformFile); platformPath != "" {
 		slog.Debug("platform soundpack found", "platform", runtime.GOOS, "path", platformPath)
 		return platformPath
 	}
 	
 	// Check embedded platform files as fallback
 	var embeddedPlatformFile string
-	if audio.IsWSL() {
+	if platform.IsWSL() {
 		embeddedPlatformFile = "wsl.json"
 	} else {
 		embeddedPlatformFile = runtime.GOOS + ".json"
@@ -536,60 +593,84 @@ func (cm *ConfigManager) GetPlatformSoundpack(fs afero.Fs, executableDir string)
 	if hasEmbeddedPlatformFile(embeddedPlatformFile) {
 		slog.Debug("using embedded platform soundpack", 
 			"platform_file", embeddedPlatformFile,
-			"is_wsl", audio.IsWSL(),
+			"is_wsl", platform.IsWSL(),
 			"runtime_goos", runtime.GOOS)
 		return "embedded:" + embeddedPlatformFile
 	}
 	
 	slog.Debug("no platform soundpack found (file or embedded), using default", 
 		"platform", runtime.GOOS, 
-		"wsl_detection", audio.IsWSL(),
+		"wsl_detection", platform.IsWSL(),
 		"exec_dir", executableDir,
 		"embedded_file_checked", embeddedPlatformFile)
 	return "default"
 }
 
-// checkPlatformFile checks if a platform JSON file exists in the specified directory
-// Returns full path if found, empty string if not found
-func checkPlatformFile(fs afero.Fs, dir, filename string) string {
+// checkPlatformFile checks if a platform JSON file exists in the specified
+// directory using the manager's own filesystem (cm.fs). Returns full path if
+// found, empty string if not found. Was previously a free function that took
+// an afero.Fs parameter; methodified in finding #64 so it honors the seam
+// established by NewConfigManagerWithFilesystem.
+func (cm *ConfigManager) checkPlatformFile(dir, filename string) string {
 	fullPath := filepath.Join(dir, filename)
-	
-	if info, err := fs.Stat(fullPath); err == nil && !info.IsDir() {
+
+	if info, err := cm.fs.Stat(fullPath); err == nil && !info.IsDir() {
 		slog.Debug("platform file found", "path", fullPath, "size", info.Size())
 		return fullPath
 	}
-	
+
 	slog.Debug("platform file not found", "path", fullPath)
 	return ""
 }
 
-// getExecutableDirectoryForDefault returns the directory containing the current executable for default config
-func getExecutableDirectoryForDefault() string {
+// getExecutableDirectoryForDefault returns the directory containing the
+// current executable for default config. Methodified in finding #64 so the
+// test-context CWD recheck uses cm.fs / cm.GetPlatformSoundpack and does
+// not construct a fresh ConfigManager (which would always use OsFs and
+// defeat the NewConfigManagerWithFilesystem seam).
+func (cm *ConfigManager) getExecutableDirectoryForDefault() string {
 	executable, err := os.Executable()
 	if err != nil {
 		slog.Warn("failed to get executable directory for default config, using current directory", "error", err)
 		return "."
 	}
-	
+
 	execDir := filepath.Dir(executable)
 	slog.Debug("executable directory detected for default config", "executable", executable, "directory", execDir)
-	
-	// If executable is in a temp build directory (like /tmp/go-buildXXX), 
-	// also check current working directory for platform JSON files
-	if strings.Contains(executable, "/tmp/go-build") {
+
+	// If executable is in a temp build directory (e.g. /tmp/go-buildXXX on
+	// POSIX, %TEMP%\go-buildNNN\... on Windows), also check current working
+	// directory for platform JSON files. Detection is portable via
+	// isGoTestTempExecutable, which uses os.TempDir() as the prefix and the
+	// "go-build" substring as the go-test staged-binary marker.
+	if isGoTestTempExecutable(executable, os.TempDir()) {
 		cwd, err := os.Getwd()
 		if err == nil {
 			slog.Debug("executable appears to be temp build, also checking current working directory", "cwd", cwd, "temp_exec", executable)
-			// Check if platform JSON exists in current directory
-			if cm := NewConfigManager(); cm != nil {
-				cwdResult := cm.GetPlatformSoundpack(afero.NewOsFs(), cwd)
-				if cwdResult != "default" {
-					slog.Debug("found platform JSON in current working directory, using that", "cwd_result", cwdResult)
-					return cwd
-				}
+			// Use the receiver's own filesystem so the recheck honors
+			// NewConfigManagerWithFilesystem.
+			cwdResult := cm.GetPlatformSoundpack(cwd)
+			if cwdResult != "default" {
+				slog.Debug("found platform JSON in current working directory, using that", "cwd_result", cwdResult)
+				return cwd
 			}
 		}
 	}
-	
+
 	return execDir
+}
+
+// isGoTestTempExecutable reports whether executablePath looks like a binary
+// staged by `go test` under tmpRoot. Both inputs are cleaned via
+// filepath.Clean so the comparison is portable across slash conventions:
+//   - POSIX go test stages binaries under e.g. /tmp/go-buildNNN/.../pkg.test
+//   - Windows go test stages binaries under e.g. %TEMP%\go-buildNNN\...\pkg.test.exe
+// The "go-build" substring is the actual marker on every platform.
+func isGoTestTempExecutable(executablePath, tmpRoot string) bool {
+	if executablePath == "" || tmpRoot == "" {
+		return false
+	}
+	cleanedExec := filepath.Clean(executablePath)
+	cleanedTmp := filepath.Clean(tmpRoot)
+	return strings.HasPrefix(cleanedExec, cleanedTmp) && strings.Contains(cleanedExec, "go-build")
 }

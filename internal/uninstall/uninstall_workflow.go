@@ -5,21 +5,26 @@ import (
 	"log/slog"
 
 	"claudio.click/internal/install"
-	"claudio.click/internal/util"
+	"github.com/spf13/afero"
 )
 
-// RunUninstallWorkflow orchestrates the complete Claudio uninstall process (public interface)
-// Workflow: Validate scope → Read settings → Detect hooks → Remove hooks → Write → Verify
-func RunUninstallWorkflow(scope string, settingsPath string) error {
-	return runUninstallWorkflow(scope, settingsPath)
+// agentResolver returns the settings path for the given agent and scope.
+// Production calls agent.BestConfigPath. Tests override via swapAgentResolver
+// (defined in *_test.go) so a t.TempDir() path can be injected without
+// changing the workflow's signature.
+var agentResolver = func(agent install.Agent, scope string) (string, error) {
+	return agent.BestConfigPath(scope)
 }
 
-// runUninstallWorkflow orchestrates the complete Claudio uninstall process
-// Workflow: Validate scope → Read settings → Detect hooks → Remove hooks → Write → Verify
-func runUninstallWorkflow(scope string, settingsPath string) error {
+// RunUninstallWorkflow orchestrates the complete Claudio uninstall process.
+// The settings-file path is resolved internally from the agent and the
+// validated scope, so the scope check becomes load-bearing: a caller cannot
+// pass scope=user with a path that does not belong to that scope.
+// Workflow: Validate scope → Resolve path → Read settings → Detect hooks → Remove hooks → Write → Verify
+func RunUninstallWorkflow(filesystem afero.Fs, scope string, agent install.Agent) error {
 	slog.Info("starting Claudio uninstall workflow",
 		"scope", scope,
-		"settings_path", settingsPath)
+		"agent", agent)
 
 	// Step 1: Validate scope
 	if scope != "user" && scope != "project" {
@@ -28,22 +33,42 @@ func runUninstallWorkflow(scope string, settingsPath string) error {
 
 	slog.Debug("validated uninstall scope", "scope", scope)
 
+	// Resolve the settings path from the validated scope using the agent.
+	// Going through agentResolver lets tests inject a TempDir path without
+	// changing this signature.
+	settingsPath, err := agentResolver(agent, scope)
+	if err != nil {
+		return fmt.Errorf("failed to resolve settings path for agent %s scope %s: %w", agent, scope, err)
+	}
+	slog.Debug("resolved settings path from agent", "agent", agent, "scope", scope, "path", settingsPath)
+
+	// Acquire advisory lock around the full read-mutate-write window so
+	// concurrent install/uninstall processes serialise. See
+	// install.LockSettingsDir for semantics.
+	lock, err := install.LockSettingsDir(settingsPath)
+	if err != nil {
+		return fmt.Errorf("uninstall: %w", err)
+	}
+	defer func() {
+		if unlockErr := lock.Unlock(); unlockErr != nil {
+			slog.Warn("failed to release settings lock", "err", unlockErr)
+		}
+	}()
+
 	// Step 2: Read existing settings
 	slog.Debug("reading existing settings", "path", settingsPath)
-	factory := install.GetFilesystemFactory()
-	prodFS := factory.Production()
-	existingSettings, err := install.ReadSettingsFile(prodFS, settingsPath)
+	existingSettings, err := install.ReadSettingsFile(filesystem, settingsPath)
 	if err != nil {
 		return fmt.Errorf("failed to read existing settings from %s: %w", settingsPath, err)
 	}
 
 	slog.Info("loaded existing settings",
 		"path", settingsPath,
-		"settings_keys", util.GetSettingsKeys(existingSettings))
+		"settings_keys", install.SettingsKeys(existingSettings))
 
 	// Step 3: Detect Claudio hooks in settings
 	slog.Debug("detecting claudio hooks in settings")
-	claudioHooks := detectClaudioHooks(existingSettings)
+	claudioHooks := DetectClaudioHooks(existingSettings)
 
 	if len(claudioHooks) == 0 {
 		slog.Info("no claudio hooks found, uninstall is idempotent",
@@ -63,29 +88,20 @@ func runUninstallWorkflow(scope string, settingsPath string) error {
 
 	// Step 6: Write updated settings back to file
 	slog.Debug("writing updated settings to file", "path", settingsPath)
-	err = install.WriteSettingsFile(prodFS, settingsPath, existingSettings)
+	err = install.WriteSettingsFile(filesystem, settingsPath, existingSettings)
 	if err != nil {
 		return fmt.Errorf("failed to write updated settings to %s: %w", settingsPath, err)
 	}
 
 	slog.Info("wrote updated settings to file", "path", settingsPath)
 
-	// Step 7: Verify uninstall by reading back and checking for claudio hooks
-	slog.Debug("verifying uninstall by reading back settings")
-	verifySettings, err := install.ReadSettingsFile(prodFS, settingsPath)
-	if err != nil {
-		return fmt.Errorf("failed to verify uninstall by reading %s: %w", settingsPath, err)
-	}
-
-	// Check that no claudio hooks remain
-	remainingClaudioHooks := detectClaudioHooks(verifySettings)
-	if len(remainingClaudioHooks) > 0 {
-		return fmt.Errorf("verification failed: claudio hooks still present after uninstall: %v", remainingClaudioHooks)
-	}
-
-	slog.Info("uninstall verification successful",
-		"no_claudio_hooks_remaining", true,
-		"settings_path", settingsPath)
+	// Note: the previous implementation read the settings back and called
+	// DetectClaudioHooks again to "verify" the removal. That was
+	// self-confirming — the read-back used the same detector that had
+	// just produced the input to the removal primitives, so a detector
+	// bug could not be caught. The post-condition is instead enforced as
+	// a unit invariant on removeSimpleClaudioHooks / removeComplexClaudioHooks
+	// (see hook_removal_test.go: TestRemoveClaudioHooks_NoClaudioHooksRemain).
 
 	slog.Info("Claudio uninstall workflow completed successfully",
 		"scope", scope,
@@ -94,4 +110,3 @@ func runUninstallWorkflow(scope string, settingsPath string) error {
 
 	return nil
 }
-

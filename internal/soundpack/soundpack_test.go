@@ -277,14 +277,15 @@ func TestJSONSoundpackLoading(t *testing.T) {
 			t.Fatalf("Failed to create test sound file: %v", err)
 		}
 
-		// Build JSON properly using encoding/json to handle path escaping
+		// Use relative mapping values; the untrusted loader resolves them
+		// under the JSON file's directory.
 		soundpackData := map[string]interface{}{
 			"name":        "test-soundpack",
 			"description": "Test soundpack for unit tests",
 			"mappings": map[string]string{
-				"success/bash.wav": soundFile1,
-				"error/error.wav":  soundFile2,
-				"default.wav":      soundFile1,
+				"success/bash.wav": "success-sound.wav",
+				"error/error.wav":  "error-sound.wav",
+				"default.wav":      "success-sound.wav",
 			},
 		}
 		jsonContent, err := json.MarshalIndent(soundpackData, "", "\t")
@@ -312,13 +313,13 @@ func TestJSONSoundpackLoading(t *testing.T) {
 			t.Errorf("Expected type 'json', got '%s'", mapper.GetType())
 		}
 
-		// Test sound resolution
+		// Test sound resolution — value should resolve to soundFile1.
 		candidates, err := mapper.MapPath("success/bash.wav")
 		if err != nil {
 			t.Errorf("MapPath should not error: %v", err)
 		}
 
-		if len(candidates) != 1 || candidates[0] != soundFile1 {
+		if len(candidates) != 1 || filepath.Clean(candidates[0]) != filepath.Clean(soundFile1) {
 			t.Errorf("Expected [%s], got %v", soundFile1, candidates)
 		}
 	})
@@ -327,11 +328,13 @@ func TestJSONSoundpackLoading(t *testing.T) {
 		tempDir := t.TempDir()
 		jsonFile := filepath.Join(tempDir, "invalid-soundpack.json")
 
-		// Create JSON with reference to non-existent sound file
+		// Relative path that resolves under tempDir but the file does not
+		// exist — exercises the post-validator existence check (after
+		// validateMappingValue accepts the syntax).
 		jsonContent := `{
 			"name": "invalid-soundpack",
 			"mappings": {
-				"success/bash.wav": "/nonexistent/path/sound.wav"
+				"success/bash.wav": "missing-sound.wav"
 			}
 		}`
 
@@ -383,7 +386,7 @@ func TestJSONSoundpackLoading(t *testing.T) {
 			t.Errorf("MapPath should not error: %v", err)
 		}
 
-		if len(candidates) != 1 || candidates[0] != soundFile {
+		if len(candidates) != 1 || filepath.Clean(candidates[0]) != filepath.Clean(soundFile) {
 			t.Errorf("Expected [%s], got %v", soundFile, candidates)
 		}
 	})
@@ -429,15 +432,15 @@ func TestJSONSoundpackLoading(t *testing.T) {
 			}
 		}
 
-		// Build JSON properly using encoding/json to handle path escaping
+		// Use relative mapping values to the basenames in tempDir.
 		soundpackData := map[string]interface{}{
 			"name": "fallback-test",
 			"mappings": map[string]string{
-				"success/bash-specific.wav": bashSpecific,
-				"success/bash.wav":          bashGeneral,
-				"success/tool-complete.wav": successCategory,
-				"success/success.wav":       successCategory,
-				"default.wav":               defaultSound,
+				"success/bash-specific.wav": filepath.Base(bashSpecific),
+				"success/bash.wav":          filepath.Base(bashGeneral),
+				"success/tool-complete.wav": filepath.Base(successCategory),
+				"success/success.wav":       filepath.Base(successCategory),
+				"default.wav":               filepath.Base(defaultSound),
 			},
 		}
 		jsonContent, err := json.MarshalIndent(soundpackData, "", "\t")
@@ -473,7 +476,7 @@ func TestJSONSoundpackLoading(t *testing.T) {
 				t.Errorf("MapPath('%s') should not error: %v", tc.path, err)
 			}
 
-			if len(candidates) != 1 || candidates[0] != tc.expected {
+			if len(candidates) != 1 || filepath.Clean(candidates[0]) != filepath.Clean(tc.expected) {
 				t.Errorf("MapPath('%s') = %v, expected [%s]", tc.path, candidates, tc.expected)
 			}
 		}
@@ -532,11 +535,11 @@ func TestSoundpackFactory(t *testing.T) {
 			t.Fatalf("Failed to create test sound file: %v", err)
 		}
 
-		// Build JSON properly using encoding/json to handle path escaping
+		// Untrusted loader requires relative mapping values; use basename.
 		soundpackData := map[string]interface{}{
 			"name": "json-test-soundpack",
 			"mappings": map[string]string{
-				"success/bash.wav": soundFile,
+				"success/bash.wav": filepath.Base(soundFile),
 			},
 		}
 		jsonContent, err := json.MarshalIndent(soundpackData, "", "\t")
@@ -584,11 +587,11 @@ func TestSoundpackFactory(t *testing.T) {
 			t.Fatalf("Failed to create sound file: %v", err)
 		}
 
-		// Build JSON properly using encoding/json to handle path escaping
+		// Untrusted loader requires relative mapping values; use basename.
 		soundpackData := map[string]interface{}{
 			"name": "extension-test",
 			"mappings": map[string]string{
-				"default.wav": soundFile,
+				"default.wav": filepath.Base(soundFile),
 			},
 		}
 		jsonContent, err := json.MarshalIndent(soundpackData, "", "\t")
@@ -655,7 +658,10 @@ func TestSoundpackFactory(t *testing.T) {
 }
 
 func TestLoadJSONSoundpackFromBytes(t *testing.T) {
-	// TDD Test: Load JSON soundpack from byte data with validation
+	// TDD Test: Load JSON soundpack from byte data with validation.
+	// After the chunk-6 trust-tier split, LoadJSONSoundpackFromBytes is
+	// the UNTRUSTED loader and requires a baseDir. Mapping values must be
+	// relative paths under baseDir.
 
 	t.Run("loads valid JSON soundpack from bytes", func(t *testing.T) {
 		// Create temporary sound files that the JSON will reference
@@ -672,14 +678,15 @@ func TestLoadJSONSoundpackFromBytes(t *testing.T) {
 			t.Fatalf("Failed to create test sound file: %v", err)
 		}
 
-		// Build JSON properly using encoding/json to handle path escaping
+		// Build JSON with RELATIVE mapping values (the new untrusted
+		// loader rejects absolute paths).
 		soundpackData := map[string]interface{}{
 			"name":        "test-soundpack-from-bytes",
 			"description": "Test soundpack for LoadJSONSoundpackFromBytes",
 			"version":     "1.0.0",
 			"mappings": map[string]string{
-				"success/bash.wav": soundFile1,
-				"error/bash.wav":   soundFile2,
+				"success/bash.wav": "success-sound.wav",
+				"error/bash.wav":   "error-sound.wav",
 			},
 		}
 		jsonContent, err := json.MarshalIndent(soundpackData, "", "\t")
@@ -687,8 +694,8 @@ func TestLoadJSONSoundpackFromBytes(t *testing.T) {
 			t.Fatalf("Failed to marshal JSON: %v", err)
 		}
 
-		// Load the JSON soundpack from bytes
-		mapper, err := LoadJSONSoundpackFromBytes([]byte(jsonContent))
+		// Load the JSON soundpack from bytes (untrusted, relative to tempDir)
+		mapper, err := LoadJSONSoundpackFromBytes([]byte(jsonContent), tempDir)
 		if err != nil {
 			t.Errorf("Expected to load JSON soundpack from bytes, got error: %v", err)
 		}
@@ -702,7 +709,7 @@ func TestLoadJSONSoundpackFromBytes(t *testing.T) {
 			t.Errorf("Expected name 'test-soundpack-from-bytes', got '%s'", mapper.GetName())
 		}
 
-		// Test sound mapping
+		// Test sound mapping — value should be the resolved absolute path.
 		candidates, err := mapper.MapPath("success/bash.wav")
 		if err != nil {
 			t.Errorf("Expected to map sound path, got error: %v", err)
@@ -722,12 +729,12 @@ func TestLoadJSONSoundpackFromBytes(t *testing.T) {
 			}
 		`
 
-		_, err := LoadJSONSoundpackFromBytes([]byte(invalidJSON))
+		_, err := LoadJSONSoundpackFromBytes([]byte(invalidJSON), t.TempDir())
 		if err == nil {
 			t.Error("Expected error for invalid JSON, got nil")
 		}
 
-		if !strings.Contains(err.Error(), "failed to parse JSON soundpack from bytes") {
+		if !strings.Contains(err.Error(), "failed to parse JSON soundpack") {
 			t.Errorf("Expected JSON parse error message, got: %v", err)
 		}
 	})
@@ -736,11 +743,11 @@ func TestLoadJSONSoundpackFromBytes(t *testing.T) {
 		jsonContent := `{
 			"description": "Missing name field",
 			"mappings": {
-				"success/test.wav": "/tmp/test.wav"
+				"success/test.wav": "test.wav"
 			}
 		}`
 
-		_, err := LoadJSONSoundpackFromBytes([]byte(jsonContent))
+		_, err := LoadJSONSoundpackFromBytes([]byte(jsonContent), t.TempDir())
 		if err == nil {
 			t.Error("Expected error for missing name field, got nil")
 		}
@@ -756,7 +763,7 @@ func TestLoadJSONSoundpackFromBytes(t *testing.T) {
 			"mappings": {}
 		}`
 
-		_, err := LoadJSONSoundpackFromBytes([]byte(jsonContent))
+		_, err := LoadJSONSoundpackFromBytes([]byte(jsonContent), t.TempDir())
 		if err == nil {
 			t.Error("Expected error for empty mappings, got nil")
 		}
@@ -767,14 +774,16 @@ func TestLoadJSONSoundpackFromBytes(t *testing.T) {
 	})
 
 	t.Run("rejects soundpack with missing sound files", func(t *testing.T) {
+		// Relative path that resolves under baseDir but the file does not
+		// exist — exercises the post-validator existence check.
 		jsonContent := `{
 			"name": "missing-files-test",
 			"mappings": {
-				"success/test.wav": "/nonexistent/file.wav"
+				"success/test.wav": "nonexistent-file.wav"
 			}
 		}`
 
-		_, err := LoadJSONSoundpackFromBytes([]byte(jsonContent))
+		_, err := LoadJSONSoundpackFromBytes([]byte(jsonContent), t.TempDir())
 		if err == nil {
 			t.Error("Expected error for missing sound files, got nil")
 		}
@@ -785,13 +794,145 @@ func TestLoadJSONSoundpackFromBytes(t *testing.T) {
 	})
 
 	t.Run("handles empty byte data", func(t *testing.T) {
-		_, err := LoadJSONSoundpackFromBytes([]byte(""))
+		_, err := LoadJSONSoundpackFromBytes([]byte(""), t.TempDir())
 		if err == nil {
 			t.Error("Expected error for empty byte data, got nil")
 		}
 
-		if !strings.Contains(err.Error(), "failed to parse JSON soundpack from bytes") {
+		if !strings.Contains(err.Error(), "failed to parse JSON soundpack") {
 			t.Errorf("Expected JSON parse error for empty data, got: %v", err)
 		}
 	})
+}
+
+// observerCall captures one PathObserver invocation for assertions.
+type observerCall struct {
+	path     string
+	sequence int
+	exists   bool
+}
+
+// TestResolveWithObserver_FiresForEachPath asserts that WithObserver attaches
+// a callback that fires exactly once per candidate the resolver walks, in
+// input order, with 1-based sequence numbering.
+func TestResolveWithObserver_FiresForEachPath(t *testing.T) {
+	tempDir := t.TempDir()
+	soundpackDir := filepath.Join(tempDir, "success")
+	if err := os.MkdirAll(soundpackDir, 0755); err != nil {
+		t.Fatalf("mkdir soundpack: %v", err)
+	}
+	// Place the LAST candidate on disk so the observer fires for every
+	// preceding candidate before the winner is hit.
+	last := filepath.Join(soundpackDir, "success.wav")
+	if err := os.WriteFile(last, []byte("data"), 0644); err != nil {
+		t.Fatalf("write success.wav: %v", err)
+	}
+
+	mapper := NewDirectoryMapper("test", []string{tempDir})
+	resolver := NewSoundpackResolver(mapper)
+
+	paths := []string{
+		"success/missing-a.wav",
+		"success/missing-b.wav",
+		"success/success.wav",
+	}
+
+	var calls []observerCall
+	obs := func(path string, sequence int, exists bool) {
+		calls = append(calls, observerCall{path: path, sequence: sequence, exists: exists})
+	}
+
+	winner, err := resolver.ResolveSoundWithFallback(paths, WithObserver(obs))
+	if err != nil {
+		t.Fatalf("ResolveSoundWithFallback failed: %v", err)
+	}
+	if winner != last {
+		t.Errorf("winner=%q want %q", winner, last)
+	}
+
+	if len(calls) != len(paths) {
+		t.Fatalf("observer fired %d times, want %d", len(calls), len(paths))
+	}
+	for i, c := range calls {
+		if c.path != paths[i] {
+			t.Errorf("calls[%d].path = %q, want %q", i, c.path, paths[i])
+		}
+		if c.sequence != i+1 {
+			t.Errorf("calls[%d].sequence = %d, want %d (1-based)", i, c.sequence, i+1)
+		}
+	}
+}
+
+// TestResolveWithObserver_ObservesExistenceAccurately asserts the observer's
+// exists flag matches on-disk reality: false for the missing candidate(s),
+// true for the candidate that resolves successfully.
+func TestResolveWithObserver_ObservesExistenceAccurately(t *testing.T) {
+	tempDir := t.TempDir()
+	soundpackDir := filepath.Join(tempDir, "success")
+	if err := os.MkdirAll(soundpackDir, 0755); err != nil {
+		t.Fatalf("mkdir soundpack: %v", err)
+	}
+	// path[0] missing, path[1] present.
+	present := filepath.Join(soundpackDir, "present.wav")
+	if err := os.WriteFile(present, []byte("data"), 0644); err != nil {
+		t.Fatalf("write present.wav: %v", err)
+	}
+
+	mapper := NewDirectoryMapper("test", []string{tempDir})
+	resolver := NewSoundpackResolver(mapper)
+
+	paths := []string{
+		"success/missing.wav",
+		"success/present.wav",
+	}
+
+	var calls []observerCall
+	obs := func(path string, sequence int, exists bool) {
+		calls = append(calls, observerCall{path: path, sequence: sequence, exists: exists})
+	}
+
+	winner, err := resolver.ResolveSoundWithFallback(paths, WithObserver(obs))
+	if err != nil {
+		t.Fatalf("ResolveSoundWithFallback failed: %v", err)
+	}
+	if winner != present {
+		t.Errorf("winner=%q want %q", winner, present)
+	}
+
+	if len(calls) != 2 {
+		t.Fatalf("observer fired %d times, want 2", len(calls))
+	}
+	if calls[0].exists {
+		t.Errorf("calls[0] exists=true, want false (path %q does not exist)", calls[0].path)
+	}
+	if !calls[1].exists {
+		t.Errorf("calls[1] exists=false, want true (path %q exists)", calls[1].path)
+	}
+}
+
+// TestResolveWithObserver_NilOptionsBackwardCompat pins that the option is
+// optional — callers that don't pass any options must continue to work
+// exactly as before. Backward compatibility for the existing callers.
+func TestResolveWithObserver_NilOptionsBackwardCompat(t *testing.T) {
+	tempDir := t.TempDir()
+	soundpackDir := filepath.Join(tempDir, "success")
+	if err := os.MkdirAll(soundpackDir, 0755); err != nil {
+		t.Fatalf("mkdir soundpack: %v", err)
+	}
+	soundFile := filepath.Join(soundpackDir, "success.wav")
+	if err := os.WriteFile(soundFile, []byte("data"), 0644); err != nil {
+		t.Fatalf("write success.wav: %v", err)
+	}
+
+	mapper := NewDirectoryMapper("test", []string{tempDir})
+	resolver := NewSoundpackResolver(mapper)
+
+	// No options passed — original-style call.
+	winner, err := resolver.ResolveSoundWithFallback([]string{"success/success.wav"})
+	if err != nil {
+		t.Fatalf("ResolveSoundWithFallback (no opts) failed: %v", err)
+	}
+	if winner != soundFile {
+		t.Errorf("winner=%q want %q", winner, soundFile)
+	}
 }

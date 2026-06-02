@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"claudio.click/internal/cli/testenv"
 	"claudio.click/internal/tracking"
 )
 
@@ -17,6 +18,7 @@ import (
 // TDD RED: Test analyze missing command functionality
 
 func TestAnalyzeMissingCommand(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// Create temporary directory for test database
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "analyze_test.db")
@@ -65,7 +67,7 @@ func TestAnalyzeMissingCommand(t *testing.T) {
 			contextJSON = `{"Category":1,"ToolName":"git","OriginalTool":"Bash","IsSuccess":true}`
 		}
 		eventResult, err := db.Exec(`
-			INSERT INTO hook_events (timestamp, session_id, tool_name, selected_path, fallback_level, context)
+			INSERT INTO hook_events (timestamp, session_id, tool_name, selected_path, chain_type, context)
 			VALUES (?, ?, ?, ?, ?, ?)`,
 			now-int64(i*60), // Different timestamps
 			data.sessionID,
@@ -154,6 +156,7 @@ func TestAnalyzeMissingCommand(t *testing.T) {
 }
 
 func TestAnalyzeMissingCommandWithFilters(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// Create temporary directory for test database
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "analyze_filter_test.db")
@@ -183,7 +186,7 @@ func TestAnalyzeMissingCommandWithFilters(t *testing.T) {
 	for i, event := range testEvents {
 		// Insert hook event
 		eventResult, err := db.Exec(`
-			INSERT INTO hook_events (timestamp, session_id, tool_name, selected_path, fallback_level, context)
+			INSERT INTO hook_events (timestamp, session_id, tool_name, selected_path, chain_type, context)
 			VALUES (?, ?, ?, ?, ?, ?)`,
 			event.timestamp,
 			"session-"+string(rune(i+1)),
@@ -246,6 +249,7 @@ func TestAnalyzeMissingCommandWithFilters(t *testing.T) {
 }
 
 func TestAnalyzeMissingCommandWithToolFilter(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// Create temporary directory for test database
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "analyze_tool_test.db")
@@ -271,7 +275,7 @@ func TestAnalyzeMissingCommandWithToolFilter(t *testing.T) {
 	for i, event := range testEvents {
 		// Insert hook event
 		eventResult, err := db.Exec(`
-			INSERT INTO hook_events (timestamp, session_id, tool_name, selected_path, fallback_level, context)
+			INSERT INTO hook_events (timestamp, session_id, tool_name, selected_path, chain_type, context)
 			VALUES (?, ?, ?, ?, ?, ?)`,
 			now,
 			"session-"+string(rune(i+1)),
@@ -334,6 +338,7 @@ func TestAnalyzeMissingCommandWithToolFilter(t *testing.T) {
 }
 
 func TestAnalyzeMissingCommandNoDatabase(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// Test behavior when tracking is disabled or database doesn't exist
 	os.Setenv("CLAUDIO_SOUND_TRACKING", "false")
 	defer os.Unsetenv("CLAUDIO_SOUND_TRACKING")
@@ -359,6 +364,7 @@ func TestAnalyzeMissingCommandNoDatabase(t *testing.T) {
 }
 
 func TestAnalyzeMissingCommandHelp(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// Test help output for analyze missing command
 	cli := NewCLI()
 	stdin := strings.NewReader("")
@@ -520,6 +526,7 @@ func TestGroupMissingSoundsByTool(t *testing.T) {
 // TDD RED: Test analyze usage command functionality
 
 func TestAnalyzeUsageCommand(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// Create temporary directory for test database
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "usage_test.db")
@@ -578,7 +585,7 @@ func TestAnalyzeUsageCommand(t *testing.T) {
 	for _, data := range testData {
 		// Insert hook event
 		_, err = db.Exec(`
-			INSERT INTO hook_events (timestamp, session_id, tool_name, selected_path, fallback_level, context)
+			INSERT INTO hook_events (timestamp, session_id, tool_name, selected_path, chain_type, context)
 			VALUES (?, ?, ?, ?, ?, ?)`,
 			data.timestamp, data.sessionID, data.toolName, data.soundPath, data.fallbackLevel, data.contextJSON)
 		if err != nil {
@@ -610,7 +617,10 @@ func TestAnalyzeUsageCommand(t *testing.T) {
 
 	output := stdout.String()
 
-	// Verify output contains expected elements
+	// Verify output contains expected elements. fallback_level-derived
+	// descriptions ("exact match"/"tool-specific"/"default fallback")
+	// were removed alongside the fallback_level column in schema v2 —
+	// see review finding #20.
 	expectedContent := []string{
 		"Sound Usage Statistics",
 		"Most Frequently Used Sounds:",
@@ -618,9 +628,6 @@ func TestAnalyzeUsageCommand(t *testing.T) {
 		"loading/bash-thinking.wav",       // Should appear with count 1
 		"default.wav",                     // Should appear with count 1
 		"2 times",                         // Edit sound played twice
-		"exact match",                     // Fallback description
-		"tool-specific",                   // Fallback description
-		"default fallback",                // Fallback description
 		"To improve your sound coverage:", // Footer advice
 	}
 
@@ -646,6 +653,7 @@ func TestAnalyzeUsageCommand(t *testing.T) {
 }
 
 func TestAnalyzeUsageCommandWithFilters(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// Create temporary directory for test database
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "usage_filter_test.db")
@@ -677,7 +685,7 @@ func TestAnalyzeUsageCommandWithFilters(t *testing.T) {
 	for i, event := range testEvents {
 		contextJSON := fmt.Sprintf(`{"Category":%d,"ToolName":"%s"}`, event.category, event.toolName)
 		_, err = db.Exec(`
-			INSERT INTO hook_events (timestamp, session_id, tool_name, selected_path, fallback_level, context)
+			INSERT INTO hook_events (timestamp, session_id, tool_name, selected_path, chain_type, context)
 			VALUES (?, ?, ?, ?, ?, ?)`,
 			event.timestamp, fmt.Sprintf("session-%d", i), event.toolName, event.soundPath, 1, contextJSON)
 		if err != nil {
@@ -735,6 +743,7 @@ func TestAnalyzeUsageCommandWithFilters(t *testing.T) {
 }
 
 func TestAnalyzeUsageCommandWithSummaryAndFallbacks(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// Create temporary directory for test database
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "usage_summary_test.db")
@@ -762,7 +771,7 @@ func TestAnalyzeUsageCommandWithSummaryAndFallbacks(t *testing.T) {
 		for i := 0; i < event.count; i++ {
 			contextJSON := `{"Category":1,"ToolName":"Test"}`
 			_, err = db.Exec(`
-				INSERT INTO hook_events (timestamp, session_id, tool_name, selected_path, fallback_level, context)
+				INSERT INTO hook_events (timestamp, session_id, tool_name, selected_path, chain_type, context)
 				VALUES (?, ?, ?, ?, ?, ?)`,
 				now-int64(i*60), "session-test", "Test", event.soundPath, event.fallbackLevel, contextJSON)
 			if err != nil {
@@ -779,14 +788,14 @@ func TestAnalyzeUsageCommandWithSummaryAndFallbacks(t *testing.T) {
 		os.Unsetenv("CLAUDIO_SOUND_TRACKING_DB")
 	}()
 
-	// Test with --show-summary and --show-fallbacks
+	// Test with --show-summary and --show-chains
 	cli := NewCLI()
 	stdin := strings.NewReader("")
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 
-	// Run: claudio analyze usage --show-summary --show-fallbacks
-	exitCode := cli.Run([]string{"claudio", "analyze", "usage", "--show-summary", "--show-fallbacks"}, stdin, stdout, stderr)
+	// Run: claudio analyze usage --show-summary --show-chains
+	exitCode := cli.Run([]string{"claudio", "analyze", "usage", "--show-summary", "--show-chains"}, stdin, stdout, stderr)
 
 	if exitCode != 0 {
 		t.Errorf("Expected exit code 0, got %d", exitCode)
@@ -806,19 +815,15 @@ func TestAnalyzeUsageCommandWithSummaryAndFallbacks(t *testing.T) {
 		t.Error("Expected summary to show correct unique sounds count")
 	}
 
-	// Should include fallback statistics
-	if !strings.Contains(output, "Fallback Level Statistics:") {
-		t.Error("Expected output to include fallback statistics")
-	}
-	if !strings.Contains(output, "Level 1:") {
-		t.Error("Expected fallback stats to include Level 1")
-	}
-	if !strings.Contains(output, "Exact hint match") {
-		t.Error("Expected fallback stats to include level descriptions")
-	}
+	// Fallback Level Statistics output was removed in schema v2 — the
+	// per-event fallback_level conflated three chain shapes and the
+	// aggregate metric was meaningless. See review finding #20. The
+	// --show-fallbacks flag is scheduled for removal in the analyzer
+	// surface cleanup commit.
 }
 
 func TestAnalyzeUsageCommandWithPresets(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// Create temporary directory for test database
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "usage_preset_test.db")
@@ -844,7 +849,7 @@ func TestAnalyzeUsageCommandWithPresets(t *testing.T) {
 	for i, event := range testEvents {
 		contextJSON := `{"Category":1,"ToolName":"Test"}`
 		_, err = db.Exec(`
-			INSERT INTO hook_events (timestamp, session_id, tool_name, selected_path, fallback_level, context)
+			INSERT INTO hook_events (timestamp, session_id, tool_name, selected_path, chain_type, context)
 			VALUES (?, ?, ?, ?, ?, ?)`,
 			event.timestamp.Unix(), fmt.Sprintf("session-%d", i), "Test", event.soundPath, 1, contextJSON)
 		if err != nil {
@@ -896,6 +901,7 @@ func TestAnalyzeUsageCommandWithPresets(t *testing.T) {
 }
 
 func TestAnalyzeUsageCommandNoDatabase(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// Test behavior when tracking is disabled
 	os.Setenv("CLAUDIO_SOUND_TRACKING", "false")
 	defer os.Unsetenv("CLAUDIO_SOUND_TRACKING")
@@ -924,6 +930,7 @@ func TestAnalyzeUsageCommandNoDatabase(t *testing.T) {
 }
 
 func TestAnalyzeUsageCommandNoData(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// Create empty database
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "empty_test.db")
@@ -970,6 +977,7 @@ func TestAnalyzeUsageCommandNoData(t *testing.T) {
 }
 
 func TestAnalyzeUsageCommandHelp(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// Test help output for analyze usage command
 	cli := NewCLI()
 	stdin := strings.NewReader("")
@@ -993,13 +1001,13 @@ func TestAnalyzeUsageCommandHelp(t *testing.T) {
 		"--tool",
 		"--category",
 		"--preset",
-		"--show-fallbacks",
+		"--show-chains",
 		"--show-summary",
 		"--limit",
 		"Examples:",
 		"claudio analyze usage --days 30",
 		"claudio analyze usage --preset today",
-		"fallback levels",
+		"chain",
 		"optimization opportunities",
 	}
 

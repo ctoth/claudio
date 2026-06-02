@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"claudio.click/internal/cli/testenv"
 	"claudio.click/internal/hooks"
 )
 
@@ -17,6 +18,7 @@ import (
 // These tests verify that tracking is properly integrated into the CLI lifecycle
 
 func TestCLIWithTrackingEnabled(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// Create temporary directory for database
 	tempDir := t.TempDir()
 	
@@ -97,7 +99,8 @@ func TestCLIWithTrackingEnabled(t *testing.T) {
 }
 
 func TestCLIWithTrackingDisabled(t *testing.T) {
-	// Create temporary directory  
+	testenv.IsolateXDG(t)
+	// Create temporary directory
 	tempDir := t.TempDir()
 	
 	// Set environment variable to disable tracking
@@ -150,6 +153,7 @@ func TestCLIWithTrackingDisabled(t *testing.T) {
 }
 
 func TestCLITrackingEnvironmentVariableOverride(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// Create temporary directory for database
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "override.db")
@@ -196,6 +200,7 @@ func TestCLITrackingEnvironmentVariableOverride(t *testing.T) {
 }
 
 func TestCLIGracefulDegradationOnDBFailures(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// Test that CLI continues to work even if database operations fail
 	
 	// Set environment to enable tracking but use invalid database path
@@ -244,6 +249,7 @@ func TestCLIGracefulDegradationOnDBFailures(t *testing.T) {
 }
 
 func TestCLIProperCleanup(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// Test that CLI properly cleans up tracking resources
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "cleanup.db")
@@ -317,6 +323,7 @@ func TestCLIProperCleanup(t *testing.T) {
 // These tests verify that session IDs are properly propagated from hook events to database
 
 func TestSessionIDPropagationToDatabase(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// Create temporary directory for database
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "session_test.db")
@@ -381,6 +388,7 @@ func TestSessionIDPropagationToDatabase(t *testing.T) {
 }
 
 func TestMultipleSessionsCreateSeparateEntries(t *testing.T) {
+	testenv.IsolateXDG(t)
 	// Create temporary directory for database
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "multi_session_test.db")
@@ -462,8 +470,12 @@ func TestMultipleSessionsCreateSeparateEntries(t *testing.T) {
 	}
 }
 
-func TestPerRequestSoundCheckerInitialization(t *testing.T) {
-	// This test verifies that each request gets its own SoundChecker with the correct session ID
+func TestPerRequestEventRecorderInitialization(t *testing.T) {
+	testenv.IsolateXDG(t)
+	// This test verifies that each request gets its own per-session
+	// EventRecorder (formerly per-session SoundChecker, now stateless
+	// via tracking.NewEventRecorder threaded through PathObserver).
+	// Chunk 14 F6 renamed the test along with the type it guards.
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "per_request_test.db")
 	
@@ -536,11 +548,73 @@ func TestPerRequestSoundCheckerInitialization(t *testing.T) {
 		if recordedSessionID != session.sessionID {
 			t.Errorf("Expected session ID %s, got %s", session.sessionID, recordedSessionID)
 		}
-		
+
 		// Verify the context contains the correct tool name
 		if !strings.Contains(context, session.toolName) {
 			t.Errorf("Expected context to contain tool name %s, got: %s", session.toolName, context)
 		}
 	}
+}
+
+// TestCLITrackingHonorsConfigFlag covers finding #50: a user-supplied
+// --config file path that enables tracking with a custom database path must
+// reach initializeTracking. Previously initializeTracking re-loaded config
+// itself, going through the env+default search and silently dropping the
+// override.
+func TestCLITrackingHonorsConfigFlag(t *testing.T) {
+	testenv.IsolateXDG(t)
+
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "from-config.db")
+	configPath := filepath.Join(tempDir, "config.json")
+
+	cfgJSON := `{
+		"volume": 0.5,
+		"default_soundpack": "default",
+		"enabled": false,
+		"log_level": "warn",
+		"sound_tracking": {
+			"enabled": true,
+			"database_path": "` + filepath.ToSlash(dbPath) + `"
+		}
+	}`
+	if err := os.WriteFile(configPath, []byte(cfgJSON), 0644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	// Ensure no env override masks the test — we explicitly want to prove
+	// the --config flag is what drove the database path.
+	os.Unsetenv("CLAUDIO_SOUND_TRACKING")
+	os.Unsetenv("CLAUDIO_SOUND_TRACKING_DB")
+
+	cli := NewCLI()
+	hookEvent := hooks.HookEvent{
+		EventName:      "PostToolUse",
+		SessionID:      "config-flag-tracking",
+		TranscriptPath: "/test/transcript",
+		CWD:            "/test/path",
+		ToolName:       stringPtr("Bash"),
+	}
+	hookJSON, err := json.Marshal(hookEvent)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	stdin := bytes.NewReader(hookJSON)
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	exitCode := cli.Run([]string{"claudio", "--config", configPath}, stdin, stdout, stderr)
+	if exitCode != 0 {
+		t.Fatalf("expected exit 0, got %d (stderr=%q)", exitCode, stderr.String())
+	}
+
+	if _, statErr := os.Stat(dbPath); os.IsNotExist(statErr) {
+		t.Errorf("tracking database was not created at config-supplied path %q; --config flag did not reach initializeTracking", dbPath)
+	}
+
+	// Avoid unused-import lint on rare build configurations.
+	_ = time.Now
+	_ = sql.ErrNoRows
 }
 

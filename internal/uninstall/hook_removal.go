@@ -157,7 +157,12 @@ func removeComplexClaudioHooks(settings *install.SettingsMap, hookNames []string
 		"remaining_hooks", len(hooksMap))
 }
 
-// removeClaudioFromArray processes an array and removes claudio commands
+// removeClaudioFromArray processes an array and removes claudio commands.
+//
+// An item is dropped from the result ONLY when this function actually removed
+// a Claudio command from it AND the remaining hooks list is empty. A
+// pre-existing item with an empty hooks array (e.g. a user-staged matcher
+// block) is preserved verbatim because we did not remove anything from it.
 func removeClaudioFromArray(array []interface{}) ([]interface{}, int) {
 	var filteredArray []interface{}
 	commandsRemoved := 0
@@ -185,7 +190,11 @@ func removeClaudioFromArray(array []interface{}) ([]interface{}, int) {
 			continue
 		}
 
-		// Filter out claudio commands from the hooks array
+		// Filter out claudio commands from the hooks array.
+		// Track per-item removals so the drop decision below can distinguish
+		// "we emptied this item by removing Claudio" from "this item started
+		// empty and we changed nothing".
+		itemCommandsRemoved := 0
 		var filteredHooks []interface{}
 		for _, hookItem := range hooksArray {
 			hookMap, ok := hookItem.(map[string]interface{})
@@ -212,20 +221,27 @@ func removeClaudioFromArray(array []interface{}) ([]interface{}, int) {
 			// This is a claudio command - remove it
 			slog.Debug("removing claudio command from hooks array", "command", commandStr)
 			commandsRemoved++
+			itemCommandsRemoved++
 		}
 
-		if len(filteredHooks) > 0 {
-			// Update the item with filtered hooks
-			newItem := make(map[string]interface{})
-			for k, v := range itemMap {
-				newItem[k] = v
-			}
-			newItem["hooks"] = filteredHooks
-			filteredArray = append(filteredArray, newItem)
-		} else {
-			// If hooks array is empty, remove the entire item
-			slog.Debug("removing entire array element as hooks became empty")
+		if itemCommandsRemoved > 0 && len(filteredHooks) == 0 {
+			// We removed a Claudio command and that was the only thing here.
+			slog.Debug("removing entire array element as hooks became empty after Claudio removal")
+			continue
 		}
+
+		newItem := make(map[string]interface{})
+		for k, v := range itemMap {
+			newItem[k] = v
+		}
+		// Preserve user's pre-existing empty array exactly. filteredHooks
+		// may be nil here if hooksArray started empty; normalise to an
+		// empty slice so the JSON round-trip emits "[]" not "null".
+		if filteredHooks == nil {
+			filteredHooks = []interface{}{}
+		}
+		newItem["hooks"] = filteredHooks
+		filteredArray = append(filteredArray, newItem)
 	}
 
 	return filteredArray, commandsRemoved

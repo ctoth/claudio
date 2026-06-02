@@ -1,7 +1,6 @@
 package audio
 
 import (
-	"errors"
 	"io"
 	"strings"
 	"testing"
@@ -15,29 +14,21 @@ func TestAudioSourceInterface(t *testing.T) {
 
 // testAudioSource is a mock implementation for testing
 type testAudioSource struct {
-	filePath  string
 	reader    io.ReadCloser
 	format    string
-	fileErr   error
 	readerErr error
 }
 
-func (tas *testAudioSource) AsFilePath() (string, error) {
-	if tas.fileErr != nil {
-		return "", tas.fileErr
-	}
-	return tas.filePath, nil
-}
-
-func (tas *testAudioSource) AsReader() (io.ReadCloser, string, error) {
+func (tas *testAudioSource) Reader() (io.ReadCloser, string, error) {
 	if tas.readerErr != nil {
 		return nil, "", tas.readerErr
 	}
 	return tas.reader, tas.format, nil
 }
 
-// TestFileSource tests will go here but should fail initially since FileSource is not implemented
-func TestFileSource_AsFilePath(t *testing.T) {
+// TestFileSource_FilePath verifies FileSource satisfies FilePather and
+// returns the configured path.
+func TestFileSource_FilePath(t *testing.T) {
 	tests := []struct {
 		name     string
 		path     string
@@ -60,9 +51,12 @@ func TestFileSource_AsFilePath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fs := NewFileSource(tt.path, NewDefaultRegistry())
-			result, err := fs.AsFilePath()
+			fs := NewFileSource(tt.path)
 
+			// Must satisfy FilePather.
+			var _ FilePather = fs
+
+			result, err := fs.FilePath()
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error but got none")
 			}
@@ -76,48 +70,37 @@ func TestFileSource_AsFilePath(t *testing.T) {
 	}
 }
 
-func TestFileSource_AsReader(t *testing.T) {
+func TestFileSource_Reader(t *testing.T) {
 	tests := []struct {
 		name           string
 		path           string
 		expectedFormat string
 		wantErr        bool
-		fileExists     bool
 	}{
 		{
-			name:           "wav file format detection",
+			name:           "wav file extension hint",
 			path:           "/test/sound.wav",
 			expectedFormat: "wav",
-			wantErr:        true, // File doesn't exist, expect error
-			fileExists:     false,
+			wantErr:        true, // File doesn't exist
 		},
 		{
-			name:           "mp3 file format detection",
+			name:           "mp3 file extension hint",
 			path:           "/test/sound.mp3",
 			expectedFormat: "mp3",
-			wantErr:        true, // File doesn't exist, expect error
-			fileExists:     false,
-		},
-		{
-			name:           "unknown extension",
-			path:           "/test/sound.xyz",
-			expectedFormat: "",
-			wantErr:        true, // Invalid format should error before file access
-			fileExists:     false,
+			wantErr:        true,
 		},
 		{
 			name:           "empty path",
 			path:           "",
 			expectedFormat: "",
 			wantErr:        true,
-			fileExists:     false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fs := NewFileSource(tt.path, NewDefaultRegistry())
-			reader, _, err := fs.AsReader()
+			fs := NewFileSource(tt.path)
+			reader, _, err := fs.Reader()
 
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error but got none")
@@ -126,46 +109,38 @@ func TestFileSource_AsReader(t *testing.T) {
 				t.Errorf("unexpected error: %v", err)
 			}
 
-			// For non-existent files, we still want to test format detection
-			// The format should be detected before file opening fails
-			if tt.path != "" && !strings.Contains(tt.path, ".xyz") {
-				expectedFormat := fs.DetectFormat()
-				if expectedFormat != tt.expectedFormat {
-					t.Errorf("format detection failed: expected %q, got %q", tt.expectedFormat, expectedFormat)
+			if tt.path != "" {
+				hint := fs.FormatHint()
+				if hint != tt.expectedFormat {
+					t.Errorf("format hint mismatch: expected %q, got %q", tt.expectedFormat, hint)
 				}
 			}
 
 			if reader != nil {
-				reader.Close() // Clean up
+				reader.Close()
 			}
 		})
 	}
 }
 
-// TestFileSource_FormatDetection tests format detection independently
-func TestFileSource_FormatDetection(t *testing.T) {
+// TestFileSource_FormatHint tests extension-based hint mapping.
+func TestFileSource_FormatHint(t *testing.T) {
 	tests := []struct {
 		name     string
 		path     string
 		expected string
 	}{
 		{"wav extension", "/test/file.wav", "wav"},
-		{"wave extension", "/test/file.wave", "wav"},
 		{"mp3 extension", "/test/file.mp3", "mp3"},
 		{"aiff extension", "/test/file.aiff", "aiff"},
-		{"aif extension", "/test/file.aif", "aiff"},
-		{"uppercase AIFF", "/test/file.AIFF", "aiff"},
-		{"flac extension (unsupported)", "/test/file.flac", ""},
-		{"ogg extension (unsupported)", "/test/file.ogg", ""},
-		{"unknown extension", "/test/file.xyz", ""},
+		{"uppercase WAV becomes wav", "/test/file.WAV", "wav"},
 		{"no extension", "/test/file", ""},
-		{"uppercase extension", "/test/file.WAV", "wav"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fs := NewFileSource(tt.path, NewDefaultRegistry())
-			result := fs.DetectFormat()
+			fs := NewFileSource(tt.path)
+			result := fs.FormatHint()
 			if result != tt.expected {
 				t.Errorf("expected %q, got %q", tt.expected, result)
 			}
@@ -173,34 +148,26 @@ func TestFileSource_FormatDetection(t *testing.T) {
 	}
 }
 
-// TestFileSource_UsesRegistry tests that FileSource uses registry for format detection
-func TestFileSource_UsesRegistry(t *testing.T) {
-	registry := NewDefaultRegistry()
-	fs := NewFileSource("/test/file.aiff", registry)
-	format := fs.DetectFormat()
-	if format != "aiff" {
-		t.Errorf("expected 'aiff', got '%s'", format)
-	}
-}
-
-func TestReaderSource_AsFilePath(t *testing.T) {
+// TestReaderSource_NoFilePather asserts that a ReaderSource does NOT
+// satisfy FilePather — exec backends rely on the assertion to decide
+// whether to fast-path or write-temp.
+func TestReaderSource_NoFilePather(t *testing.T) {
 	reader := io.NopCloser(strings.NewReader("test data"))
 	rs := NewReaderSource(reader, "wav")
 
-	_, err := rs.AsFilePath()
-	if !errors.Is(err, ErrNotSupported) {
-		t.Errorf("expected ErrNotSupported, got %v", err)
+	if _, ok := any(rs).(FilePather); ok {
+		t.Error("ReaderSource must not satisfy FilePather; exec backends rely on the negative type assertion")
 	}
 }
 
-func TestReaderSource_AsReader(t *testing.T) {
+func TestReaderSource_Reader(t *testing.T) {
 	testData := "test audio data"
 	reader := io.NopCloser(strings.NewReader(testData))
 	expectedFormat := "wav"
 
 	rs := NewReaderSource(reader, expectedFormat)
 
-	returnedReader, format, err := rs.AsReader()
+	returnedReader, format, err := rs.Reader()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -211,14 +178,12 @@ func TestReaderSource_AsReader(t *testing.T) {
 		t.Error("expected non-nil reader")
 	}
 
-	// Clean up
 	if returnedReader != nil {
 		returnedReader.Close()
 	}
 }
 
 func TestErrorDefinitions(t *testing.T) {
-	// Test that our error types are properly defined
 	if ErrNotSupported == nil {
 		t.Error("ErrNotSupported should be defined")
 	}
@@ -229,7 +194,6 @@ func TestErrorDefinitions(t *testing.T) {
 		t.Error("ErrSourceClosed should be defined")
 	}
 
-	// Test error messages
 	if ErrNotSupported.Error() != "operation not supported by this source" {
 		t.Errorf("unexpected ErrNotSupported message: %s", ErrNotSupported.Error())
 	}

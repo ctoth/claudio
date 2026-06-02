@@ -175,7 +175,7 @@ func TestMergeHookValuesStringFormatExisting(t *testing.T) {
 			"PreToolUse": "/usr/bin/other-tool",
 		},
 	}
-	claudioHooks, err := GenerateClaudioHooksForAgent(afero.NewMemMapFs(), "/usr/local/bin/claudio", AgentClaude)
+	claudioHooks, err := GenerateClaudioHooksForAgent("/usr/local/bin/claudio", AgentClaude)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -224,7 +224,7 @@ func TestMergeHooksRefreshesClaudioWithoutDroppingExistingHooks(t *testing.T) {
 			},
 		},
 	}
-	claudioHooks, err := GenerateClaudioHooksForAgent(afero.NewMemMapFs(), "/new/claudio", AgentCodex)
+	claudioHooks, err := GenerateClaudioHooksForAgent("/new/claudio", AgentCodex)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -262,7 +262,7 @@ func TestMergeHooksRefreshesClaudioWithoutDroppingExistingHooks(t *testing.T) {
 	}
 }
 
-func TestRemoveClaudioCommandsPreservesNonClaudioEntries(t *testing.T) {
+func TestMergeHookValuesPreservesNonClaudioEntriesWhileRefreshingClaudio(t *testing.T) {
 	entries := []interface{}{
 		"raw-entry",
 		map[string]interface{}{"matcher": "*"},
@@ -282,14 +282,23 @@ func TestRemoveClaudioCommandsPreservesNonClaudioEntries(t *testing.T) {
 			},
 		},
 	}
+	claudioValue := []interface{}{
+		map[string]interface{}{
+			"matcher": "*",
+			"hooks": []interface{}{
+				map[string]interface{}{"command": "/new/claudio"},
+			},
+		},
+	}
 
-	filtered := removeClaudioCommands(entries)
-	if len(filtered) != 3 {
-		t.Fatalf("filtered entry count = %d, want 3: %#v", len(filtered), filtered)
+	filtered := mergeHookValues(entries, claudioValue).([]interface{})
+	if len(filtered) != 4 {
+		t.Fatalf("merged entry count = %d, want 4: %#v", len(filtered), filtered)
 	}
 
 	foundLogger := false
 	foundOldClaudio := false
+	foundNewClaudio := false
 	foundRawHook := false
 	foundNumericCommand := false
 	for _, entry := range filtered {
@@ -315,6 +324,8 @@ func TestRemoveClaudioCommandsPreservesNonClaudioEntries(t *testing.T) {
 				foundNumericCommand = true
 			case "/old/claudio":
 				foundOldClaudio = true
+			case "/new/claudio":
+				foundNewClaudio = true
 			case "/usr/bin/logger":
 				foundLogger = true
 			}
@@ -325,6 +336,9 @@ func TestRemoveClaudioCommandsPreservesNonClaudioEntries(t *testing.T) {
 	}
 	if foundOldClaudio {
 		t.Error("old claudio command was not removed")
+	}
+	if !foundNewClaudio {
+		t.Error("new claudio command was not appended")
 	}
 }
 
@@ -402,7 +416,7 @@ func TestIsClaudioHookFindsClaudioInMergedHookArrays(t *testing.T) {
 func TestMergeHooksMarshalErrorPropagates(t *testing.T) {
 	// A channel value cannot be JSON-marshaled, forcing deepCopySettings to error.
 	bad := &SettingsMap{"x": make(chan int)}
-	claudioHooks, _ := GenerateClaudioHooksForAgent(afero.NewMemMapFs(), "/usr/local/bin/claudio", AgentClaude)
+	claudioHooks, _ := GenerateClaudioHooksForAgent("/usr/local/bin/claudio", AgentClaude)
 	if _, err := MergeHooksIntoSettings(bad, claudioHooks); err == nil {
 		t.Error("expected error when existing settings cannot be deep-copied")
 	}
@@ -416,7 +430,7 @@ func TestMergeHookValuesUnknownExistingFormat(t *testing.T) {
 			"PreToolUse": float64(42),
 		},
 	}
-	claudioHooks, _ := GenerateClaudioHooksForAgent(afero.NewMemMapFs(), "/usr/local/bin/claudio", AgentClaude)
+	claudioHooks, _ := GenerateClaudioHooksForAgent("/usr/local/bin/claudio", AgentClaude)
 	merged, err := MergeHooksIntoSettings(existing, claudioHooks)
 	if err != nil {
 		t.Fatal(err)

@@ -1,0 +1,14 @@
+{
+  "name": "linux-default",
+  "description": "Default Linux platform soundpack -- synthesized tones embedded in the binary and materialized to the cache dir at load time. Keys are the category-level fallback paths the sound mapper emits (<category>/<category>.wav), so every event resolves out of the box.",
+  "version": "1.1",
+  "mappings": {
+    "success/success.wav": "default-success.wav",
+    "error/error.wav": "default-error.wav",
+    "loading/loading.wav": "default-loading.wav",
+    "interactive/interactive.wav": "default-interactive.wav",
+    "completion/completion.wav": "default-success.wav",
+    "system/system.wav": "default-loading.wav",
+    "default.wav": "default.wav"
+  }
+}

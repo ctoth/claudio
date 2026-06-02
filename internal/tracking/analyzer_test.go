@@ -55,7 +55,7 @@ func TestGetMissingSoundsWithContext(t *testing.T) {
 	for i, data := range testData {
 		// Insert hook event with context JSON
 		eventResult, err := db.Exec(`
-			INSERT INTO hook_events (timestamp, session_id, tool_name, selected_path, fallback_level, context)
+			INSERT INTO hook_events (timestamp, session_id, tool_name, selected_path, chain_type, context)
 			VALUES (?, ?, ?, ?, ?, ?)`,
 			now-int64(i*60), // Different timestamps
 			data.sessionID,
@@ -209,7 +209,7 @@ func TestGetSoundUsage(t *testing.T) {
 	for _, event := range testEvents {
 		// Insert hook event
 		_, err = db.Exec(`
-			INSERT INTO hook_events (timestamp, session_id, tool_name, selected_path, fallback_level, context)
+			INSERT INTO hook_events (timestamp, session_id, tool_name, selected_path, chain_type, context)
 			VALUES (?, ?, ?, ?, ?, ?)`,
 			event.timestamp, event.sessionID, event.toolName, event.soundPath, event.fallbackLevel, event.contextJSON)
 		if err != nil {
@@ -241,9 +241,6 @@ func TestGetSoundUsage(t *testing.T) {
 	}
 	if usage[0].PlayCount != 2 {
 		t.Errorf("Expected edit-success.wav to have PlayCount 2, got %d", usage[0].PlayCount)
-	}
-	if usage[0].FallbackLevel != 1 {
-		t.Errorf("Expected edit-success.wav to have FallbackLevel 1, got %d", usage[0].FallbackLevel)
 	}
 	if usage[0].Category != "success" {
 		t.Errorf("Expected edit-success.wav to have Category 'success', got '%s'", usage[0].Category)
@@ -309,7 +306,7 @@ func TestGetUsageSummary(t *testing.T) {
 	for _, event := range testEvents {
 		for i := 0; i < event.count; i++ {
 			_, err = db.Exec(`
-				INSERT INTO hook_events (timestamp, session_id, tool_name, selected_path, fallback_level, context)
+				INSERT INTO hook_events (timestamp, session_id, tool_name, selected_path, chain_type, context)
 				VALUES (?, ?, ?, ?, ?, ?)`,
 				now-int64(i*60), "test-session", event.toolName, event.soundPath, event.fallbackLevel, event.contextJSON)
 			if err != nil {
@@ -340,22 +337,9 @@ func TestGetUsageSummary(t *testing.T) {
 		t.Errorf("Expected UniqueSounds 3, got %d", summary.UniqueSounds)
 	}
 
-	// Check average fallback level: (1*10 + 4*5 + 5*3) / 18 = (10+20+15)/18 = 45/18 = 2.5
-	expectedAvgFallback := 2.5
-	if summary.AvgFallbackLevel < expectedAvgFallback-0.1 || summary.AvgFallbackLevel > expectedAvgFallback+0.1 {
-		t.Errorf("Expected AvgFallbackLevel ~%.1f, got %.2f", expectedAvgFallback, summary.AvgFallbackLevel)
-	}
-
-	// Check fallback distribution (counts by level)
-	if summary.FallbackDistribution[1] != 10 {
-		t.Errorf("Expected 10 events at fallback level 1, got %d", summary.FallbackDistribution[1])
-	}
-	if summary.FallbackDistribution[4] != 5 {
-		t.Errorf("Expected 5 events at fallback level 4, got %d", summary.FallbackDistribution[4])
-	}
-	if summary.FallbackDistribution[5] != 3 {
-		t.Errorf("Expected 3 events at fallback level 5, got %d", summary.FallbackDistribution[5])
-	}
+	// fallback_level aggregations (AvgFallbackLevel / FallbackDistribution)
+	// were removed in schema v2 because the per-row value conflated chain
+	// shapes. See review finding #20.
 }
 
 // TDD RED: Test GetToolUsageStats function that doesn't exist yet
@@ -402,7 +386,7 @@ func TestGetToolUsageStats(t *testing.T) {
 	for _, event := range testEvents {
 		for i := 0; i < event.count; i++ {
 			_, err = db.Exec(`
-				INSERT INTO hook_events (timestamp, session_id, tool_name, selected_path, fallback_level, context)
+				INSERT INTO hook_events (timestamp, session_id, tool_name, selected_path, chain_type, context)
 				VALUES (?, ?, ?, ?, ?, ?)`,
 				now-int64(i*60), "test-session", event.toolName, "test.wav", event.fallbackLevel, event.contextJSON)
 			if err != nil {
@@ -436,10 +420,6 @@ func TestGetToolUsageStats(t *testing.T) {
 	if toolStats[0].UsageCount != 15 {
 		t.Errorf("Expected Edit usage count 15, got %d", toolStats[0].UsageCount)
 	}
-	if toolStats[0].AvgFallbackLevel != 1.0 {
-		t.Errorf("Expected Edit avg fallback level 1.0, got %.2f", toolStats[0].AvgFallbackLevel)
-	}
-
 	// Second tool should be Bash
 	if toolStats[1].ToolName != "Bash" {
 		t.Errorf("Expected second tool to be 'Bash', got '%s'", toolStats[1].ToolName)
@@ -488,7 +468,7 @@ func TestGetCategoryDistribution(t *testing.T) {
 		
 		for i := 0; i < event.count; i++ {
 			_, err = db.Exec(`
-				INSERT INTO hook_events (timestamp, session_id, tool_name, selected_path, fallback_level, context)
+				INSERT INTO hook_events (timestamp, session_id, tool_name, selected_path, chain_type, context)
 				VALUES (?, ?, ?, ?, ?, ?)`,
 				now-int64(i*60), "test-session", "Test", "test.wav", 1, contextJSON)
 			if err != nil {
@@ -537,102 +517,128 @@ func TestGetCategoryDistribution(t *testing.T) {
 	}
 }
 
-// TDD RED: Test GetFallbackStatistics function that doesn't exist yet
-func TestGetFallbackStatistics(t *testing.T) {
-	// Create temporary directory for test database  
-	tempDir := t.TempDir()
-	dbPath := filepath.Join(tempDir, "fallback_test.db")
-
-	// Set up test database
-	db, err := NewDatabase(dbPath)
-	if err != nil {
-		t.Fatalf("Failed to create test database: %v", err)
-	}
-	defer db.Close()
-
-	// Insert test data with different fallback levels
+// TestGetChainTypeStatistics asserts the new per-chain-type analytics
+// surface that replaced fallback_level aggregation. Each event's
+// chain_type is recorded; depth comes from the path_lookups row whose
+// path matches selected_path.
+func TestGetChainTypeStatistics(t *testing.T) {
+	db := setupTestDB(t)
 	now := time.Now().Unix()
-	testEvents := []struct {
-		fallbackLevel int
-		count         int
-		description   string
+
+	// Three events: two "enhanced" (depths 1 and 3) and one "posttool"
+	// (depth 2). Avg depth: enhanced=(1+3)/2=2.0; posttool=2.0.
+	events := []struct {
+		sessionID    string
+		toolName     string
+		selectedPath string
+		chainType    string
+		paths        []struct {
+			path  string
+			seq   int
+			found int
+		}
 	}{
-		{1, 25, "Perfect match"},      // Most events with perfect match
-		{2, 15, "Tool-specific"},      // Some tool-specific fallbacks  
-		{3, 10, "Operation-specific"}, // Fewer operation fallbacks
-		{4, 8, "Category-specific"},   // Even fewer category fallbacks
-		{5, 2, "Default fallback"},    // Very few complete fallbacks
+		{
+			sessionID:    "s1",
+			toolName:     "git",
+			selectedPath: "loading/git-start.wav",
+			chainType:    "enhanced",
+			paths: []struct {
+				path  string
+				seq   int
+				found int
+			}{
+				{"loading/git-start.wav", 1, 1},
+			},
+		},
+		{
+			sessionID:    "s2",
+			toolName:     "bash",
+			selectedPath: "loading/loading.wav",
+			chainType:    "enhanced",
+			paths: []struct {
+				path  string
+				seq   int
+				found int
+			}{
+				{"loading/bash-start.wav", 1, 0},
+				{"loading/bash.wav", 2, 0},
+				{"loading/loading.wav", 3, 1},
+			},
+		},
+		{
+			sessionID:    "s3",
+			toolName:     "edit",
+			selectedPath: "success/edit-success.wav",
+			chainType:    "posttool",
+			paths: []struct {
+				path  string
+				seq   int
+				found int
+			}{
+				{"success/edit-success.wav", 2, 1},
+			},
+		},
 	}
 
-	for _, event := range testEvents {
-		contextJSON := `{"Category":1,"ToolName":"Test","IsSuccess":true}`
-		
-		for i := 0; i < event.count; i++ {
-			_, err = db.Exec(`
-				INSERT INTO hook_events (timestamp, session_id, tool_name, selected_path, fallback_level, context)
-				VALUES (?, ?, ?, ?, ?, ?)`,
-				now-int64(i*60), "test-session", "Test", "test.wav", event.fallbackLevel, contextJSON)
-			if err != nil {
-				t.Fatalf("Failed to insert test event: %v", err)
+	for i, e := range events {
+		res, err := db.Exec(`INSERT INTO hook_events
+			(timestamp, session_id, tool_name, selected_path, chain_type, context)
+			VALUES (?, ?, ?, ?, ?, '{"Category":1,"ToolName":"`+e.toolName+`"}')`,
+			now-int64(i*60), e.sessionID, e.toolName, e.selectedPath, e.chainType)
+		if err != nil {
+			t.Fatalf("insert event %d: %v", i, err)
+		}
+		eventID, _ := res.LastInsertId()
+		for _, p := range e.paths {
+			if _, err := db.Exec(`INSERT INTO path_lookups (event_id, path, sequence, found) VALUES (?, ?, ?, ?)`,
+				eventID, p.path, p.seq, p.found); err != nil {
+				t.Fatalf("insert path lookup: %v", err)
 			}
 		}
 	}
 
-	// TDD RED: Test GetFallbackStatistics function that doesn't exist yet
-	filter := QueryFilter{
-		Days: 0, // All time
-	}
-
-	fallbackStats, err := GetFallbackStatistics(db, filter)
+	stats, err := GetChainTypeStatistics(db, QueryFilter{})
 	if err != nil {
-		t.Fatalf("GetFallbackStatistics failed: %v", err)
+		t.Fatalf("GetChainTypeStatistics: %v", err)
+	}
+	if len(stats) != 2 {
+		t.Fatalf("expected 2 chain-type rows, got %d", len(stats))
 	}
 
-	// Should have 5 fallback levels
-	if len(fallbackStats) != 5 {
-		t.Errorf("Expected 5 fallback levels, got %d", len(fallbackStats))
+	byChain := map[string]ChainTypeStatistic{}
+	for _, s := range stats {
+		byChain[s.ChainType] = s
 	}
 
-	// Check level 1 (most events)
-	level1Found := false
-	for _, stat := range fallbackStats {
-		if stat.FallbackLevel == 1 {
-			level1Found = true
-			if stat.Count != 25 {
-				t.Errorf("Expected level 1 count 25, got %d", stat.Count)
-			}
-			// Percentage: 25/60 = 41.67%
-			expectedPct := 41.67
-			if stat.Percentage < expectedPct-0.1 || stat.Percentage > expectedPct+0.1 {
-				t.Errorf("Expected level 1 percentage ~%.1f%%, got %.2f%%", expectedPct, stat.Percentage)
-			}
-			if stat.Description == "" {
-				t.Error("Expected level 1 to have description")
-			}
-			break
-		}
+	enh, ok := byChain["enhanced"]
+	if !ok {
+		t.Fatal("expected 'enhanced' chain type in results")
 	}
-	if !level1Found {
-		t.Error("Expected to find fallback level 1 in results")
+	if enh.EventCount != 2 {
+		t.Errorf("expected enhanced EventCount=2, got %d", enh.EventCount)
+	}
+	if enh.AvgDepth < 1.99 || enh.AvgDepth > 2.01 {
+		t.Errorf("expected enhanced AvgDepth=2.0, got %.2f", enh.AvgDepth)
 	}
 
-	// Check level 5 (fewest events)
-	level5Found := false
-	for _, stat := range fallbackStats {
-		if stat.FallbackLevel == 5 {
-			level5Found = true
-			if stat.Count != 2 {
-				t.Errorf("Expected level 5 count 2, got %d", stat.Count)
-			}
-			// Percentage: 2/60 = 3.33%
-			expectedPct := 3.33
-			if stat.Percentage < expectedPct-0.1 || stat.Percentage > expectedPct+0.1 {
-				t.Errorf("Expected level 5 percentage ~%.1f%%, got %.2f%%", expectedPct, stat.Percentage)
-			}
-			break
-		}
+	post, ok := byChain["posttool"]
+	if !ok {
+		t.Fatal("expected 'posttool' chain type in results")
 	}
-	if !level5Found {
-		t.Error("Expected to find fallback level 5 in results")
+	if post.EventCount != 1 {
+		t.Errorf("expected posttool EventCount=1, got %d", post.EventCount)
+	}
+	if post.AvgDepth < 1.99 || post.AvgDepth > 2.01 {
+		t.Errorf("expected posttool AvgDepth=2.0, got %.2f", post.AvgDepth)
+	}
+
+	// Percentages: enhanced 66.7%, posttool 33.3%. Sum to 100.
+	totalPct := 0.0
+	for _, s := range stats {
+		totalPct += s.Percentage
+	}
+	if totalPct < 99.9 || totalPct > 100.1 {
+		t.Errorf("expected percentages to sum to ~100, got %.2f", totalPct)
 	}
 }

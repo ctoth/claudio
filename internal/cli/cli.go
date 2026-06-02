@@ -15,10 +15,10 @@ import (
 	"claudio.click/internal/audio"
 	"claudio.click/internal/config"
 	"claudio.click/internal/hooks"
+	"claudio.click/internal/safeio"
 	"claudio.click/internal/soundpack"
 	"claudio.click/internal/sounds"
 	"claudio.click/internal/tracking"
-	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
@@ -31,8 +31,6 @@ type CLI struct {
 	configManager     *config.ConfigManager
 	soundpackResolver soundpack.SoundpackResolver
 	audioBackend      audio.AudioBackend
-	backendFactory    audio.BackendFactory
-	terminalDetector  TerminalDetector
 	trackingDB        *sql.DB // Optional tracking database
 }
 
@@ -41,11 +39,15 @@ func NewCLI() *CLI {
 	slog.Debug("creating new CLI instance")
 
 	rootCmd := &cobra.Command{
-		Use:   "claudio",
-		Short: "Claude Code Audio Plugin",
-		Long:  "Claudio is a hook-based audio plugin for Claude Code that plays contextual sounds based on tool usage and events.",
-		RunE:  runStdinModeE, // Default behavior when no subcommand is provided
+		Use:     "claudio",
+		Short:   "Claude Code Audio Plugin",
+		Long:    "Claudio is a hook-based audio plugin for Claude Code that plays contextual sounds based on tool usage and events.",
+		Version: Version,
+		RunE:    runStdinModeE, // Default behavior when no subcommand is provided
 	}
+	// Preserve the historical version output shape ("claudio version X (Version X)\n...")
+	// that downstream tooling and tests check against.
+	rootCmd.SetVersionTemplate("claudio version " + Version + " (Version " + Version + ")\nClaude Code Audio Plugin - Hook-based sound system\n")
 
 	// Add install subcommand
 	installCmd := newInstallCommand()
@@ -63,6 +65,22 @@ func NewCLI() *CLI {
 	soundpackCmd := newSoundpackCommand()
 	rootCmd.AddCommand(soundpackCmd)
 
+	// Add volume subcommand
+	rootCmd.AddCommand(newVolumeCommand())
+
+	// Add mute / unmute subcommands
+	rootCmd.AddCommand(newMuteCommand())
+	rootCmd.AddCommand(newUnmuteCommand())
+
+	// Add status subcommand
+	rootCmd.AddCommand(newStatusCommand())
+
+	// Add install-commands subcommand (writes the /claudio slash command markdown)
+	rootCmd.AddCommand(newInstallCommandsCommand())
+
+	// Add uninstall-commands subcommand (removes the command artifact installed above)
+	rootCmd.AddCommand(newUninstallCommandsCommand())
+
 	// Add persistent flags to root command for backward compatibility
 	rootCmd.PersistentFlags().String("config", "", "Path to config file")
 	rootCmd.PersistentFlags().String("volume", "", "Set volume (0.0 to 1.0)")
@@ -73,16 +91,15 @@ func NewCLI() *CLI {
 	_ = rootCmd.PersistentFlags().MarkHidden("daemon-child")
 	_ = rootCmd.PersistentFlags().MarkHidden("hook-input-file")
 
-	// Add version flag
-	rootCmd.Flags().BoolP("version", "v", false, "Show version information")
+	// Note: cobra automatically registers a `--version` boolean flag (and
+	// short `-v`) once rootCmd.Version is set. We do not register a manual
+	// one, which previously required an args[1] short-circuit in Run().
 
 	return &CLI{
 		rootCmd:           rootCmd,
 		configManager:     nil, // Lazy initialization - only create when needed
 		soundpackResolver: nil, // Lazy initialization - only create when needed
 		audioBackend:      nil, // Lazy initialization - only create when needed
-		backendFactory:    nil, // Lazy initialization - only create when needed
-		terminalDetector:  nil, // Lazy initialization - only create when needed
 		trackingDB:        nil, // Lazy initialization - only create when needed
 	}
 }
@@ -105,15 +122,25 @@ func cliFromContext(ctx context.Context) *CLI {
 	return nil
 }
 
-// handleVersionFlag checks and handles the version flag
-// Returns true if version was handled and processing should stop
-func handleVersionFlag(cmd *cobra.Command) (bool, error) {
-	version, _ := cmd.Flags().GetBool("version")
-	if version {
-		cmd.Printf("claudio version %s (Version %s)\nClaude Code Audio Plugin - Hook-based sound system\n", Version, Version)
-		return true, nil
+// hasVersionFlag reports whether --version or the short -v form appears
+// anywhere in argv. Used in Run() to gate initializeSystems so that
+// `claudio --silent --version` (and any other ordering) is as cheap as
+// `claudio --version` was previously when the flag was args[1].
+func hasVersionFlag(args []string) bool {
+	// Skip args[0] (program name).
+	for i := 1; i < len(args); i++ {
+		a := args[i]
+		if a == "--version" || a == "-v" {
+			return true
+		}
+		// Support `--version=...` and `-v=...` forms even though cobra
+		// treats them as boolean flags — defensive against future
+		// shape changes.
+		if strings.HasPrefix(a, "--version=") || strings.HasPrefix(a, "-v=") {
+			return true
+		}
 	}
-	return false, nil
+	return false
 }
 
 // loadAndValidateConfig loads configuration from flags and files, applies overrides, and validates
@@ -270,7 +297,7 @@ func initializeAudioSystem(cmd *cobra.Command, cli *CLI, cfg *config.Config) err
 		// Try platform JSON fallback (e.g., wsl.json, darwin.json, linux.json)
 		cfgMgr := config.NewConfigManager()
 		execDir := getPlatformExecutableDirectory()
-		platformSoundpack := cfgMgr.GetPlatformSoundpack(afero.NewOsFs(), execDir)
+		platformSoundpack := cfgMgr.GetPlatformSoundpack(execDir)
 
 		if platformSoundpack != "default" {
 			slog.Debug("using platform-specific soundpack", "path", platformSoundpack)
@@ -332,21 +359,14 @@ func initializeAudioSystem(cmd *cobra.Command, cli *CLI, cfg *config.Config) err
 func (c *CLI) initializeAudioSystemWithBackend(cfg *config.Config) error {
 	slog.Debug("initializing audio backend", "backend_type", cfg.AudioBackend)
 
-	// Create audio backend using factory
-	backend, err := c.backendFactory.CreateBackend(cfg.AudioBackend)
+	// Create audio backend using package-level constructor
+	backend, err := audio.NewBackend(cfg.AudioBackend)
 	if err != nil {
 		slog.Error("failed to create audio backend", "backend_type", cfg.AudioBackend, "error", err)
 		return fmt.Errorf("failed to create audio backend '%s': %w", cfg.AudioBackend, err)
 	}
 
 	c.audioBackend = backend
-
-	// Start the backend
-	err = c.audioBackend.Start()
-	if err != nil {
-		slog.Error("failed to start audio backend", "error", err)
-		return fmt.Errorf("failed to start audio backend: %w", err)
-	}
 
 	// Set volume on backend (use default 0.5 if not set)
 	volume := 0.5
@@ -370,9 +390,17 @@ func (c *CLI) initializeAudioSystemWithBackend(cfg *config.Config) error {
 func readHookInput(cmd *cobra.Command) ([]byte, error) {
 	hookInputFile, _ := cmd.Flags().GetString("hook-input-file")
 	if hookInputFile != "" {
-		inputData, err := os.ReadFile(hookInputFile)
+		f, err := os.Open(hookInputFile)
 		if err != nil {
 			return nil, fmt.Errorf("error reading hook input file: %w", err)
+		}
+		inputData, err := safeio.ReadAllCapped(f, safeio.MaxHookPayloadBytes, "hook spool")
+		closeErr := f.Close()
+		if err != nil {
+			return nil, fmt.Errorf("error reading hook input file: %w", err)
+		}
+		if closeErr != nil {
+			slog.Warn("failed to close hook input file", "file", hookInputFile, "error", closeErr)
 		}
 
 		if removeErr := os.Remove(hookInputFile); removeErr != nil {
@@ -382,7 +410,7 @@ func readHookInput(cmd *cobra.Command) ([]byte, error) {
 		return inputData, nil
 	}
 
-	inputData, err := io.ReadAll(cmd.InOrStdin())
+	inputData, err := safeio.ReadAllCapped(cmd.InOrStdin(), safeio.MaxHookPayloadBytes, "hook payload")
 	if err != nil {
 		return nil, fmt.Errorf("error reading from stdin: %w", err)
 	}
@@ -440,16 +468,8 @@ func runStdinModeE(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("CLI instance not found in context")
 	}
 
-	// Handle version flag first
-	handled, err := handleVersionFlag(cmd)
-	if err != nil {
-		return err
-	}
-	if handled {
-		return nil
-	}
-
-	// Load and validate configuration
+	// Load and validate configuration. (Note: --version is handled by
+	// cobra itself before RunE is invoked because rootCmd.Version is set.)
 	cfg, err := loadAndValidateConfig(cmd, cli)
 	if err != nil {
 		return err
@@ -476,8 +496,11 @@ func runStdinModeE(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Initialize tracking (before audio system initialization)
-	cli.initializeTracking()
+	// Initialize tracking (before audio system initialization). Pass the
+	// already-loaded cfg so a user-supplied --config is honored
+	// (initializeTracking previously called LoadConfig itself, dropping
+	// the override).
+	cli.initializeTracking(cfg)
 
 	// Initialize audio and soundpack systems
 	err = initializeAudioSystem(cmd, cli, cfg)
@@ -493,11 +516,25 @@ func runStdinModeE(cmd *cobra.Command, args []string) error {
 func (c *CLI) Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	slog.Debug("CLI run started", "args", args)
 
-	// CRITICAL: Check for version flag BEFORE any system initialization
-	// This prevents unnecessary audio player creation for simple version requests
-	if len(args) > 1 && (args[1] == "--version" || args[1] == "-v") {
-		// Show version immediately without initializing any systems
-		fmt.Fprintf(stdout, "claudio version %s (Version %s)\nClaude Code Audio Plugin - Hook-based sound system\n", Version, Version)
+	// --version (and -v) is now handled by cobra natively because
+	// rootCmd.Version is set in NewCLI. Cobra exits before RunE runs, but
+	// we still skip initializeSystems() (which constructs a configManager
+	// and XDG resolver) when the version flag is present anywhere on the
+	// command line — the previous args[1] short-circuit only fired when
+	// --version was literally args[1], so e.g. `claudio --silent --version`
+	// still spun up the config manager. Detecting the flag here keeps the
+	// observable "fast path" invariant covered by TestVersionFlagEarlyExit
+	// while letting cobra produce the actual output.
+	if hasVersionFlag(args) {
+		c.rootCmd.SetArgs(args[1:])
+		c.rootCmd.SetIn(stdin)
+		c.rootCmd.SetOut(stdout)
+		c.rootCmd.SetErr(stderr)
+		c.rootCmd.SetContext(contextWithCLI(c))
+		if err := c.rootCmd.Execute(); err != nil {
+			slog.Error("cobra execution failed", "error", err)
+			return 1
+		}
 		return 0
 	}
 
@@ -556,14 +593,13 @@ func (c *CLI) initializeSystems() {
 	// Note: Tracking initialization is done later in runStdinModeE after logging is configured
 	// to avoid log messages appearing before the dual-level handler is set up
 
-	// Don't create global SoundMapper - it will be created per-request with session-specific SoundChecker
-	if c.backendFactory == nil {
-		c.backendFactory = audio.NewBackendFactory()
-	}
-	if c.terminalDetector == nil {
-		c.terminalDetector = &DefaultTerminalDetector{}
-	}
-	// soundpackResolver and audioBackend are initialized in initializeAudioSystem when needed
+	// Don't create a global SoundMapper here — it is built per-request in
+	// processHookEvent so each request gets its own session-scoped
+	// EventRecorder threaded through the soundpack PathObserver. (Chunk 14
+	// inverted the old SoundChecker hook ecosystem; this comment used to
+	// say "session-specific SoundChecker" — that type no longer exists.)
+	// soundpackResolver and audioBackend are initialized in
+	// initializeAudioSystem when needed.
 }
 
 // processHookEvent processes the parsed hook event
@@ -571,33 +607,55 @@ func (c *CLI) processHookEvent(hookEvent *hooks.HookEvent, cfg *config.Config, s
 	slog.Debug("processing hook event", "event_name", hookEvent.EventName)
 
 	// Extract hook context directly from event
-	context := hookEvent.GetContext()
+	eventCtx := hookEvent.GetContext()
 
 	slog.Debug("hook context parsed",
-		"category", context.Category.String(),
-		"operation", context.Operation,
-		"tool", context.ToolName,
-		"hint", context.SoundHint)
+		"category", eventCtx.Category.String(),
+		"operation", eventCtx.Operation,
+		"tool", eventCtx.ToolName,
+		"hint", eventCtx.SoundHint)
 
-	// Create SoundMapper with resolver-enabled SoundChecker for proper path resolution
-	var soundMapper *sounds.SoundMapper
+	// Compose the resolution pipeline. The mapper drives chain construction
+	// and resolution; the LookupBuffer (when tracking is on) wires
+	// per-candidate observation into the EventRecorder.RecordEvent payload.
+	//
+	// End-state dependency direction: sounds knows nothing about tracking.
+	// The CLI is the orchestrator that buys observation from the resolver
+	// (via soundpack.WithObserver) and writes it to tracking — preserving
+	// Chunk 13's one-RecordEvent-per-MapSound invariant at the CLI seam.
+	ctx := context.Background()
+
+	var buf *tracking.LookupBuffer
+	var dbHook *tracking.DBHook
+	var mapperOpts []sounds.MapperOption
 	if c.trackingDB != nil {
-		// Create DBHook with actual session ID from hook event
-		dbHook := tracking.NewDBHook(c.trackingDB, hookEvent.SessionID)
-		soundMapper = sounds.NewSoundMapperWithResolver(c.soundpackResolver, tracking.WithHook(dbHook.GetHook()))
-		slog.Debug("created SoundMapper with resolver and DBHook", "session_id", hookEvent.SessionID)
+		buf = tracking.NewLookupBuffer()
+		dbHook = tracking.NewDBHook(c.trackingDB, hookEvent.SessionID)
+		mapperOpts = append(mapperOpts, sounds.WithObserver(buf.Observer()))
+		slog.Debug("created LookupBuffer + DBHook for tracking", "session_id", hookEvent.SessionID)
 	} else {
-		// Create NopHook for no-op tracking
-		nopHook := tracking.NewNopHook()
-		soundMapper = sounds.NewSoundMapperWithResolver(c.soundpackResolver, tracking.WithHook(nopHook.GetHook()))
-		slog.Debug("created SoundMapper with resolver and NopHook (tracking disabled)")
+		slog.Debug("tracking disabled; mapper resolves without an observer")
 	}
 
-	// Map to sound file
-	result := soundMapper.MapSound(context)
+	soundMapper := sounds.NewSoundMapperWithResolver(c.soundpackResolver, mapperOpts...)
+
+	result := soundMapper.MapSound(ctx, eventCtx)
 	if result == nil {
 		slog.Warn("no sound mapping found for event")
 		return
+	}
+
+	// One RecordEvent per MapSound, post-resolution, with the full deduped
+	// lookup chain and the chosen winner. Errors are logged at WARN and do
+	// NOT propagate — tracking is best-effort.
+	if buf != nil && dbHook != nil {
+		if err := dbHook.RecordEvent(ctx, eventCtx, result.ChainType, buf.Lookups(), result.SelectedPath); err != nil {
+			slog.Warn("sound tracking RecordEvent failed (continuing)",
+				"error", err,
+				"chain_type", result.ChainType,
+				"selected_path", result.SelectedPath,
+				"lookups", len(buf.Lookups()))
+		}
 	}
 
 	slog.Debug("sound mapped",
@@ -637,8 +695,8 @@ func (c *CLI) playSoundWithBackend(soundPath string, volume float64) error {
 		return fmt.Errorf("failed to resolve sound path: %w", err)
 	}
 
-	// Create audio source from file path
-	source := audio.NewFileSource(fullPath, audio.NewDefaultRegistry())
+	// Create audio source from file path; the backend owns decoding.
+	source := audio.NewFileSource(fullPath)
 
 	// Play using audio backend
 	ctx := context.Background()
@@ -662,19 +720,20 @@ func setupLogging(cfg *config.Config, stderrWriter io.Writer) {
 		fileLevel = slog.LevelInfo // Default level if parsing fails
 	}
 
-	// Check if current logger is already more verbose than config specifies
-	// This preserves test logger setup
+	var handlers []slog.Handler
+
+	// Preserve an already-installed verbose handler (test setup) by adding it
+	// as one of the multi-handler outputs instead of returning early. The
+	// previous early-return silently dropped file logging whenever a test
+	// installed a DEBUG-level default handler, violating the chunk-1
+	// "Dual Output" contract.
 	currentHandler := slog.Default().Handler()
 	if textHandler, ok := currentHandler.(*slog.TextHandler); ok {
-		// Check if current handler allows DEBUG level but config wants higher level
 		if textHandler.Enabled(context.Background(), slog.LevelDebug) && fileLevel > slog.LevelDebug {
-			// Current handler allows DEBUG but config wants higher level - preserve current handler
-			slog.Debug("preserving existing verbose logger setup", "config_level", fileLevel.String(), "current_allows", "DEBUG")
-			return
+			slog.Debug("preserving existing verbose logger as additional handler", "config_level", fileLevel.String(), "current_allows", "DEBUG")
+			handlers = append(handlers, currentHandler)
 		}
 	}
-
-	var handlers []slog.Handler
 
 	// Always create stderr handler with ERROR level only
 	// This ensures users only see genuine errors, not debug/info/warn spam
@@ -730,8 +789,12 @@ func setupLogging(cfg *config.Config, stderrWriter io.Writer) {
 		"file_enabled", cfg.FileLogging != nil && cfg.FileLogging.Enabled)
 }
 
-// initializeTracking initializes the tracking database if enabled in configuration
-func (c *CLI) initializeTracking() {
+// initializeTracking initializes the tracking database if enabled in the
+// supplied configuration. The caller must pass the cfg they already
+// loaded — re-loading inside this function (the previous behavior) lost
+// any --config override the user passed, because the second LoadConfig
+// went through the env+default search path instead.
+func (c *CLI) initializeTracking(cfg *config.Config) {
 	slog.Debug("initializeTracking() called", "trackingDB_nil", c.trackingDB == nil)
 
 	if c.trackingDB != nil {
@@ -739,15 +802,10 @@ func (c *CLI) initializeTracking() {
 		return // Already initialized
 	}
 
-	// Load config to check if tracking is enabled
-	cfg, err := c.configManager.LoadConfig()
-	if err != nil {
-		slog.Debug("failed to load config for tracking initialization, using defaults", "error", err)
-		cfg = c.configManager.GetDefaultConfig()
+	if cfg == nil {
+		slog.Debug("initializeTracking called with nil cfg; skipping")
+		return
 	}
-
-	// Apply environment overrides
-	cfg = c.configManager.ApplyEnvironmentOverrides(cfg)
 
 	slog.Debug("tracking config loaded",
 		"tracking_nil", cfg.SoundTracking == nil,
@@ -833,11 +891,123 @@ func loadEmbeddedPlatformSoundpack(identifier string) (soundpack.PathMapper, err
 		return nil, fmt.Errorf("failed to read embedded platform soundpack: %w", err)
 	}
 
-	mapper, err := soundpack.LoadJSONSoundpackFromBytes(data)
+	basePaths := embeddedPlatformSoundpackBasePaths(filename, data)
+	mapper, err := soundpack.LoadEmbeddedPlatformSoundpack(data, basePaths...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load embedded platform soundpack: %w", err)
 	}
 
 	slog.Debug("embedded platform soundpack loaded successfully", "filename", filename)
 	return mapper, nil
+}
+
+func embeddedPlatformSoundpackBasePaths(filename string, data []byte) []string {
+	xdgDirs := config.NewXDGDirs()
+	ids := []string{}
+
+	if spFile, err := soundpack.PeekJSONSoundpackFromBytes(data); err == nil {
+		ids = append(ids, spFile.Name)
+		if strings.HasSuffix(spFile.Name, "-default") {
+			ids = append(ids, strings.TrimSuffix(spFile.Name, "-default"))
+		}
+	}
+
+	fileID := strings.TrimSuffix(filename, filepath.Ext(filename))
+	ids = append(ids, fileID, fileID+"-default", "default", "")
+
+	seen := make(map[string]struct{})
+	var paths []string
+	for _, id := range ids {
+		for _, path := range xdgDirs.GetSoundpackPaths(id) {
+			cleaned := filepath.Clean(path)
+			if _, exists := seen[cleaned]; exists {
+				continue
+			}
+			seen[cleaned] = struct{}{}
+			paths = append(paths, cleaned)
+		}
+	}
+
+	// The native-Linux pack references its default tones by bare filename
+	// (e.g. "default-success.wav") because a bare Linux box ships no
+	// guaranteed system WAVs. Those tones are embedded in the binary and
+	// materialized to the cache dir here, appended LAST so the shipped
+	// defaults are a fallback only: a user who installs linux-default sounds
+	// in their XDG data dir still wins. Packs that map to absolute system
+	// paths (Windows/macOS/WSL) name no embedded sound, so this is a no-op.
+	if extracted := ensureEmbeddedDefaultSoundsExtracted(data); extracted != "" {
+		cleaned := filepath.Clean(extracted)
+		if _, exists := seen[cleaned]; !exists {
+			paths = append(paths, cleaned)
+		}
+	}
+	return paths
+}
+
+// ensureEmbeddedDefaultSoundsExtracted materializes any of the pack's mapping
+// values that name an embedded default sound into a cache directory and
+// returns that directory (or "" if the pack references none). The shipped
+// tones back the native-Linux platform pack; Windows/macOS/WSL packs map to
+// absolute system paths that name no embedded sound, so this is a no-op for
+// them. Extraction targets the cache dir — not the user's data dir — because
+// these bytes are regenerable from the binary, not user-installed content.
+func ensureEmbeddedDefaultSoundsExtracted(data []byte) string {
+	spFile, err := soundpack.PeekJSONSoundpackFromBytes(data)
+	if err != nil {
+		return ""
+	}
+
+	destDir := config.NewXDGDirs().GetCachePath(filepath.Join("embedded-soundpacks", spFile.Name))
+	var wrote bool
+	for _, value := range spFile.Mappings {
+		soundBytes, err := config.GetEmbeddedSoundData(value)
+		if err != nil {
+			continue // absolute path or otherwise not an embedded sound
+		}
+		if err := writeCachedSoundIfMissing(filepath.Join(destDir, value), soundBytes); err != nil {
+			slog.Warn("failed to materialize embedded default sound",
+				"name", value, "dir", destDir, "error", err)
+			continue
+		}
+		wrote = true
+	}
+
+	if !wrote {
+		return ""
+	}
+	slog.Debug("materialized embedded default sounds", "pack", spFile.Name, "dir", destDir)
+	return destDir
+}
+
+// writeCachedSoundIfMissing writes data to path only when it is not already
+// present, via a temp file + rename so concurrent claudio hook processes
+// never observe a torn file. The embedded bytes are identical across runs, so
+// a redundant write under a race is harmless.
+func writeCachedSoundIfMissing(path string, data []byte) error {
+	if _, err := os.Stat(path); err == nil {
+		return nil
+	}
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(dir, ".sound-*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		os.Remove(tmpName)
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpName)
+		return err
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		os.Remove(tmpName)
+		return err
+	}
+	return nil
 }

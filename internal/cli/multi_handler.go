@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 )
 
@@ -31,15 +32,20 @@ func (h *MultiLevelHandler) Enabled(ctx context.Context, level slog.Level) bool 
 }
 
 // Handle sends the record to all wrapped handlers that would handle it.
+// Every enabled handler is attempted even if an earlier handler returns an
+// error; the per-handler errors are aggregated via errors.Join so that a
+// failing stderr handler does not silently drop the file handler (or vice
+// versa).
 func (h *MultiLevelHandler) Handle(ctx context.Context, record slog.Record) error {
+	var errs []error
 	for _, handler := range h.handlers {
 		if handler.Enabled(ctx, record.Level) {
 			if err := handler.Handle(ctx, record); err != nil {
-				return err
+				errs = append(errs, err)
 			}
 		}
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 // WithAttrs returns a new handler with the given attributes added.
