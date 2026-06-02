@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -50,11 +51,69 @@ func findCommand(rootCmd *cobra.Command, name string) *cobra.Command {
 
 func TestInstallCommandRejectsInvalidAgent(t *testing.T) {
 	cmd := newInstallCommand()
-	cmd.SetArgs([]string{"--agent", "gemini", "--dry-run"})
+	cmd.SetArgs([]string{"--agent", "bogus", "--dry-run"})
 	cmd.SetOut(io.Discard)
 	cmd.SetErr(io.Discard)
 	if err := cmd.Execute(); err == nil {
 		t.Error("expected error for invalid agent, got nil")
+	}
+}
+
+func TestInstallCommandDefaultsToAutoGlobalScope(t *testing.T) {
+	dir := t.TempDir()
+	addFakeCliAgentBinary(t, dir, "claude")
+	setIsolatedCliAgentEnv(t, dir, t.TempDir())
+
+	cmd := newInstallCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"--dry-run"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	s := out.String()
+	if !strings.Contains(s, "global scope") {
+		t.Errorf("expected global scope by default, got: %s", s)
+	}
+	if !strings.Contains(s, "Target agent: claude") {
+		t.Errorf("expected auto-detected Claude target, got: %s", s)
+	}
+}
+
+func TestInstallQuietDoesNotEmitInfoLogs(t *testing.T) {
+	dir := t.TempDir()
+	addFakeCliAgentBinary(t, dir, "claude")
+	setIsolatedCliAgentEnv(t, dir, t.TempDir())
+
+	cli := NewCLI()
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	exitCode := cli.Run(
+		[]string{"claudio", "install", "--dry-run", "--quiet"},
+		strings.NewReader(""),
+		&stdout,
+		&stderr,
+	)
+	if exitCode != 0 {
+		t.Fatalf("exit code = %d; stderr=%q", exitCode, stderr.String())
+	}
+	if strings.Contains(stderr.String(), "INFO") {
+		t.Fatalf("quiet install emitted info logs on stderr: %q", stderr.String())
+	}
+}
+
+func TestInstallCommandGeminiDryRunUsesGeminiPath(t *testing.T) {
+	cmd := newInstallCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"--agent", "gemini", "--dry-run"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(out.String(), filepath.Join(".gemini", "settings.json")) {
+		t.Errorf("expected gemini settings path in output, got: %s", out.String())
 	}
 }
 
@@ -81,13 +140,33 @@ func TestInstallCommandDefaultsToClaude(t *testing.T) {
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"--dry-run"})
+	cmd.SetArgs([]string{"--agent", "claude", "--dry-run"})
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !strings.Contains(out.String(), "settings.json") {
 		t.Errorf("expected claude settings.json path by default, got: %s", out.String())
 	}
+}
+
+func addFakeCliAgentBinary(t *testing.T, dir string, name string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(""), 0755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func setIsolatedCliAgentEnv(t *testing.T, pathDir string, home string) {
+	t.Helper()
+	t.Setenv("PATH", pathDir)
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("HOMEDRIVE", "")
+	t.Setenv("HOMEPATH", "")
+	t.Setenv("CODEX_HOME", "")
 }
 
 // TestInstallVerifyHonorsDefaultEnabledFalse covers finding #82: the
@@ -141,5 +220,20 @@ func TestInstallVerifyHonorsDefaultEnabledFalse(t *testing.T) {
 		// The merger may still mention the disabled hook if it was
 		// previously present; we wrote {} so it should be absent.
 		t.Errorf("disabled hook %q unexpectedly written to settings: %s", modified[0].Name, string(data))
+	}
+}
+
+func TestRunInstallWorkflowCreatesMissingSettingsDir(t *testing.T) {
+	t.Setenv("CLAUDIO_TEST_RECOGNIZE_GO_TEST", "1")
+
+	tempDir := t.TempDir()
+	settingsPath := filepath.Join(tempDir, "missing", ".claude", "settings.json")
+
+	err := runInstallWorkflow(install.AgentClaude, install.ScopeGlobal, settingsPath)
+	if err != nil {
+		t.Fatalf("install workflow with missing settings dir failed: %v", err)
+	}
+	if _, err := os.Stat(settingsPath); err != nil {
+		t.Fatalf("expected settings file to be created: %v", err)
 	}
 }

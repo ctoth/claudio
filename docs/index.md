@@ -1,8 +1,8 @@
 ---
 layout: default
 title: "Claudio"
-description: "Hook-based audio feedback for Claude Code and OpenAI Codex CLI."
-keywords: "Claude Code, Codex CLI, hooks, audio feedback, soundpacks, developer tools"
+description: "Hook-based audio feedback for Claude Code, OpenAI Codex CLI, and Gemini CLI."
+keywords: "Claude Code, Codex CLI, Gemini CLI, hooks, audio feedback, soundpacks, developer tools"
 canonical_url: "https://claudio.click"
 ---
 
@@ -22,28 +22,30 @@ sound different.
 
 ```bash
 go install claudio.click/cmd/claudio@latest
-claudio install --agent claude --scope user
+claudio install
 claudio status
 ```
 
-For Codex:
+`claudio install` uses `--agent auto --scope global` by default. It detects
+Claude Code, Codex CLI, and Gemini CLI, then installs hooks for the agents it
+finds.
+
+For Codex, trust the hook after installation:
 
 ```bash
-go install claudio.click/cmd/claudio@latest
-claudio install --agent codex --scope user
+/hooks
 ```
-
-Then run `/hooks` in Codex and trust the Claudio hook.
 
 ## What Claudio Installs
 
 `claudio install` writes hook entries into the selected agent's settings file
 and preserves non-Claudio hooks.
 
-| Agent | Command | User settings | Project settings |
+| Agent | Command | Global settings | Project settings |
 | --- | --- | --- | --- |
 | Claude Code | `claudio install --agent claude` | `~/.claude/settings.json` | `./.claude/settings.json` |
 | Codex | `claudio install --agent codex` | `$CODEX_HOME/hooks.json` or `~/.codex/hooks.json` | `./.codex/hooks.json` |
+| Gemini | `claudio install --agent gemini` | `~/.gemini/settings.json` | `./.gemini/settings.json` |
 
 Antigravity support is command-artifact only:
 
@@ -76,6 +78,20 @@ Codex installs these default-enabled hooks:
 - `PostCompact`
 - `SessionStart`
 - `PermissionRequest`
+
+Gemini installs these default-enabled hooks:
+
+- `BeforeTool`
+- `AfterTool`
+- `BeforeAgent`
+- `AfterAgent`
+- `BeforeModel` (silent no-op)
+- `AfterModel` (silent no-op)
+- `BeforeToolSelection` (silent no-op)
+- `SessionStart`
+- `SessionEnd`
+- `Notification`
+- `PreCompress`
 
 ## How Sound Selection Works
 

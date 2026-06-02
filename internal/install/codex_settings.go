@@ -9,16 +9,20 @@ import (
 
 // FindCodexHooksPaths returns candidate ~/.codex/hooks.json paths for the scope, in priority order.
 func FindCodexHooksPaths(scope string) ([]string, error) {
-	switch scope {
-	case "user":
+	normalizedScope, err := NormalizeScope(scope)
+	if err != nil {
+		return nil, err
+	}
+	switch normalizedScope {
+	case ScopeGlobal:
 		return findCodexUserScopePaths(), nil
-	case "project":
+	case ScopeProject:
 		return []string{
 			filepath.Join(".", ".codex", "hooks.json"),
 			filepath.Join(".codex", "hooks.json"),
 		}, nil
 	default:
-		return nil, fmt.Errorf("invalid scope '%s': must be 'user' or 'project'", scope)
+		return nil, fmt.Errorf("invalid scope '%s': must be 'global' or 'project'", scope)
 	}
 }
 

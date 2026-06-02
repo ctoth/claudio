@@ -17,6 +17,7 @@ const (
 	Interactive
 	Completion
 	System
+	Silent
 )
 
 func (c EventCategory) String() string {
@@ -35,6 +36,8 @@ func (c EventCategory) String() string {
 	case System:
 		slog.Debug("EventCategory.String() returning system")
 		return "system"
+	case Silent:
+		return "silent"
 	default:
 		slog.Warn("EventCategory.String() received unknown category", "category", int(c))
 		return "unknown"
@@ -316,6 +319,11 @@ func (e *HookEvent) GetContext() *EventContext {
 		context.Operation = "session-end"
 		slog.Debug("categorizing SessionEnd event as Interactive", "hint", context.SoundHint, "operation", context.Operation)
 
+	case "BeforeModel", "AfterModel", "BeforeToolSelection":
+		context.Category = Silent
+		context.Operation = strings.ToLower(e.EventName)
+		slog.Debug("categorizing no-sound event as Silent", "event_name", e.EventName)
+
 	default:
 		slog.Warn("unknown hook event type", "event_name", e.EventName)
 		context.Category = Interactive
@@ -371,6 +379,14 @@ func (e *HookEvent) analyzeToolResponse() (success bool, hasError bool, errorTyp
 	}
 
 	// Check for common error indicators
+	if errorValue, ok := response["error"]; ok && errorValue != nil {
+		if errorString, ok := errorValue.(string); !ok || errorString != "" {
+			slog.Debug("tool response has error field")
+			return false, true, ""
+		}
+	}
+
+	// Check stderr output after structured error fields.
 	if stderr, ok := response["stderr"].(string); ok && stderr != "" {
 		slog.Debug("tool response has stderr", "stderr_length", len(stderr))
 		return false, true, ""

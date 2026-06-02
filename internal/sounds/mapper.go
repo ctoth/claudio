@@ -96,6 +96,10 @@ func (m *SoundMapper) MapSound(ctx context.Context, eventCtx *hooks.EventContext
 			ChainType:     ChainTypeSimple,
 		}
 	}
+	if eventCtx.Category == hooks.Silent {
+		slog.Debug("silent context provided to sound mapper")
+		return nil
+	}
 
 	// Determine chain type based on event context
 	chainType := m.determineChainType(eventCtx)

@@ -14,20 +14,26 @@ func TestInstallScopeFlag(t *testing.T) {
 		errorMsg string
 	}{
 		{
-			name:     "valid user scope",
-			args:     []string{"claudio", "install", "--scope", "user", "--dry-run"},
+			name:     "valid global scope",
+			args:     []string{"claudio", "install", "--scope", "global", "--agent", "claude", "--dry-run"},
+			exitCode: 0,
+			errorMsg: "",
+		},
+		{
+			name:     "legacy user scope alias",
+			args:     []string{"claudio", "install", "--scope", "user", "--agent", "claude", "--dry-run"},
 			exitCode: 0,
 			errorMsg: "",
 		},
 		{
 			name:     "valid project scope",
-			args:     []string{"claudio", "install", "--scope", "project", "--dry-run"},
+			args:     []string{"claudio", "install", "--scope", "project", "--agent", "claude", "--dry-run"},
 			exitCode: 0,
 			errorMsg: "",
 		},
 		{
 			name:     "invalid scope value",
-			args:     []string{"claudio", "install", "--scope", "invalid", "--dry-run"},
+			args:     []string{"claudio", "install", "--scope", "invalid", "--agent", "claude", "--dry-run"},
 			exitCode: 1,
 			errorMsg: "invalid scope",
 		},
@@ -39,7 +45,7 @@ func TestInstallScopeFlag(t *testing.T) {
 		},
 		{
 			name:     "default scope behavior",
-			args:     []string{"claudio", "install", "--dry-run"},
+			args:     []string{"claudio", "install", "--agent", "claude", "--dry-run"},
 			exitCode: 0,
 			errorMsg: "",
 		},
@@ -80,7 +86,7 @@ func TestInstallScopeFlag(t *testing.T) {
 func TestInstallScopeFlagValidation(t *testing.T) {
 	// TDD RED: Test that the install command validates scope values
 	// Test scope validation with different invalid values
-	invalidScopes := []string{"global", "system", "admin", "root", ""}
+	invalidScopes := []string{"system", "admin", "root", ""}
 
 	for _, scope := range invalidScopes {
 		t.Run("invalid_scope_"+scope, func(t *testing.T) {
@@ -89,7 +95,7 @@ func TestInstallScopeFlagValidation(t *testing.T) {
 			stdout := &bytes.Buffer{}
 			stderr := &bytes.Buffer{}
 
-			args := []string{"claudio", "install", "--scope", scope, "--dry-run"}
+			args := []string{"claudio", "install", "--scope", scope, "--agent", "claude", "--dry-run"}
 			exitCode := cli.Run(args, stdin, stdout, stderr)
 
 			// Should fail with exit code 1
@@ -127,7 +133,7 @@ func TestInstallScopeFlagHelp(t *testing.T) {
 	// Should contain --scope flag documentation
 	expectedHelpContent := []string{
 		"--scope",
-		"user",
+		"global",
 		"project",
 		"Installation scope",
 	}

@@ -8,6 +8,26 @@ import (
 	"testing"
 )
 
+func TestFindClaudeSettingsPathsGlobalScope(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("HOMEDRIVE", "")
+	t.Setenv("HOMEPATH", "")
+
+	paths, err := FindClaudeSettingsPaths("global")
+	if err != nil {
+		t.Fatalf("FindClaudeSettingsPaths returned error: %v", err)
+	}
+	if len(paths) == 0 {
+		t.Fatal("expected at least one global Claude settings path")
+	}
+	want := filepath.Join(home, ".claude", "settings.json")
+	if paths[0] != want {
+		t.Errorf("first global Claude path = %q, want %q", paths[0], want)
+	}
+}
+
 func TestFindClaudeSettings(t *testing.T) {
 	// TDD RED: Test Claude settings path detection for user and project scopes
 	testCases := []struct {
@@ -105,7 +125,6 @@ func TestFindClaudeSettingsInvalidScope(t *testing.T) {
 	// TDD RED: Test that invalid scopes return appropriate errors
 	invalidScopes := []string{
 		"invalid",
-		"global",
 		"system",
 		"admin",
 		"",

@@ -24,12 +24,37 @@ go env GOPATH
 
 The binary normally lands in `$(go env GOPATH)/bin`.
 
-## Claude Code Hooks
+## Auto Install
 
-Install user-wide Claude Code hooks:
+Install global hooks for every detected supported agent:
 
 ```bash
-claudio install --agent claude --scope user
+claudio install
+```
+
+This is the default: `--agent auto --scope global`. Claudio detects Claude
+Code, Codex CLI, and Gemini CLI from installed commands, settings directories,
+or existing Claudio hook files. If more than one supported agent is detected,
+each matching hook set is installed.
+
+To force every supported hook target:
+
+```bash
+claudio install --agent all --scope global
+```
+
+Use project scope only when hooks should live under the current repository:
+
+```bash
+claudio install --scope project
+```
+
+## Claude Code Hooks
+
+Install global Claude Code hooks:
+
+```bash
+claudio install --agent claude --scope global
 ```
 
 Install hooks only for the current project:
@@ -38,17 +63,17 @@ Install hooks only for the current project:
 claudio install --agent claude --scope project
 ```
 
-User scope writes `~/.claude/settings.json` on every platform. On Windows that
+Global scope writes `~/.claude/settings.json` on every platform. On Windows that
 resolves through the native user profile path.
 
 Project scope writes `./.claude/settings.json`.
 
 ## Codex Hooks
 
-Install user-wide Codex hooks:
+Install global Codex hooks:
 
 ```bash
-claudio install --agent codex --scope user
+claudio install --agent codex --scope global
 ```
 
 Install hooks only for the current project:
@@ -57,32 +82,52 @@ Install hooks only for the current project:
 claudio install --agent codex --scope project
 ```
 
-User scope uses `$CODEX_HOME/hooks.json` when `CODEX_HOME` is set, otherwise
+Global scope uses `$CODEX_HOME/hooks.json` when `CODEX_HOME` is set, otherwise
 `~/.codex/hooks.json`.
 
 Project scope writes `./.codex/hooks.json`.
 
 After installing Codex hooks, run `/hooks` in Codex and trust the Claudio hook.
 
+## Gemini Hooks
+
+Install global Gemini hooks:
+
+```bash
+claudio install --agent gemini --scope global
+```
+
+Install hooks only for the current project:
+
+```bash
+claudio install --agent gemini --scope project
+```
+
+Global scope writes `~/.gemini/settings.json`.
+
+Project scope writes `./.gemini/settings.json`.
+
 ## Inspect Before Writing
 
 Dry run:
 
 ```bash
-claudio install --agent claude --scope user --dry-run
-claudio install --agent codex --scope user --dry-run
+claudio install --dry-run
+claudio install --agent claude --scope global --dry-run
+claudio install --agent codex --scope global --dry-run
+claudio install --agent gemini --scope global --dry-run
 ```
 
 Print the target path and mode:
 
 ```bash
-claudio install --agent claude --scope user --print
+claudio install --print
 ```
 
 Quiet mode:
 
 ```bash
-claudio install --agent claude --scope user --quiet
+claudio install --quiet
 ```
 
 The installer takes an advisory lock around the read, merge, write, and verify
@@ -118,6 +163,22 @@ Codex defaults:
 | `PostCompact` | system |
 | `SessionStart` | system |
 | `PermissionRequest` | interactive |
+
+Gemini defaults:
+
+| Hook | Category |
+| --- | --- |
+| `BeforeTool` | loading |
+| `AfterTool` | success or error |
+| `BeforeAgent` | interactive |
+| `AfterAgent` | completion |
+| `BeforeModel` | silent no-op |
+| `AfterModel` | silent no-op |
+| `BeforeToolSelection` | silent no-op |
+| `SessionStart` | system |
+| `SessionEnd` | interactive |
+| `Notification` | interactive |
+| `PreCompress` | system |
 
 ## Optional Agent Commands
 
@@ -169,8 +230,10 @@ echo '{"session_id":"test","cwd":".","hook_event_name":"PostToolUse","tool_name"
 ## Uninstall Hooks
 
 ```bash
-claudio uninstall --agent claude --scope user
-claudio uninstall --agent codex --scope user
+claudio uninstall --agent all --scope global
+claudio uninstall --agent claude --scope global
+claudio uninstall --agent codex --scope global
+claudio uninstall --agent gemini --scope global
 ```
 
 Use `--dry-run`, `--print`, or `--quiet` the same way as `install`.

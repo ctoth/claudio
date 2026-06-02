@@ -26,6 +26,8 @@ import (
 // bounded by a small constant. Skips if no audio device is present (the
 // underlying PlaySoundWithContext opens a real malgo device).
 func TestPlay_NoGoroutineLeak(t *testing.T) {
+	skipIfWSLMalgoPlayback(t)
+
 	backend := NewBackend()
 	defer backend.Close()
 
@@ -133,6 +135,8 @@ func TestBackend_SoundIDCounter_Unique(t *testing.T) {
 // present — the underlying PlaySoundWithContext opens a real malgo
 // device.
 func TestBackend_Play_ConcurrentSameLengthBuffers_NoCollision(t *testing.T) {
+	skipIfWSLMalgoPlayback(t)
+
 	backend := NewBackend()
 	defer backend.Close()
 

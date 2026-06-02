@@ -133,5 +133,9 @@ func buildDetachedWorkerArgs(cmd *cobra.Command, hookInputFile string) []string 
 		args = append(args, "--silent")
 	}
 
+	if hookAgent, _ := cmd.Flags().GetString("hook-agent"); hookAgent != "" {
+		args = append(args, "--hook-agent", hookAgent)
+	}
+
 	return args
 }

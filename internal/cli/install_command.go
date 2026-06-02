@@ -3,6 +3,8 @@ package cli
 import (
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"claudio.click/internal/install"
@@ -14,8 +16,8 @@ import (
 type InstallScope string
 
 const (
-	ScopeUser    InstallScope = "user"
-	ScopeProject InstallScope = "project"
+	ScopeGlobal  InstallScope = InstallScope(install.ScopeGlobal)
+	ScopeProject InstallScope = InstallScope(install.ScopeProject)
 )
 
 // String returns the string representation of InstallScope
@@ -25,27 +27,27 @@ func (s InstallScope) String() string {
 
 // IsValid returns true if the scope is valid
 func (s InstallScope) IsValid() bool {
-	return s == ScopeUser || s == ScopeProject
+	_, err := install.NormalizeScope(s.String())
+	return err == nil
 }
 
 // newInstallCommand creates the install subcommand with flags
 func newInstallCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "install",
-		Short: "Install claudio hooks into Claude Code settings",
-		Long:  "Install claudio hooks into Claude Code settings to enable audio feedback for tool usage and events.",
+		Short: "Install claudio hooks into agent settings",
+		Long:  "Install claudio hooks into supported coding-agent settings to enable audio feedback for tool usage and events.",
 		RunE:  runInstallCommandE,
 	}
 
 	// Add --scope flag with validation
-	cmd.Flags().StringP("scope", "s", "user", "Installation scope: 'user' for user-specific settings, 'project' for project-specific settings")
+	cmd.Flags().StringP("scope", "s", install.ScopeGlobal, "Installation scope: 'global' for user-wide settings, 'project' for project-specific settings")
 
 	// Add --agent flag with validation
-	cmd.Flags().StringP("agent", "a", "claude", "Target agent: 'claude' for Claude Code, 'codex' for OpenAI Codex CLI")
+	cmd.Flags().StringP("agent", "a", string(install.AgentAuto), "Target agent: 'auto', 'claude', 'codex', 'gemini', or 'all'")
 
 	// Add --dry-run flag
 	cmd.Flags().BoolP("dry-run", "d", false, "Show what would be done without making changes (simulation mode)")
-
 
 	// Add --quiet flag
 	cmd.Flags().BoolP("quiet", "q", false, "Suppress output (no progress messages)")
@@ -66,10 +68,11 @@ func runInstallCommandE(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to get scope flag: %w", err)
 	}
 
-	scope := InstallScope(scopeStr)
-	if !scope.IsValid() {
-		return fmt.Errorf("invalid scope '%s': must be 'user' or 'project'", scopeStr)
+	normalizedScope, err := install.NormalizeScope(scopeStr)
+	if err != nil {
+		return err
 	}
+	scope := InstallScope(normalizedScope)
 
 	// Get and validate agent flag
 	agentStr, err := cmd.Flags().GetString("agent")
@@ -87,7 +90,6 @@ func runInstallCommandE(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to get dry-run flag: %w", err)
 	}
 
-
 	// Get quiet flag
 	quiet, err := cmd.Flags().GetBool("quiet")
 	if err != nil {
@@ -100,74 +102,98 @@ func runInstallCommandE(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to get print flag: %w", err)
 	}
 
-	slog.Info("install command executing", "scope", scope, "dry_run", dryRun, "quiet", quiet, "print", print)
+	slog.Info("install command executing", "scope", scope, "agent", agent, "dry_run", dryRun, "quiet", quiet, "print", print)
 
-	// Find the best config path for the specified agent and scope
-	settingsPath, err := agent.BestConfigPath(scope.String())
+	targets, err := install.ResolveAgentTargets(agent, scope.String())
 	if err != nil {
-		return fmt.Errorf("failed to find %s config path: %w", agent, err)
+		return err
 	}
 
-	slog.Debug("using settings path", "path", settingsPath, "scope", scope)
+	slog.Debug("resolved install targets", "scope", scope, "agent", agent, "count", len(targets))
 
 	// Handle print flag - shows configuration details
 	if print {
-		var configDetails string
-		if dryRun {
-			configDetails = "PRINT: DRY-RUN configuration for scope: " + scope.String()
-		} else {
-			configDetails = "PRINT: Install configuration for scope: " + scope.String()
-		}
-
-		cmd.Printf("%s\n", configDetails)
-		if dryRun {
-			cmd.Printf("  Mode: Simulation (no changes will be made)\n")
-		}
-		if quiet {
-			cmd.Printf("  Output: Quiet mode (minimal messages)\n")
-		}
-		cmd.Printf("  Scope: %s\n", scope.String())
-		cmd.Printf("  Settings Path: %s\n", settingsPath)
-		return nil
+		return handlePrintInstall(cmd, scope, targets, dryRun, quiet)
 	}
 
 	// Handle dry-run mode - show what would be done without making changes
 	if dryRun {
-		if !quiet {
-			cmd.Printf("DRY-RUN: Claudio installation simulation for %s scope\n", scope.String())
-			cmd.Printf("Settings path: %s\n", settingsPath)
+		return handleDryRunInstall(cmd, scope, targets, quiet)
+	}
 
-			// Use agent registry to show hook names instead of hardcoded list
-			hookNames := agent.HookNames()
-			hookList := strings.Join(hookNames, ", ")
+	return runInstallTargets(cmd, scope, targets, quiet)
+}
+
+func handlePrintInstall(cmd *cobra.Command, scope InstallScope, targets []install.AgentTarget, dryRun bool, quiet bool) error {
+	var configDetails string
+	if dryRun {
+		configDetails = "PRINT: DRY-RUN configuration for scope: " + scope.String()
+	} else {
+		configDetails = "PRINT: Install configuration for scope: " + scope.String()
+	}
+
+	cmd.Printf("%s\n", configDetails)
+	if dryRun {
+		cmd.Printf("  Mode: Simulation (no changes will be made)\n")
+	}
+	if quiet {
+		cmd.Printf("  Output: Quiet mode (minimal messages)\n")
+	}
+	cmd.Printf("  Scope: %s\n", scope.String())
+	for _, target := range targets {
+		cmd.Printf("  Target agent: %s\n", target.Agent)
+		cmd.Printf("  Settings Path: %s\n", target.ConfigPath)
+	}
+	return nil
+}
+
+func handleDryRunInstall(cmd *cobra.Command, scope InstallScope, targets []install.AgentTarget, quiet bool) error {
+	if !quiet {
+		cmd.Printf("DRY-RUN: Claudio installation simulation for %s scope\n", scope.String())
+		for _, target := range targets {
+			cmd.Printf("Target agent: %s\n", target.Agent)
+			cmd.Printf("Settings path: %s\n", target.ConfigPath)
+
+			hookList := strings.Join(target.Agent.HookNames(), ", ")
 			cmd.Printf("Would install hooks: %s\n", hookList)
-			cmd.Printf("No changes will be made.\n")
-			if agent == install.AgentCodex {
+			if target.Agent == install.AgentCodex {
 				cmd.Printf("After install, run /hooks in Codex to trust the claudio hook.\n")
 			}
-		} else {
-			cmd.Printf("DRY-RUN: %s -> %s\n", scope.String(), settingsPath)
 		}
-		return nil
+		cmd.Printf("No changes will be made.\n")
+	} else {
+		for _, target := range targets {
+			cmd.Printf("DRY-RUN: %s %s -> %s\n", scope.String(), target.Agent, target.ConfigPath)
+		}
 	}
+	return nil
+}
 
-	// Run the actual installation workflow
+func runInstallTargets(cmd *cobra.Command, scope InstallScope, targets []install.AgentTarget, quiet bool) error {
 	if !quiet {
 		cmd.Printf("Installing Claudio hooks for %s scope...\n", scope.String())
-		cmd.Printf("Settings path: %s\n", settingsPath)
 	}
 
-	err = runInstallWorkflow(agent, scope.String(), settingsPath)
-	if err != nil {
-		return fmt.Errorf("installation failed: %w", err)
+	for _, target := range targets {
+		if !quiet {
+			cmd.Printf("Target agent: %s\n", target.Agent)
+			cmd.Printf("Settings path: %s\n", target.ConfigPath)
+		}
+
+		err := runInstallWorkflow(target.Agent, scope.String(), target.ConfigPath)
+		if err != nil {
+			return fmt.Errorf("installation failed for %s: %w", target.Agent, err)
+		}
 	}
 
-	// Success message
 	if !quiet {
 		cmd.Printf("✅ Claudio installation completed successfully!\n")
-		cmd.Printf("Audio hooks have been added to %s settings.\n", agent)
-		if agent == install.AgentCodex {
-			cmd.Printf("Run /hooks in Codex to trust the claudio hook.\n")
+		cmd.Printf("Audio hooks have been added to selected agent settings.\n")
+		for _, target := range targets {
+			if target.Agent == install.AgentCodex {
+				cmd.Printf("Run /hooks in Codex to trust the claudio hook.\n")
+				break
+			}
 		}
 	} else {
 		cmd.Printf("Install: %s ✅\n", scope.String())
@@ -183,12 +209,18 @@ func runInstallWorkflow(agent install.Agent, scope string, settingsPath string) 
 		"scope", scope,
 		"settings_path", settingsPath)
 
-	// Step 1: Validate scope
-	if scope != "user" && scope != "project" {
-		return fmt.Errorf("invalid scope '%s': must be 'user' or 'project'", scope)
+	normalizedScope, err := install.NormalizeScope(scope)
+	if err != nil {
+		return err
 	}
+	scope = normalizedScope
 
 	slog.Debug("validated installation scope", "scope", scope)
+
+	settingsDir := filepath.Dir(settingsPath)
+	if err := os.MkdirAll(settingsDir, 0755); err != nil {
+		return fmt.Errorf("failed to create settings directory %s: %w", settingsDir, err)
+	}
 
 	// Acquire advisory lock around the full read-mutate-write window so
 	// concurrent install/uninstall processes serialise. This must happen
@@ -220,13 +252,13 @@ func runInstallWorkflow(agent install.Agent, scope string, settingsPath string) 
 
 	// Step 3: Generate Claudio hooks configuration
 	slog.Debug("generating Claudio hooks configuration")
-	
+
 	// Get current executable path - must succeed
 	execPath, err := install.GetExecutablePath()
 	if err != nil {
 		return fmt.Errorf("failed to get executable path: %w", err)
 	}
-	
+
 	claudioHooks, err := install.GenerateClaudioHooksForAgent(execPath, agent)
 	if err != nil {
 		return fmt.Errorf("failed to generate Claudio hooks: %w", err)
@@ -293,4 +325,3 @@ func runInstallWorkflow(agent install.Agent, scope string, settingsPath string) 
 
 	return nil
 }
-

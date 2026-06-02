@@ -62,12 +62,34 @@ echo '{"session_id":"debug","cwd":".","hook_event_name":"PostToolUse","tool_name
 If that works, the issue is likely hook registration or agent trust. If it
 does not, inspect logging and audio backend configuration.
 
+## No Supported Agents Detected
+
+`claudio install` uses `--agent auto` by default. It installs hooks only for
+agents Claudio can detect.
+
+Check expected settings paths:
+
+```bash
+ls -la ~/.claude/settings.json
+ls -la ~/.codex/hooks.json
+ls -la ~/.gemini/settings.json
+```
+
+Run the target agent once if its settings directory does not exist yet, or
+install explicitly:
+
+```bash
+claudio install --agent claude --scope global
+claudio install --agent codex --scope global
+claudio install --agent gemini --scope global
+```
+
 ## Codex Hooks Do Nothing
 
 After installing Codex hooks:
 
 ```bash
-claudio install --agent codex --scope user
+claudio install --agent codex --scope global
 ```
 
 Run `/hooks` in Codex and trust the Claudio hook. Codex will not run an
@@ -76,7 +98,7 @@ untrusted hook.
 Dry-run the target path:
 
 ```bash
-claudio install --agent codex --scope user --dry-run
+claudio install --agent codex --scope global --dry-run
 ```
 
 For project hooks, make sure you installed from the project root:
@@ -90,8 +112,8 @@ claudio install --agent codex --scope project --dry-run
 Inspect the target settings file:
 
 ```bash
-claudio install --agent claude --scope user --dry-run
-claudio install --agent claude --scope user --print
+claudio install --agent claude --scope global --dry-run
+claudio install --agent claude --scope global --print
 ```
 
 For project hooks, run from the repository root:
@@ -103,7 +125,28 @@ claudio install --agent claude --scope project --dry-run
 Reinstalling is idempotent for Claudio hooks:
 
 ```bash
-claudio install --agent claude --scope user
+claudio install --agent claude --scope global
+```
+
+## Gemini Hooks Do Nothing
+
+Inspect the target settings file:
+
+```bash
+claudio install --agent gemini --scope global --dry-run
+claudio install --agent gemini --scope global --print
+```
+
+For project hooks, run from the repository root:
+
+```bash
+claudio install --agent gemini --scope project --dry-run
+```
+
+Reinstalling is idempotent for Claudio hooks:
+
+```bash
+claudio install --agent gemini --scope global
 ```
 
 ## Wrong Sound Plays
@@ -266,8 +309,10 @@ claudio analyze missing
 Remove hooks:
 
 ```bash
-claudio uninstall --agent claude --scope user
-claudio uninstall --agent codex --scope user
+claudio uninstall --agent all --scope global
+claudio uninstall --agent claude --scope global
+claudio uninstall --agent codex --scope global
+claudio uninstall --agent gemini --scope global
 ```
 
 Remove optional command artifacts:
