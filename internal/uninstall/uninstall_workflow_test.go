@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"claudio.click/internal/install"
+	"github.com/spf13/afero"
 )
 
 func TestInstallUninstallWithExecutablePath(t *testing.T) {
@@ -58,13 +59,10 @@ func TestInstallUninstallWithExecutablePath(t *testing.T) {
 
 			if tc.installFirst {
 				// Step 1: Install claudio hooks (which should use executable path)
-				factory := install.GetFilesystemFactory()
-				memFS := factory.Memory()
-				execPath, _ := install.GetExecutablePath()
-				if execPath == "" {
-					execPath = "claudio"
-				}
-				claudioHooks, err := install.GenerateClaudioHooks(memFS, execPath)
+				// Use an explicit fixture path so the test does not depend on go test's
+				// binary name leaking through GetExecutablePath().
+				execPath := "/usr/local/bin/claudio"
+				claudioHooks, err := install.GenerateClaudioHooks(execPath)
 				if err != nil {
 					t.Fatalf("Failed to generate claudio hooks: %v", err)
 				}
@@ -137,8 +135,11 @@ func TestInstallUninstallWithExecutablePath(t *testing.T) {
 					t.Error("Expected at least one hook to use executable command")
 				}
 
-				// Step 3: Run uninstall workflow to remove hooks
-				err = runUninstallWorkflow(tc.scope, settingsPath)
+				// Step 3: Run uninstall workflow to remove hooks. Inject the
+				// test's tempdir path via swapAgentResolver so we don't write
+				// to the user's real settings file.
+				swapAgentResolver(t, fixedPathResolver(settingsPath))
+				err = RunUninstallWorkflow(afero.NewOsFs(), tc.scope, install.AgentClaude)
 				if tc.expectError && err == nil {
 					t.Error("Expected error but got none")
 				}
@@ -338,8 +339,11 @@ func TestRunUninstallWorkflow(t *testing.T) {
 				}
 			}
 
-			// Test the complete uninstall workflow
-			err = runUninstallWorkflow(tc.scope, settingsFile)
+			// Test the complete uninstall workflow. Inject the test's tempdir
+			// path via swapAgentResolver so the workflow targets settingsFile
+			// instead of resolving via agent.BestConfigPath.
+			swapAgentResolver(t, fixedPathResolver(settingsFile))
+			err = RunUninstallWorkflow(afero.NewOsFs(), tc.scope, install.AgentClaude)
 
 			if tc.expectError && err == nil {
 				t.Errorf("Expected error but got none")
@@ -393,7 +397,7 @@ func TestRunUninstallWorkflow(t *testing.T) {
 						}
 
 						// 4. Verify no claudio hooks remain
-						claudioHooks := detectClaudioHooks(settings)
+						claudioHooks := DetectClaudioHooks(settings)
 						if len(claudioHooks) > 0 {
 							t.Errorf("Claudio hooks still present after uninstall: %v", claudioHooks)
 						}
@@ -497,7 +501,8 @@ func TestUninstallWorkflowErrorHandling(t *testing.T) {
 			settingsPath, cleanup := tc.setupFunc()
 			defer cleanup()
 
-			err := runUninstallWorkflow(tc.scope, settingsPath)
+			swapAgentResolver(t, fixedPathResolver(settingsPath))
+			err := RunUninstallWorkflow(afero.NewOsFs(), tc.scope, install.AgentClaude)
 
 			if tc.expectError {
 				if err == nil {

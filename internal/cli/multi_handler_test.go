@@ -3,10 +3,80 @@ package cli
 import (
 	"bytes"
 	"context"
+	"errors"
 	"log/slog"
 	"strings"
 	"testing"
+	"time"
 )
+
+// failingHandler is an slog.Handler used to verify MultiLevelHandler keeps
+// invoking subsequent handlers even after an earlier handler errors.
+type failingHandler struct {
+	level  slog.Level
+	err    error
+	called bool
+}
+
+func (f *failingHandler) Enabled(_ context.Context, lvl slog.Level) bool {
+	return lvl >= f.level
+}
+
+func (f *failingHandler) Handle(_ context.Context, _ slog.Record) error {
+	f.called = true
+	return f.err
+}
+
+func (f *failingHandler) WithAttrs(_ []slog.Attr) slog.Handler { return f }
+func (f *failingHandler) WithGroup(_ string) slog.Handler      { return f }
+
+// TestMultiLevelHandler_AllHandlersRunOnError covers finding #46: a failing
+// stderr handler must not silently skip the file handler. All handlers must
+// fire and their errors aggregate via errors.Join.
+func TestMultiLevelHandler_AllHandlersRunOnError(t *testing.T) {
+	firstErr := errors.New("first handler boom")
+	first := &failingHandler{level: slog.LevelDebug, err: firstErr}
+
+	var secondBuf bytes.Buffer
+	second := slog.NewTextHandler(&secondBuf, &slog.HandlerOptions{Level: slog.LevelDebug})
+
+	multi := NewMultiLevelHandler(first, second)
+
+	err := multi.Handle(context.Background(), slog.NewRecord(time.Time{}, slog.LevelInfo, "msg via multi", 0))
+	if err == nil {
+		t.Fatal("expected aggregated error from failing handler, got nil")
+	}
+	if !errors.Is(err, firstErr) {
+		t.Fatalf("expected errors.Is to match first handler error, got: %v", err)
+	}
+	if !first.called {
+		t.Error("first (failing) handler should have been invoked")
+	}
+	if got := secondBuf.String(); !strings.Contains(got, "msg via multi") {
+		t.Errorf("second handler should have received record even though first errored, got: %q", got)
+	}
+}
+
+// TestMultiLevelHandler_AggregatesMultipleErrors verifies errors.Join behavior
+// when multiple handlers fail simultaneously.
+func TestMultiLevelHandler_AggregatesMultipleErrors(t *testing.T) {
+	errA := errors.New("a fail")
+	errB := errors.New("b fail")
+	a := &failingHandler{level: slog.LevelDebug, err: errA}
+	b := &failingHandler{level: slog.LevelDebug, err: errB}
+
+	multi := NewMultiLevelHandler(a, b)
+	err := multi.Handle(context.Background(), slog.NewRecord(time.Time{}, slog.LevelError, "x", 0))
+	if err == nil {
+		t.Fatal("expected aggregated error, got nil")
+	}
+	if !errors.Is(err, errA) || !errors.Is(err, errB) {
+		t.Fatalf("expected aggregated error to contain both errA and errB, got: %v", err)
+	}
+	if !a.called || !b.called {
+		t.Fatalf("both handlers should have been called: a=%v b=%v", a.called, b.called)
+	}
+}
 
 func TestMultiLevelHandler_DifferentLevels(t *testing.T) {
 	// Setup: Create two buffers for different outputs

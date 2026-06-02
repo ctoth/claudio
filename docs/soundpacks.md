@@ -80,7 +80,7 @@ Save this as `/path/to/my-sounds.json` and reference it in your config:
 
 **Validation:**
 - All mapped files must exist when the soundpack loads
-- Supports same audio formats as directory soundpacks (WAV, MP3)
+- Supports same audio formats as directory soundpacks (WAV, MP3, AIFF)
 
 ### Use Cases
 
@@ -355,34 +355,37 @@ You can create custom soundpacks in two ways: traditional directory-based soundp
 
 **Step 1: Create Directory Structure**
 
+Directory soundpacks live under the literal `claudio/soundpacks/<id>`
+subpath inside an XDG data directory:
+
 ```bash
-mkdir -p ~/.local/share/claudio/my-pack/{loading,success,error,interactive}
+mkdir -p ~/.local/share/claudio/soundpacks/my-pack/{loading,success,error,interactive}
 ```
 
 **Step 2: Add Sound Files**
 
-Add `.wav` or `.mp3` files to appropriate directories. Start with essentials:
+Add `.wav`, `.mp3`, or `.aiff` files to appropriate directories. Start with essentials:
 
 ```bash
 # Essential files for a functional soundpack
-touch ~/.local/share/claudio/my-pack/loading/loading.wav
-touch ~/.local/share/claudio/my-pack/success/success.wav
-touch ~/.local/share/claudio/my-pack/error/error.wav
-touch ~/.local/share/claudio/my-pack/interactive/interactive.wav
-touch ~/.local/share/claudio/my-pack/default.wav
+touch ~/.local/share/claudio/soundpacks/my-pack/loading/loading.wav
+touch ~/.local/share/claudio/soundpacks/my-pack/success/success.wav
+touch ~/.local/share/claudio/soundpacks/my-pack/error/error.wav
+touch ~/.local/share/claudio/soundpacks/my-pack/interactive/interactive.wav
+touch ~/.local/share/claudio/soundpacks/my-pack/default.wav
 ```
 
 **Step 3: Configure Claudio**
 
 ```json
 {
-  "default_soundpack": "my-pack",
-  "soundpack_paths": [
-    "/home/user/.local/share/claudio",
-    "/usr/local/share/claudio"
-  ]
+  "default_soundpack": "my-pack"
 }
 ```
+
+You only need to add explicit entries to `soundpack_paths` for soundpacks that
+live OUTSIDE the standard XDG locations — Claudio searches the XDG data dirs
+automatically.
 
 ### Option 2: JSON Soundpack (Recommended)
 
@@ -494,19 +497,21 @@ minimal/
 
 ## Soundpack Discovery
 
-Claudio searches for soundpacks in these locations:
+Claudio searches for soundpacks in these locations. Every XDG-derived path
+includes the literal `claudio/soundpacks/` segment (hardcoded in
+`internal/config/xdg.go`):
 
 1. **Custom paths** (from configuration `soundpack_paths`)
-2. **User directory:** `~/.local/share/claudio/`
-3. **System directory:** `/usr/local/share/claudio/`
-4. **System fallback:** `/usr/share/claudio/`
+2. **User directory:** `~/.local/share/claudio/soundpacks/<id>` (or `$XDG_DATA_HOME/claudio/soundpacks/<id>`)
+3. **System directory:** `/usr/local/share/claudio/soundpacks/<id>`
+4. **System fallback:** `/usr/share/claudio/soundpacks/<id>`
 
 ### Listing Available Soundpacks
 
 ```bash
 # Check what soundpacks are available
-ls ~/.local/share/claudio/
-ls /usr/local/share/claudio/
+ls ~/.local/share/claudio/soundpacks/
+ls /usr/local/share/claudio/soundpacks/
 ```
 
 ### Testing Soundpack Availability
@@ -521,6 +526,10 @@ CLAUDIO_SOUNDPACK=test-pack echo '...' | claudio
 **Supported Formats:**
 - WAV (recommended)
 - MP3
+- AIFF (16/24/32-bit, mono/stereo; auto-detected from magic bytes)
+
+The decoder registry that registers WAV/MP3/AIFF is at
+`internal/audio/registry.go`.
 
 **Recommendations:**
 - **Sample Rate:** 44.1kHz or 48kHz

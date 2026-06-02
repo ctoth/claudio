@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/spf13/afero"
-	"claudio.click/internal/fs"
 )
 
 // Helper to create float64 pointer
@@ -19,9 +18,8 @@ func ptrFloat(v float64) *float64 {
 
 func TestConfigManagerWithMemoryFilesystem(t *testing.T) {
 	// TDD RED: This test expects ConfigManager to accept afero.Fs
-	factory := fs.NewDefaultFactory()
-	memFS := factory.Memory()
-	
+	memFS := afero.NewMemMapFs()
+
 	// This constructor doesn't exist yet - will fail until we implement it
 	cm := NewConfigManagerWithFilesystem(memFS)
 	
@@ -32,8 +30,7 @@ func TestConfigManagerWithMemoryFilesystem(t *testing.T) {
 
 func TestLoadFromFileWithMemoryFilesystem(t *testing.T) {
 	// TDD RED: Test loading config from memory filesystem
-	factory := fs.NewDefaultFactory()
-	memFS := factory.Memory()
+	memFS := afero.NewMemMapFs()
 	
 	// Create test config in memory filesystem
 	configPath := "/test/config.json"
@@ -78,8 +75,7 @@ func TestLoadFromFileWithMemoryFilesystem(t *testing.T) {
 
 func TestWriteConfigWithMemoryFilesystem(t *testing.T) {
 	// TDD RED: Test writing config to memory filesystem
-	factory := fs.NewDefaultFactory()
-	memFS := factory.Memory()
+	memFS := afero.NewMemMapFs()
 	
 	cm := NewConfigManagerWithFilesystem(memFS)
 	config := &Config{
@@ -127,8 +123,7 @@ func TestWriteConfigWithMemoryFilesystem(t *testing.T) {
 
 func TestConfigManagerIsolationFromRealFilesystem(t *testing.T) {
 	// TDD RED: Verify memory filesystem doesn't touch real filesystem
-	factory := fs.NewDefaultFactory()
-	memFS := factory.Memory()
+	memFS := afero.NewMemMapFs()
 	
 	cm := NewConfigManagerWithFilesystem(memFS)
 	

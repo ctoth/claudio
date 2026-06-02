@@ -14,8 +14,11 @@ var (
 // AudioBackend represents a system for playing audio from various sources
 // Implementations handle the actual audio playback mechanism (malgo, system commands, etc.)
 type AudioBackend interface {
-	// Lifecycle management
-	Start() error
+	// Lifecycle management. Both Stop and Close cease playback; Stop is
+	// best-effort on backends without process control (e.g. SystemCommandBackend
+	// flips a flag but cannot interrupt an exec'd player). Start was previously
+	// part of this interface; it was a no-op on every implementation and was
+	// dropped in finding #44.
 	Stop() error
 	Close() error
 

@@ -1,18 +1,31 @@
 package sounds
 
 import (
-	"fmt"
+	"context"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 	"claudio.click/internal/hooks"
-	"claudio.click/internal/tracking"
+	"claudio.click/internal/soundpack"
 )
 
+// newTestResolver builds a real soundpack.SoundpackResolver backed by a
+// JSONMapper. The mapping is logical-path → physical-absolute-path. Tests
+// must create the physical files on disk (typically under t.TempDir()) so
+// that os.Stat inside the resolver finds them.
+//
+// Using the real UnifiedSoundpackResolver keeps the observer-firing
+// contract end-to-end — there's no hand-rolled mock to keep in sync with
+// the production resolver's observer semantics.
+func newTestResolver(mappings map[string]string) soundpack.SoundpackResolver {
+	return soundpack.NewSoundpackResolver(soundpack.NewJSONMapper("test", mappings))
+}
+
 func TestSoundMapper(t *testing.T) {
-	mapper := NewSoundMapper(nil)
+	mapper := NewSoundMapper()
 
 	if mapper == nil {
 		t.Fatal("NewSoundMapper returned nil")
@@ -20,7 +33,7 @@ func TestSoundMapper(t *testing.T) {
 }
 
 func TestMapSoundEventSpecificFallback(t *testing.T) {
-	mapper := NewSoundMapper(nil)
+	mapper := NewSoundMapper()
 
 	testCases := []struct {
 		name          string
@@ -119,7 +132,7 @@ func TestMapSoundEventSpecificFallback(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := mapper.MapSound(tc.context)
+			result := mapper.MapSound(context.Background(), tc.context)
 
 			// Verify result structure
 			if result == nil {
@@ -160,7 +173,7 @@ func TestMapSoundEventSpecificFallback(t *testing.T) {
 }
 
 func TestMapSoundPathNormalization(t *testing.T) {
-	mapper := NewSoundMapper(nil)
+	mapper := NewSoundMapper()
 
 	testCases := []struct {
 		name     string
@@ -180,12 +193,12 @@ func TestMapSoundPathNormalization(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Test normalization through a context that will use the input
-			context := &hooks.EventContext{
+			eventCtx := &hooks.EventContext{
 				Category:  hooks.Loading,
 				SoundHint: tc.input,
 			}
 
-			result := mapper.MapSound(context)
+			result := mapper.MapSound(context.Background(), eventCtx)
 			expected := "loading/" + tc.expected + ".wav"
 
 			if len(result.AllPaths) == 0 {
@@ -200,7 +213,7 @@ func TestMapSoundPathNormalization(t *testing.T) {
 }
 
 func TestMapSoundFallbackSelection(t *testing.T) {
-	mapper := NewSoundMapper(nil)
+	mapper := NewSoundMapper()
 
 	// Test fallback path generation - updated for event-specific architecture
 
@@ -262,7 +275,7 @@ func TestMapSoundFallbackSelection(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := mapper.MapSound(tc.context)
+			result := mapper.MapSound(context.Background(), tc.context)
 
 			// Test that the expected paths are generated
 			t.Logf("%s: Generated paths: %v", tc.description, result.AllPaths)
@@ -285,10 +298,10 @@ func TestMapSoundFallbackSelection(t *testing.T) {
 }
 
 func TestMapSoundEdgeCases(t *testing.T) {
-	mapper := NewSoundMapper(nil)
+	mapper := NewSoundMapper()
 
 	t.Run("nil context", func(t *testing.T) {
-		result := mapper.MapSound(nil)
+		result := mapper.MapSound(context.Background(), nil)
 
 		if result == nil {
 			t.Fatal("MapSound should handle nil context gracefully")
@@ -310,7 +323,7 @@ func TestMapSoundEdgeCases(t *testing.T) {
 	})
 
 	t.Run("empty strings", func(t *testing.T) {
-		result := mapper.MapSound(&hooks.EventContext{
+		result := mapper.MapSound(context.Background(), &hooks.EventContext{
 			Category:  hooks.Interactive,
 			ToolName:  "",
 			SoundHint: "",
@@ -336,11 +349,11 @@ func TestMapSoundEdgeCases(t *testing.T) {
 
 	t.Run("unknown category", func(t *testing.T) {
 		// This tests what happens with an invalid category value
-		context := &hooks.EventContext{
+		eventCtx := &hooks.EventContext{
 			Category: hooks.EventCategory(999), // Invalid category
 		}
 
-		result := mapper.MapSound(context)
+		result := mapper.MapSound(context.Background(), eventCtx)
 
 		// Should still work, falling back to default
 		if len(result.AllPaths) == 0 {
@@ -356,16 +369,16 @@ func TestMapSoundEdgeCases(t *testing.T) {
 }
 
 func TestMapSoundResultMetadata(t *testing.T) {
-	mapper := NewSoundMapper(nil)
+	mapper := NewSoundMapper()
 
-	context := &hooks.EventContext{
+	eventCtx := &hooks.EventContext{
 		Category:  hooks.Success,
 		ToolName:  "Edit",
 		SoundHint: "file-saved",
 		Operation: "tool-complete",
 	}
 
-	result := mapper.MapSound(context)
+	result := mapper.MapSound(context.Background(), eventCtx)
 
 	// Verify all metadata fields are set correctly
 	if result.SelectedPath == "" {
@@ -391,10 +404,10 @@ func TestMapSoundResultMetadata(t *testing.T) {
 }
 
 func TestMapSoundWithOriginalToolFallback(t *testing.T) {
-	mapper := NewSoundMapper(nil)
+	mapper := NewSoundMapper()
 
 	// Test context with extracted command but original tool for fallback
-	context := &hooks.EventContext{
+	eventCtx := &hooks.EventContext{
 		Category:     hooks.Success,
 		ToolName:     "git",  // Extracted from Bash
 		OriginalTool: "Bash", // Original tool for fallback
@@ -402,7 +415,7 @@ func TestMapSoundWithOriginalToolFallback(t *testing.T) {
 		Operation:    "tool-complete",
 	}
 
-	result := mapper.MapSound(context)
+	result := mapper.MapSound(context.Background(), eventCtx)
 
 	// PostToolUse 6-level fallback (skips command-only sounds)
 	expectedPaths := []string{
@@ -435,7 +448,7 @@ func TestMapSoundWithOriginalToolFallback(t *testing.T) {
 
 // TDD Phase 2.1 RED: Event-specific fallback chain differentiation tests
 func TestEventSpecificFallbackChains(t *testing.T) {
-	mapper := NewSoundMapper(nil)
+	mapper := NewSoundMapper()
 
 	tests := []struct {
 		name              string
@@ -553,7 +566,7 @@ func TestEventSpecificFallbackChains(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := mapper.MapSound(tt.context)
+			result := mapper.MapSound(context.Background(), tt.context)
 
 			if result == nil {
 				t.Fatal("MapSound returned nil result")
@@ -578,9 +591,9 @@ func TestEventSpecificFallbackChains(t *testing.T) {
 
 // TDD Phase 2.1 RED: PreToolUse enhanced 9-level fallback chain test
 func TestPreToolUse9LevelEnhancedFallback(t *testing.T) {
-	mapper := NewSoundMapper(nil)
+	mapper := NewSoundMapper()
 
-	context := &hooks.EventContext{
+	eventCtx := &hooks.EventContext{
 		Category:     hooks.Loading,
 		ToolName:     "git",
 		OriginalTool: "Bash",
@@ -588,7 +601,7 @@ func TestPreToolUse9LevelEnhancedFallback(t *testing.T) {
 		Operation:    "tool-start",
 	}
 
-	result := mapper.MapSound(context)
+	result := mapper.MapSound(context.Background(), eventCtx)
 
 	// PreToolUse should generate 9-level enhanced fallback including command-only sounds
 	expectedPaths := []string{
@@ -620,7 +633,7 @@ func TestPreToolUse9LevelEnhancedFallback(t *testing.T) {
 
 // TDD Phase 2.1 RED: PostToolUse 6-level fallback chain test (skip command-only sounds)
 func TestPostToolUse6LevelFallback(t *testing.T) {
-	mapper := NewSoundMapper(nil)
+	mapper := NewSoundMapper()
 
 	tests := []struct {
 		name     string
@@ -669,7 +682,7 @@ func TestPostToolUse6LevelFallback(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := mapper.MapSound(tt.context)
+			result := mapper.MapSound(context.Background(), tt.context)
 
 			// Test will fail initially - current mapper doesn't skip command-only sounds
 			if len(result.AllPaths) != len(tt.expected) {
@@ -689,7 +702,7 @@ func TestPostToolUse6LevelFallback(t *testing.T) {
 
 // TDD Phase 2.1 RED: Simple event 4-level fallback chain test
 func TestSimpleEvent4LevelFallback(t *testing.T) {
-	mapper := NewSoundMapper(nil)
+	mapper := NewSoundMapper()
 
 	tests := []struct {
 		name     string
@@ -770,7 +783,7 @@ func TestSimpleEvent4LevelFallback(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := mapper.MapSound(tt.context)
+			result := mapper.MapSound(context.Background(), tt.context)
 
 			// Test will fail initially - current mapper doesn't generate event-specific paths
 			if len(result.AllPaths) != len(tt.expected) {
@@ -788,231 +801,15 @@ func TestSimpleEvent4LevelFallback(t *testing.T) {
 	}
 }
 
-// TDD Cycle 6 RED: SoundChecker Integration Tests
-func TestNewSoundMapperWithSoundChecker(t *testing.T) {
-	checker := tracking.NewSoundChecker()
-	mapper := NewSoundMapper(checker)
-
-	if mapper == nil {
-		t.Fatal("NewSoundMapper with SoundChecker returned nil")
-	}
-}
-
-func TestNewSoundMapperWithNilChecker(t *testing.T) {
-	mapper := NewSoundMapper(nil)
-
-	if mapper == nil {
-		t.Fatal("NewSoundMapper with nil checker returned nil")
-	}
-}
-
-func TestMapSoundTriggersPathChecking(t *testing.T) {
-	// Create a test hook to capture path checks
-	var checkedPaths []string
-	var checkedSequences []int
-	var checkedExists []bool
-	var checkedContext *hooks.EventContext
-
-	testHook := func(path string, exists bool, sequence int, context *hooks.EventContext) {
-		checkedPaths = append(checkedPaths, path)
-		checkedExists = append(checkedExists, exists)
-		checkedSequences = append(checkedSequences, sequence)
-		checkedContext = context
-	}
-
-	checker := tracking.NewSoundChecker(tracking.WithHook(testHook))
-	mapper := NewSoundMapper(checker)
-
-	context := &hooks.EventContext{
-		Category:  hooks.Success,
-		ToolName:  "Edit",
-		SoundHint: "file-saved",
-		Operation: "tool-complete",
-	}
-
-	result := mapper.MapSound(context)
-
-	// Verify that path checking was triggered
-	if len(checkedPaths) == 0 {
-		t.Error("Expected path checking to be triggered, but no paths were checked")
-	}
-
-	// Verify that all paths from the result were checked
-	if len(checkedPaths) != len(result.AllPaths) {
-		t.Errorf("Expected %d paths to be checked, got %d", len(result.AllPaths), len(checkedPaths))
-	}
-
-	// Verify paths match between result and checked paths
-	for i, expectedPath := range result.AllPaths {
-		if i < len(checkedPaths) && checkedPaths[i] != expectedPath {
-			t.Errorf("Checked path[%d] = %s, expected %s", i, checkedPaths[i], expectedPath)
-		}
-	}
-
-	// Verify sequences are 1-based and incremental
-	for i, seq := range checkedSequences {
-		expectedSeq := i + 1 // 1-based
-		if seq != expectedSeq {
-			t.Errorf("Sequence[%d] = %d, expected %d", i, seq, expectedSeq)
-		}
-	}
-
-	// Verify context was passed correctly
-	if checkedContext != context {
-		t.Error("Expected original context to be passed to path checker")
-	}
-}
-
-func TestMapSoundFallbackLevelBasedOnFileExistence(t *testing.T) {
-	// Create a temporary directory structure for this test
-	tempDir := t.TempDir()
-	
-	// Create the success subdirectory
-	successDir := filepath.Join(tempDir, "success")
-	err := os.MkdirAll(successDir, 0755)
-	if err != nil {
-		t.Fatalf("Failed to create test directory: %v", err)
-	}
-	
-	// Create only the second file (edit-success.wav) to simulate level 2 existing
-	level2File := filepath.Join(successDir, "edit-success.wav")
-	err = os.WriteFile(level2File, []byte("test audio data"), 0644)
-	if err != nil {
-		t.Fatalf("Failed to create test file: %v", err)
-	}
-	
-	// Change to the temp directory so relative paths work
-	originalDir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("Failed to get current directory: %v", err)
-	}
-	defer func() { _ = os.Chdir(originalDir) }()
-
-	err = os.Chdir(tempDir)
-	if err != nil {
-		t.Fatalf("Failed to change to temp directory: %v", err)
-	}
-
-	var checkedPaths []string
-	trackingHook := func(path string, exists bool, sequence int, context *hooks.EventContext) {
-		checkedPaths = append(checkedPaths, path)
-		t.Logf("Path check: %s (exists: %v, sequence: %d)", path, exists, sequence)
-	}
-
-	checker := tracking.NewSoundChecker(tracking.WithHook(trackingHook))
-	mapper := NewSoundMapper(checker)
-
-	context := &hooks.EventContext{
-		Category:  hooks.Success,
-		ToolName:  "Edit",
-		SoundHint: "file-saved",
-		Operation: "tool-complete",
-	}
-
-	result := mapper.MapSound(context)
-
-	// Since level 1 doesn't exist but level 2 does, fallback level should be 2
-	expectedFallbackLevel := 2
-	if result.FallbackLevel != expectedFallbackLevel {
-		t.Errorf("Expected fallback level %d, got %d", expectedFallbackLevel, result.FallbackLevel)
-		t.Logf("All paths: %v", result.AllPaths)
-		t.Logf("Checked paths: %v", checkedPaths)
-	}
-
-	// Selected path should be the second path (first existing one)
-	if len(result.AllPaths) >= 2 {
-		expectedSelectedPath := result.AllPaths[1] // Second path (level 2)
-		if result.SelectedPath != expectedSelectedPath {
-			t.Errorf("Expected selected path %s, got %s", expectedSelectedPath, result.SelectedPath)
-		}
-	} else {
-		t.Error("Expected at least 2 paths in AllPaths")
-	}
-
-	// Verify all expected paths were checked
-	if len(checkedPaths) != len(result.AllPaths) {
-		t.Errorf("Expected %d path checks, got %d", len(result.AllPaths), len(checkedPaths))
-	}
-}
-
-func TestMapSoundAllPathsChecked(t *testing.T) {
-	var checkedPaths []string
-
-	testHook := func(path string, exists bool, sequence int, context *hooks.EventContext) {
-		checkedPaths = append(checkedPaths, path)
-	}
-
-	checker := tracking.NewSoundChecker(tracking.WithHook(testHook))
-	mapper := NewSoundMapper(checker)
-
-	// Test with enhanced 9-level fallback (PreToolUse)
-	context := &hooks.EventContext{
-		Category:     hooks.Loading,
-		ToolName:     "git",
-		OriginalTool: "Bash",
-		SoundHint:    "git-commit-start",
-		Operation:    "tool-start",
-	}
-
-	result := mapper.MapSound(context)
-
-	// Verify all paths in the result were checked
-	if len(checkedPaths) != len(result.AllPaths) {
-		t.Errorf("Expected all %d paths to be checked, only checked %d", len(result.AllPaths), len(checkedPaths))
-	}
-
-	// Verify exact path matching
-	for i, expectedPath := range result.AllPaths {
-		if i < len(checkedPaths) && checkedPaths[i] != expectedPath {
-			t.Errorf("Path check[%d]: expected %s, got %s", i, expectedPath, checkedPaths[i])
-		}
-	}
-
-	// Should generate 9 paths for enhanced fallback
-	expectedPathCount := 9
-	if len(result.AllPaths) != expectedPathCount {
-		t.Errorf("Expected %d paths for enhanced fallback, got %d", expectedPathCount, len(result.AllPaths))
-	}
-}
-
-func TestMapSoundWithoutTrackingSkipsPathChecking(t *testing.T) {
-	var pathCheckTriggered bool
-
-	// This hook should never be called 
-	_ = func(path string, exists bool, sequence int, context *hooks.EventContext) {
-		pathCheckTriggered = true
-	}
-
-	// This should NOT trigger path checking
-	mapper := NewSoundMapper(nil)
-
-	context := &hooks.EventContext{
-		Category:  hooks.Success,
-		ToolName:  "Edit",
-		Operation: "tool-complete",
-	}
-
-	result := mapper.MapSound(context)
-
-	// Path checking should not have been triggered
-	if pathCheckTriggered {
-		t.Error("Expected no path checking for nil SoundChecker, but path checking was triggered")
-	}
-
-	// Should still return valid result
-	if result == nil {
-		t.Fatal("Expected valid result even without tracking")
-	}
-
-	if len(result.AllPaths) == 0 {
-		t.Fatal("Expected paths to be generated even without tracking")
-	}
-
-	// Fallback level should be 1 (default behavior without actual checking)
-	if result.FallbackLevel != 1 {
-		t.Errorf("Expected fallback level 1 for no tracking, got %d", result.FallbackLevel)
-	}
-}
+// TestNewSoundMapperWithSoundChecker, TestNewSoundMapperWithNilChecker,
+// TestMapSoundTriggersPathChecking, TestMapSoundFallbackLevelBasedOnFileExistence,
+// TestMapSoundAllPathsChecked, TestMapSoundWithoutTrackingSkipsPathChecking
+// — all deleted. They tested the streaming-hook ecosystem (PathCheckedHook,
+// WithHook, NewSoundChecker no-resolver constructor) that was removed when
+// tracking moved to the soundpack.PathObserver / LookupBuffer model. The
+// observation contract those tests covered (1-based sequence, all paths
+// checked, exists flag accuracy, context-passthrough) now lives in
+// TestResolveWithObserver_* in soundpack and TestLookupBuffer_* in tracking.
 
 func TestSoundMapper_BugReproduction_AllPathsFallbackToDefault(t *testing.T) {
 	// This test reproduces the original bug where all sounds fallback to default.wav
@@ -1028,24 +825,24 @@ func TestSoundMapper_BugReproduction_AllPathsFallbackToDefault(t *testing.T) {
 	err = os.WriteFile(defaultFile, []byte("test"), 0644)
 	require.NoError(t, err)
 	
-	// Mock resolver that maps specific sounds
-	resolver := &MockSoundpackResolver{
-		mappings: map[string]string{
-			"success/bash-success.wav": bashSuccessFile, // This should be found
-			"default.wav": defaultFile,
-		},
+	// Real resolver mapping logical → physical absolute paths. Anything not
+	// in the map produces a MapPath miss, so the resolver walks the chain
+	// the same way the production resolver does.
+	resolver := newTestResolver(map[string]string{
+		"success/bash-success.wav": bashSuccessFile, // This should be found
+		"default.wav":              defaultFile,
 		// Note: success/tool-complete.wav and success/success.wav are NOT mapped
-	}
+	})
 	
 	mapper := NewSoundMapperWithResolver(resolver)
 	
-	context := &hooks.EventContext{
+	eventCtx := &hooks.EventContext{
 		Category:  hooks.Success,
 		ToolName:  "bash",
 		Operation: "tool-complete",
 	}
 	
-	result := mapper.MapSound(context)
+	result := mapper.MapSound(context.Background(), eventCtx)
 	
 	// Should find bash-success.wav (level 1) instead of falling back to default.wav
 	expectedPath := "success/bash-success.wav"
@@ -1071,21 +868,19 @@ func TestSoundMapper_BugReproduction_NoSpecificSoundFallsToDefault(t *testing.T)
 	require.NoError(t, err)
 	
 	// Resolver only has default.wav, no specific sounds
-	resolver := &MockSoundpackResolver{
-		mappings: map[string]string{
-			"default.wav": defaultFile,
-		},
-	}
+	resolver := newTestResolver(map[string]string{
+		"default.wav": defaultFile,
+	})
 	
 	mapper := NewSoundMapperWithResolver(resolver)
 	
-	context := &hooks.EventContext{
+	eventCtx := &hooks.EventContext{
 		Category:  hooks.Success,
 		ToolName:  "unknowntool",
 		Operation: "tool-complete",
 	}
 	
-	result := mapper.MapSound(context)
+	result := mapper.MapSound(context.Background(), eventCtx)
 	
 	// Should fallback to default.wav (last level)
 	expectedPath := "default.wav"
@@ -1099,27 +894,184 @@ func TestSoundMapper_BugReproduction_NoSpecificSoundFallsToDefault(t *testing.T)
 	}
 }
 
-// MockSoundpackResolver for testing (same as in types_test.go)
-type MockSoundpackResolver struct {
-	mappings map[string]string
+// observerCall captures one PathObserver invocation for assertions.
+type observerCall struct {
+	path     string
+	sequence int
+	exists   bool
 }
 
-func (m *MockSoundpackResolver) ResolveSound(relativePath string) (string, error) {
-	if physical, exists := m.mappings[relativePath]; exists {
-		return physical, nil
+// captureObserver returns a thread-safe PathObserver that appends every
+// callback into the provided slice (under the supplied mutex).
+func captureObserver(mu *sync.Mutex, calls *[]observerCall) soundpack.PathObserver {
+	return func(path string, sequence int, exists bool) {
+		mu.Lock()
+		*calls = append(*calls, observerCall{path: path, sequence: sequence, exists: exists})
+		mu.Unlock()
 	}
-	return "", fmt.Errorf("sound not found: %s", relativePath)
 }
 
-func (m *MockSoundpackResolver) ResolveSoundWithFallback(paths []string) (string, error) {
-	for _, path := range paths {
-		if resolved, err := m.ResolveSound(path); err == nil {
-			return resolved, nil
-		}
+// TestMapSound_ObserverFiresOncePerChainCandidate locks in the contract
+// that MapSound fires the wired PathObserver EXACTLY ONCE per deduped chain
+// candidate, in order, with 1-based sequence. The observer stream is the
+// telemetry source that LookupBuffer accumulates and the CLI hands to
+// EventRecorder.RecordEvent in one transaction — so this invariant is the
+// updated form of Chunk 13's "one RecordEvent per MapSound" guarantee.
+//
+// Covers all three chain types (enhanced, posttool, simple). Regression
+// guard against streaming-style observation that would fire partial state
+// during resolution.
+func TestMapSound_ObserverFiresOncePerChainCandidate(t *testing.T) {
+	tempDir := t.TempDir()
+	defaultFile := filepath.Join(tempDir, "default.wav")
+	if err := os.WriteFile(defaultFile, []byte("test"), 0644); err != nil {
+		t.Fatalf("write default.wav: %v", err)
 	}
-	return "", fmt.Errorf("no sounds found in fallback chain")
+	// Only default.wav is mapped — every other chain candidate produces a
+	// MapPath miss, so the resolver walks the entire chain and the observer
+	// stream is fully populated for the dedup invariant to chew on.
+	resolver := newTestResolver(map[string]string{
+		"default.wav": defaultFile,
+	})
+
+	tests := []struct {
+		name              string
+		eventCtx          *hooks.EventContext
+		expectedChainType string
+	}{
+		{
+			name: "enhanced chain (PreToolUse with tool)",
+			eventCtx: &hooks.EventContext{
+				Category:     hooks.Loading,
+				ToolName:     "Bash",
+				OriginalTool: "Bash",
+				SoundHint:    "bash-thinking",
+				Operation:    "tool-start",
+			},
+			expectedChainType: ChainTypeEnhanced,
+		},
+		{
+			name: "posttool chain (PostToolUse success)",
+			eventCtx: &hooks.EventContext{
+				Category:  hooks.Success,
+				ToolName:  "Edit",
+				Operation: "tool-complete",
+				IsSuccess: true,
+			},
+			expectedChainType: ChainTypePostTool,
+		},
+		{
+			name: "simple chain (Interactive event)",
+			eventCtx: &hooks.EventContext{
+				Category:  hooks.Interactive,
+				Operation: "prompt",
+			},
+			expectedChainType: ChainTypeSimple,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var mu sync.Mutex
+			var calls []observerCall
+			mapper := NewSoundMapperWithResolver(
+				resolver,
+				WithObserver(captureObserver(&mu, &calls)),
+			)
+
+			result := mapper.MapSound(context.Background(), tc.eventCtx)
+			if result == nil {
+				t.Fatal("MapSound returned nil result")
+			}
+
+			// Chain type tag matches the routed method.
+			if result.ChainType != tc.expectedChainType {
+				t.Errorf("chainType: got %q, want %q", result.ChainType, tc.expectedChainType)
+			}
+
+			mu.Lock()
+			defer mu.Unlock()
+
+			// Observer fires once per candidate; calls list must be non-empty.
+			if len(calls) == 0 {
+				t.Fatal("observer received zero callbacks; expected one per candidate")
+			}
+
+			// SelectedPath must be set; the chain must include it.
+			if result.SelectedPath == "" {
+				t.Error("SelectedPath empty after resolution")
+			}
+			selectedFound := false
+			for _, c := range calls {
+				if c.path == result.SelectedPath {
+					selectedFound = true
+					break
+				}
+			}
+			if !selectedFound {
+				t.Errorf("selectedPath %q not in observer call paths", result.SelectedPath)
+			}
+
+			// Dedup invariant: every observed path is unique. PostTool chains
+			// can synthesize duplicates (hint == tool-suffix); the mapper
+			// dedupes BEFORE resolution so the observer stream and the
+			// downstream UNIQUE(event_id, path) constraint stay aligned.
+			seen := make(map[string]bool)
+			for _, c := range calls {
+				if seen[c.path] {
+					t.Errorf("duplicate path in observer calls: %q (dedup invariant violated)", c.path)
+				}
+				seen[c.path] = true
+			}
+
+			// Observer stream length == AllPaths length: the resolver walks
+			// the full deduped chain (post-winner candidates fire with
+			// exists=false to preserve telemetry shape).
+			if len(calls) != len(result.AllPaths) {
+				t.Errorf("observer calls=%d, AllPaths=%d (want equal)",
+					len(calls), len(result.AllPaths))
+			} else {
+				for i, c := range calls {
+					if result.AllPaths[i] != c.path {
+						t.Errorf("AllPaths[%d]=%q != calls[%d].path=%q",
+							i, result.AllPaths[i], i, c.path)
+					}
+				}
+			}
+
+			// Sequences are 1-based and contiguous.
+			for i, c := range calls {
+				if c.sequence != i+1 {
+					t.Errorf("calls[%d].sequence=%d, want %d", i, c.sequence, i+1)
+				}
+			}
+		})
+	}
 }
 
-func (m *MockSoundpackResolver) GetName() string { return "mock" }
-func (m *MockSoundpackResolver) GetType() string { return "mock" }
+// TestMapSound_NilObserver_NoPanic pins that a mapper with no observer
+// configured (WithObserver not used) never panics and resolves normally.
+// Observation is optional.
+func TestMapSound_NilObserver_NoPanic(t *testing.T) {
+	tempDir := t.TempDir()
+	defaultFile := filepath.Join(tempDir, "default.wav")
+	if err := os.WriteFile(defaultFile, []byte("test"), 0644); err != nil {
+		t.Fatalf("write default.wav: %v", err)
+	}
+	resolver := newTestResolver(map[string]string{"default.wav": defaultFile})
 
+	// No WithObserver option.
+	mapper := NewSoundMapperWithResolver(resolver)
+
+	result := mapper.MapSound(context.Background(), &hooks.EventContext{
+		Category:  hooks.Success,
+		ToolName:  "Edit",
+		Operation: "tool-complete",
+	})
+	if result == nil {
+		t.Fatal("MapSound returned nil result")
+	}
+	if result.SelectedPath == "" {
+		t.Error("SelectedPath should be set even without an observer")
+	}
+}

@@ -2,54 +2,14 @@ package install
 
 import (
 	"encoding/json"
-	"path/filepath"
 	"testing"
 )
 
-// isClaudioHook checks if a hook value represents a claudio hook,
-// supporting both the old string format and new array format
-func isClaudioHook(hookValue interface{}) bool {
-	// Helper function to check if command is a claudio executable
-	isClaudioCommand := func(cmdStr string) bool {
-		// Remove quotes if present (handles quoted paths in JSON)
-		unquoted := cmdStr
-		if len(cmdStr) >= 2 && cmdStr[0] == '"' && cmdStr[len(cmdStr)-1] == '"' {
-			unquoted = cmdStr[1 : len(cmdStr)-1]
-		}
-		
-		baseName := filepath.Base(unquoted)
-		// Handle production "claudio" and test executables "install.test", "uninstall.test"
-		return baseName == "claudio" || baseName == "install.test" || baseName == "uninstall.test"
-	}
-
-	// Check old string format (backward compatibility)
-	if str, ok := hookValue.(string); ok {
-		return isClaudioCommand(str)
-	}
-
-	// Check new array format
-	if arr, ok := hookValue.([]interface{}); ok && len(arr) > 0 {
-		if config, ok := arr[0].(map[string]interface{}); ok {
-			if hooks, ok := config["hooks"].([]interface{}); ok && len(hooks) > 0 {
-				if cmd, ok := hooks[0].(map[string]interface{}); ok {
-					if cmdStr, ok := cmd["command"].(string); ok {
-						return isClaudioCommand(cmdStr)
-					}
-				}
-			}
-		}
-	}
-
-	return false
-}
-
 // Helper function for merge tests to generate hooks with test parameters
 func generateTestHooksForMerge() (interface{}, error) {
-	factory := GetFilesystemFactory()
-	memFS := factory.Memory()
 	// Use mock executable path to prevent config corruption during tests
 	mockExecPath := "/test/mock/claudio"
-	return GenerateClaudioHooks(memFS, mockExecPath)
+	return GenerateClaudioHooks(mockExecPath)
 }
 
 func TestMergeHooksIdempotent(t *testing.T) {
@@ -156,7 +116,7 @@ func TestMergeHooksIdempotent(t *testing.T) {
 					for _, expectedHook := range expectedHooks {
 						if val, exists := hooksMap[expectedHook]; !exists {
 							t.Errorf("Expected hook '%s' missing after merge", expectedHook)
-						} else if !isClaudioHook(val) {
+						} else if !IsClaudioHook(val) {
 							t.Errorf("Expected hook '%s' to be a claudio hook, got: %v", expectedHook, val)
 						}
 					}
@@ -291,7 +251,7 @@ func TestMergeHooksPreservesExisting(t *testing.T) {
 					for _, hookName := range claudioHookNames {
 						if val, exists := hooksMap[hookName]; !exists {
 							t.Errorf("Claudio hook '%s' missing after merge", hookName)
-						} else if !isClaudioHook(val) {
+						} else if !IsClaudioHook(val) {
 							// For conflicting hooks, check the merge strategy
 							t.Logf("Hook '%s' has value '%v' (merge strategy applied)", hookName, val)
 						}
@@ -767,3 +727,347 @@ func TestMergeHooksWithExistingNonClaudioHooks(t *testing.T) {
 
 // Functions that will need to be implemented (currently undefined):
 // - MergeHooksIntoSettings(existing *SettingsMap, claudioHooks interface{}) (*SettingsMap, error)
+
+// claudioArrayEntry returns a hook array element with a single claudio command.
+func claudioArrayEntry(cmd string) map[string]interface{} {
+	return map[string]interface{}{
+		"matcher": ".*",
+		"hooks": []interface{}{
+			map[string]interface{}{
+				"type":    "command",
+				"command": cmd,
+			},
+		},
+	}
+}
+
+// customArrayEntry returns a hook array element with a single non-claudio
+// command. The matcher value is parametrised so callers can distinguish their
+// entries when asserting preservation.
+func customArrayEntry(matcher, cmd string) map[string]interface{} {
+	return map[string]interface{}{
+		"matcher": matcher,
+		"hooks": []interface{}{
+			map[string]interface{}{
+				"type":    "command",
+				"command": cmd,
+			},
+		},
+	}
+}
+
+func countCommandsInHookValue(t *testing.T, v interface{}) int {
+	t.Helper()
+	arr, ok := v.([]interface{})
+	if !ok {
+		t.Fatalf("expected []interface{} hook value, got %T", v)
+	}
+	count := 0
+	for _, item := range arr {
+		m, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		hooks, ok := m["hooks"].([]interface{})
+		if !ok {
+			continue
+		}
+		count += len(hooks)
+	}
+	return count
+}
+
+// TestIsClaudioHookMultiMatcherArray verifies that IsClaudioHook returns true
+// for an array whose claudio entry is NOT in position 0. The old arr[0]-only
+// scan would have returned false here, and the merge path would have appended
+// a second claudio block.
+func TestIsClaudioHookMultiMatcherArray(t *testing.T) {
+	value := []interface{}{
+		customArrayEntry(".*", "/usr/local/bin/custom"),
+		claudioArrayEntry("/usr/local/bin/claudio"),
+	}
+	if !IsClaudioHook(value) {
+		t.Errorf("IsClaudioHook should detect claudio in any array position, got false for %v", value)
+	}
+}
+
+// TestIsClaudioHookMultiHookInsideMatcher verifies the predicate scans every
+// inner hook inside a matcher block, not just hooks[0].
+func TestIsClaudioHookMultiHookInsideMatcher(t *testing.T) {
+	value := []interface{}{
+		map[string]interface{}{
+			"matcher": ".*",
+			"hooks": []interface{}{
+				map[string]interface{}{"type": "command", "command": "/usr/local/bin/custom"},
+				map[string]interface{}{"type": "command", "command": "/usr/local/bin/claudio"},
+			},
+		},
+	}
+	if !IsClaudioHook(value) {
+		t.Errorf("IsClaudioHook should detect claudio in any hooks-sub-array position, got false")
+	}
+}
+
+// TestMergeHooksIdempotent_CustomThenClaudio: starting with a pre-existing
+// [custom, claudio] array, run two merges. After the first merge the array
+// should still have exactly two elements (claudio is replaced, not duplicated).
+// After the second merge it must remain two elements (idempotency).
+func TestMergeHooksIdempotent_CustomThenClaudio(t *testing.T) {
+	const claudioCmd = "/test/mock/claudio"
+
+	existing := &SettingsMap{
+		"hooks": map[string]interface{}{
+			"PostToolUse": []interface{}{
+				customArrayEntry(".*", "/usr/local/bin/custom"),
+				claudioArrayEntry(claudioCmd),
+			},
+		},
+	}
+
+	claudioHooks := map[string]interface{}{
+		"PostToolUse": []interface{}{claudioArrayEntry(claudioCmd)},
+	}
+
+	first, err := MergeHooksIntoSettings(existing, claudioHooks)
+	if err != nil {
+		t.Fatalf("first merge failed: %v", err)
+	}
+
+	firstHooks, _ := (*first)["hooks"].(map[string]interface{})
+	firstArr, ok := firstHooks["PostToolUse"].([]interface{})
+	if !ok {
+		t.Fatalf("expected PostToolUse to be []interface{}, got %T", firstHooks["PostToolUse"])
+	}
+	if got, want := len(firstArr), 2; got != want {
+		t.Errorf("after first merge: expected %d array elements, got %d (%v)", want, got, firstArr)
+	}
+
+	// Second merge — must be byte-identical to first.
+	second, err := MergeHooksIntoSettings(first, claudioHooks)
+	if err != nil {
+		t.Fatalf("second merge failed: %v", err)
+	}
+
+	firstJSON, _ := json.Marshal(first)
+	secondJSON, _ := json.Marshal(second)
+	if string(firstJSON) != string(secondJSON) {
+		t.Errorf("merge not idempotent:\nfirst:  %s\nsecond: %s", firstJSON, secondJSON)
+	}
+}
+
+// TestMergeHooksIdempotent_ClaudioThenCustom asserts the data-loss bug is
+// fixed: starting with [claudio, custom], the custom entry is preserved
+// across a merge. Under the old code IsClaudioHook(arr[0]) returned true
+// and the idempotent-update branch replaced the whole array with the
+// claudio-only value, deleting the user's custom hook.
+func TestMergeHooksIdempotent_ClaudioThenCustom(t *testing.T) {
+	const claudioCmd = "/test/mock/claudio"
+	const customCmd = "/usr/local/bin/custom"
+
+	existing := &SettingsMap{
+		"hooks": map[string]interface{}{
+			"PostToolUse": []interface{}{
+				claudioArrayEntry(claudioCmd),
+				customArrayEntry("custom-matcher", customCmd),
+			},
+		},
+	}
+
+	claudioHooks := map[string]interface{}{
+		"PostToolUse": []interface{}{claudioArrayEntry(claudioCmd)},
+	}
+
+	merged, err := MergeHooksIntoSettings(existing, claudioHooks)
+	if err != nil {
+		t.Fatalf("merge failed: %v", err)
+	}
+
+	mergedHooks, _ := (*merged)["hooks"].(map[string]interface{})
+	arr, ok := mergedHooks["PostToolUse"].([]interface{})
+	if !ok {
+		t.Fatalf("expected PostToolUse to be []interface{}, got %T", mergedHooks["PostToolUse"])
+	}
+
+	if got, want := len(arr), 2; got != want {
+		t.Errorf("expected %d array elements after merge, got %d (%v)", want, got, arr)
+	}
+
+	// Verify the custom entry survived.
+	foundCustom := false
+	for _, item := range arr {
+		m, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		hooks, _ := m["hooks"].([]interface{})
+		for _, h := range hooks {
+			hm, ok := h.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if cmd, _ := hm["command"].(string); cmd == customCmd {
+				foundCustom = true
+			}
+		}
+	}
+	if !foundCustom {
+		t.Errorf("custom hook %q was silently deleted by merge — data-loss bug regressed. Got: %v", customCmd, arr)
+	}
+
+	// Exactly one claudio entry.
+	if claudioCount := countCommandsInHookValue(t, arr) - 1; claudioCount != 1 {
+		t.Errorf("expected exactly 1 claudio command after merge, got %d (1 custom + claudio commands)", claudioCount)
+	}
+}
+
+// TestMergeHooksIdempotent_MultipleClaudio: a pre-corrupted state with two
+// claudio entries plus one custom entry. One merge must collapse to exactly
+// one claudio plus the custom — self-healing for any settings file already
+// corrupted by the pre-fix code.
+func TestMergeHooksIdempotent_MultipleClaudio(t *testing.T) {
+	const claudioCmd = "/test/mock/claudio"
+	const customCmd = "/usr/local/bin/custom"
+
+	existing := &SettingsMap{
+		"hooks": map[string]interface{}{
+			"PostToolUse": []interface{}{
+				claudioArrayEntry(claudioCmd),
+				claudioArrayEntry(claudioCmd),
+				customArrayEntry("custom-matcher", customCmd),
+			},
+		},
+	}
+
+	claudioHooks := map[string]interface{}{
+		"PostToolUse": []interface{}{claudioArrayEntry(claudioCmd)},
+	}
+
+	merged, err := MergeHooksIntoSettings(existing, claudioHooks)
+	if err != nil {
+		t.Fatalf("merge failed: %v", err)
+	}
+
+	mergedHooks, _ := (*merged)["hooks"].(map[string]interface{})
+	arr, ok := mergedHooks["PostToolUse"].([]interface{})
+	if !ok {
+		t.Fatalf("expected PostToolUse to be []interface{}, got %T", mergedHooks["PostToolUse"])
+	}
+
+	if got, want := len(arr), 2; got != want {
+		t.Errorf("expected exactly 2 array elements (1 custom + 1 claudio) after collapsing duplicates, got %d (%v)", got, arr)
+	}
+
+	// Count claudio commands across the array.
+	claudioCommands := 0
+	customFound := false
+	for _, item := range arr {
+		m, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		hooks, _ := m["hooks"].([]interface{})
+		for _, h := range hooks {
+			hm, ok := h.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			cmd, _ := hm["command"].(string)
+			if cmd == claudioCmd {
+				claudioCommands++
+			}
+			if cmd == customCmd {
+				customFound = true
+			}
+		}
+	}
+	if claudioCommands != 1 {
+		t.Errorf("expected exactly 1 claudio command after collapse, got %d", claudioCommands)
+	}
+	if !customFound {
+		t.Errorf("custom command %q was lost during multi-claudio collapse", customCmd)
+	}
+}
+
+// TestMergeHooksIdempotent_ClaudioSiblingNonClaudio asserts that when a
+// matcher's hooks sub-array contains BOTH a Claudio command AND a user
+// non-Claudio command, the merge filters only the Claudio command and
+// preserves the user command in the same matcher block.
+//
+// Regression for Chunk 5 analyst Finding 1: the strip-and-replace previously
+// dropped the entire array item if it contained ANY Claudio command, losing
+// the user's sibling command in the same hooks sub-array.
+func TestMergeHooksIdempotent_ClaudioSiblingNonClaudio(t *testing.T) {
+	const claudioCmd = "/test/mock/claudio"
+	const userCmd = "/usr/local/bin/user-lint"
+
+	existing := &SettingsMap{
+		"hooks": map[string]interface{}{
+			"PostToolUse": []interface{}{
+				map[string]interface{}{
+					"matcher": ".*",
+					"hooks": []interface{}{
+						map[string]interface{}{"type": "command", "command": claudioCmd},
+						map[string]interface{}{"type": "command", "command": userCmd},
+					},
+				},
+			},
+		},
+	}
+
+	claudioHooks := map[string]interface{}{
+		"PostToolUse": []interface{}{claudioArrayEntry(claudioCmd)},
+	}
+
+	merged, err := MergeHooksIntoSettings(existing, claudioHooks)
+	if err != nil {
+		t.Fatalf("first merge failed: %v", err)
+	}
+
+	// Inspect the merged result: the user-lint command must survive somewhere
+	// in the PostToolUse array. The Claudio command must appear exactly once.
+	mergedHooks, _ := (*merged)["hooks"].(map[string]interface{})
+	arr, ok := mergedHooks["PostToolUse"].([]interface{})
+	if !ok {
+		t.Fatalf("expected PostToolUse to be []interface{}, got %T", mergedHooks["PostToolUse"])
+	}
+
+	userFound := false
+	claudioCount := 0
+	for _, item := range arr {
+		m, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		hooks, _ := m["hooks"].([]interface{})
+		for _, h := range hooks {
+			hm, ok := h.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			cmd, _ := hm["command"].(string)
+			switch cmd {
+			case userCmd:
+				userFound = true
+			case claudioCmd:
+				claudioCount++
+			}
+		}
+	}
+	if !userFound {
+		t.Errorf("user command %q was silently deleted by merge — Finding 1 regressed. Got: %v", userCmd, arr)
+	}
+	if claudioCount != 1 {
+		t.Errorf("expected exactly 1 claudio command after merge, got %d", claudioCount)
+	}
+
+	// Second merge — must be byte-identical (idempotency).
+	second, err := MergeHooksIntoSettings(merged, claudioHooks)
+	if err != nil {
+		t.Fatalf("second merge failed: %v", err)
+	}
+	firstJSON, _ := json.Marshal(merged)
+	secondJSON, _ := json.Marshal(second)
+	if string(firstJSON) != string(secondJSON) {
+		t.Errorf("merge not idempotent:\nfirst:  %s\nsecond: %s", firstJSON, secondJSON)
+	}
+}

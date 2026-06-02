@@ -6,107 +6,109 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
 // Common errors for AudioSource implementations
 var (
-	ErrNotSupported = errors.New("operation not supported by this source")
+	ErrNotSupported  = errors.New("operation not supported by this source")
 	ErrInvalidFormat = errors.New("invalid audio format")
-	ErrSourceClosed = errors.New("audio source is closed")
+	ErrSourceClosed  = errors.New("audio source is closed")
 )
 
-// AudioSource represents a source of audio data that can be played
-// Implementations should provide audio data either as a file path (most efficient)
-// or as a reader with format information (more flexible)
+// AudioSource represents a source of audio data that can be played. Every
+// source can be read; backends that prefer a raw file path (e.g.
+// SystemCommandBackend which exec's a player binary) can opt in to that
+// fast-path via a FilePather type assertion. The previous dual API
+// (AsFilePath + AsReader) was paid for by every consumer for a fast-path
+// that only the exec backend used; review finding #42 collapses it.
 type AudioSource interface {
-	// AsFilePath returns a file path if the source can provide one
-	// Returns ErrNotSupported if the source cannot provide a file path
-	AsFilePath() (string, error)
-	
-	// AsReader returns a reader for the audio data along with format information
-	// Format should be a string like "wav", "mp3", etc.
-	// The caller is responsible for closing the returned ReadCloser
-	AsReader() (io.ReadCloser, string, error)
+	// Reader returns an io.ReadCloser over the audio bytes plus a short
+	// lowercase format name (e.g. "wav", "mp3"). The caller is responsible
+	// for closing the returned ReadCloser.
+	Reader() (io.ReadCloser, string, error)
 }
 
-// FileSource represents an audio source backed by a file on disk
+// FilePather is an optional capability for sources backed by a file on
+// disk. Exec-style backends (SystemCommandBackend) prefer to pass the path
+// directly to a player binary rather than read-then-write-temp; they
+// type-assert to FilePather and fall back to Reader if the assertion
+// fails.
+type FilePather interface {
+	FilePath() (string, error)
+}
+
+// FileSource represents an audio source backed by a file on disk.
+// FileSource no longer carries a *DecoderRegistry; the decoding seam lives
+// in the malgo subpackage (review finding #5). FileSource derives a naive
+// format hint from filepath.Ext so SystemCommandBackend's temp-file
+// fallback can name the temp with the right extension.
 type FileSource struct {
-	path     string
-	registry *DecoderRegistry
+	path string
 }
 
-// NewFileSource creates a new FileSource for the given file path
-func NewFileSource(path string, registry *DecoderRegistry) *FileSource {
+// NewFileSource creates a new FileSource for the given file path.
+func NewFileSource(path string) *FileSource {
 	slog.Debug("creating new FileSource", "path", path)
-	return &FileSource{
-		path:     path, 
-		registry: registry,
-	}
+	return &FileSource{path: path}
 }
 
-// AsFilePath returns the file path directly
-func (fs *FileSource) AsFilePath() (string, error) {
+// FilePath returns the file path directly. Satisfies FilePather so exec
+// backends can skip the open-read-temp dance.
+func (fs *FileSource) FilePath() (string, error) {
 	if fs.path == "" {
 		slog.Error("FileSource has empty path")
 		return "", fmt.Errorf("file path is empty")
 	}
-	
 	slog.Debug("FileSource providing file path", "path", fs.path)
 	return fs.path, nil
 }
 
-// AsReader opens the file and returns a reader with format detection
-func (fs *FileSource) AsReader() (io.ReadCloser, string, error) {
+// Reader opens the file and returns a reader. The returned format is a
+// naive extension-based hint (lowercase, dot stripped, e.g. "wav"); the
+// authoritative decoder selection happens inside the decoding backend
+// against the full filename.
+func (fs *FileSource) Reader() (io.ReadCloser, string, error) {
 	if fs.path == "" {
 		slog.Error("FileSource has empty path for reader")
 		return nil, "", fmt.Errorf("file path is empty")
 	}
-	
-	// Detect format from file extension
-	format := fs.DetectFormat()
-	if format == "" {
-		slog.Error("unsupported audio format", "path", fs.path)
-		return nil, "", ErrInvalidFormat
-	}
-	
-	// Open the file
+
 	file, err := os.Open(fs.path)
 	if err != nil {
 		slog.Error("failed to open file", "path", fs.path, "error", err)
 		return nil, "", fmt.Errorf("failed to open file: %w", err)
 	}
-	
+
+	format := fs.FormatHint()
 	slog.Debug("FileSource providing reader", "path", fs.path, "format", format)
 	return file, format, nil
 }
 
-// DetectFormat determines the audio format using the registry
-func (fs *FileSource) DetectFormat() string {
-	if fs.registry == nil {
-		slog.Warn("no registry available for format detection", "path", fs.path)
+// FormatHint returns a lowercase extension-based format hint (without
+// the leading dot) for the source's path. Returns empty string if the
+// path has no extension. Callers needing authoritative format detection
+// should pass the full path to their decoder registry — this hint is for
+// naming temp files in the exec-backend fallback path.
+func (fs *FileSource) FormatHint() string {
+	ext := filepath.Ext(fs.path)
+	if ext == "" {
 		return ""
 	}
-	
-	decoder := fs.registry.DetectFormat(fs.path)
-	if decoder != nil {
-		format := strings.ToLower(decoder.FormatName())
-		slog.Debug("format detected via registry", "path", fs.path, "format", format)
-		return format
-	}
-	
-	slog.Warn("unknown audio format via registry", "path", fs.path)
-	return ""
+	return strings.ToLower(strings.TrimPrefix(ext, "."))
 }
 
-// ReaderSource represents an audio source backed by an io.ReadCloser
-// This is useful for streaming audio data or in-memory audio
+// ReaderSource represents an audio source backed by an io.ReadCloser. It
+// is used by tests and any in-memory or streaming consumer; it
+// deliberately does NOT implement FilePather so exec backends fall through
+// to their write-temp-file path.
 type ReaderSource struct {
 	reader io.ReadCloser
 	format string
 }
 
-// NewReaderSource creates a new ReaderSource with the given reader and format
+// NewReaderSource creates a new ReaderSource with the given reader and format.
 func NewReaderSource(reader io.ReadCloser, format string) *ReaderSource {
 	slog.Debug("creating new ReaderSource", "format", format)
 	return &ReaderSource{
@@ -115,19 +117,13 @@ func NewReaderSource(reader io.ReadCloser, format string) *ReaderSource {
 	}
 }
 
-// AsFilePath returns ErrNotSupported since ReaderSource cannot provide a file path
-func (rs *ReaderSource) AsFilePath() (string, error) {
-	slog.Debug("ReaderSource cannot provide file path")
-	return "", ErrNotSupported
-}
-
-// AsReader returns the stored reader and format
-func (rs *ReaderSource) AsReader() (io.ReadCloser, string, error) {
+// Reader returns the stored reader and format.
+func (rs *ReaderSource) Reader() (io.ReadCloser, string, error) {
 	if rs.reader == nil {
 		slog.Error("ReaderSource has nil reader")
 		return nil, "", ErrSourceClosed
 	}
-	
+
 	slog.Debug("ReaderSource providing reader", "format", rs.format)
 	return rs.reader, rs.format, nil
 }

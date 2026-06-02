@@ -148,7 +148,7 @@ func TestMergeHookValuesStringFormatExisting(t *testing.T) {
 			"PreToolUse": "/usr/bin/other-tool",
 		},
 	}
-	claudioHooks, err := GenerateClaudioHooksForAgent(afero.NewMemMapFs(), "/usr/local/bin/claudio", AgentClaude)
+	claudioHooks, err := GenerateClaudioHooksForAgent("/usr/local/bin/claudio", AgentClaude)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +203,7 @@ func TestIsClaudioHookFormats(t *testing.T) {
 func TestMergeHooksMarshalErrorPropagates(t *testing.T) {
 	// A channel value cannot be JSON-marshaled, forcing deepCopySettings to error.
 	bad := &SettingsMap{"x": make(chan int)}
-	claudioHooks, _ := GenerateClaudioHooksForAgent(afero.NewMemMapFs(), "/usr/local/bin/claudio", AgentClaude)
+	claudioHooks, _ := GenerateClaudioHooksForAgent("/usr/local/bin/claudio", AgentClaude)
 	if _, err := MergeHooksIntoSettings(bad, claudioHooks); err == nil {
 		t.Error("expected error when existing settings cannot be deep-copied")
 	}
@@ -217,7 +217,7 @@ func TestMergeHookValuesUnknownExistingFormat(t *testing.T) {
 			"PreToolUse": float64(42),
 		},
 	}
-	claudioHooks, _ := GenerateClaudioHooksForAgent(afero.NewMemMapFs(), "/usr/local/bin/claudio", AgentClaude)
+	claudioHooks, _ := GenerateClaudioHooksForAgent("/usr/local/bin/claudio", AgentClaude)
 	merged, err := MergeHooksIntoSettings(existing, claudioHooks)
 	if err != nil {
 		t.Fatal(err)

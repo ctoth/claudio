@@ -1,3 +1,5 @@
+//go:build cgo
+
 package integration
 
 import (
@@ -13,11 +15,9 @@ import (
 func TestEndToEndAIFFSupport(t *testing.T) {
 	// This test validates the complete unified audio system from user perspective
 	
-	// Step 1: Verify backend factory supports AIFF through all backends
-	factory := audio.NewBackendFactory()
-	
+	// Step 1: Verify NewBackend supports AIFF through all backends
 	// Test MalgoBackend (primary backend for AIFF support)
-	malgoBackend, err := factory.CreateBackend("malgo")
+	malgoBackend, err := audio.NewBackend("malgo")
 	if err != nil {
 		t.Fatalf("Failed to create malgo backend: %v", err)
 	}
@@ -40,7 +40,7 @@ func TestEndToEndAIFFSupport(t *testing.T) {
 	
 	for _, path := range aiffPaths {
 		t.Run("aiff_path_"+path, func(t *testing.T) {
-			source := audio.NewFileSource(path, audio.NewDefaultRegistry())
+			source := audio.NewFileSource(path)
 			
 			err := malgoBackend.Play(ctx, source)
 			if err != nil {
@@ -64,16 +64,15 @@ func TestEndToEndAIFFSupport(t *testing.T) {
 
 // TestEndToEndUnifiedSystemPerformance validates performance characteristics
 func TestEndToEndUnifiedSystemPerformance(t *testing.T) {
-	factory := audio.NewBackendFactory()
-	backend, err := factory.CreateBackend("malgo")
+	backend, err := audio.NewBackend("malgo")
 	if err != nil {
 		t.Fatalf("Failed to create backend: %v", err)
 	}
 	defer backend.Close()
-	
+
 	// Measure backend creation time (should be fast)
 	start := time.Now()
-	testBackend, err := factory.CreateBackend("malgo")
+	testBackend, err := audio.NewBackend("malgo")
 	if err != nil {
 		t.Fatalf("Failed to create test backend: %v", err)
 	}
@@ -90,26 +89,20 @@ func TestEndToEndUnifiedSystemPerformance(t *testing.T) {
 
 // TestEndToEndSystemResourceCleanup validates proper resource management
 func TestEndToEndSystemResourceCleanup(t *testing.T) {
-	factory := audio.NewBackendFactory()
-	
 	// Create and destroy multiple backends to test resource cleanup
 	for i := 0; i < 10; i++ {
-		backend, err := factory.CreateBackend("malgo")
+		backend, err := audio.NewBackend("malgo")
 		if err != nil {
 			t.Fatalf("Failed to create backend %d: %v", i, err)
 		}
 		
-		// Test lifecycle
-		err = backend.Start()
-		if err != nil {
-			t.Errorf("Failed to start backend %d: %v", i, err)
-		}
-		
+		// Test lifecycle (Start was dropped in finding #44; both Stop and Close
+		// must succeed)
 		err = backend.Stop()
 		if err != nil {
 			t.Errorf("Failed to stop backend %d: %v", i, err)
 		}
-		
+
 		err = backend.Close()
 		if err != nil {
 			t.Errorf("Failed to close backend %d: %v", i, err)

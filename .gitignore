@@ -6,3 +6,20 @@ cli-v2.md
 sound-fallbacks.md
 windows_sounds_checklist.md
 test_temp_file.txt
+
+# Build outputs (root-built binaries)
+/claudio
+/claudio.exe
+/claudio.click.exe
+/hook-logger
+/hook-logger.exe
+/test_cli.exe
+*.exe
+/dist/
+
+# Coverage outputs
+/coverage.out
+/coverage.html
+
+# Logs
+*.log

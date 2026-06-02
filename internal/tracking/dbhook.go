@@ -1,188 +1,116 @@
 package tracking
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
-	"log/slog"
+	"fmt"
 	"time"
 
 	"claudio.click/internal/hooks"
 )
 
-// DBHook implements database logging for sound path checks
+// DBHook records sound resolution events to a SQLite database.
+//
+// DBHook is safe for concurrent use. Each RecordEvent call runs in its
+// own SQLite transaction; concurrent calls serialize at the SQLite write
+// lock. No goroutine-affinity is required and no cross-call state is
+// retained — the API is one-shot per event.
+//
+// Errors from RecordEvent are returned to the caller, never latched.
+// The caller (sound mapper) logs at WARN and continues; tracking is
+// best-effort and a failure does not crash a hook.
 type DBHook struct {
-	db           *sql.DB
-	sessionID    string
-	disabled     bool
-	eventID      int64 // Current event ID for grouping path checks
-	context      *hooks.EventContext // Current context for grouping
-	pathChecks   []pathCheckEntry // Buffer for current event's path checks
-	selectedPath string
-	fallbackLevel int
+	db        *sql.DB
+	sessionID string
 }
 
-// pathCheckEntry represents a single path check
-type pathCheckEntry struct {
-	path   string
-	exists bool
-}
-
-// NewDBHook creates a new database hook for the specified session
+// NewDBHook creates a new database recorder for the specified session.
 func NewDBHook(db *sql.DB, sessionID string) *DBHook {
 	return &DBHook{
-		db:            db,
-		sessionID:     sessionID,
-		disabled:      false,
-		eventID:       0, // Will be set when first path check is logged
-		context:       nil, // Will be set for context grouping
-		pathChecks:    make([]pathCheckEntry, 0),
-		selectedPath:  "",
-		fallbackLevel: 0,
+		db:        db,
+		sessionID: sessionID,
 	}
 }
 
-// LogPathCheck logs a path check to the database with transaction handling
-func (d *DBHook) LogPathCheck(path string, exists bool, sequence int, context *hooks.EventContext) {
-	// Skip if disabled due to previous errors
-	if d.disabled {
-		return
+// RecordEvent writes one hook_events row and all of its path_lookups in
+// a single transaction. The caller passes the already-resolved
+// selectedPath; the recorder trusts that choice and does not re-derive
+// it from the lookups slice.
+//
+// Returns the underlying error on any failure; the transaction is
+// rolled back automatically (no partial state lands).
+func (d *DBHook) RecordEvent(
+	ctx context.Context,
+	eventCtx *hooks.EventContext,
+	chainType string,
+	lookups []Lookup,
+	selectedPath string,
+) error {
+	// Refuse to record a row with no event context. The previous behavior
+	// json.Marshal'd a nil pointer to the literal string "null" and wrote
+	// that into the context column, producing a row whose only payload
+	// was "the recorder was called with nothing." That row is useless to
+	// analytics and silently mis-represents reality. Chunk 13 analyst F3.
+	if eventCtx == nil {
+		return fmt.Errorf("RecordEvent: nil eventCtx; refusing to insert a context-less row")
 	}
 
-	// Check if this is a new context (new event group)
-	if d.needsNewEvent(context) {
-		d.startNewEvent(context)
-		// For the first path in a new event, assume it's selected
-		// This will be updated if a later path exists
-		d.selectedPath = path
-		d.fallbackLevel = sequence
-		
-		if err := d.ensureEvent(d.context, d.selectedPath, d.fallbackLevel); err != nil {
-			slog.Warn("sound tracking failed to create event", "error", err, "path", path)
-			d.disabled = true
-			return
-		}
-	}
-
-	// Update selected path if this one exists (first existing path wins)
-	if exists && (d.selectedPath == "" || !d.hasExistingPath()) {
-		d.selectedPath = path
-		d.fallbackLevel = sequence
-		// Update the event record with the correct selected path
-		if err := d.updateEventSelection(path, sequence); err != nil {
-			slog.Warn("sound tracking failed to update event selection", "error", err, "path", path)
-			d.disabled = true
-			return
-		}
-	}
-
-	// Insert path lookup
-	if err := d.insertPathCheck(path, exists, sequence); err != nil {
-		slog.Warn("sound tracking failed to log path check", "error", err, "path", path)
-		d.disabled = true
-		return
-	}
-
-	slog.Debug("sound tracking logged path check",
-		"session_id", d.sessionID,
-		"event_id", d.eventID,
-		"path", path,
-		"exists", exists,
-		"sequence", sequence)
-}
-
-// needsNewEvent determines if a new event should be created for this context
-func (d *DBHook) needsNewEvent(context *hooks.EventContext) bool {
-	// Always create new event if we don't have one yet
-	if d.context == nil {
-		return true
-	}
-	
-	// Create new event if key context fields differ
-	return d.context.Category != context.Category ||
-		d.context.ToolName != context.ToolName ||
-		d.context.Operation != context.Operation
-}
-
-// startNewEvent initializes a new event context
-func (d *DBHook) startNewEvent(context *hooks.EventContext) {
-	d.context = context
-	d.pathChecks = make([]pathCheckEntry, 0)
-	d.selectedPath = ""
-	d.fallbackLevel = 0
-	d.eventID = 0
-}
-
-// hasExistingPath checks if the current selected path exists
-func (d *DBHook) hasExistingPath() bool {
-	for _, check := range d.pathChecks {
-		if check.path == d.selectedPath && check.exists {
-			return true
-		}
-	}
-	return false
-}
-
-// updateEventSelection updates the event record with new selected path and fallback level
-func (d *DBHook) updateEventSelection(selectedPath string, fallbackLevel int) error {
-	_, err := d.db.Exec(`
-		UPDATE hook_events 
-		SET selected_path = ?, fallback_level = ?
-		WHERE id = ?`,
-		selectedPath,
-		fallbackLevel,
-		d.eventID)
-	return err
-}
-
-// ensureEvent creates a hook event record if one doesn't exist for this context
-func (d *DBHook) ensureEvent(context *hooks.EventContext, selectedPath string, fallbackLevel int) error {
-	// Marshal context to JSON
-	contextJSON, err := json.Marshal(context)
+	tx, err := d.db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	// Best-effort rollback; turns into a no-op after a successful Commit.
+	// Explicit `_ =` discard is clearer than //nolint:errcheck. Chunk 13 F5.
+	defer func() { _ = tx.Rollback() }()
+
+	contextJSON, err := json.Marshal(eventCtx)
+	if err != nil {
+		return fmt.Errorf("marshal context: %w", err)
 	}
 
-	// Insert event and get ID
-	result, err := d.db.Exec(`
-		INSERT INTO hook_events (timestamp, session_id, tool_name, selected_path, fallback_level, context)
+	toolName := eventCtx.ToolName
+
+	res, err := tx.ExecContext(ctx, `
+		INSERT INTO hook_events (timestamp, session_id, tool_name, selected_path, chain_type, context)
 		VALUES (?, ?, ?, ?, ?, ?)`,
 		time.Now().Unix(),
 		d.sessionID,
-		context.ToolName,
+		toolName,
 		selectedPath,
-		fallbackLevel,
+		chainType,
 		string(contextJSON))
 	if err != nil {
-		return err
+		return fmt.Errorf("insert hook_event: %w", err)
 	}
 
-	eventID, err := result.LastInsertId()
+	eventID, err := res.LastInsertId()
 	if err != nil {
-		return err
+		return fmt.Errorf("last insert id: %w", err)
 	}
 
-	d.eventID = eventID
+	if len(lookups) > 0 {
+		stmt, err := tx.PrepareContext(ctx, `
+			INSERT INTO path_lookups (event_id, path, sequence, found)
+			VALUES (?, ?, ?, ?)`)
+		if err != nil {
+			return fmt.Errorf("prepare lookup insert: %w", err)
+		}
+		defer stmt.Close()
+
+		for _, lk := range lookups {
+			found := 0
+			if lk.Found {
+				found = 1
+			}
+			if _, err := stmt.ExecContext(ctx, eventID, lk.Path, lk.Sequence, found); err != nil {
+				return fmt.Errorf("insert path lookup (seq=%d): %w", lk.Sequence, err)
+			}
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit: %w", err)
+	}
 	return nil
-}
-
-// insertPathCheck inserts a path lookup record
-func (d *DBHook) insertPathCheck(path string, exists bool, sequence int) error {
-	found := 0
-	if exists {
-		found = 1
-	}
-
-	_, err := d.db.Exec(`
-		INSERT INTO path_lookups (event_id, path, sequence, found)
-		VALUES (?, ?, ?, ?)`,
-		d.eventID,
-		path,
-		sequence,
-		found)
-	return err
-}
-
-// GetHook returns the PathCheckedHook function for use with SoundChecker
-func (d *DBHook) GetHook() PathCheckedHook {
-	return d.LogPathCheck
 }

@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"claudio.click/internal/install"
-	"claudio.click/internal/util"
+	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 )
 
@@ -190,10 +190,25 @@ func runInstallWorkflow(agent install.Agent, scope string, settingsPath string) 
 
 	slog.Debug("validated installation scope", "scope", scope)
 
+	// Acquire advisory lock around the full read-mutate-write window so
+	// concurrent install/uninstall processes serialise. This must happen
+	// BEFORE the initial ReadSettingsFile — putting it inside
+	// WriteSettingsFile would not prevent the classic read-modify-write
+	// race two install processes hit when they both read the same
+	// starting state.
+	lock, err := install.LockSettingsDir(settingsPath)
+	if err != nil {
+		return fmt.Errorf("install: %w", err)
+	}
+	defer func() {
+		if unlockErr := lock.Unlock(); unlockErr != nil {
+			slog.Warn("failed to release settings lock", "err", unlockErr)
+		}
+	}()
+
 	// Step 2: Read existing settings
 	slog.Debug("reading existing settings", "path", settingsPath)
-	factory := install.GetFilesystemFactory()
-	prodFS := factory.Production()
+	prodFS := afero.NewOsFs()
 	existingSettings, err := install.ReadSettingsFile(prodFS, settingsPath)
 	if err != nil {
 		return fmt.Errorf("failed to read existing settings from %s: %w", settingsPath, err)
@@ -201,7 +216,7 @@ func runInstallWorkflow(agent install.Agent, scope string, settingsPath string) 
 
 	slog.Info("loaded existing settings",
 		"path", settingsPath,
-		"settings_keys", util.GetSettingsKeys(existingSettings))
+		"settings_keys", install.SettingsKeys(existingSettings))
 
 	// Step 3: Generate Claudio hooks configuration
 	slog.Debug("generating Claudio hooks configuration")
@@ -212,9 +227,7 @@ func runInstallWorkflow(agent install.Agent, scope string, settingsPath string) 
 		return fmt.Errorf("failed to get executable path: %w", err)
 	}
 	
-	// Use production filesystem (reuse existing variables)
-	
-	claudioHooks, err := install.GenerateClaudioHooksForAgent(prodFS, execPath, agent)
+	claudioHooks, err := install.GenerateClaudioHooksForAgent(execPath, agent)
 	if err != nil {
 		return fmt.Errorf("failed to generate Claudio hooks: %w", err)
 	}
@@ -229,7 +242,7 @@ func runInstallWorkflow(agent install.Agent, scope string, settingsPath string) 
 	}
 
 	slog.Info("merged Claudio hooks into settings",
-		"merged_settings_keys", util.GetSettingsKeys(mergedSettings))
+		"merged_settings_keys", install.SettingsKeys(mergedSettings))
 
 	// Step 5: Write merged settings back to file
 	slog.Debug("writing merged settings to file", "path", settingsPath)
@@ -247,11 +260,16 @@ func runInstallWorkflow(agent install.Agent, scope string, settingsPath string) 
 		return fmt.Errorf("failed to verify installation by reading %s: %w", settingsPath, err)
 	}
 
-	// Check that all Claudio hooks are present
+	// Check that the default-enabled Claudio hooks are present. We iterate
+	// EnabledHooks (not HookNames) so we match the set the write step
+	// (install/hooks.go) actually writes — a DefaultEnabled=false hook
+	// must NOT cause a verify mismatch because it was deliberately
+	// skipped on write.
 	if hooks, exists := (*verifySettings)["hooks"]; exists {
 		if hooksMap, ok := hooks.(map[string]interface{}); ok {
-			expectedHooks := agent.HookNames() // Use agent registry instead of hardcoded list
-			for _, hookName := range expectedHooks {
+			expectedHooks := agent.EnabledHooks()
+			for _, h := range expectedHooks {
+				hookName := h.Name
 				if val, exists := hooksMap[hookName]; !exists {
 					return fmt.Errorf("verification failed: Claudio hook '%s' missing after installation", hookName)
 				} else if !install.IsClaudioHook(val) {

@@ -4,63 +4,12 @@ import (
 	"testing"
 )
 
-// TestPlatformDetectionInterface tests that platform detection functions are properly defined
+// TestPlatformDetectionInterface tests that the audio package's
+// command/backend detection helpers compile and have expected
+// signatures. WSL detection itself now lives in internal/platform.
 func TestPlatformDetectionInterface(t *testing.T) {
-	// This test ensures the functions compile and have expected signatures
-	_ = IsWSL()
 	_ = CommandExists("test")
 	_ = DetectOptimalBackend()
-}
-
-func TestIsWSL(t *testing.T) {
-	tests := []struct {
-		name           string
-		procVersion    string
-		wslEnv         string
-		expectedResult bool
-	}{
-		{
-			name:           "WSL1 detected via /proc/version",
-			procVersion:    "Linux version 4.4.0-19041-Microsoft (Microsoft@Microsoft.com) (gcc version 5.4.0 (Ubuntu 5.4.0-6ubuntu1~16.04.12) ) #1237-Microsoft Sat Sep 11 14:32:00 PST 2021",
-			wslEnv:         "",
-			expectedResult: true,
-		},
-		{
-			name:           "WSL2 detected via /proc/version",
-			procVersion:    "Linux version 5.15.74.2-microsoft-standard-WSL2 (gcc (GCC) 11.2.0) #1 SMP Wed Oct 5 20:57:03 UTC 2022",
-			wslEnv:         "",
-			expectedResult: true,
-		},
-		{
-			name:           "WSL detected via WSL_DISTRO_NAME env var",
-			procVersion:    "",
-			wslEnv:         "Ubuntu",
-			expectedResult: true,
-		},
-		{
-			name:           "Native Linux - no WSL indicators",
-			procVersion:    "Linux version 5.15.0-56-generic (buildd@lcy02-amd64-044) (gcc (Ubuntu 11.3.0-1ubuntu1~22.04) #62-Ubuntu SMP Tue Nov 22 19:54:14 UTC 2022",
-			wslEnv:         "",
-			expectedResult: false,
-		},
-		{
-			name:           "Empty proc version and no env var",
-			procVersion:    "",
-			wslEnv:         "",
-			expectedResult: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Note: This test will initially fail since IsWSL is not implemented
-			// We'll implement a version that can be tested with mock data
-			result := detectWSLFromData(tt.procVersion, tt.wslEnv)
-			if result != tt.expectedResult {
-				t.Errorf("expected %v, got %v", tt.expectedResult, result)
-			}
-		})
-	}
 }
 
 func TestCommandExists(t *testing.T) {
@@ -240,15 +189,6 @@ func TestGetPreferredSystemCommand(t *testing.T) {
 
 // TestRealSystemIntegration tests against the real system (these may vary by environment)
 func TestRealSystemIntegration(t *testing.T) {
-	t.Run("real WSL detection", func(t *testing.T) {
-		// This will test the actual IsWSL() function against the real system
-		result := IsWSL()
-		t.Logf("Real system WSL detection: %v", result)
-
-		// We can't assert a specific value since it depends on the test environment,
-		// but we can ensure the function doesn't panic
-	})
-
 	t.Run("real command detection", func(t *testing.T) {
 		// Test some commands that should exist on most systems
 		echoExists := CommandExists("echo")
@@ -279,27 +219,6 @@ func TestRealSystemIntegration(t *testing.T) {
 
 		if !validBackends[backend] {
 			t.Errorf("DetectOptimalBackend returned invalid backend: %s", backend)
-		}
-	})
-}
-
-// Test helper functions that we'll need to implement for dependency injection
-func TestHelperFunctions(t *testing.T) {
-	t.Run("detectWSLFromData should be implemented", func(t *testing.T) {
-		// Test the helper function we use for testing WSL detection
-		result := detectWSLFromData("Linux version 5.15.74.2-microsoft-standard-WSL2", "")
-		if !result {
-			t.Error("should detect WSL2 from proc version")
-		}
-
-		result = detectWSLFromData("", "Ubuntu")
-		if !result {
-			t.Error("should detect WSL from environment variable")
-		}
-
-		result = detectWSLFromData("regular linux", "")
-		if result {
-			t.Error("should not detect WSL from regular linux")
 		}
 	})
 }

@@ -205,7 +205,7 @@ func TestGetSupportedAudioBackends(t *testing.T) {
 
 	supported := mgr.GetSupportedAudioBackends()
 
-	expectedBackends := []string{"auto", "system_command", "malgo"}
+	expectedBackends := []string{"auto", "system_command", "malgo", "fake"}
 	if len(supported) != len(expectedBackends) {
 		t.Errorf("expected %d supported backends, got %d", len(expectedBackends), len(supported))
 	}
@@ -227,7 +227,7 @@ func TestGetSupportedAudioBackends(t *testing.T) {
 func TestIsValidAudioBackend(t *testing.T) {
 	mgr := NewConfigManager()
 
-	validBackends := []string{"auto", "system_command", "malgo", ""}
+	validBackends := []string{"auto", "system_command", "malgo", "fake", ""}
 	for _, backend := range validBackends {
 		if !mgr.IsValidAudioBackend(backend) {
 			t.Errorf("backend '%s' should be valid", backend)

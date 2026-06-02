@@ -1,0 +1,11 @@
+# 2026/05/29 13:18:29.773762 [TestProperty_AbsolutePathsAlwaysRejected] [rapid] draw baseDir: "a"
+# 2026/05/29 13:18:29.773762 [TestProperty_AbsolutePathsAlwaysRejected] [rapid] draw absSuffix: ""
+# 2026/05/29 13:18:29.773762 [TestProperty_AbsolutePathsAlwaysRejected] validator accepted absolute path "/" (base="a")
+# 
+v0.4.8#14880818905279723002
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0

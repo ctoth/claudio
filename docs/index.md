@@ -36,14 +36,21 @@ claudio install
 
 That's it. The install command finds your Claude Code settings and adds the hooks automatically.
 
-Or manually configure Claude Code:
+Or manually configure Claude Code (this is the canonical array form
+`claudio install` would have written; see `internal/install/hooks.go`):
 
 ```json
 {
   "hooks": {
-    "PostToolUse": "claudio",
-    "PreToolUse": "claudio", 
-    "UserPromptSubmit": "claudio"
+    "PreToolUse": [
+      { "hooks": [ { "type": "command", "command": "claudio" } ] }
+    ],
+    "PostToolUse": [
+      { "hooks": [ { "type": "command", "command": "claudio" } ] }
+    ],
+    "UserPromptSubmit": [
+      { "hooks": [ { "type": "command", "command": "claudio" } ] }
+    ]
   }
 }
 ```
@@ -142,7 +149,11 @@ This way your sounds can be anywhere on the filesystem - no need to copy or reor
 
 ## Config
 
-Lives in `/etc/xdg/claudio/config.json`:
+Loaded from XDG-compliant locations (typically
+`~/.config/claudio/config.json` on Linux, the Windows-native XDG mapping on
+Windows). See [Configuration](/configuration) for the full search order.
+
+Default values look like this (every field is optional):
 
 ```json
 {

@@ -27,7 +27,8 @@ claudio install --scope user
 
 This command:
 - Finds your Claude Code settings file
-- Adds Claudio hooks for `PreToolUse`, `PostToolUse`, and `UserPromptSubmit` events
+- Adds Claudio hooks for every default-enabled Claude Code event in the registry
+  (see "What Gets Installed" below for the full list)
 - Preserves any existing hooks
 - Creates a backup of your settings before making changes
 
@@ -94,34 +95,49 @@ After installation, verify Claudio is working:
 
 ## Claude Code Settings Location
 
-Claudio automatically finds your Claude Code settings in these locations:
+Claudio writes Claude Code hooks to these locations:
 
-**User Settings:**
-- macOS: `~/Library/Application Support/claude-code/settings.json`
-- Linux: `~/.config/claude-code/settings.json`
-- Windows: `%APPDATA%\claude-code\settings.json`
+**User Settings:** `~/.claude/settings.json` (all platforms; on Windows, `%USERPROFILE%\.claude\settings.json`).
 
-**Project Settings:**
-- `.claude-code/settings.json` in your project directory
+**Project Settings:** `./.claude/settings.json` relative to the current working directory.
+
+The canonical resolution lives in `internal/install/claude_settings.go`.
 
 ## What Gets Installed
 
-The installation adds these hooks to your Claude Code settings:
+The installation adds Claudio entries for every default-enabled event in the
+Claude Code hook registry (see `internal/install/hook_registry.go`). At the
+time of writing that is **14 events** (additional events are registered but
+disabled by default so Claudio does not chatter):
+
+- **SessionStart** — Claude Code session starts or resumes
+- **UserPromptSubmit** — you send a prompt
+- **PreToolUse** — before a tool runs (loading / thinking sounds)
+- **PermissionRequest** — a permission dialog appears
+- **PermissionDenied** — a tool call is denied
+- **PostToolUse** — a tool call succeeds
+- **PostToolUseFailure** — a tool call fails
+- **PreCompact** / **PostCompact** — before/after context compaction
+- **Stop** — main agent finishes responding
+- **StopFailure** — a turn ends due to an API error
+- **SubagentStart** / **SubagentStop** — a Task-tool subagent starts / finishes
+- **Notification** — permission requests and idle notifications
+
+Each entry is written in Claude Code's canonical array form, e.g.:
 
 ```json
 {
   "hooks": {
-    "PreToolUse": "claudio",
-    "PostToolUse": "claudio",
-    "UserPromptSubmit": "claudio"
+    "PreToolUse": [
+      {
+        "hooks": [
+          { "type": "command", "command": "claudio" }
+        ]
+      }
+    ]
   }
 }
 ```
-
-These hooks tell Claude Code to call Claudio:
-- **PreToolUse**: Before running any tool (plays "thinking" sounds)
-- **PostToolUse**: After tool completion (plays success/error sounds)
-- **UserPromptSubmit**: When you send a message (plays interaction sounds)
 
 ## Troubleshooting Installation
 

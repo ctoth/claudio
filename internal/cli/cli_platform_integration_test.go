@@ -6,12 +6,13 @@ import (
 	"strings"
 	"testing"
 
+	"claudio.click/internal/cli/testenv"
 	"claudio.click/internal/config"
-	"github.com/spf13/afero"
 )
 
 // TDD RED: Test unconfigured claudio uses platform JSON
 func TestCLIUnconfiguredUsePlatformSoundpack(t *testing.T) {
+	testenv.IsolateXDG(t)
 	t.Run("unconfigured CLI should auto-detect and use wsl.json in WSL", func(t *testing.T) {
 		// Test should succeed with embedded WSL soundpack when no file found
 		
@@ -109,6 +110,7 @@ func TestCLIUnconfiguredUsePlatformSoundpack(t *testing.T) {
 
 // TDD RED: Test configured claudio with platform fallback
 func TestCLIConfiguredWithPlatformFallback(t *testing.T) {
+	testenv.IsolateXDG(t)
 	t.Run("configured CLI should fallback to platform JSON when configured soundpack missing", func(t *testing.T) {
 		// Test should succeed with embedded WSL soundpack as fallback when configured soundpack missing
 		
@@ -259,6 +261,7 @@ func TestCLIConfiguredWithPlatformFallback(t *testing.T) {
 
 // TDD RED: Test platform detection integration in CLI initialization
 func TestCLIPlatformDetectionIntegration(t *testing.T) {
+	testenv.IsolateXDG(t)
 	t.Run("CLI should integrate platform detection into soundpack resolution", func(t *testing.T) {
 		// This tests that the CLI actually calls the platform detection logic
 		
@@ -271,7 +274,7 @@ func TestCLIPlatformDetectionIntegration(t *testing.T) {
 		// Test current platform detection behavior with updated API
 		// Use real filesystem and current executable directory
 		execDir := getPlatformExecutableDirectoryForTest()
-		platformSoundpack := mgr.GetPlatformSoundpack(afero.NewOsFs(), execDir)
+		platformSoundpack := mgr.GetPlatformSoundpack(execDir)
 		t.Logf("Current platform soundpack detection result: %s", platformSoundpack)
 		
 		// This should show current behavior (likely "default" or "linux.json")

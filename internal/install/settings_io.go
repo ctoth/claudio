@@ -3,6 +3,7 @@ package install
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -61,6 +62,71 @@ func ReadSettingsFile(filesystem afero.Fs, filePath string) (*SettingsMap, error
 }
 
 
+// BackupSettingsFile copies filePath to filePath+".bak" if filePath
+// exists and parses as JSON. Failure is logged at WARN but not
+// returned — callers proceed with the write regardless. A missing
+// backup is better than a blocked write; a refusal to overwrite a
+// valid .bak with a corrupt source preserves the last-known-good copy.
+func BackupSettingsFile(filesystem afero.Fs, filePath string) {
+	info, err := filesystem.Stat(filePath)
+	if err != nil {
+		return // no file, no backup needed
+	}
+	data, err := afero.ReadFile(filesystem, filePath)
+	if err != nil {
+		slog.Warn("backup skipped: read failed", "path", filePath, "err", err)
+		return
+	}
+	var probe SettingsMap
+	if err := json.Unmarshal(data, &probe); err != nil {
+		slog.Warn("backup skipped: existing file is not valid JSON, refusing to overwrite .bak",
+			"path", filePath, "err", err)
+		return
+	}
+	// Atomic temp+rename for the .bak write so a crash mid-write cannot
+	// corrupt the recovery file the whole hardening chunk exists to provide.
+	bakPath := filePath + ".bak"
+	bakDir := filepath.Dir(bakPath)
+	mode := info.Mode() & os.ModePerm
+
+	tempFile, err := afero.TempFile(filesystem, bakDir, ".settings-bak-*.tmp")
+	if err != nil {
+		slog.Warn("backup skipped: temp file create failed", "path", bakPath, "err", err)
+		return
+	}
+	tempName := tempFile.Name()
+	cleanupTemp := func() { _ = filesystem.Remove(tempName) }
+
+	if _, err := tempFile.Write(data); err != nil {
+		tempFile.Close()
+		cleanupTemp()
+		slog.Warn("backup skipped: temp write failed", "path", bakPath, "err", err)
+		return
+	}
+	if err := tempFile.Sync(); err != nil {
+		tempFile.Close()
+		cleanupTemp()
+		slog.Warn("backup skipped: temp sync failed", "path", bakPath, "err", err)
+		return
+	}
+	if err := tempFile.Close(); err != nil {
+		cleanupTemp()
+		slog.Warn("backup skipped: temp close failed", "path", bakPath, "err", err)
+		return
+	}
+	if err := filesystem.Chmod(tempName, mode); err != nil {
+		cleanupTemp()
+		slog.Warn("backup skipped: chmod failed", "path", bakPath, "err", err)
+		return
+	}
+	if err := filesystem.Rename(tempName, bakPath); err != nil {
+		cleanupTemp()
+		slog.Warn("backup rename failed", "path", bakPath, "err", err)
+		return
+	}
+	slog.Debug("settings backed up", "from", filePath, "to", bakPath)
+}
+
 // WriteSettingsFile writes settings to a file atomically using filesystem abstraction
 // Creates directory structure if it doesn't exist
 func WriteSettingsFile(filesystem afero.Fs, filePath string, settings *SettingsMap) error {
@@ -70,6 +136,12 @@ func WriteSettingsFile(filesystem afero.Fs, filePath string, settings *SettingsM
 	if err != nil {
 		return fmt.Errorf("failed to create directory %s: %w", dir, err)
 	}
+
+	// Back up existing settings before overwrite. Non-fatal: a missing
+	// .bak is better than a blocked write. Caller's advisory lock
+	// (see internal/install/lockfile.go) keeps this safely inside the
+	// read-mutate-write window.
+	BackupSettingsFile(filesystem, filePath)
 
 	// Detect existing file permissions to preserve them
 	fileMode := os.FileMode(0644) // Default for new files
@@ -98,6 +170,16 @@ func WriteSettingsFile(filesystem afero.Fs, filePath string, settings *SettingsM
 		return fmt.Errorf("failed to write to temp file: %w", err)
 	}
 
+	// Sync temp file to disk before close so a crash between rename and
+	// full durability doesn't leave the new content unflushed. afero.File
+	// declares Sync() on the interface — MemMapFs no-ops, OsFs delegates
+	// to os.File.Sync (the real fsync(2) syscall).
+	if err := tempFile.Sync(); err != nil {
+		tempFile.Close()
+		_ = filesystem.Remove(tempFileName)
+		return fmt.Errorf("failed to sync temp file: %w", err)
+	}
+
 	// Close temp file
 	err = tempFile.Close()
 	if err != nil {
@@ -118,6 +200,16 @@ func WriteSettingsFile(filesystem afero.Fs, filePath string, settings *SettingsM
 		// Clean up temp file on failure
 		_ = filesystem.Remove(tempFileName)
 		return fmt.Errorf("failed to rename temp settings file: %w", err)
+	}
+
+	// fsync the parent directory so the rename entry survives a crash on
+	// POSIX filesystems. Skipped on Windows (no portable directory flush)
+	// and on non-OS filesystems (MemMapFs has no real directory to sync).
+	// Failure here is non-fatal — the rename already succeeded.
+	if _, isOs := filesystem.(*afero.OsFs); isOs {
+		if err := fsyncDir(dir); err != nil {
+			slog.Warn("parent dir fsync failed (non-fatal)", "dir", dir, "err", err)
+		}
 	}
 
 	return nil
