@@ -34,7 +34,7 @@ func TestLockConfigDir_FailsWhenHeld(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first LockConfigDir failed: %v", err)
 	}
-	defer first.Unlock()
+	defer func() { _ = first.Unlock() }()
 
 	start := time.Now()
 	_, err = LockConfigDir(configPath)
@@ -68,11 +68,11 @@ func TestLockConfigDir_DifferentDirsDoNotCollide(t *testing.T) {
 	if err != nil {
 		t.Fatalf("lockA failed: %v", err)
 	}
-	defer lockA.Unlock()
+	defer func() { _ = lockA.Unlock() }()
 
 	lockB, err := LockConfigDir(filepath.Join(dirB, "config.json"))
 	if err != nil {
 		t.Fatalf("lockB failed despite different directory: %v", err)
 	}
-	defer lockB.Unlock()
+	defer func() { _ = lockB.Unlock() }()
 }

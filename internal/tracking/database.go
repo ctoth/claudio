@@ -135,7 +135,7 @@ func migrate(db *sql.DB) error {
 		return fmt.Errorf("read user_version: %w", err)
 	}
 
-	if v < 2 {
+	if v < schemaUserVersion {
 		if err := migrateToV2(db); err != nil {
 			return err
 		}

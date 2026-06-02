@@ -34,7 +34,7 @@ func TestLockSettingsDir_FailsWhenHeld(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first LockSettingsDir failed: %v", err)
 	}
-	defer first.Unlock()
+	defer func() { _ = first.Unlock() }()
 
 	start := time.Now()
 	_, err = LockSettingsDir(settingsPath)

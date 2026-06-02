@@ -208,7 +208,7 @@ func TestWriteSettingsFile_FaultInjection(t *testing.T) {
 
 			// No .settings-*.tmp residue
 			tmpResidue := false
-			afero.Walk(memFS, dir, func(p string, info os.FileInfo, walkErr error) error {
+			_ = afero.Walk(memFS, dir, func(p string, info os.FileInfo, walkErr error) error {
 				if walkErr != nil {
 					return nil
 				}
@@ -291,7 +291,7 @@ func TestWriteSettingsFile_ConcurrentWritersSerialise(t *testing.T) {
 			resultsCh <- result{label: "contender", err: err}
 			return
 		}
-		defer lock.Unlock()
+		defer func() { _ = lock.Unlock() }()
 		settings := SettingsMap{"writer": "contender"}
 		writeErr := WriteSettingsFile(osFS, settingsPath, &settings)
 		resultsCh <- result{label: "contender", err: writeErr}

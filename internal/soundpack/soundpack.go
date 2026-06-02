@@ -317,7 +317,7 @@ func LoadJSONSoundpackFromBytes(data []byte, baseDir string) (PathMapper, error)
 }
 
 // LoadEmbeddedPlatformSoundpack loads a TRUSTED JSON soundpack from
-// go:embed bytes baked into the binary at build time. It skips the
+// bytes baked into the binary via go:embed at build time. It skips the
 // path-syntax validation (absolute-path rejection, `..` rejection,
 // under-baseDir resolution) because shipped platform soundpacks
 // legitimately reference absolute system paths like
@@ -492,17 +492,6 @@ func validateMappingFilesExist(soundpack JSONSoundpackFile) error {
 			"absolute_path", absolutePath)
 	}
 	return nil
-}
-
-// validateJSONSoundpack is kept as a backwards-compatible wrapper that
-// applies the full validation chain a non-loader caller might rely on
-// (basics + existence check). It does NOT apply the path-syntax
-// validation — callers that want that should use the loader.
-func validateJSONSoundpack(soundpack JSONSoundpackFile) error {
-	if err := validateJSONSoundpackBasics(soundpack); err != nil {
-		return err
-	}
-	return validateMappingFilesExist(soundpack)
 }
 
 // PeekJSONSoundpackFromBytes parses a JSON soundpack from byte data and
