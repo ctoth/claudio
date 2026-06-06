@@ -1417,6 +1417,48 @@ func TestGetContextCodexApplyPatchPostToolUseSuccess(t *testing.T) {
 	}
 }
 
+func TestGetContextCodexStringToolResponseIsSuccess(t *testing.T) {
+	tool := "Bash"
+	input := json.RawMessage(`{"command":"git status --short"}`)
+	resp := json.RawMessage(`"Exit code: 0\nWall time: 0.1 seconds\nOutput:\nclean"`)
+	event := &HookEvent{
+		SessionID:    "a",
+		CWD:          "/tmp",
+		EventName:    "PostToolUse",
+		ToolName:     &tool,
+		ToolInput:    &input,
+		ToolResponse: &resp,
+	}
+	ctx := event.GetContext()
+	if ctx.Category != Success {
+		t.Errorf("expected Success, got %v", ctx.Category)
+	}
+	if ctx.SoundHint != "git-status-success" {
+		t.Errorf("expected git-status-success, got %q", ctx.SoundHint)
+	}
+}
+
+func TestGetContextCodexStringToolResponseWithNonzeroExitCodeIsError(t *testing.T) {
+	tool := "Bash"
+	input := json.RawMessage(`{"command":"git status --short"}`)
+	resp := json.RawMessage(`"Exit code: 1\nWall time: 0.1 seconds\nOutput:\nfatal: not a git repository"`)
+	event := &HookEvent{
+		SessionID:    "a",
+		CWD:          "/tmp",
+		EventName:    "PostToolUse",
+		ToolName:     &tool,
+		ToolInput:    &input,
+		ToolResponse: &resp,
+	}
+	ctx := event.GetContext()
+	if ctx.Category != Error {
+		t.Errorf("expected Error, got %v", ctx.Category)
+	}
+	if ctx.SoundHint != "git-status-error" {
+		t.Errorf("expected git-status-error, got %q", ctx.SoundHint)
+	}
+}
+
 func TestGetContextCodexMcpToolNormalized(t *testing.T) {
 	tool := "mcp__filesystem__read_file"
 	event := &HookEvent{SessionID: "a", CWD: "/tmp", EventName: "PreToolUse", ToolName: &tool}

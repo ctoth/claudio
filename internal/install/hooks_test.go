@@ -496,9 +496,60 @@ func TestGenerateClaudioHooksForCodexAgent(t *testing.T) {
 	}
 	hookList := cfg["hooks"].([]interface{})
 	commandConfig := hookList[0].(map[string]interface{})
-	if commandConfig["statusMessage"] != "Playing Claudio sound" {
-		t.Errorf("codex statusMessage = %v, want Playing Claudio sound", commandConfig["statusMessage"])
+	if _, exists := commandConfig["statusMessage"]; exists {
+		t.Errorf("codex statusMessage should be omitted, got %v", commandConfig["statusMessage"])
 	}
+}
+
+func TestGenerateClaudioHooksOmitStatusMessageForAllAgents(t *testing.T) {
+	for _, agent := range ConcreteAgents() {
+		t.Run(agent.String(), func(t *testing.T) {
+			result, err := GenerateClaudioHooksForAgent("/usr/local/bin/claudio", agent)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			hooks, ok := result.(HooksMap)
+			if !ok {
+				t.Fatalf("expected HooksMap, got %T", result)
+			}
+
+			for hookName, hookValue := range hooks {
+				for _, commandConfig := range collectGeneratedCommandConfigs(t, hookValue) {
+					if _, exists := commandConfig["statusMessage"]; exists {
+						t.Errorf("%s generated statusMessage for %s: %v", agent, hookName, commandConfig["statusMessage"])
+					}
+				}
+			}
+		})
+	}
+}
+
+func collectGeneratedCommandConfigs(t *testing.T, hookValue interface{}) []map[string]interface{} {
+	t.Helper()
+	arr, ok := hookValue.([]interface{})
+	if !ok {
+		t.Fatalf("expected hook array, got %T", hookValue)
+	}
+
+	var commandConfigs []map[string]interface{}
+	for _, item := range arr {
+		itemMap, ok := item.(map[string]interface{})
+		if !ok {
+			t.Fatalf("expected hook item map, got %T", item)
+		}
+		if nestedHooks, ok := itemMap["hooks"].([]interface{}); ok {
+			for _, nested := range nestedHooks {
+				nestedMap, ok := nested.(map[string]interface{})
+				if !ok {
+					t.Fatalf("expected nested hook map, got %T", nested)
+				}
+				commandConfigs = append(commandConfigs, nestedMap)
+			}
+			continue
+		}
+		commandConfigs = append(commandConfigs, itemMap)
+	}
+	return commandConfigs
 }
 
 func TestGenerateClaudioHooksForGeminiAgent(t *testing.T) {
@@ -558,8 +609,8 @@ func TestGenerateClaudioHooksForQwenAgent(t *testing.T) {
 	if commandConfig["name"] != "claudio" {
 		t.Errorf("qwen hook name = %v, want claudio", commandConfig["name"])
 	}
-	if commandConfig["statusMessage"] != "Playing Claudio sound" {
-		t.Errorf("qwen statusMessage = %v, want Playing Claudio sound", commandConfig["statusMessage"])
+	if _, exists := commandConfig["statusMessage"]; exists {
+		t.Errorf("qwen statusMessage should be omitted, got %v", commandConfig["statusMessage"])
 	}
 }
 

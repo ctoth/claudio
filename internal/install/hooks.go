@@ -103,13 +103,10 @@ func hookCommandForAgent(executablePath string, agent Agent) string {
 
 func addAgentHookMetadata(commandConfig map[string]interface{}, agent Agent) {
 	switch agent {
-	case AgentCodex:
-		commandConfig["statusMessage"] = "Playing Claudio sound"
 	case AgentGemini:
 		commandConfig["name"] = "claudio"
 	case AgentQwen:
 		commandConfig["name"] = "claudio"
-		commandConfig["statusMessage"] = "Playing Claudio sound"
 	case AgentCopilot:
 		commandConfig["timeoutSec"] = 30
 	}
