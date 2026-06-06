@@ -186,6 +186,28 @@ func TestCodexRegistryContents(t *testing.T) {
 	}
 }
 
+func TestQwenRegistryContents(t *testing.T) {
+	want := map[string]bool{
+		"PreToolUse": true, "PostToolUse": true, "PostToolUseFailure": true,
+		"UserPromptSubmit": true, "SessionStart": true, "SessionEnd": true,
+		"Stop": true, "StopFailure": true, "SubagentStart": true,
+		"SubagentStop": true, "PreCompact": true, "PostCompact": true,
+		"Notification": true, "PermissionRequest": true,
+	}
+	got := map[string]bool{}
+	for _, h := range QwenHooks {
+		got[h.Name] = true
+	}
+	if len(got) != len(want) {
+		t.Errorf("qwen registry has %d events, want %d", len(got), len(want))
+	}
+	for name := range want {
+		if !got[name] {
+			t.Errorf("qwen registry missing %q", name)
+		}
+	}
+}
+
 func TestAgentEnabledHooksAndNames(t *testing.T) {
 	if len(AgentCodex.EnabledHooks()) != len(CodexHooks) {
 		t.Errorf("expected all codex hooks enabled by default")
@@ -195,5 +217,8 @@ func TestAgentEnabledHooksAndNames(t *testing.T) {
 	}
 	if len(AgentClaude.HookNames()) != len(AllHooks) {
 		t.Errorf("claude hook names mismatch")
+	}
+	if len(AgentQwen.HookNames()) != len(QwenHooks) {
+		t.Errorf("qwen hook names mismatch")
 	}
 }

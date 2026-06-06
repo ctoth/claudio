@@ -54,14 +54,17 @@ func GenerateClaudioHooksForAgent(executablePath string, agent Agent) (interface
 
 	// Helper function to create hook config structure
 	createHookConfig := func() interface{} {
+		commandConfig := map[string]interface{}{
+			"type":    "command",
+			"command": hookCommandForAgent(executablePath, agent),
+		}
+		addAgentHookMetadata(commandConfig, agent)
+
 		return []interface{}{
 			map[string]interface{}{
 				"matcher": matcher,
 				"hooks": []interface{}{
-					map[string]interface{}{
-						"type":    "command",
-						"command": hookCommandForAgent(executablePath, agent),
-					},
+					commandConfig,
 				},
 			},
 		}
@@ -86,10 +89,24 @@ func GenerateClaudioHooksForAgent(executablePath string, agent Agent) (interface
 }
 
 func hookCommandForAgent(executablePath string, agent Agent) string {
-	if agent != AgentGemini {
+	switch agent {
+	case AgentGemini, AgentQwen:
+		return quoteCommandArg(executablePath) + " --hook-agent " + string(agent)
+	default:
 		return executablePath
 	}
-	return quoteCommandArg(executablePath) + " --hook-agent gemini"
+}
+
+func addAgentHookMetadata(commandConfig map[string]interface{}, agent Agent) {
+	switch agent {
+	case AgentCodex:
+		commandConfig["statusMessage"] = "Playing Claudio sound"
+	case AgentGemini:
+		commandConfig["name"] = "claudio"
+	case AgentQwen:
+		commandConfig["name"] = "claudio"
+		commandConfig["statusMessage"] = "Playing Claudio sound"
+	}
 }
 
 func quoteCommandArg(arg string) string {

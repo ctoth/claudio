@@ -494,6 +494,11 @@ func TestGenerateClaudioHooksForCodexAgent(t *testing.T) {
 	if cfg["matcher"] != "*" {
 		t.Errorf("codex matcher = %v, want *", cfg["matcher"])
 	}
+	hookList := cfg["hooks"].([]interface{})
+	commandConfig := hookList[0].(map[string]interface{})
+	if commandConfig["statusMessage"] != "Playing Claudio sound" {
+		t.Errorf("codex statusMessage = %v, want Playing Claudio sound", commandConfig["statusMessage"])
+	}
 }
 
 func TestGenerateClaudioHooksForGeminiAgent(t *testing.T) {
@@ -522,6 +527,39 @@ func TestGenerateClaudioHooksForGeminiAgent(t *testing.T) {
 	command := hookList[0].(map[string]interface{})["command"]
 	if command != "/usr/local/bin/claudio --hook-agent gemini" {
 		t.Errorf("gemini command = %v, want claudio with hook-agent flag", command)
+	}
+	if hookList[0].(map[string]interface{})["name"] != "claudio" {
+		t.Errorf("gemini hook name = %v, want claudio", hookList[0].(map[string]interface{})["name"])
+	}
+}
+
+func TestGenerateClaudioHooksForQwenAgent(t *testing.T) {
+	result, err := GenerateClaudioHooksForAgent("/usr/local/bin/claudio", AgentQwen)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	hooks, ok := result.(HooksMap)
+	if !ok {
+		t.Fatalf("expected HooksMap, got %T", result)
+	}
+	if len(hooks) != len(QwenHooks) {
+		t.Errorf("expected %d qwen hooks, got %d", len(QwenHooks), len(hooks))
+	}
+	arr := hooks["PreToolUse"].([]interface{})
+	cfg := arr[0].(map[string]interface{})
+	if cfg["matcher"] != ".*" {
+		t.Errorf("qwen matcher = %v, want .*", cfg["matcher"])
+	}
+	hookList := cfg["hooks"].([]interface{})
+	commandConfig := hookList[0].(map[string]interface{})
+	if commandConfig["command"] != "/usr/local/bin/claudio --hook-agent qwen" {
+		t.Errorf("qwen command = %v, want claudio with hook-agent flag", commandConfig["command"])
+	}
+	if commandConfig["name"] != "claudio" {
+		t.Errorf("qwen hook name = %v, want claudio", commandConfig["name"])
+	}
+	if commandConfig["statusMessage"] != "Playing Claudio sound" {
+		t.Errorf("qwen statusMessage = %v, want Playing Claudio sound", commandConfig["statusMessage"])
 	}
 }
 

@@ -1,8 +1,8 @@
 ---
 layout: default
 title: "Claudio"
-description: "Hook-based audio feedback for Claude Code, OpenAI Codex CLI, and Gemini CLI."
-keywords: "Claude Code, Codex CLI, Gemini CLI, hooks, audio feedback, soundpacks, developer tools"
+description: "Hook-based audio feedback for Claude Code, OpenAI Codex CLI, Gemini CLI, and Qwen Code."
+keywords: "Claude Code, Codex CLI, Gemini CLI, Qwen Code, hooks, audio feedback, soundpacks, developer tools"
 canonical_url: "https://claudio.click"
 ---
 
@@ -27,8 +27,8 @@ claudio status
 ```
 
 `claudio install` uses `--agent auto --scope global` by default. It detects
-Claude Code, Codex CLI, and Gemini CLI, then installs hooks for the agents it
-finds.
+Claude Code, Codex CLI, Gemini CLI, and Qwen Code, then installs hooks for the
+agents it finds.
 
 For Codex, trust the hook after installation:
 
@@ -46,6 +46,7 @@ and preserves non-Claudio hooks.
 | Claude Code | `claudio install --agent claude` | `~/.claude/settings.json` | `./.claude/settings.json` |
 | Codex | `claudio install --agent codex` | `$CODEX_HOME/hooks.json` or `~/.codex/hooks.json` | `./.codex/hooks.json` |
 | Gemini | `claudio install --agent gemini` | `~/.gemini/settings.json` | `./.gemini/settings.json` |
+| Qwen Code | `claudio install --agent qwen` | `~/.qwen/settings.json` | `./.qwen/settings.json` |
 
 Antigravity support is command-artifact only:
 
@@ -92,6 +93,23 @@ Gemini installs these default-enabled hooks:
 - `SessionEnd`
 - `Notification`
 - `PreCompress`
+
+Qwen Code installs these default-enabled hooks:
+
+- `PreToolUse`
+- `PostToolUse`
+- `PostToolUseFailure`
+- `UserPromptSubmit`
+- `SessionStart`
+- `SessionEnd`
+- `Stop`
+- `StopFailure`
+- `SubagentStart`
+- `SubagentStop`
+- `PreCompact`
+- `PostCompact`
+- `Notification`
+- `PermissionRequest`
 
 ## How Sound Selection Works
 

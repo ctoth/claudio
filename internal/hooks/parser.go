@@ -136,7 +136,7 @@ func (p *HookEventParser) Parse(data []byte) (*HookEvent, error) {
 // GetContext extracts actionable context from the hook event for sound mapping
 func (e *HookEvent) GetContext() *EventContext {
 	context := &EventContext{
-		ToolName: getStringPtr(e.ToolName),
+		ToolName: normalizeToolName(getStringPtr(e.ToolName)),
 	}
 
 	slog.Debug("extracting event context",
@@ -154,122 +154,14 @@ func (e *HookEvent) GetContext() *EventContext {
 		context.SoundHint = e.detectNotificationType()
 		context.Operation = "notification"
 
-	case "PreToolUse":
-		context.Category = Loading
-		context.Operation = "tool-start"
+	case "PreToolUse", "BeforeTool":
+		e.populatePreToolContext(context)
 
-		// Enhanced logic for Bash tools
-		if context.ToolName == "Bash" {
-			commandInfo := e.extractCommandInfo()
-			if commandInfo.Command != "" {
-				context.OriginalTool = "Bash"
-				context.ToolName = commandInfo.Command
+	case "PostToolUse", "AfterTool":
+		e.populatePostToolContext(context, false)
 
-				if commandInfo.HasSubcommand {
-					context.SoundHint = strings.ToLower(commandInfo.Command) + "-" +
-						strings.ToLower(commandInfo.Subcommand) + "-start"
-				} else {
-					context.SoundHint = strings.ToLower(commandInfo.Command) + "-start"
-				}
-			} else {
-				// Fallback to original behavior
-				context.SoundHint = strings.ToLower(context.ToolName) + "-start"
-			}
-		} else if strings.HasPrefix(context.ToolName, "mcp__") {
-			context.OriginalTool = context.ToolName
-			context.ToolName = "mcp"
-			context.SoundHint = "mcp-start"
-		} else if context.ToolName != "" {
-			context.SoundHint = strings.ToLower(context.ToolName) + "-start"
-		} else {
-			context.SoundHint = "tool-loading"
-		}
-
-	case "PostToolUse":
-		// Analyze tool response for success/error
-		success, hasError, errorType := e.analyzeToolResponse()
-		context.IsSuccess = success
-		context.HasError = hasError
-
-		if hasError {
-			context.Category = Error
-
-			// Enhanced logic for Bash tools
-			if context.ToolName == "Bash" {
-				commandInfo := e.extractCommandInfo()
-				if commandInfo.Command != "" {
-					context.OriginalTool = "Bash"
-					context.ToolName = commandInfo.Command
-
-					if errorType != "" {
-						context.SoundHint = errorType
-					} else if commandInfo.HasSubcommand {
-						context.SoundHint = strings.ToLower(commandInfo.Command) + "-" +
-							strings.ToLower(commandInfo.Subcommand) + "-error"
-					} else {
-						context.SoundHint = strings.ToLower(commandInfo.Command) + "-error"
-					}
-				} else {
-					// Fallback to original behavior
-					if errorType != "" {
-						context.SoundHint = errorType
-					} else {
-						context.SoundHint = strings.ToLower(context.ToolName) + "-error"
-					}
-				}
-			} else if strings.HasPrefix(context.ToolName, "mcp__") {
-				context.OriginalTool = context.ToolName
-				context.ToolName = "mcp"
-				if errorType != "" {
-					context.SoundHint = errorType
-				} else {
-					context.SoundHint = "mcp-error"
-				}
-			} else {
-				// Original logic for non-Bash tools
-				if errorType != "" {
-					context.SoundHint = errorType
-				} else if context.ToolName != "" {
-					context.SoundHint = strings.ToLower(context.ToolName) + "-error"
-				} else {
-					context.SoundHint = "tool-error"
-				}
-			}
-		} else {
-			context.Category = Success
-
-			// Enhanced logic for Bash tools
-			if context.ToolName == "Bash" {
-				commandInfo := e.extractCommandInfo()
-				if commandInfo.Command != "" {
-					context.OriginalTool = "Bash"
-					context.ToolName = commandInfo.Command
-
-					if commandInfo.HasSubcommand {
-						context.SoundHint = strings.ToLower(commandInfo.Command) + "-" +
-							strings.ToLower(commandInfo.Subcommand) + "-success"
-					} else {
-						context.SoundHint = strings.ToLower(commandInfo.Command) + "-success"
-					}
-				} else {
-					// Fallback to original behavior
-					context.SoundHint = strings.ToLower(context.ToolName) + "-success"
-				}
-			} else if strings.HasPrefix(context.ToolName, "mcp__") {
-				context.OriginalTool = context.ToolName
-				context.ToolName = "mcp"
-				context.SoundHint = "mcp-success"
-			} else {
-				// Original logic for non-Bash tools
-				if context.ToolName != "" {
-					context.SoundHint = strings.ToLower(context.ToolName) + "-success"
-				} else {
-					context.SoundHint = "tool-success"
-				}
-			}
-		}
-
-		context.Operation = "tool-complete"
+	case "PostToolUseFailure":
+		e.populatePostToolContext(context, true)
 
 	case "Stop":
 		context.Category = Completion
@@ -295,11 +187,11 @@ func (e *HookEvent) GetContext() *EventContext {
 		context.Operation = "post-compact"
 		slog.Debug("categorizing PostCompact event as System", "hint", context.SoundHint, "operation", context.Operation)
 
-	case "PreCompact":
+	case "PreCompact", "PreCompress":
 		context.Category = System
 		context.SoundHint = "compacting"
 		context.Operation = "compact"
-		slog.Debug("categorizing PreCompact event as System", "hint", context.SoundHint, "operation", context.Operation)
+		slog.Debug("categorizing compaction event as System", "event_name", e.EventName, "hint", context.SoundHint, "operation", context.Operation)
 
 	case "SessionStart":
 		context.Category = System
@@ -318,6 +210,32 @@ func (e *HookEvent) GetContext() *EventContext {
 		context.SoundHint = "session-end"
 		context.Operation = "session-end"
 		slog.Debug("categorizing SessionEnd event as Interactive", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "BeforeAgent":
+		context.Category = Interactive
+		context.SoundHint = "before-agent"
+		context.Operation = "before-agent"
+		slog.Debug("categorizing BeforeAgent event as Interactive", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "AfterAgent":
+		context.Category = Completion
+		context.SoundHint = "agent-complete"
+		context.Operation = "after-agent"
+		slog.Debug("categorizing AfterAgent event as Completion", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "StopFailure":
+		context.Category = Error
+		context.HasError = true
+		context.SoundHint = "stop-failure"
+		context.Operation = "stop-failure"
+		slog.Debug("categorizing StopFailure event as Error", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "ErrorOccurred":
+		context.Category = Error
+		context.HasError = true
+		context.SoundHint = "error-occurred"
+		context.Operation = "error-occurred"
+		slog.Debug("categorizing ErrorOccurred event as Error", "hint", context.SoundHint, "operation", context.Operation)
 
 	case "BeforeModel", "AfterModel", "BeforeToolSelection":
 		context.Category = Silent
@@ -348,6 +266,164 @@ func (e *HookEvent) GetContext() *EventContext {
 		"operation", context.Operation)
 
 	return context
+}
+
+func (e *HookEvent) populatePreToolContext(context *EventContext) {
+	context.Category = Loading
+	context.Operation = "tool-start"
+
+	if context.ToolName == "Bash" {
+		commandInfo := e.extractCommandInfo()
+		if commandInfo.Command != "" {
+			context.OriginalTool = "Bash"
+			context.ToolName = commandInfo.Command
+
+			if commandInfo.HasSubcommand {
+				context.SoundHint = strings.ToLower(commandInfo.Command) + "-" +
+					strings.ToLower(commandInfo.Subcommand) + "-start"
+			} else {
+				context.SoundHint = strings.ToLower(commandInfo.Command) + "-start"
+			}
+		} else {
+			context.SoundHint = strings.ToLower(context.ToolName) + "-start"
+		}
+	} else if isMCPToolName(context.ToolName) {
+		context.OriginalTool = getStringPtr(e.ToolName)
+		context.ToolName = "mcp"
+		context.SoundHint = "mcp-start"
+	} else if context.ToolName != "" {
+		context.SoundHint = strings.ToLower(context.ToolName) + "-start"
+	} else {
+		context.SoundHint = "tool-loading"
+	}
+}
+
+func (e *HookEvent) populatePostToolContext(context *EventContext, forceError bool) {
+	success, hasError, errorType := e.analyzeToolResponse()
+	if forceError {
+		success = false
+		hasError = true
+	}
+	context.IsSuccess = success
+	context.HasError = hasError
+
+	if hasError {
+		context.Category = Error
+		e.populatePostToolErrorHint(context, errorType)
+	} else {
+		context.Category = Success
+		e.populatePostToolSuccessHint(context)
+	}
+
+	context.Operation = "tool-complete"
+}
+
+func (e *HookEvent) populatePostToolErrorHint(context *EventContext, errorType string) {
+	if context.ToolName == "Bash" {
+		commandInfo := e.extractCommandInfo()
+		if commandInfo.Command != "" {
+			context.OriginalTool = "Bash"
+			context.ToolName = commandInfo.Command
+
+			if errorType != "" {
+				context.SoundHint = errorType
+			} else if commandInfo.HasSubcommand {
+				context.SoundHint = strings.ToLower(commandInfo.Command) + "-" +
+					strings.ToLower(commandInfo.Subcommand) + "-error"
+			} else {
+				context.SoundHint = strings.ToLower(commandInfo.Command) + "-error"
+			}
+		} else if errorType != "" {
+			context.SoundHint = errorType
+		} else {
+			context.SoundHint = strings.ToLower(context.ToolName) + "-error"
+		}
+	} else if isMCPToolName(context.ToolName) {
+		context.OriginalTool = getStringPtr(e.ToolName)
+		context.ToolName = "mcp"
+		if errorType != "" {
+			context.SoundHint = errorType
+		} else {
+			context.SoundHint = "mcp-error"
+		}
+	} else if errorType != "" {
+		context.SoundHint = errorType
+	} else if context.ToolName != "" {
+		context.SoundHint = strings.ToLower(context.ToolName) + "-error"
+	} else {
+		context.SoundHint = "tool-error"
+	}
+}
+
+func (e *HookEvent) populatePostToolSuccessHint(context *EventContext) {
+	if context.ToolName == "Bash" {
+		commandInfo := e.extractCommandInfo()
+		if commandInfo.Command != "" {
+			context.OriginalTool = "Bash"
+			context.ToolName = commandInfo.Command
+
+			if commandInfo.HasSubcommand {
+				context.SoundHint = strings.ToLower(commandInfo.Command) + "-" +
+					strings.ToLower(commandInfo.Subcommand) + "-success"
+			} else {
+				context.SoundHint = strings.ToLower(commandInfo.Command) + "-success"
+			}
+		} else {
+			context.SoundHint = strings.ToLower(context.ToolName) + "-success"
+		}
+	} else if isMCPToolName(context.ToolName) {
+		context.OriginalTool = getStringPtr(e.ToolName)
+		context.ToolName = "mcp"
+		context.SoundHint = "mcp-success"
+	} else if context.ToolName != "" {
+		context.SoundHint = strings.ToLower(context.ToolName) + "-success"
+	} else {
+		context.SoundHint = "tool-success"
+	}
+}
+
+func normalizeToolName(toolName string) string {
+	if toolName == "" {
+		return ""
+	}
+	if strings.HasPrefix(toolName, "mcp__") {
+		return "mcp"
+	}
+
+	key := strings.ToLower(strings.TrimSpace(toolName))
+	key = strings.ReplaceAll(key, "-", "_")
+	switch key {
+	case "bash", "shell", "run_shell_command":
+		return "Bash"
+	case "write", "writefile", "write_file":
+		return "Write"
+	case "edit", "edit_file", "replace":
+		return "Edit"
+	case "multiedit", "multi_edit":
+		return "MultiEdit"
+	case "read", "readfile", "read_file", "read_many_files":
+		return "Read"
+	case "ls", "list_directory":
+		return "LS"
+	case "grep", "grep_search":
+		return "Grep"
+	case "glob":
+		return "Glob"
+	case "webfetch", "web_fetch":
+		return "WebFetch"
+	case "websearch", "web_search", "google_web_search":
+		return "WebSearch"
+	case "todowrite", "todo_write", "write_todos":
+		return "TodoWrite"
+	case "read_mcp_resource", "list_mcp_resources":
+		return "mcp"
+	default:
+		return toolName
+	}
+}
+
+func isMCPToolName(toolName string) bool {
+	return toolName == "mcp" || strings.HasPrefix(toolName, "mcp__")
 }
 
 // analyzeToolResponse examines tool response to determine success/error status and error type
@@ -394,7 +470,7 @@ func (e *HookEvent) analyzeToolResponse() (success bool, hasError bool, errorTyp
 
 	// Check for tool-specific error patterns
 	if e.ToolName != nil {
-		switch *e.ToolName {
+		switch normalizeToolName(*e.ToolName) {
 		case "Bash":
 			// Bash is success if no stderr and not interrupted
 			return true, false, ""

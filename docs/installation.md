@@ -33,9 +33,9 @@ claudio install
 ```
 
 This is the default: `--agent auto --scope global`. Claudio detects Claude
-Code, Codex CLI, and Gemini CLI from installed commands, settings directories,
-or existing Claudio hook files. If more than one supported agent is detected,
-each matching hook set is installed.
+Code, Codex CLI, Gemini CLI, and Qwen Code from installed commands, settings
+directories, or existing Claudio hook files. If more than one supported agent
+is detected, each matching hook set is installed.
 
 To force every supported hook target:
 
@@ -107,6 +107,24 @@ Global scope writes `~/.gemini/settings.json`.
 
 Project scope writes `./.gemini/settings.json`.
 
+## Qwen Code Hooks
+
+Install global Qwen Code hooks:
+
+```bash
+claudio install --agent qwen --scope global
+```
+
+Install hooks only for the current project:
+
+```bash
+claudio install --agent qwen --scope project
+```
+
+Global scope writes `~/.qwen/settings.json`.
+
+Project scope writes `./.qwen/settings.json`.
+
 ## Inspect Before Writing
 
 Dry run:
@@ -116,6 +134,7 @@ claudio install --dry-run
 claudio install --agent claude --scope global --dry-run
 claudio install --agent codex --scope global --dry-run
 claudio install --agent gemini --scope global --dry-run
+claudio install --agent qwen --scope global --dry-run
 ```
 
 Print the target path and mode:
@@ -180,6 +199,25 @@ Gemini defaults:
 | `Notification` | interactive |
 | `PreCompress` | system |
 
+Qwen Code defaults:
+
+| Hook | Category |
+| --- | --- |
+| `PreToolUse` | loading |
+| `PostToolUse` | success |
+| `PostToolUseFailure` | error |
+| `UserPromptSubmit` | interactive |
+| `SessionStart` | system |
+| `SessionEnd` | interactive |
+| `Stop` | completion |
+| `StopFailure` | error |
+| `SubagentStart` | loading |
+| `SubagentStop` | completion |
+| `PreCompact` | system |
+| `PostCompact` | system |
+| `Notification` | interactive |
+| `PermissionRequest` | interactive |
+
 ## Optional Agent Commands
 
 These commands install control artifacts so you can ask an agent to adjust
@@ -234,6 +272,7 @@ claudio uninstall --agent all --scope global
 claudio uninstall --agent claude --scope global
 claudio uninstall --agent codex --scope global
 claudio uninstall --agent gemini --scope global
+claudio uninstall --agent qwen --scope global
 ```
 
 Use `--dry-run`, `--print`, or `--quiet` the same way as `install`.

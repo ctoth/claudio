@@ -73,6 +73,7 @@ Check expected settings paths:
 ls -la ~/.claude/settings.json
 ls -la ~/.codex/hooks.json
 ls -la ~/.gemini/settings.json
+ls -la ~/.qwen/settings.json
 ```
 
 Run the target agent once if its settings directory does not exist yet, or
@@ -82,6 +83,7 @@ install explicitly:
 claudio install --agent claude --scope global
 claudio install --agent codex --scope global
 claudio install --agent gemini --scope global
+claudio install --agent qwen --scope global
 ```
 
 ## Codex Hooks Do Nothing
@@ -147,6 +149,27 @@ Reinstalling is idempotent for Claudio hooks:
 
 ```bash
 claudio install --agent gemini --scope global
+```
+
+## Qwen Code Hooks Do Nothing
+
+Inspect the target settings file:
+
+```bash
+claudio install --agent qwen --scope global --dry-run
+claudio install --agent qwen --scope global --print
+```
+
+For project hooks, run from the repository root:
+
+```bash
+claudio install --agent qwen --scope project --dry-run
+```
+
+Reinstalling is idempotent for Claudio hooks:
+
+```bash
+claudio install --agent qwen --scope global
 ```
 
 ## Wrong Sound Plays

@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/afero"
 )
 
-const NoSupportedAgentsDetectedMessage = "No supported agents detected. Install Claude Code, Codex CLI, or Gemini CLI, or rerun with --agent claude, --agent codex, --agent gemini, or --agent all."
+const NoSupportedAgentsDetectedMessage = "No supported agents detected. Install Claude Code, Codex CLI, Gemini CLI, or Qwen Code, or rerun with --agent claude, --agent codex, --agent gemini, --agent qwen, or --agent all."
 
 // AgentTarget is one concrete agent config file selected for install or uninstall.
 type AgentTarget struct {
@@ -146,6 +146,8 @@ func agentConfigPaths(agent Agent, scope string) ([]string, error) {
 		return FindCodexHooksPaths(scope)
 	case AgentGemini:
 		return FindGeminiSettingsPaths(scope)
+	case AgentQwen:
+		return FindQwenSettingsPaths(scope)
 	default:
 		return nil, fmt.Errorf("invalid concrete agent '%s'", agent)
 	}
