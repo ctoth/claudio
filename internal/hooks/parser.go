@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 )
 
@@ -479,6 +480,10 @@ func (e *HookEvent) analyzeToolResponse() (success bool, hasError bool, errorTyp
 	var response map[string]interface{}
 	err := json.Unmarshal(*e.ToolResponse, &response)
 	if err != nil {
+		var responseText string
+		if stringErr := json.Unmarshal(*e.ToolResponse, &responseText); stringErr == nil {
+			return analyzeTextToolResponse(responseText)
+		}
 		slog.Error("failed to parse tool response", "error", err)
 		return false, true, ""
 	}
@@ -547,6 +552,33 @@ func (e *HookEvent) analyzeToolResponse() (success bool, hasError bool, errorTyp
 
 	// Default: assume success if no clear error indicators
 	return true, false, ""
+}
+
+func analyzeTextToolResponse(responseText string) (success bool, hasError bool, errorType string) {
+	if exitCode, ok := parseExitCode(responseText); ok && exitCode != 0 {
+		return false, true, ""
+	}
+	return true, false, ""
+}
+
+func parseExitCode(responseText string) (int, bool) {
+	for _, line := range strings.Split(responseText, "\n") {
+		line = strings.TrimSpace(line)
+		rest, ok := strings.CutPrefix(strings.ToLower(line), "exit code:")
+		if !ok {
+			continue
+		}
+		fields := strings.Fields(rest)
+		if len(fields) == 0 {
+			return 0, false
+		}
+		exitCode, err := strconv.Atoi(fields[0])
+		if err != nil {
+			return 0, false
+		}
+		return exitCode, true
+	}
+	return 0, false
 }
 
 // extractFileType attempts to extract file type from tool input
