@@ -1,10 +1,8 @@
 package install
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 )
 
 // FindCopilotSettingsPaths returns candidate GitHub Copilot CLI settings paths
@@ -15,19 +13,15 @@ func FindCopilotSettingsPaths(scope string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	switch normalizedScope {
-	case ScopeGlobal:
+	if normalizedScope == ScopeGlobal {
 		return findCopilotGlobalScopePaths(), nil
-	case ScopeProject:
-		return []string{
-			filepath.Join(".", ".github", "copilot", "settings.local.json"),
-			filepath.Join(".github", "copilot", "settings.local.json"),
-			filepath.Join(".", ".github", "copilot", "settings.json"),
-			filepath.Join(".github", "copilot", "settings.json"),
-		}, nil
-	default:
-		return nil, fmt.Errorf("invalid scope '%s': must be 'global' or 'project'", scope)
 	}
+	return []string{
+		filepath.Join(".", ".github", "copilot", "settings.local.json"),
+		filepath.Join(".github", "copilot", "settings.local.json"),
+		filepath.Join(".", ".github", "copilot", "settings.json"),
+		filepath.Join(".github", "copilot", "settings.json"),
+	}, nil
 }
 
 func findCopilotGlobalScopePaths() []string {
@@ -41,12 +35,7 @@ func findCopilotGlobalScopePaths() []string {
 		paths = append(paths, filepath.Join(homeDir, ".copilot", "settings.json"))
 	}
 
-	if runtime.GOOS == "windows" {
-		userProfile := os.Getenv("USERPROFILE")
-		if userProfile != "" && userProfile != homeDir {
-			paths = append(paths, filepath.Join(userProfile, ".copilot", "settings.json"))
-		}
-	}
+	paths = appendUserProfilePath(paths, homeDir, ".copilot", "settings.json")
 
 	if len(paths) == 0 {
 		paths = append(paths, filepath.Join("~", ".copilot", "settings.json"))
@@ -61,9 +50,6 @@ func FindBestCopilotPath(scope string) (string, error) {
 	paths, err := FindCopilotSettingsPaths(scope)
 	if err != nil {
 		return "", err
-	}
-	if len(paths) == 0 {
-		return "", fmt.Errorf("no copilot settings paths found for scope: %s", scope)
 	}
 	for _, path := range paths {
 		if _, err := os.Stat(path); err == nil {

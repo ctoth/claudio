@@ -13,3 +13,9 @@ func TestFsyncDirReturnsOpenError(t *testing.T) {
 		t.Fatal("expected error for missing directory")
 	}
 }
+
+func TestFsyncDirSucceedsForExistingDirectory(t *testing.T) {
+	if err := fsyncDir(t.TempDir()); err != nil {
+		t.Fatalf("fsyncDir returned error: %v", err)
+	}
+}

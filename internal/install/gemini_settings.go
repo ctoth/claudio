@@ -1,10 +1,8 @@
 package install
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 )
 
 // FindGeminiSettingsPaths returns candidate Gemini settings.json paths for
@@ -15,17 +13,13 @@ func FindGeminiSettingsPaths(scope string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	switch normalizedScope {
-	case ScopeGlobal:
+	if normalizedScope == ScopeGlobal {
 		return findGeminiGlobalScopePaths(), nil
-	case ScopeProject:
-		return []string{
-			filepath.Join(".", ".gemini", "settings.json"),
-			filepath.Join(".gemini", "settings.json"),
-		}, nil
-	default:
-		return nil, fmt.Errorf("invalid scope '%s': must be 'global' or 'project'", scope)
 	}
+	return []string{
+		filepath.Join(".", ".gemini", "settings.json"),
+		filepath.Join(".gemini", "settings.json"),
+	}, nil
 }
 
 func findGeminiGlobalScopePaths() []string {
@@ -36,12 +30,7 @@ func findGeminiGlobalScopePaths() []string {
 		paths = append(paths, filepath.Join(homeDir, ".gemini", "settings.json"))
 	}
 
-	if runtime.GOOS == "windows" {
-		userProfile := os.Getenv("USERPROFILE")
-		if userProfile != "" && userProfile != homeDir {
-			paths = append(paths, filepath.Join(userProfile, ".gemini", "settings.json"))
-		}
-	}
+	paths = appendUserProfilePath(paths, homeDir, ".gemini", "settings.json")
 
 	if len(paths) == 0 {
 		paths = append(paths, filepath.Join("~", ".gemini", "settings.json"))
@@ -56,9 +45,6 @@ func FindBestGeminiPath(scope string) (string, error) {
 	paths, err := FindGeminiSettingsPaths(scope)
 	if err != nil {
 		return "", err
-	}
-	if len(paths) == 0 {
-		return "", fmt.Errorf("no gemini settings paths found for scope: %s", scope)
 	}
 	for _, path := range paths {
 		if _, err := os.Stat(path); err == nil {
