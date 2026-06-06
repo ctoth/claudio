@@ -1,10 +1,8 @@
 package install
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 )
 
@@ -16,14 +14,10 @@ func FindClaudeSettingsPaths(scope string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	switch normalizedScope {
-	case ScopeGlobal:
+	if normalizedScope == ScopeGlobal {
 		return findUserScopePaths()
-	case ScopeProject:
-		return findProjectScopePaths()
-	default:
-		return nil, fmt.Errorf("invalid scope '%s': must be 'global' or 'project'", scope)
 	}
+	return findProjectScopePaths()
 }
 
 // findUserScopePaths returns potential user-scope Claude settings paths
@@ -38,14 +32,7 @@ func findUserScopePaths() ([]string, error) {
 		paths = append(paths, userPath)
 	}
 
-	// On Windows, also check USERPROFILE if different from HOME
-	if runtime.GOOS == "windows" {
-		userProfile := os.Getenv("USERPROFILE")
-		if userProfile != "" && userProfile != homeDir {
-			winPath := filepath.Join(userProfile, ".claude", "settings.json")
-			paths = append(paths, winPath)
-		}
-	}
+	paths = appendUserProfilePath(paths, homeDir, ".claude", "settings.json")
 
 	// Ensure we have at least one path
 	if len(paths) == 0 {
@@ -63,9 +50,6 @@ func FindBestSettingsPath(scope string) (string, error) {
 	paths, err := FindClaudeSettingsPaths(scope)
 	if err != nil {
 		return "", err
-	}
-	if len(paths) == 0 {
-		return "", fmt.Errorf("no settings paths found for scope: %s", scope)
 	}
 
 	// Return the first path where the file actually exists
@@ -91,35 +75,6 @@ func findProjectScopePaths() ([]string, error) {
 	paths = append(paths, filepath.Join(".claude", "settings.json"))
 
 	return paths, nil
-}
-
-// getHomeDirectory returns the user's home directory using multiple fallback methods
-func getHomeDirectory() string {
-	if runtime.GOOS == "windows" {
-		// On Windows, prefer USERPROFILE (canonical Windows home directory).
-		// HOME may contain MSYS/Git Bash-style paths (e.g. /c/Users/Q)
-		// that are not valid native Windows paths for Go's filepath operations.
-		if userProfile := os.Getenv("USERPROFILE"); userProfile != "" {
-			return userProfile
-		}
-		// Fall back to HOME with MSYS path normalization
-		if home := os.Getenv("HOME"); home != "" {
-			return normalizeMSYSPath(home)
-		}
-		// Try HOMEDRIVE + HOMEPATH combination (Windows alternative)
-		if homeDrive := os.Getenv("HOMEDRIVE"); homeDrive != "" {
-			if homePath := os.Getenv("HOMEPATH"); homePath != "" {
-				return homeDrive + homePath
-			}
-		}
-		return ""
-	}
-
-	// Unix/Linux/macOS: HOME is the standard
-	if home := os.Getenv("HOME"); home != "" {
-		return home
-	}
-	return ""
 }
 
 // normalizeMSYSPath converts MSYS/Git Bash-style paths (e.g. /c/Users/Q) to

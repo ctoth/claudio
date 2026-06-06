@@ -12,6 +12,8 @@ HOOK_LOGGER := hook-logger
 HOOK_LOGGER_CMD := ./cmd/hook-logger
 PKGS := ./...
 COVERAGE_PACKAGES := ./internal/hooks ./internal/install
+COVERAGE_FLOOR := 97.9
+COVERAGE_FLOOR_TOOL := ./internal/devtools/coveragefloor
 COVER_PROFILE := coverage.out
 COVER_HTML := coverage.html
 SMOKE_CONFIG := config-example.json
@@ -61,7 +63,7 @@ help: ## Show available targets.
 	@echo "  make test-pkg PKG=...  Run one package, default PKG=./internal/cli"
 	@echo "  make coverage          Write coverage.out"
 	@echo "  make coverage-html     Write coverage.html"
-	@echo "  make coverage-ci       Run the coverage packages used by CI"
+	@echo "  make coverage-ci       Enforce $(COVERAGE_FLOOR)% coverage for each CI coverage package"
 	@echo ""
 	@echo "Binaries:"
 	@echo "  make build-all         Build claudio and hook-logger"
@@ -142,8 +144,8 @@ coverage-html: coverage ## Render coverage.html from coverage.out.
 	$(GO) tool cover -html=$(COVER_PROFILE) -o $(COVER_HTML)
 
 .PHONY: coverage-ci
-coverage-ci: ## Run the two coverage packages named in GitHub Actions.
-	$(GO) test $(COVERAGE_PACKAGES) -count=1 -cover
+coverage-ci: ## Enforce the shared coverage floor for the packages named in GitHub Actions.
+	$(GO) run $(COVERAGE_FLOOR_TOOL) -go $(GO) -floor $(COVERAGE_FLOOR) $(COVERAGE_PACKAGES)
 
 .PHONY: build
 build: ## Build the claudio binary for the current platform.

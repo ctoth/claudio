@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"path/filepath"
-	"runtime"
 	"strings"
 
 	"claudio.click/internal/fs"
@@ -417,11 +415,8 @@ func IsClaudioCommandString(cmdStr string) bool {
 		return true
 	}
 
-	if executable, ok := leadingCommandToken(cmdStr); ok {
-		return executableRecognizer(commandBasename(executable))
-	}
-
-	return false
+	executable, _ := leadingCommandToken(cmdStr)
+	return executableRecognizer(commandBasename(executable))
 }
 
 func stripSurroundingQuotes(s string) string {
@@ -506,15 +501,6 @@ func IsClaudioHook(hookValue interface{}) bool {
 }
 
 // GetExecutablePath returns the current executable path using filesystem abstraction.
-// On Windows the result is converted to forward slashes so that the path works
-// when Claude Code invokes the hook command through bash.
 func GetExecutablePath() (string, error) {
-	p, err := fs.ExecutablePath()
-	if err != nil {
-		return "", err
-	}
-	if runtime.GOOS == "windows" {
-		p = filepath.ToSlash(p)
-	}
-	return p, nil
+	return fs.ExecutablePath()
 }

@@ -61,7 +61,11 @@ jobs:
         run: go build ./...
 
   coverage:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
@@ -71,23 +75,4 @@ jobs:
 
       # These packages have no cgo dependency, so no ALSA headers are needed.
       - name: Enforce coverage floor
-        run: |
-          THRESHOLD=91.0
-          status=0
-          for pkg in ./internal/hooks ./internal/install; do
-            line=$(go test "$pkg" -count=1 -cover)
-            pct=$(echo "$line" | grep -oE 'coverage: [0-9.]+%' | grep -oE '[0-9.]+')
-            if [ -z "$pct" ]; then
-              echo "FAIL: could not parse coverage for $pkg"
-              echo "$line"
-              status=1
-              continue
-            fi
-            if awk -v p="$pct" -v t="$THRESHOLD" 'BEGIN { exit !(p+0 >= t+0) }'; then
-              echo "OK: $pkg coverage ${pct}% (floor ${THRESHOLD}%)"
-            else
-              echo "FAIL: $pkg coverage ${pct}% below floor ${THRESHOLD}%"
-              status=1
-            fi
-          done
-          exit $status
+        run: go run ./internal/devtools/coveragefloor -floor 97.9 ./internal/hooks ./internal/install
