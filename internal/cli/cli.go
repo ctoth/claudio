@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -40,14 +39,14 @@ func NewCLI() *CLI {
 
 	rootCmd := &cobra.Command{
 		Use:     "claudio",
-		Short:   "Claude Code Audio Plugin",
-		Long:    "Claudio is a hook-based audio plugin for Claude Code that plays contextual sounds based on tool usage and events.",
+		Short:   "Coding-agent audio plugin",
+		Long:    "Claudio is a hook-based audio plugin for coding agents that plays contextual sounds based on tool usage and events.",
 		Version: Version,
 		RunE:    runStdinModeE, // Default behavior when no subcommand is provided
 	}
 	// Preserve the historical version output shape ("claudio version X (Version X)\n...")
 	// that downstream tooling and tests check against.
-	rootCmd.SetVersionTemplate("claudio version " + Version + " (Version " + Version + ")\nClaude Code Audio Plugin - Hook-based sound system\n")
+	rootCmd.SetVersionTemplate("claudio version " + Version + " (Version " + Version + ")\nCoding-agent audio plugin - Hook-based sound system\n")
 
 	// Add install subcommand
 	installCmd := newInstallCommand()
@@ -434,26 +433,12 @@ func processHookInput(cmd *cobra.Command, cli *CLI, cfg *config.Config, inputDat
 		return nil
 	}
 
-	// Parse hook JSON
-	var hookEvent hooks.HookEvent
-	err := json.Unmarshal(inputData, &hookEvent)
+	parser := hooks.NewHookEventParser()
+	hookEvent, err := parser.Parse(inputData)
 	if err != nil {
-		cmd.PrintErrf("Error parsing hook JSON: %v\n", err)
+		cmd.PrintErrf("Error: %v\n", err)
 		slog.Error("hook JSON parsing failed", "error", err)
 		return fmt.Errorf("error parsing hook JSON: %w", err)
-	}
-
-	// Validate hook event
-	if hookEvent.EventName == "" {
-		cmd.PrintErrln("Error: missing required field 'hook_event_name'")
-		slog.Error("missing hook_event_name field")
-		return fmt.Errorf("missing required field 'hook_event_name'")
-	}
-
-	if hookEvent.SessionID == "" {
-		cmd.PrintErrln("Error: missing required field 'session_id'")
-		slog.Error("missing session_id field")
-		return fmt.Errorf("missing required field 'session_id'")
 	}
 
 	slog.Info("hook event parsed",
@@ -462,7 +447,7 @@ func processHookInput(cmd *cobra.Command, cli *CLI, cfg *config.Config, inputDat
 		"tool_name", getStringPtr(hookEvent.ToolName))
 
 	// Process hook event.
-	cli.processHookEvent(&hookEvent, cfg, cmd.OutOrStdout(), cmd.ErrOrStderr())
+	cli.processHookEvent(hookEvent, cfg, cmd.OutOrStdout(), cmd.ErrOrStderr())
 
 	return nil
 }
@@ -501,7 +486,7 @@ func runStdinModeE(cmd *cobra.Command, args []string) error {
 			slog.Error("detached hook worker start failed", "error", err)
 			return err
 		}
-		return writeGeminiHookSuccessResponse(cmd, inputData)
+		return writeJSONHookSuccessResponse(cmd, inputData)
 	}
 
 	// Initialize tracking (before audio system initialization). Pass the
@@ -520,16 +505,16 @@ func runStdinModeE(cmd *cobra.Command, args []string) error {
 	if err := processHookInput(cmd, cli, cfg, inputData); err != nil {
 		return err
 	}
-	return writeGeminiHookSuccessResponse(cmd, inputData)
+	return writeJSONHookSuccessResponse(cmd, inputData)
 }
 
-func writeGeminiHookSuccessResponse(cmd *cobra.Command, inputData []byte) error {
+func writeJSONHookSuccessResponse(cmd *cobra.Command, inputData []byte) error {
 	if len(inputData) == 0 {
 		return nil
 	}
 	hookAgent, _ := cmd.Flags().GetString("hook-agent")
 	hookAgent = strings.ToLower(strings.TrimSpace(hookAgent))
-	if hookAgent == "gemini" || hookAgent == "qwen" {
+	if hookAgent == "gemini" || hookAgent == "qwen" || hookAgent == "copilot" {
 		if _, err := fmt.Fprintln(cmd.OutOrStdout(), "{}"); err != nil {
 			return fmt.Errorf("failed to write %s hook response: %w", hookAgent, err)
 		}

@@ -563,6 +563,37 @@ func TestGenerateClaudioHooksForQwenAgent(t *testing.T) {
 	}
 }
 
+func TestGenerateClaudioHooksForCopilotAgent(t *testing.T) {
+	result, err := GenerateClaudioHooksForAgent("/usr/local/bin/claudio", AgentCopilot)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	hooks, ok := result.(HooksMap)
+	if !ok {
+		t.Fatalf("expected HooksMap, got %T", result)
+	}
+	if len(hooks) != len(CopilotHooks) {
+		t.Errorf("expected %d copilot hooks, got %d", len(CopilotHooks), len(hooks))
+	}
+	arr := hooks["PreToolUse"].([]interface{})
+	commandConfig := arr[0].(map[string]interface{})
+	if _, exists := commandConfig["matcher"]; exists {
+		t.Errorf("copilot command hook must not use Claude/Gemini matcher wrapper: %v", commandConfig)
+	}
+	if _, exists := commandConfig["hooks"]; exists {
+		t.Errorf("copilot command hook must be direct, got nested hooks: %v", commandConfig)
+	}
+	if commandConfig["command"] != "/usr/local/bin/claudio --hook-agent copilot" {
+		t.Errorf("copilot command = %v, want claudio with hook-agent flag", commandConfig["command"])
+	}
+	if commandConfig["timeoutSec"] != 30 {
+		t.Errorf("copilot timeoutSec = %v, want 30", commandConfig["timeoutSec"])
+	}
+	if !IsClaudioHook(arr) {
+		t.Error("copilot direct command array should be detected as Claudio hook")
+	}
+}
+
 func TestGenerateClaudioHooksDefaultsToClaude(t *testing.T) {
 	result, err := GenerateClaudioHooks("/usr/local/bin/claudio")
 	if err != nil {

@@ -8,12 +8,13 @@ import (
 
 func TestParseAgentValid(t *testing.T) {
 	cases := map[string]Agent{
-		"auto":   AgentAuto,
-		"all":    AgentAll,
-		"claude": AgentClaude,
-		"codex":  AgentCodex,
-		"gemini": AgentGemini,
-		"qwen":   AgentQwen,
+		"auto":    AgentAuto,
+		"all":     AgentAll,
+		"claude":  AgentClaude,
+		"codex":   AgentCodex,
+		"gemini":  AgentGemini,
+		"qwen":    AgentQwen,
+		"copilot": AgentCopilot,
 	}
 	for in, want := range cases {
 		got, err := ParseAgent(in)
@@ -34,7 +35,7 @@ func TestParseAgentInvalid(t *testing.T) {
 
 func TestConcreteAgents(t *testing.T) {
 	got := ConcreteAgents()
-	want := []Agent{AgentClaude, AgentCodex, AgentGemini, AgentQwen}
+	want := []Agent{AgentClaude, AgentCodex, AgentGemini, AgentQwen, AgentCopilot}
 	if len(got) != len(want) {
 		t.Fatalf("ConcreteAgents() length = %d, want %d", len(got), len(want))
 	}
@@ -87,6 +88,9 @@ func TestAgentMatcher(t *testing.T) {
 	if AgentQwen.Matcher() != ".*" {
 		t.Errorf("qwen matcher = %q, want .*", AgentQwen.Matcher())
 	}
+	if AgentCopilot.Matcher() != "" {
+		t.Errorf("copilot matcher = %q, want empty matcher", AgentCopilot.Matcher())
+	}
 }
 
 func TestAgentString(t *testing.T) {
@@ -108,6 +112,9 @@ func TestAgentRegistryAndHookNames(t *testing.T) {
 	if len(AgentQwen.Registry()) == 0 {
 		t.Error("qwen registry should not be empty")
 	}
+	if len(AgentCopilot.Registry()) == 0 {
+		t.Error("copilot registry should not be empty")
+	}
 	if AgentAuto.Registry() != nil {
 		t.Error("auto should not have a concrete registry")
 	}
@@ -122,6 +129,9 @@ func TestAgentRegistryAndHookNames(t *testing.T) {
 	}
 	if len(AgentQwen.HookNames()) != len(AgentQwen.Registry()) {
 		t.Error("qwen hook names should match registry length")
+	}
+	if len(AgentCopilot.HookNames()) != len(AgentCopilot.Registry()) {
+		t.Error("copilot hook names should match registry length")
 	}
 }
 
@@ -153,6 +163,13 @@ func TestAgentBestConfigPathProjectScope(t *testing.T) {
 	}
 	if !strings.Contains(qp, filepath.Join(".qwen", "settings.json")) {
 		t.Errorf("qwen project path %q missing .qwen/settings.json", qp)
+	}
+	copilotPath, err := AgentCopilot.BestConfigPath("project")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(copilotPath, filepath.Join(".github", "copilot", "settings.local.json")) {
+		t.Errorf("copilot project path %q missing .github/copilot/settings.local.json", copilotPath)
 	}
 }
 

@@ -1,9 +1,9 @@
 # Claudio
 
 Claudio is a hook-driven audio layer for coding agents. It listens to hook
-events from Claude Code, OpenAI Codex CLI, Gemini CLI, and Qwen Code, maps the
-event to a contextual sound, and plays that sound without making the agent wait
-for playback.
+events from Claude Code, OpenAI Codex CLI, Gemini CLI, Qwen Code, and GitHub
+Copilot CLI, maps the event to a contextual sound, and plays that sound without
+making the agent wait for playback.
 
 It can play different sounds for tool starts, tool successes, tool failures,
 prompts, notifications, completions, compaction, session starts, and subagent
@@ -25,14 +25,15 @@ claudio install
 ```
 
 `claudio install` uses `--agent auto --scope global` by default. It detects
-Claude Code, Codex CLI, Gemini CLI, and Qwen Code, then installs hooks for the
-agents it finds. To force a single agent:
+Claude Code, Codex CLI, Gemini CLI, Qwen Code, and GitHub Copilot CLI, then
+installs hooks for the agents it finds. To force a single agent:
 
 ```bash
 claudio install --agent claude --scope global
 claudio install --agent codex --scope global
 claudio install --agent gemini --scope global
 claudio install --agent qwen --scope global
+claudio install --agent copilot --scope global
 ```
 
 After Codex hook installation, run `/hooks` in Codex and trust the Claudio

@@ -31,6 +31,9 @@ func TestResolveAgentTargetsAutoDetectsPathBinaries(t *testing.T) {
 	if agents[AgentQwen] {
 		t.Error("auto detection should not include Qwen without evidence")
 	}
+	if agents[AgentCopilot] {
+		t.Error("auto detection should not include Copilot without evidence")
+	}
 }
 
 func TestResolveAgentTargetsAutoDetectsGlobalConfigDir(t *testing.T) {
@@ -66,6 +69,24 @@ func TestResolveAgentTargetsAutoDetectsQwenGlobalConfigDir(t *testing.T) {
 	agents := targetAgents(targets)
 	if !agents[AgentQwen] {
 		t.Error("auto detection should include Qwen when ~/.qwen exists")
+	}
+}
+
+func TestResolveAgentTargetsAutoDetectsCopilotGlobalConfigDir(t *testing.T) {
+	home := t.TempDir()
+	setIsolatedAgentEnv(t, t.TempDir(), home)
+	if err := os.MkdirAll(filepath.Join(home, ".copilot"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	targets, err := ResolveAgentTargets(AgentAuto, ScopeGlobal)
+	if err != nil {
+		t.Fatalf("ResolveAgentTargets returned error: %v", err)
+	}
+
+	agents := targetAgents(targets)
+	if !agents[AgentCopilot] {
+		t.Error("auto detection should include Copilot when ~/.copilot exists")
 	}
 }
 
@@ -300,6 +321,7 @@ func setIsolatedAgentEnv(t *testing.T, pathDir string, home string) {
 	t.Setenv("HOMEDRIVE", "")
 	t.Setenv("HOMEPATH", "")
 	t.Setenv("CODEX_HOME", "")
+	t.Setenv("COPILOT_HOME", "")
 }
 
 func targetAgents(targets []AgentTarget) map[Agent]bool {

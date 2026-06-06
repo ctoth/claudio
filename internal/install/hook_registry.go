@@ -114,6 +114,23 @@ var QwenHooks = []HookDefinition{
 	{Name: "PermissionRequest", Category: hooks.Interactive, Description: "Play sounds for Qwen permission requests", DefaultEnabled: true},
 }
 
+// CopilotHooks defines the registry of GitHub Copilot CLI hooks supported by Claudio.
+// PascalCase event names request VS Code-compatible snake_case payloads.
+var CopilotHooks = []HookDefinition{
+	{Name: "PreToolUse", Category: hooks.Loading, Description: "Play loading sounds before Copilot tool execution", DefaultEnabled: true},
+	{Name: "PostToolUse", Category: hooks.Success, Description: "Play success sounds after Copilot tool execution", DefaultEnabled: true},
+	{Name: "PostToolUseFailure", Category: hooks.Error, Description: "Play error sounds after failed Copilot tool execution", DefaultEnabled: true},
+	{Name: "UserPromptSubmit", Category: hooks.Interactive, Description: "Play interaction sounds when user submits prompts", DefaultEnabled: true},
+	{Name: "SessionStart", Category: hooks.System, Description: "Play sounds when a Copilot session starts or resumes", DefaultEnabled: true},
+	{Name: "SessionEnd", Category: hooks.Interactive, Description: "Play sounds when a Copilot session ends", DefaultEnabled: true},
+	{Name: "Stop", Category: hooks.Completion, Description: "Play sounds when Copilot finishes responding", DefaultEnabled: true},
+	{Name: "SubagentStop", Category: hooks.Completion, Description: "Play sounds when a Copilot subagent finishes", DefaultEnabled: true},
+	{Name: "PreCompact", Category: hooks.System, Description: "Play sounds before Copilot context compaction", DefaultEnabled: true},
+	{Name: "Notification", Category: hooks.Interactive, Description: "Play sounds for Copilot notifications", DefaultEnabled: true},
+	{Name: "PermissionRequest", Category: hooks.Interactive, Description: "Play sounds for Copilot permission requests", DefaultEnabled: true},
+	{Name: "ErrorOccurred", Category: hooks.Error, Description: "Play sounds for Copilot execution errors", DefaultEnabled: true},
+}
+
 // GetAllHooks returns all hooks defined in the registry
 func GetAllHooks() []HookDefinition {
 	slog.Debug("retrieving all hooks from registry", "total_hooks", len(AllHooks))

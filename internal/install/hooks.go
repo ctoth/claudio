@@ -12,7 +12,7 @@ import (
 	"claudio.click/internal/fs"
 )
 
-// HooksMap represents the hooks section of Claude Code settings
+// HooksMap represents an agent settings hooks section.
 type HooksMap map[string]interface{}
 
 // executableRecognizer decides whether a basename refers to the claudio
@@ -40,8 +40,8 @@ func GenerateClaudioHooks(executablePath string) (interface{}, error) {
 	return GenerateClaudioHooksForAgent(executablePath, AgentClaude)
 }
 
-// GenerateClaudioHooksForAgent creates hook configuration for the given agent using its
-// registry and matcher. Returns a hooks map suitable for Claude settings.json or Codex hooks.json.
+// GenerateClaudioHooksForAgent creates hook configuration for the given agent
+// using its registry and config shape.
 func GenerateClaudioHooksForAgent(executablePath string, agent Agent) (interface{}, error) {
 	slog.Debug("generating Claudio hooks configuration",
 		"agent", agent, "executable_path", executablePath)
@@ -59,6 +59,10 @@ func GenerateClaudioHooksForAgent(executablePath string, agent Agent) (interface
 			"command": hookCommandForAgent(executablePath, agent),
 		}
 		addAgentHookMetadata(commandConfig, agent)
+
+		if agent == AgentCopilot {
+			return []interface{}{commandConfig}
+		}
 
 		return []interface{}{
 			map[string]interface{}{
@@ -90,7 +94,7 @@ func GenerateClaudioHooksForAgent(executablePath string, agent Agent) (interface
 
 func hookCommandForAgent(executablePath string, agent Agent) string {
 	switch agent {
-	case AgentGemini, AgentQwen:
+	case AgentGemini, AgentQwen, AgentCopilot:
 		return quoteCommandArg(executablePath) + " --hook-agent " + string(agent)
 	default:
 		return executablePath
@@ -106,6 +110,8 @@ func addAgentHookMetadata(commandConfig map[string]interface{}, agent Agent) {
 	case AgentQwen:
 		commandConfig["name"] = "claudio"
 		commandConfig["statusMessage"] = "Playing Claudio sound"
+	case AgentCopilot:
+		commandConfig["timeoutSec"] = 30
 	}
 }
 
@@ -301,6 +307,14 @@ func mergeHookValues(existingValue, claudioValue interface{}) interface{} {
 			filteredExisting = append(filteredExisting, item)
 			continue
 		}
+		if cmdStr, ok := itemMap["command"].(string); ok {
+			if isClaudioCommandString(cmdStr) {
+				strippedCount++
+				continue
+			}
+			filteredExisting = append(filteredExisting, item)
+			continue
+		}
 		hooks, ok := itemMap["hooks"].([]interface{})
 		if !ok {
 			// Preserve items without a hooks sub-array verbatim
@@ -364,6 +378,9 @@ func mergeHookValues(existingValue, claudioValue interface{}) interface{} {
 // (a map with a "hooks" sub-array) contains any hook whose command resolves
 // to the claudio executable per executableRecognizer.
 func itemContainsClaudioCommand(item map[string]interface{}) bool {
+	if cmdStr, ok := item["command"].(string); ok && isClaudioCommandString(cmdStr) {
+		return true
+	}
 	hooks, ok := item["hooks"].([]interface{})
 	if !ok {
 		return false
