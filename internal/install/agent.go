@@ -15,6 +15,7 @@ const (
 	AgentClaude Agent = "claude"
 	AgentCodex  Agent = "codex"
 	AgentGemini Agent = "gemini"
+	AgentQwen   Agent = "qwen"
 )
 
 const (
@@ -27,10 +28,10 @@ const (
 func ParseAgent(s string) (Agent, error) {
 	agent := Agent(strings.ToLower(strings.TrimSpace(s)))
 	switch agent {
-	case AgentAuto, AgentAll, AgentClaude, AgentCodex, AgentGemini:
+	case AgentAuto, AgentAll, AgentClaude, AgentCodex, AgentGemini, AgentQwen:
 		return agent, nil
 	default:
-		return "", fmt.Errorf("invalid agent '%s': must be 'auto', 'claude', 'codex', 'gemini', or 'all'", s)
+		return "", fmt.Errorf("invalid agent '%s': must be 'auto', 'claude', 'codex', 'gemini', 'qwen', or 'all'", s)
 	}
 }
 
@@ -39,13 +40,13 @@ func (a Agent) String() string { return string(a) }
 
 // ConcreteAgents returns every directly installable agent.
 func ConcreteAgents() []Agent {
-	return []Agent{AgentClaude, AgentCodex, AgentGemini}
+	return []Agent{AgentClaude, AgentCodex, AgentGemini, AgentQwen}
 }
 
 // IsConcrete returns true for agents that map to one config target.
 func (a Agent) IsConcrete() bool {
 	switch a {
-	case AgentClaude, AgentCodex, AgentGemini:
+	case AgentClaude, AgentCodex, AgentGemini, AgentQwen:
 		return true
 	default:
 		return false
@@ -73,6 +74,8 @@ func (a Agent) Matcher() string {
 		return "*"
 	case AgentGemini:
 		return ""
+	case AgentQwen:
+		return ".*"
 	default:
 		return ".*"
 	}
@@ -85,6 +88,8 @@ func (a Agent) Registry() []HookDefinition {
 		return CodexHooks
 	case AgentGemini:
 		return GeminiHooks
+	case AgentQwen:
+		return QwenHooks
 	case AgentClaude:
 		return AllHooks
 	default:
@@ -127,6 +132,8 @@ func (a Agent) BestConfigPath(scope string) (string, error) {
 		return FindBestSettingsPath(normalizedScope)
 	case AgentGemini:
 		return FindBestGeminiPath(normalizedScope)
+	case AgentQwen:
+		return FindBestQwenPath(normalizedScope)
 	case AgentAuto, AgentAll:
 		return "", fmt.Errorf("agent '%s' must be resolved before selecting a config path", a)
 	default:

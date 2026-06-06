@@ -96,6 +96,24 @@ var GeminiHooks = []HookDefinition{
 	{Name: "PreCompress", Category: hooks.System, Description: "Play sounds before Gemini context compression", DefaultEnabled: true},
 }
 
+// QwenHooks defines the registry of Qwen Code hooks supported by Claudio.
+var QwenHooks = []HookDefinition{
+	{Name: "PreToolUse", Category: hooks.Loading, Description: "Play loading sounds before Qwen tool execution", DefaultEnabled: true},
+	{Name: "PostToolUse", Category: hooks.Success, Description: "Play success sounds after Qwen tool execution", DefaultEnabled: true},
+	{Name: "PostToolUseFailure", Category: hooks.Error, Description: "Play error sounds after failed Qwen tool execution", DefaultEnabled: true},
+	{Name: "UserPromptSubmit", Category: hooks.Interactive, Description: "Play interaction sounds when user submits prompts", DefaultEnabled: true},
+	{Name: "SessionStart", Category: hooks.System, Description: "Play sounds when a Qwen session starts or resumes", DefaultEnabled: true},
+	{Name: "SessionEnd", Category: hooks.Interactive, Description: "Play sounds when a Qwen session ends", DefaultEnabled: true},
+	{Name: "Stop", Category: hooks.Completion, Description: "Play sounds when Qwen finishes responding", DefaultEnabled: true},
+	{Name: "StopFailure", Category: hooks.Error, Description: "Play sounds when Qwen fails to stop cleanly", DefaultEnabled: true},
+	{Name: "SubagentStart", Category: hooks.Loading, Description: "Play sounds when a Qwen subagent starts", DefaultEnabled: true},
+	{Name: "SubagentStop", Category: hooks.Completion, Description: "Play sounds when a Qwen subagent finishes", DefaultEnabled: true},
+	{Name: "PreCompact", Category: hooks.System, Description: "Play sounds before Qwen context compaction", DefaultEnabled: true},
+	{Name: "PostCompact", Category: hooks.System, Description: "Play sounds after Qwen context compaction", DefaultEnabled: true},
+	{Name: "Notification", Category: hooks.Interactive, Description: "Play sounds for Qwen notifications", DefaultEnabled: true},
+	{Name: "PermissionRequest", Category: hooks.Interactive, Description: "Play sounds for Qwen permission requests", DefaultEnabled: true},
+}
+
 // GetAllHooks returns all hooks defined in the registry
 func GetAllHooks() []HookDefinition {
 	slog.Debug("retrieving all hooks from registry", "total_hooks", len(AllHooks))

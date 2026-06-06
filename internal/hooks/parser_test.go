@@ -1428,3 +1428,86 @@ func TestGetContextCodexMcpToolNormalized(t *testing.T) {
 		t.Errorf("expected mcp-start, got %q", ctx.SoundHint)
 	}
 }
+
+func TestGetContextGeminiBeforeToolShellCommand(t *testing.T) {
+	tool := "run_shell_command"
+	input := json.RawMessage(`{"command":"git status --short"}`)
+	event := &HookEvent{SessionID: "a", CWD: "/tmp", EventName: "BeforeTool", ToolName: &tool, ToolInput: &input}
+	ctx := event.GetContext()
+	if ctx.Category != Loading {
+		t.Errorf("expected Loading, got %v", ctx.Category)
+	}
+	if ctx.OriginalTool != "Bash" || ctx.ToolName != "git" {
+		t.Errorf("tool normalization = original %q tool %q, want Bash/git", ctx.OriginalTool, ctx.ToolName)
+	}
+	if ctx.SoundHint != "git-status-start" {
+		t.Errorf("expected git-status-start, got %q", ctx.SoundHint)
+	}
+}
+
+func TestGetContextGeminiAfterToolWriteFileSuccess(t *testing.T) {
+	tool := "write_file"
+	resp := json.RawMessage(`{"success":true}`)
+	event := &HookEvent{SessionID: "a", CWD: "/tmp", EventName: "AfterTool", ToolName: &tool, ToolResponse: &resp}
+	ctx := event.GetContext()
+	if ctx.Category != Success {
+		t.Errorf("expected Success, got %v", ctx.Category)
+	}
+	if ctx.ToolName != "Write" {
+		t.Errorf("expected normalized tool Write, got %q", ctx.ToolName)
+	}
+	if ctx.SoundHint != "write-success" {
+		t.Errorf("expected write-success, got %q", ctx.SoundHint)
+	}
+}
+
+func TestGetContextGeminiAgentAndCompressEvents(t *testing.T) {
+	cases := []struct {
+		eventName string
+		category  EventCategory
+		hint      string
+		operation string
+	}{
+		{"BeforeAgent", Interactive, "before-agent", "before-agent"},
+		{"AfterAgent", Completion, "agent-complete", "after-agent"},
+		{"PreCompress", System, "compacting", "compact"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.eventName, func(t *testing.T) {
+			event := &HookEvent{SessionID: "a", CWD: "/tmp", EventName: tc.eventName}
+			ctx := event.GetContext()
+			if ctx.Category != tc.category {
+				t.Errorf("category = %v, want %v", ctx.Category, tc.category)
+			}
+			if ctx.SoundHint != tc.hint {
+				t.Errorf("hint = %q, want %q", ctx.SoundHint, tc.hint)
+			}
+			if ctx.Operation != tc.operation {
+				t.Errorf("operation = %q, want %q", ctx.Operation, tc.operation)
+			}
+		})
+	}
+}
+
+func TestGetContextQwenFailureEvents(t *testing.T) {
+	tool := "run_shell_command"
+	input := json.RawMessage(`{"command":"git status"}`)
+	resp := json.RawMessage(`{"stderr":"fatal: not a git repository"}`)
+	event := &HookEvent{SessionID: "a", CWD: "/tmp", EventName: "PostToolUseFailure", ToolName: &tool, ToolInput: &input, ToolResponse: &resp}
+	ctx := event.GetContext()
+	if ctx.Category != Error {
+		t.Errorf("expected Error, got %v", ctx.Category)
+	}
+	if ctx.SoundHint != "git-status-error" {
+		t.Errorf("expected git-status-error, got %q", ctx.SoundHint)
+	}
+
+	event = &HookEvent{SessionID: "a", CWD: "/tmp", EventName: "ErrorOccurred"}
+	ctx = event.GetContext()
+	if ctx.Category != Error {
+		t.Errorf("expected ErrorOccurred to map to Error, got %v", ctx.Category)
+	}
+	if ctx.SoundHint != "error-occurred" {
+		t.Errorf("expected error-occurred, got %q", ctx.SoundHint)
+	}
+}

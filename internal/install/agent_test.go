@@ -13,6 +13,7 @@ func TestParseAgentValid(t *testing.T) {
 		"claude": AgentClaude,
 		"codex":  AgentCodex,
 		"gemini": AgentGemini,
+		"qwen":   AgentQwen,
 	}
 	for in, want := range cases {
 		got, err := ParseAgent(in)
@@ -33,7 +34,7 @@ func TestParseAgentInvalid(t *testing.T) {
 
 func TestConcreteAgents(t *testing.T) {
 	got := ConcreteAgents()
-	want := []Agent{AgentClaude, AgentCodex, AgentGemini}
+	want := []Agent{AgentClaude, AgentCodex, AgentGemini, AgentQwen}
 	if len(got) != len(want) {
 		t.Fatalf("ConcreteAgents() length = %d, want %d", len(got), len(want))
 	}
@@ -83,6 +84,9 @@ func TestAgentMatcher(t *testing.T) {
 	if AgentGemini.Matcher() != "" {
 		t.Errorf("gemini matcher = %q, want empty matcher", AgentGemini.Matcher())
 	}
+	if AgentQwen.Matcher() != ".*" {
+		t.Errorf("qwen matcher = %q, want .*", AgentQwen.Matcher())
+	}
 }
 
 func TestAgentString(t *testing.T) {
@@ -101,6 +105,9 @@ func TestAgentRegistryAndHookNames(t *testing.T) {
 	if len(AgentGemini.Registry()) == 0 {
 		t.Error("gemini registry should not be empty")
 	}
+	if len(AgentQwen.Registry()) == 0 {
+		t.Error("qwen registry should not be empty")
+	}
 	if AgentAuto.Registry() != nil {
 		t.Error("auto should not have a concrete registry")
 	}
@@ -112,6 +119,9 @@ func TestAgentRegistryAndHookNames(t *testing.T) {
 	}
 	if len(AgentGemini.HookNames()) != len(AgentGemini.Registry()) {
 		t.Error("gemini hook names should match registry length")
+	}
+	if len(AgentQwen.HookNames()) != len(AgentQwen.Registry()) {
+		t.Error("qwen hook names should match registry length")
 	}
 }
 
@@ -136,6 +146,13 @@ func TestAgentBestConfigPathProjectScope(t *testing.T) {
 	}
 	if !strings.Contains(gp, filepath.Join(".gemini", "settings.json")) {
 		t.Errorf("gemini project path %q missing .gemini/settings.json", gp)
+	}
+	qp, err := AgentQwen.BestConfigPath("project")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(qp, filepath.Join(".qwen", "settings.json")) {
+		t.Errorf("qwen project path %q missing .qwen/settings.json", qp)
 	}
 }
 

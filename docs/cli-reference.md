@@ -42,7 +42,7 @@ Tool events can also include `tool_name`, `tool_input`, and `tool_response`.
 
 ## `claudio install`
 
-Installs hooks for Claude Code, Codex CLI, or Gemini CLI.
+Installs hooks for Claude Code, Codex CLI, Gemini CLI, or Qwen Code.
 
 ```bash
 claudio install [flags]
@@ -52,7 +52,7 @@ Flags:
 
 | Flag | Default | Meaning |
 | --- | --- | --- |
-| `--agent`, `-a` | `auto` | `auto`, `all`, `claude`, `codex`, or `gemini`. |
+| `--agent`, `-a` | `auto` | `auto`, `all`, `claude`, `codex`, `gemini`, or `qwen`. |
 | `--scope`, `-s` | `global` | `global` or `project`. |
 | `--dry-run`, `-d` | false | Show what would happen without writing. |
 | `--print`, `-p` | false | Print target configuration details. |
@@ -66,6 +66,7 @@ claudio install --agent all --scope global
 claudio install --agent claude --scope global
 claudio install --agent codex --scope project
 claudio install --agent gemini --scope global
+claudio install --agent qwen --scope global
 claudio install --agent codex --scope global --dry-run
 ```
 
@@ -73,7 +74,7 @@ Codex users must trust the hook with `/hooks` after installation.
 
 ## `claudio uninstall`
 
-Removes Claudio hooks for Claude Code, Codex CLI, or Gemini CLI.
+Removes Claudio hooks for Claude Code, Codex CLI, Gemini CLI, or Qwen Code.
 
 ```bash
 claudio uninstall [flags]
@@ -83,7 +84,7 @@ Flags match `install`:
 
 | Flag | Default | Meaning |
 | --- | --- | --- |
-| `--agent`, `-a` | `auto` | `auto`, `all`, `claude`, `codex`, or `gemini`. |
+| `--agent`, `-a` | `auto` | `auto`, `all`, `claude`, `codex`, `gemini`, or `qwen`. |
 | `--scope`, `-s` | `global` | `global` or `project`. |
 | `--dry-run`, `-d` | false | Show what would be removed. |
 | `--print`, `-p` | false | Print removal details. |

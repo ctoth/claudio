@@ -528,9 +528,10 @@ func writeGeminiHookSuccessResponse(cmd *cobra.Command, inputData []byte) error 
 		return nil
 	}
 	hookAgent, _ := cmd.Flags().GetString("hook-agent")
-	if strings.EqualFold(strings.TrimSpace(hookAgent), "gemini") {
+	hookAgent = strings.ToLower(strings.TrimSpace(hookAgent))
+	if hookAgent == "gemini" || hookAgent == "qwen" {
 		if _, err := fmt.Fprintln(cmd.OutOrStdout(), "{}"); err != nil {
-			return fmt.Errorf("failed to write Gemini hook response: %w", err)
+			return fmt.Errorf("failed to write %s hook response: %w", hookAgent, err)
 		}
 	}
 	return nil

@@ -28,6 +28,9 @@ func TestResolveAgentTargetsAutoDetectsPathBinaries(t *testing.T) {
 	if agents[AgentGemini] {
 		t.Error("auto detection should not include Gemini without evidence")
 	}
+	if agents[AgentQwen] {
+		t.Error("auto detection should not include Qwen without evidence")
+	}
 }
 
 func TestResolveAgentTargetsAutoDetectsGlobalConfigDir(t *testing.T) {
@@ -45,6 +48,24 @@ func TestResolveAgentTargetsAutoDetectsGlobalConfigDir(t *testing.T) {
 	agents := targetAgents(targets)
 	if !agents[AgentGemini] {
 		t.Error("auto detection should include Gemini when ~/.gemini exists")
+	}
+}
+
+func TestResolveAgentTargetsAutoDetectsQwenGlobalConfigDir(t *testing.T) {
+	home := t.TempDir()
+	setIsolatedAgentEnv(t, t.TempDir(), home)
+	if err := os.MkdirAll(filepath.Join(home, ".qwen"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	targets, err := ResolveAgentTargets(AgentAuto, ScopeGlobal)
+	if err != nil {
+		t.Fatalf("ResolveAgentTargets returned error: %v", err)
+	}
+
+	agents := targetAgents(targets)
+	if !agents[AgentQwen] {
+		t.Error("auto detection should include Qwen when ~/.qwen exists")
 	}
 }
 
