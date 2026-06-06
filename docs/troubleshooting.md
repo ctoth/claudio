@@ -74,6 +74,7 @@ ls -la ~/.claude/settings.json
 ls -la ~/.codex/hooks.json
 ls -la ~/.gemini/settings.json
 ls -la ~/.qwen/settings.json
+ls -la ~/.copilot/settings.json
 ```
 
 Run the target agent once if its settings directory does not exist yet, or
@@ -84,6 +85,7 @@ claudio install --agent claude --scope global
 claudio install --agent codex --scope global
 claudio install --agent gemini --scope global
 claudio install --agent qwen --scope global
+claudio install --agent copilot --scope global
 ```
 
 ## Codex Hooks Do Nothing

@@ -264,6 +264,40 @@ func TestMergeHooksPreservesExisting(t *testing.T) {
 	}
 }
 
+func TestMergeHooksReplacesCopilotDirectCommandEntries(t *testing.T) {
+	existing := &SettingsMap{
+		"hooks": map[string]interface{}{
+			"PreToolUse": []interface{}{
+				map[string]interface{}{"type": "command", "command": "/usr/bin/logger"},
+				map[string]interface{}{"type": "command", "command": "/old/claudio --hook-agent copilot"},
+			},
+		},
+	}
+	claudioHooks, err := GenerateClaudioHooksForAgent("/new/claudio", AgentCopilot)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	merged, err := MergeHooksIntoSettings(existing, claudioHooks)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	hooksMap := (*merged)["hooks"].(map[string]interface{})
+	arr := hooksMap["PreToolUse"].([]interface{})
+	if len(arr) != 2 {
+		t.Fatalf("merged PreToolUse length = %d, want preserved custom + new Claudio hook: %v", len(arr), arr)
+	}
+	first := arr[0].(map[string]interface{})
+	if first["command"] != "/usr/bin/logger" {
+		t.Fatalf("first command = %v, want preserved logger", first["command"])
+	}
+	second := arr[1].(map[string]interface{})
+	if second["command"] != "/new/claudio --hook-agent copilot" {
+		t.Fatalf("second command = %v, want new Claudio command", second["command"])
+	}
+}
+
 func TestMergeHooksErrorHandling(t *testing.T) {
 	// TDD RED: Test error handling in hook merging
 	testCases := []struct {
@@ -549,7 +583,7 @@ func TestMergeHookValues(t *testing.T) {
 			}
 
 			if totalCommands != tc.expectedCount {
-				t.Errorf("Expected %d commands, got %d. Result: %v", 
+				t.Errorf("Expected %d commands, got %d. Result: %v",
 					tc.expectedCount, totalCommands, result)
 			}
 
@@ -715,7 +749,7 @@ func TestMergeHooksWithExistingNonClaudioHooks(t *testing.T) {
 				}
 
 				if totalCommands != expectedCount {
-					t.Errorf("Hook '%s' expected %d commands, got %d. Hook value: %v", 
+					t.Errorf("Hook '%s' expected %d commands, got %d. Hook value: %v",
 						hookName, expectedCount, totalCommands, hookValue)
 				}
 			}

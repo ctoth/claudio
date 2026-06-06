@@ -44,7 +44,7 @@ func newInstallCommand() *cobra.Command {
 	cmd.Flags().StringP("scope", "s", install.ScopeGlobal, "Installation scope: 'global' for user-wide settings, 'project' for project-specific settings")
 
 	// Add --agent flag with validation
-	cmd.Flags().StringP("agent", "a", string(install.AgentAuto), "Target agent: 'auto', 'claude', 'codex', 'gemini', 'qwen', or 'all'")
+	cmd.Flags().StringP("agent", "a", string(install.AgentAuto), "Target agent: 'auto', 'claude', 'codex', 'gemini', 'qwen', 'copilot', or 'all'")
 
 	// Add --dry-run flag
 	cmd.Flags().BoolP("dry-run", "d", false, "Show what would be done without making changes (simulation mode)")

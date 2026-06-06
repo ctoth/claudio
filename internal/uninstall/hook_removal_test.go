@@ -88,6 +88,34 @@ func TestRemoveClaudioHooksWithFullPaths(t *testing.T) {
 			},
 		},
 		{
+			name: "remove direct Copilot command hook",
+			initialSettings: &install.SettingsMap{
+				"hooks": map[string]interface{}{
+					"PreToolUse": []interface{}{
+						map[string]interface{}{
+							"command": "/usr/local/bin/claudio --hook-agent copilot",
+							"type":    "command",
+						},
+						map[string]interface{}{
+							"command": "/usr/bin/logger",
+							"type":    "command",
+						},
+					},
+				},
+			},
+			hookNames: []string{"PreToolUse"},
+			expectedSettings: &install.SettingsMap{
+				"hooks": map[string]interface{}{
+					"PreToolUse": []interface{}{
+						map[string]interface{}{
+							"command": "/usr/bin/logger",
+							"type":    "command",
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "remove complex array hook - dev directory path",
 			initialSettings: &install.SettingsMap{
 				"hooks": map[string]interface{}{

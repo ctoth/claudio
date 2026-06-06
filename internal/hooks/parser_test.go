@@ -1511,3 +1511,71 @@ func TestGetContextQwenFailureEvents(t *testing.T) {
 		t.Errorf("expected error-occurred, got %q", ctx.SoundHint)
 	}
 }
+
+func TestGetContextCopilotToolNames(t *testing.T) {
+	tool := "powershell"
+	input := json.RawMessage(`{"command":"git status"}`)
+	event := &HookEvent{SessionID: "a", CWD: "/tmp", EventName: "PreToolUse", ToolName: &tool, ToolInput: &input}
+	ctx := event.GetContext()
+	if ctx.Category != Loading {
+		t.Errorf("expected Loading, got %v", ctx.Category)
+	}
+	if ctx.OriginalTool != "Bash" || ctx.ToolName != "git" {
+		t.Errorf("tool normalization = original %q tool %q, want Bash/git", ctx.OriginalTool, ctx.ToolName)
+	}
+	if ctx.SoundHint != "git-status-start" {
+		t.Errorf("expected git-status-start, got %q", ctx.SoundHint)
+	}
+
+	tool = "view"
+	event = &HookEvent{SessionID: "a", CWD: "/tmp", EventName: "PreToolUse", ToolName: &tool}
+	ctx = event.GetContext()
+	if ctx.ToolName != "Read" || ctx.SoundHint != "read-start" {
+		t.Errorf("view normalization = tool %q hint %q, want Read/read-start", ctx.ToolName, ctx.SoundHint)
+	}
+}
+
+func TestParseCopilotResultAliases(t *testing.T) {
+	payload := []byte(`{
+		"sessionId": "copilot-session",
+		"hook_event_name": "PostToolUse",
+		"cwd": "/tmp",
+		"tool_name": "Write",
+		"tool_result": {"success": true}
+	}`)
+
+	event, err := NewHookEventParser().Parse(payload)
+	if err != nil {
+		t.Fatalf("Parse returned error: %v", err)
+	}
+	if event.SessionID != "copilot-session" {
+		t.Errorf("session id = %q, want copilot-session", event.SessionID)
+	}
+	if event.ToolResponse == nil {
+		t.Fatal("expected tool_result alias to populate ToolResponse")
+	}
+
+	ctx := event.GetContext()
+	if ctx.SoundHint != "write-success" {
+		t.Errorf("sound hint = %q, want write-success", ctx.SoundHint)
+	}
+}
+
+func TestParseCopilotNotificationSessionAlias(t *testing.T) {
+	payload := []byte(`{
+		"sessionId": "copilot-session",
+		"hook_event_name": "Notification",
+		"cwd": "/tmp",
+		"message": "Permission needed"
+	}`)
+
+	event, err := NewHookEventParser().Parse(payload)
+	if err != nil {
+		t.Fatalf("Parse returned error: %v", err)
+	}
+
+	ctx := event.GetContext()
+	if ctx.SoundHint != "notification-permission" {
+		t.Errorf("sound hint = %q, want notification-permission", ctx.SoundHint)
+	}
+}

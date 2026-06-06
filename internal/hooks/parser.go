@@ -44,7 +44,7 @@ func (c EventCategory) String() string {
 	}
 }
 
-// HookEvent represents a parsed Claude Code hook event
+// HookEvent represents a parsed agent hook event.
 type HookEvent struct {
 	// Base fields (always present)
 	SessionID      string `json:"session_id"`
@@ -79,7 +79,7 @@ type CommandInfo struct {
 	HasSubcommand bool   // True if subcommand was found
 }
 
-// HookEventParser parses Claude Code hook JSON into structured events
+// HookEventParser parses agent hook JSON into structured events.
 type HookEventParser struct{}
 
 // NewHookEventParser creates a new hook event parser
@@ -103,6 +103,9 @@ func (p *HookEventParser) Parse(data []byte) (*HookEvent, error) {
 	if err != nil {
 		slog.Error("failed to unmarshal hook JSON", "error", err, "data_preview", string(data[:min(100, len(data))]))
 		return nil, fmt.Errorf("failed to parse hook JSON: %w", err)
+	}
+	if err := event.applyCompatibilityAliases(data); err != nil {
+		return nil, err
 	}
 
 	// Validate required fields
@@ -131,6 +134,46 @@ func (p *HookEventParser) Parse(data []byte) (*HookEvent, error) {
 		"has_tool_response", event.ToolResponse != nil)
 
 	return &event, nil
+}
+
+type hookEventAliases struct {
+	SessionID      string           `json:"sessionId"`
+	TranscriptPath string           `json:"transcriptPath"`
+	EventName      string           `json:"hookEventName"`
+	ToolName       string           `json:"toolName"`
+	ToolInput      *json.RawMessage `json:"toolArgs"`
+	ToolResponse   *json.RawMessage `json:"toolResult"`
+	ToolResult     *json.RawMessage `json:"tool_result"`
+}
+
+func (e *HookEvent) applyCompatibilityAliases(data []byte) error {
+	var aliases hookEventAliases
+	if err := json.Unmarshal(data, &aliases); err != nil {
+		slog.Error("failed to unmarshal hook JSON aliases", "error", err)
+		return fmt.Errorf("failed to parse hook JSON aliases: %w", err)
+	}
+	if e.SessionID == "" {
+		e.SessionID = aliases.SessionID
+	}
+	if e.TranscriptPath == "" {
+		e.TranscriptPath = aliases.TranscriptPath
+	}
+	if e.EventName == "" {
+		e.EventName = aliases.EventName
+	}
+	if e.ToolName == nil && aliases.ToolName != "" {
+		e.ToolName = &aliases.ToolName
+	}
+	if e.ToolInput == nil {
+		e.ToolInput = aliases.ToolInput
+	}
+	if e.ToolResponse == nil {
+		e.ToolResponse = aliases.ToolResponse
+	}
+	if e.ToolResponse == nil {
+		e.ToolResponse = aliases.ToolResult
+	}
+	return nil
 }
 
 // GetContext extracts actionable context from the hook event for sound mapping
@@ -393,15 +436,15 @@ func normalizeToolName(toolName string) string {
 	key := strings.ToLower(strings.TrimSpace(toolName))
 	key = strings.ReplaceAll(key, "-", "_")
 	switch key {
-	case "bash", "shell", "run_shell_command":
+	case "bash", "shell", "powershell", "run_shell_command":
 		return "Bash"
-	case "write", "writefile", "write_file":
+	case "write", "writefile", "write_file", "create":
 		return "Write"
 	case "edit", "edit_file", "replace":
 		return "Edit"
 	case "multiedit", "multi_edit":
 		return "MultiEdit"
-	case "read", "readfile", "read_file", "read_many_files":
+	case "read", "readfile", "read_file", "read_many_files", "view":
 		return "Read"
 	case "ls", "list_directory":
 		return "LS"

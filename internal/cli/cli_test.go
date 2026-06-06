@@ -111,7 +111,7 @@ func TestCLIBasicUsage(t *testing.T) {
 }
 
 func TestJSONStdoutHookAgentsWriteEmptyResponse(t *testing.T) {
-	for _, agent := range []string{"gemini", "qwen"} {
+	for _, agent := range []string{"gemini", "qwen", "copilot"} {
 		t.Run(agent, func(t *testing.T) {
 			testenv.IsolateXDG(t)
 			cli := NewCLI()

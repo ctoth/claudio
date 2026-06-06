@@ -70,6 +70,11 @@ func isClaudioCommand(cmdStr string) bool {
 func containsClaudioCommand(array []interface{}) bool {
 	for _, item := range array {
 		if itemMap, ok := item.(map[string]interface{}); ok {
+			if command, exists := itemMap["command"]; exists {
+				if commandStr, ok := command.(string); ok && isClaudioCommand(commandStr) {
+					return true
+				}
+			}
 			// Check if this item has a "hooks" array
 			if hooksInterface, exists := itemMap["hooks"]; exists {
 				if hooksArray, ok := hooksInterface.([]interface{}); ok {

@@ -33,9 +33,9 @@ claudio install
 ```
 
 This is the default: `--agent auto --scope global`. Claudio detects Claude
-Code, Codex CLI, Gemini CLI, and Qwen Code from installed commands, settings
-directories, or existing Claudio hook files. If more than one supported agent
-is detected, each matching hook set is installed.
+Code, Codex CLI, Gemini CLI, Qwen Code, and GitHub Copilot CLI from installed
+commands, settings directories, or existing Claudio hook files. If more than one
+supported agent is detected, each matching hook set is installed.
 
 To force every supported hook target:
 
@@ -125,6 +125,25 @@ Global scope writes `~/.qwen/settings.json`.
 
 Project scope writes `./.qwen/settings.json`.
 
+## GitHub Copilot CLI Hooks
+
+Install global GitHub Copilot CLI hooks:
+
+```bash
+claudio install --agent copilot --scope global
+```
+
+Install hooks only for the current project:
+
+```bash
+claudio install --agent copilot --scope project
+```
+
+Global scope writes `~/.copilot/settings.json`, or `$COPILOT_HOME/settings.json`
+when `COPILOT_HOME` is set.
+
+Project scope writes `./.github/copilot/settings.local.json`.
+
 ## Inspect Before Writing
 
 Dry run:
@@ -135,6 +154,7 @@ claudio install --agent claude --scope global --dry-run
 claudio install --agent codex --scope global --dry-run
 claudio install --agent gemini --scope global --dry-run
 claudio install --agent qwen --scope global --dry-run
+claudio install --agent copilot --scope global --dry-run
 ```
 
 Print the target path and mode:
@@ -273,6 +293,7 @@ claudio uninstall --agent claude --scope global
 claudio uninstall --agent codex --scope global
 claudio uninstall --agent gemini --scope global
 claudio uninstall --agent qwen --scope global
+claudio uninstall --agent copilot --scope global
 ```
 
 Use `--dry-run`, `--print`, or `--quiet` the same way as `install`.
