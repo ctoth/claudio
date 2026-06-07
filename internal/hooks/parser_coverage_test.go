@@ -279,6 +279,7 @@ func TestNormalizeToolNameAliases(t *testing.T) {
 		"todo-write":                 "TodoWrite",
 		"read_mcp_resource":          "mcp",
 		"mcp__filesystem__read_file": "mcp",
+		"mcp_filesystem_read_file":   "mcp",
 		"CustomTool":                 "CustomTool",
 	}
 	for input, want := range cases {

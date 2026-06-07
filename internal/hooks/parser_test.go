@@ -1148,9 +1148,9 @@ func TestPostToolUseSuffixesUnchanged(t *testing.T) {
 	}
 }
 
-// TestMCPToolNormalization verifies that mcp__<server>__<tool> tool names are
-// normalized to "mcp" for sound mapping, making all MCP servers produce the
-// same generic mcp sounds regardless of which server or tool is called.
+// TestMCPToolNormalization verifies that MCP tool names are normalized to "mcp"
+// for sound mapping, making all MCP servers produce the same generic mcp sounds
+// regardless of which server or tool is called.
 func TestMCPToolNormalization(t *testing.T) {
 	parser := NewHookEventParser()
 
@@ -1209,6 +1209,35 @@ func TestMCPToolNormalization(t *testing.T) {
 		}
 	})
 
+	t.Run("BeforeTool Gemini mcp_filesystem_read_file normalizes to mcp", func(t *testing.T) {
+		data := `{
+			"session_id": "test",
+			"transcript_path": "/test",
+			"cwd": "/test",
+			"hook_event_name": "BeforeTool",
+			"tool_name": "mcp_filesystem_read_file",
+			"tool_input": {}
+		}`
+		event, err := parser.Parse([]byte(data))
+		if err != nil {
+			t.Fatalf("Parse failed: %v", err)
+		}
+		ctx := event.GetContext()
+
+		if ctx.ToolName != "mcp" {
+			t.Errorf("ToolName: expected 'mcp', got '%s'", ctx.ToolName)
+		}
+		if ctx.OriginalTool != "mcp_filesystem_read_file" {
+			t.Errorf("OriginalTool: expected 'mcp_filesystem_read_file', got '%s'", ctx.OriginalTool)
+		}
+		if ctx.SoundHint != "mcp-start" {
+			t.Errorf("SoundHint: expected 'mcp-start', got '%s'", ctx.SoundHint)
+		}
+		if ctx.Category != Loading {
+			t.Errorf("Category: expected Loading, got %s", ctx.Category.String())
+		}
+	})
+
 	t.Run("PostToolUse success mcp__github__create_issue normalizes to mcp-success", func(t *testing.T) {
 		data := `{
 			"session_id": "test",
@@ -1230,6 +1259,36 @@ func TestMCPToolNormalization(t *testing.T) {
 		}
 		if ctx.OriginalTool != "mcp__github__create_issue" {
 			t.Errorf("OriginalTool: expected 'mcp__github__create_issue', got '%s'", ctx.OriginalTool)
+		}
+		if ctx.SoundHint != "mcp-success" {
+			t.Errorf("SoundHint: expected 'mcp-success', got '%s'", ctx.SoundHint)
+		}
+		if ctx.Category != Success {
+			t.Errorf("Category: expected Success, got %s", ctx.Category.String())
+		}
+	})
+
+	t.Run("AfterTool success Gemini mcp_filesystem_read_file normalizes to mcp-success", func(t *testing.T) {
+		data := `{
+			"session_id": "test",
+			"transcript_path": "/test",
+			"cwd": "/test",
+			"hook_event_name": "AfterTool",
+			"tool_name": "mcp_filesystem_read_file",
+			"tool_input": {},
+			"tool_response": {"content": "file contents", "isError": false}
+		}`
+		event, err := parser.Parse([]byte(data))
+		if err != nil {
+			t.Fatalf("Parse failed: %v", err)
+		}
+		ctx := event.GetContext()
+
+		if ctx.ToolName != "mcp" {
+			t.Errorf("ToolName: expected 'mcp', got '%s'", ctx.ToolName)
+		}
+		if ctx.OriginalTool != "mcp_filesystem_read_file" {
+			t.Errorf("OriginalTool: expected 'mcp_filesystem_read_file', got '%s'", ctx.OriginalTool)
 		}
 		if ctx.SoundHint != "mcp-success" {
 			t.Errorf("SoundHint: expected 'mcp-success', got '%s'", ctx.SoundHint)
