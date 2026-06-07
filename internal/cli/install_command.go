@@ -154,7 +154,7 @@ func handleDryRunInstall(cmd *cobra.Command, scope InstallScope, targets []insta
 			cmd.Printf("Target agent: %s\n", target.Agent)
 			cmd.Printf("Settings path: %s\n", target.ConfigPath)
 
-			hookList := strings.Join(target.Agent.HookNames(), ", ")
+			hookList := strings.Join(enabledHookNames(target.Agent), ", ")
 			cmd.Printf("Would install hooks: %s\n", hookList)
 			if target.Agent == install.AgentCodex {
 				cmd.Printf("After install, run /hooks in Codex to trust the claudio hook.\n")
@@ -167,6 +167,15 @@ func handleDryRunInstall(cmd *cobra.Command, scope InstallScope, targets []insta
 		}
 	}
 	return nil
+}
+
+func enabledHookNames(agent install.Agent) []string {
+	definitions := agent.EnabledHooks()
+	names := make([]string, len(definitions))
+	for i, definition := range definitions {
+		names[i] = definition.Name
+	}
+	return names
 }
 
 func runInstallTargets(cmd *cobra.Command, scope InstallScope, targets []install.AgentTarget, quiet bool) error {
