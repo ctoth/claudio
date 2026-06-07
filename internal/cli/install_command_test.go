@@ -149,6 +149,27 @@ func TestInstallCommandDefaultsToClaude(t *testing.T) {
 	}
 }
 
+func TestInstallCommandDryRunShowsOnlyEnabledHooks(t *testing.T) {
+	cmd := newInstallCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"--agent", "claude", "--dry-run"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	output := out.String()
+	if strings.Contains(output, "MessageDisplay") {
+		t.Errorf("dry-run output listed disabled MessageDisplay hook: %s", output)
+	}
+	if strings.Contains(output, "FileChanged") {
+		t.Errorf("dry-run output listed disabled FileChanged hook: %s", output)
+	}
+	if !strings.Contains(output, "SessionStart") {
+		t.Errorf("dry-run output omitted enabled SessionStart hook: %s", output)
+	}
+}
+
 func addFakeCliAgentBinary(t *testing.T, dir string, name string) {
 	t.Helper()
 	if runtime.GOOS == "windows" {
