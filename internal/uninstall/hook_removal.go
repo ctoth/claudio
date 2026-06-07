@@ -13,6 +13,9 @@ func isSimpleClaudioArrayHook(arr []interface{}) bool {
 	}
 
 	if config, ok := arr[0].(map[string]interface{}); ok {
+		if cmdStr, ok := config["command"].(string); ok && isClaudioCommand(cmdStr) {
+			return true
+		}
 		if hooks, ok := config["hooks"].([]interface{}); ok && len(hooks) == 1 {
 			if cmd, ok := hooks[0].(map[string]interface{}); ok {
 				if cmdStr, ok := cmd["command"].(string); ok && isClaudioCommand(cmdStr) {
@@ -173,6 +176,13 @@ func removeClaudioFromArray(array []interface{}) ([]interface{}, int) {
 			// Keep non-map items as-is
 			filteredArray = append(filteredArray, item)
 			continue
+		}
+		if command, exists := itemMap["command"]; exists {
+			if commandStr, ok := command.(string); ok && isClaudioCommand(commandStr) {
+				slog.Debug("removing direct claudio command from hooks array", "command", commandStr)
+				commandsRemoved++
+				continue
+			}
 		}
 
 		// Check if this item has a "hooks" array

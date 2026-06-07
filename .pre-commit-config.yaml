@@ -1,0 +1,44 @@
+repos:
+  - repo: local
+    hooks:
+      - id: go-vet
+        name: go vet
+        entry: go vet ./...
+        language: system
+        pass_filenames: false
+        files: \.go$
+
+      - id: go-test
+        name: go test
+        entry: go test ./... -count=1
+        language: system
+        pass_filenames: false
+        files: \.go$
+
+      - id: go-build
+        name: go build
+        entry: go run ./internal/devtools/buildcheck
+        language: system
+        pass_filenames: false
+        files: \.go$
+
+      - id: golangci-lint
+        name: golangci-lint
+        entry: go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8 run
+        language: system
+        pass_filenames: false
+        files: \.go$
+
+      - id: build-nocgo
+        name: build without CGO
+        entry: go run ./internal/devtools/buildcheck -nocgo ./...
+        language: system
+        pass_filenames: false
+        files: \.go$
+
+      - id: coverage-floor
+        name: coverage floor
+        entry: go run ./internal/devtools/coveragefloor -floor 97.9 ./internal/hooks ./internal/install
+        language: system
+        pass_filenames: false
+        files: \.go$

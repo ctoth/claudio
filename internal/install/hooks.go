@@ -5,14 +5,12 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"path/filepath"
-	"runtime"
 	"strings"
 
 	"claudio.click/internal/fs"
 )
 
-// HooksMap represents the hooks section of Claude Code settings
+// HooksMap represents an agent settings hooks section.
 type HooksMap map[string]interface{}
 
 // executableRecognizer decides whether a basename refers to the claudio
@@ -35,14 +33,13 @@ var executableRecognizer = func(name string) bool {
 	return false
 }
 
-
 // GenerateClaudioHooks creates the Claude Code hook configuration (backward-compatible default).
 func GenerateClaudioHooks(executablePath string) (interface{}, error) {
 	return GenerateClaudioHooksForAgent(executablePath, AgentClaude)
 }
 
-// GenerateClaudioHooksForAgent creates hook configuration for the given agent using its
-// registry and matcher. Returns a hooks map suitable for Claude settings.json or Codex hooks.json.
+// GenerateClaudioHooksForAgent creates hook configuration for the given agent
+// using its registry and config shape.
 func GenerateClaudioHooksForAgent(executablePath string, agent Agent) (interface{}, error) {
 	slog.Debug("generating Claudio hooks configuration",
 		"agent", agent, "executable_path", executablePath)
@@ -54,15 +51,22 @@ func GenerateClaudioHooksForAgent(executablePath string, agent Agent) (interface
 	hooks := make(HooksMap)
 
 	// Helper function to create hook config structure
-	createHookConfig := func() interface{} {
+	createHookConfig := func(hookDef HookDefinition) interface{} {
+		commandConfig := map[string]interface{}{
+			"type":    "command",
+			"command": hookCommandForHook(executablePath, agent, hookDef.Name),
+		}
+		addAgentHookMetadata(commandConfig, agent)
+
+		if agent == AgentCopilot {
+			return []interface{}{commandConfig}
+		}
+
 		return []interface{}{
 			map[string]interface{}{
 				"matcher": matcher,
 				"hooks": []interface{}{
-					map[string]interface{}{
-						"type":    "command",
-						"command": executablePath,
-					},
+					commandConfig,
 				},
 			},
 		}
@@ -70,7 +74,7 @@ func GenerateClaudioHooksForAgent(executablePath string, agent Agent) (interface
 
 	// Generate hooks for all enabled hooks in the agent's registry
 	for _, hookDef := range enabledHooks {
-		hooks[hookDef.Name] = createHookConfig()
+		hooks[hookDef.Name] = createHookConfig(hookDef)
 		slog.Debug("added hook from registry",
 			"agent", agent,
 			"hook_name", hookDef.Name,
@@ -84,6 +88,41 @@ func GenerateClaudioHooksForAgent(executablePath string, agent Agent) (interface
 		"hooks", getHookNamesList(hooks))
 
 	return hooks, nil
+}
+
+func hookCommandForAgent(executablePath string, agent Agent) string {
+	switch agent {
+	case AgentGemini, AgentQwen, AgentCopilot:
+		return quoteCommandArg(executablePath) + " --hook-agent " + string(agent)
+	default:
+		return executablePath
+	}
+}
+
+func hookCommandForHook(executablePath string, agent Agent, hookName string) string {
+	command := hookCommandForAgent(executablePath, agent)
+	if agent == AgentCopilot && hookName == "subagentStart" {
+		return command + " --hook-event subagentStart"
+	}
+	return command
+}
+
+func addAgentHookMetadata(commandConfig map[string]interface{}, agent Agent) {
+	switch agent {
+	case AgentGemini:
+		commandConfig["name"] = "claudio"
+	case AgentQwen:
+		commandConfig["name"] = "claudio"
+	case AgentCopilot:
+		commandConfig["timeoutSec"] = 30
+	}
+}
+
+func quoteCommandArg(arg string) string {
+	if !strings.ContainsAny(arg, " \t\r\n\"") {
+		return arg
+	}
+	return `"` + strings.ReplaceAll(arg, `"`, `\"`) + `"`
 }
 
 // getHookNamesList returns a list of hook names for logging
@@ -271,6 +310,14 @@ func mergeHookValues(existingValue, claudioValue interface{}) interface{} {
 			filteredExisting = append(filteredExisting, item)
 			continue
 		}
+		if cmdStr, ok := itemMap["command"].(string); ok {
+			if isClaudioCommandString(cmdStr) {
+				strippedCount++
+				continue
+			}
+			filteredExisting = append(filteredExisting, item)
+			continue
+		}
 		hooks, ok := itemMap["hooks"].([]interface{})
 		if !ok {
 			// Preserve items without a hooks sub-array verbatim
@@ -334,6 +381,9 @@ func mergeHookValues(existingValue, claudioValue interface{}) interface{} {
 // (a map with a "hooks" sub-array) contains any hook whose command resolves
 // to the claudio executable per executableRecognizer.
 func itemContainsClaudioCommand(item map[string]interface{}) bool {
+	if cmdStr, ok := item["command"].(string); ok && isClaudioCommandString(cmdStr) {
+		return true
+	}
 	hooks, ok := item["hooks"].([]interface{})
 	if !ok {
 		return false
@@ -361,11 +411,51 @@ func itemContainsClaudioCommand(item map[string]interface{}) bool {
 // uninstall maintained two recognizers with divergent code shapes;
 // they happened to agree on production inputs only by accident.)
 func IsClaudioCommandString(cmdStr string) bool {
-	// Strip surrounding quotes if present (for Windows compatibility)
-	if len(cmdStr) >= 2 && cmdStr[0] == '"' && cmdStr[len(cmdStr)-1] == '"' {
-		cmdStr = cmdStr[1 : len(cmdStr)-1]
+	cmdStr = strings.TrimSpace(cmdStr)
+	if cmdStr == "" {
+		return false
 	}
-	return executableRecognizer(commandBasename(cmdStr))
+
+	// Preserve support for legacy unquoted Windows paths with spaces, such as
+	// C:\Program Files\claudio.exe, by trying the full string before treating
+	// whitespace as argument separation.
+	if executableRecognizer(commandBasename(stripSurroundingQuotes(cmdStr))) {
+		return true
+	}
+
+	executable, _ := leadingCommandToken(cmdStr)
+	return executableRecognizer(commandBasename(executable))
+}
+
+func stripSurroundingQuotes(s string) string {
+	if len(s) >= 2 {
+		if (s[0] == '"' && s[len(s)-1] == '"') || (s[0] == '\'' && s[len(s)-1] == '\'') {
+			return s[1 : len(s)-1]
+		}
+	}
+	return s
+}
+
+func leadingCommandToken(s string) (string, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "", false
+	}
+
+	if s[0] == '"' || s[0] == '\'' {
+		quote := s[0]
+		for i := 1; i < len(s); i++ {
+			if s[i] == quote {
+				return s[1:i], true
+			}
+		}
+		return stripSurroundingQuotes(s), true
+	}
+
+	if i := strings.IndexAny(s, " \t\r\n"); i >= 0 {
+		return s[:i], true
+	}
+	return s, true
 }
 
 // commandBasename returns the final path segment of a command string,
@@ -419,16 +509,6 @@ func IsClaudioHook(hookValue interface{}) bool {
 }
 
 // GetExecutablePath returns the current executable path using filesystem abstraction.
-// On Windows the result is converted to forward slashes so that the path works
-// when Claude Code invokes the hook command through bash.
 func GetExecutablePath() (string, error) {
-	p, err := fs.ExecutablePath()
-	if err != nil {
-		return "", err
-	}
-	if runtime.GOOS == "windows" {
-		p = filepath.ToSlash(p)
-	}
-	return p, nil
+	return fs.ExecutablePath()
 }
-

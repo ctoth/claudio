@@ -60,6 +60,20 @@ func TestDetectClaudioHooksWithFullPaths(t *testing.T) {
 			expected: []string{"Notification"},
 		},
 		{
+			name: "direct Copilot command hook",
+			settings: &install.SettingsMap{
+				"hooks": map[string]interface{}{
+					"PreToolUse": []interface{}{
+						map[string]interface{}{
+							"command": "/usr/local/bin/claudio --hook-agent copilot",
+							"type":    "command",
+						},
+					},
+				},
+			},
+			expected: []string{"PreToolUse"},
+		},
+		{
 			name: "complex array hook - dev directory path",
 			settings: &install.SettingsMap{
 				"hooks": map[string]interface{}{

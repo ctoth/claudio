@@ -94,9 +94,10 @@ func TestRunInstallWorkflow_EndToEnd_NoDryRun(t *testing.T) {
 		t.Fatalf("settings.json 'hooks' is %T, want map[string]interface{}", hooksAny)
 	}
 
-	// Every hook the Claude agent registry advertises must be
-	// present AND must be classified as a Claudio hook.
-	for _, name := range install.AgentClaude.HookNames() {
+	// Every default-enabled Claude hook must be present AND must be
+	// classified as a Claudio hook.
+	for _, definition := range install.AgentClaude.EnabledHooks() {
+		name := definition.Name
 		val, exists := hooks[name]
 		if !exists {
 			t.Errorf("hook %q missing from settings.json after install", name)
@@ -126,7 +127,8 @@ func TestRunInstallWorkflow_EndToEnd_NoDryRun(t *testing.T) {
 		t.Fatalf("settings.json after second install not valid JSON: %v", err)
 	}
 	hooks2, _ := settings2["hooks"].(map[string]interface{})
-	for _, name := range install.AgentClaude.HookNames() {
+	for _, definition := range install.AgentClaude.EnabledHooks() {
+		name := definition.Name
 		if val, exists := hooks2[name]; !exists {
 			t.Errorf("after second install hook %q missing", name)
 		} else if !install.IsClaudioHook(val) {

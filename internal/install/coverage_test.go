@@ -1,6 +1,7 @@
 package install
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -349,6 +350,12 @@ func TestIsClaudioHookFormats(t *testing.T) {
 	if !IsClaudioHook(`"/usr/local/bin/claudio.exe"`) {
 		t.Error("expected quoted windows claudio recognized")
 	}
+	if !IsClaudioHook(`/usr/local/bin/claudio --hook-agent gemini`) {
+		t.Error("expected claudio command with arguments recognized")
+	}
+	if !IsClaudioHook(`"C:\Program Files\claudio.exe" --hook-agent gemini`) {
+		t.Error("expected quoted claudio command with arguments recognized")
+	}
 	if IsClaudioHook("/usr/bin/other") {
 		t.Error("non-claudio command must not be recognized")
 	}
@@ -481,4 +488,196 @@ func TestFindBestPathReturnsExistingFile(t *testing.T) {
 	if cgot != filepath.Join(".claude", "settings.json") {
 		t.Errorf("expected existing claude file, got %q", cgot)
 	}
+}
+
+func TestHookCommandQuotingAndRecognitionBranches(t *testing.T) {
+	if got := hookCommandForAgent("/usr/local/bin/claudio", AgentClaude); got != "/usr/local/bin/claudio" {
+		t.Errorf("claude hook command = %q", got)
+	}
+	if got := hookCommandForAgent(`/opt/Claudio Tools/claudio`, AgentGemini); got != `"/opt/Claudio Tools/claudio" --hook-agent gemini` {
+		t.Errorf("gemini hook command = %q", got)
+	}
+	if got := hookCommandForAgent(`/opt/cla"udio`, AgentQwen); got != `"/opt/cla\"udio" --hook-agent qwen` {
+		t.Errorf("qwen hook command = %q", got)
+	}
+	if got := quoteCommandArg("plain"); got != "plain" {
+		t.Errorf("plain arg quoted as %q", got)
+	}
+
+	if IsClaudioCommandString("") {
+		t.Error("empty command must not be recognized as claudio")
+	}
+	if IsClaudioCommandString("/usr/bin/other --flag") {
+		t.Error("other command must not be recognized as claudio")
+	}
+	if !IsClaudioCommandString(`"/usr/local/bin/claudio" --silent`) {
+		t.Error("quoted executable with arguments should be recognized")
+	}
+	if !IsClaudioCommandString(`'/usr/local/bin/claudio' --silent`) {
+		t.Error("single-quoted executable with arguments should be recognized")
+	}
+	if !IsClaudioCommandString(`C:\Program Files\claudio.exe`) {
+		t.Error("legacy unquoted Windows path with spaces should be recognized")
+	}
+	if IsClaudioCommandString(`"/usr/local/bin/other --silent`) {
+		t.Error("unclosed quoted non-claudio command must not be recognized")
+	}
+
+	if token, ok := leadingCommandToken("  "); ok || token != "" {
+		t.Errorf("blank leading token = %q, %v; want empty false", token, ok)
+	}
+	if token, ok := leadingCommandToken(`"/usr/local/bin/claudio --silent`); !ok || token != `"/usr/local/bin/claudio --silent` {
+		t.Errorf("unclosed quoted leading token = %q, %v", token, ok)
+	}
+}
+
+func TestHookArrayDetectionAdditionalBranches(t *testing.T) {
+	if IsClaudioHook([]interface{}{}) {
+		t.Error("empty hook array must not be recognized")
+	}
+	if IsClaudioHook([]interface{}{"raw", map[string]interface{}{"hooks": []interface{}{}}}) {
+		t.Error("array without claudio command must not be recognized")
+	}
+
+	directCommand := map[string]interface{}{"command": "/opt/claudio"}
+	if !itemContainsClaudioCommand(directCommand) {
+		t.Error("direct command item should be recognized")
+	}
+	noHookArray := map[string]interface{}{"matcher": "*"}
+	if itemContainsClaudioCommand(noHookArray) {
+		t.Error("item without hooks array must not be recognized")
+	}
+	nestedCommand := map[string]interface{}{
+		"hooks": []interface{}{
+			"raw-hook",
+			map[string]interface{}{"command": 42},
+			map[string]interface{}{"command": "/opt/claudio"},
+		},
+	}
+	if !itemContainsClaudioCommand(nestedCommand) {
+		t.Error("nested claudio command should be recognized")
+	}
+}
+
+func TestMergeHookValuesReturnsNonArrayClaudioValue(t *testing.T) {
+	if got := mergeHookValues([]interface{}{}, "not-array"); got != "not-array" {
+		t.Errorf("mergeHookValues returned %v, want non-array claudio value", got)
+	}
+}
+
+func TestAdditionalBestPathFallbacksAndInvalidScopes(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("HOMEDRIVE", "")
+	t.Setenv("HOMEPATH", "")
+	t.Setenv("COPILOT_HOME", "")
+
+	qwenPath, err := FindBestQwenPath("global")
+	if err != nil {
+		t.Fatalf("FindBestQwenPath returned error: %v", err)
+	}
+	if want := filepath.Join(home, ".qwen", "settings.json"); qwenPath != want {
+		t.Errorf("FindBestQwenPath = %q, want %q", qwenPath, want)
+	}
+
+	copilotPath, err := FindBestCopilotPath("global")
+	if err != nil {
+		t.Fatalf("FindBestCopilotPath returned error: %v", err)
+	}
+	if want := filepath.Join(home, ".copilot", "settings.json"); copilotPath != want {
+		t.Errorf("FindBestCopilotPath = %q, want %q", copilotPath, want)
+	}
+
+	if _, err := FindBestQwenPath("bogus"); err == nil {
+		t.Error("expected invalid Qwen best path scope error")
+	}
+	if _, err := FindBestCopilotPath("bogus"); err == nil {
+		t.Error("expected invalid Copilot best path scope error")
+	}
+}
+
+func TestAdditionalGlobalPathFallbacksWhenHomeMissing(t *testing.T) {
+	t.Setenv("HOME", "")
+	t.Setenv("USERPROFILE", "")
+	t.Setenv("HOMEDRIVE", "")
+	t.Setenv("HOMEPATH", "")
+	t.Setenv("COPILOT_HOME", "")
+
+	qwenPaths, err := FindQwenSettingsPaths("global")
+	if err != nil {
+		t.Fatalf("FindQwenSettingsPaths returned error: %v", err)
+	}
+	if want := filepath.Join("~", ".qwen", "settings.json"); len(qwenPaths) != 1 || qwenPaths[0] != want {
+		t.Fatalf("Qwen fallback paths = %v, want [%q]", qwenPaths, want)
+	}
+
+	copilotPaths, err := FindCopilotSettingsPaths("global")
+	if err != nil {
+		t.Fatalf("FindCopilotSettingsPaths returned error: %v", err)
+	}
+	if want := filepath.Join("~", ".copilot", "settings.json"); len(copilotPaths) != 1 || copilotPaths[0] != want {
+		t.Fatalf("Copilot fallback paths = %v, want [%q]", copilotPaths, want)
+	}
+}
+
+func TestResolveAgentTargetsRejectsInvalidScope(t *testing.T) {
+	if _, err := ResolveAgentTargets(AgentClaude, "bogus"); err == nil {
+		t.Fatal("expected invalid scope error")
+	}
+}
+
+func TestReadSettingsFilePrimitiveJSONErrors(t *testing.T) {
+	fsys := afero.NewMemMapFs()
+	cases := map[string]string{
+		"/string.json": `"not an object"`,
+		"/number.json": "42",
+		"/bool.json":   "true",
+	}
+	for path, content := range cases {
+		if err := afero.WriteFile(fsys, path, []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := ReadSettingsFile(fsys, path); err == nil {
+			t.Errorf("expected primitive JSON error for %s", path)
+		}
+	}
+}
+
+func TestReadSettingsFileReadError(t *testing.T) {
+	fsys := afero.NewMemMapFs()
+	path := "/settings.json"
+	if err := afero.WriteFile(fsys, path, []byte(`{"ok":true}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReadSettingsFile(readErrorFs{Fs: fsys}, path); err == nil {
+		t.Fatal("expected read error")
+	}
+}
+
+func TestAutoDetectUsesGlobalConfigEvidenceForProjectScope(t *testing.T) {
+	home := t.TempDir()
+	setIsolatedAgentEnv(t, t.TempDir(), home)
+	if err := os.MkdirAll(filepath.Join(home, ".gemini"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	targets, err := ResolveAgentTargets(AgentAuto, ScopeProject)
+	if err != nil {
+		t.Fatalf("ResolveAgentTargets returned error: %v", err)
+	}
+	if len(targets) != 1 || targets[0].Agent != AgentGemini {
+		t.Fatalf("targets = %+v, want only gemini", targets)
+	}
+	if got := filepath.Base(filepath.Dir(targets[0].ConfigPath)); got != ".gemini" {
+		t.Fatalf("project target dir = %q, want .gemini", got)
+	}
+}
+
+type readErrorFs struct {
+	afero.Fs
+}
+
+func (f readErrorFs) Open(name string) (afero.File, error) {
+	return nil, errors.New("injected read error")
 }

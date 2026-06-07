@@ -110,6 +110,89 @@ func TestCLIBasicUsage(t *testing.T) {
 	}
 }
 
+func TestJSONStdoutHookAgentsWriteEmptyResponse(t *testing.T) {
+	for _, agent := range []string{"gemini", "qwen", "copilot"} {
+		t.Run(agent, func(t *testing.T) {
+			testenv.IsolateXDG(t)
+			cli := NewCLI()
+
+			hookJSON := `{
+				"session_id": "test",
+				"transcript_path": "/test",
+				"cwd": "/test",
+				"hook_event_name": "BeforeModel"
+			}`
+
+			stdout := &bytes.Buffer{}
+			stderr := &bytes.Buffer{}
+			exitCode := cli.Run(
+				[]string{"claudio", "--silent", "--hook-agent", agent},
+				strings.NewReader(hookJSON),
+				stdout,
+				stderr,
+			)
+			if exitCode != 0 {
+				t.Fatalf("exit code = %d; stderr=%q", exitCode, stderr.String())
+			}
+			if stdout.String() != "{}\n" {
+				t.Fatalf("stdout = %q, want empty %s hook JSON response", stdout.String(), agent)
+			}
+		})
+	}
+}
+
+func TestDefaultHookAgentDoesNotWriteJSONResponse(t *testing.T) {
+	testenv.IsolateXDG(t)
+	cli := NewCLI()
+
+	hookJSON := `{
+		"session_id": "test",
+		"transcript_path": "/test",
+		"cwd": "/test",
+		"hook_event_name": "BeforeModel"
+	}`
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	exitCode := cli.Run(
+		[]string{"claudio", "--silent"},
+		strings.NewReader(hookJSON),
+		stdout,
+		stderr,
+	)
+	if exitCode != 0 {
+		t.Fatalf("exit code = %d; stderr=%q", exitCode, stderr.String())
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("stdout = %q, want no hook response for default agent", stdout.String())
+	}
+}
+
+func TestCopilotHookEventFlagSuppliesMissingEventName(t *testing.T) {
+	testenv.IsolateXDG(t)
+	cli := NewCLI()
+
+	hookJSON := `{
+		"sessionId": "test",
+		"cwd": "/test"
+	}`
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	exitCode := cli.Run(
+		[]string{"claudio", "--silent", "--hook-agent", "copilot", "--hook-event", "subagentStart"},
+		strings.NewReader(hookJSON),
+		stdout,
+		stderr,
+	)
+	if exitCode != 0 {
+		t.Fatalf("exit code = %d; stderr=%q", exitCode, stderr.String())
+	}
+	if stdout.String() != "{}\n" {
+		t.Fatalf("stdout = %q, want empty copilot hook JSON response", stdout.String())
+	}
+}
+
 func TestCLIFlags(t *testing.T) {
 	testenv.IsolateXDG(t)
 	// Preserve original slog configuration to avoid test interference

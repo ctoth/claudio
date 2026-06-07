@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -40,14 +39,14 @@ func NewCLI() *CLI {
 
 	rootCmd := &cobra.Command{
 		Use:     "claudio",
-		Short:   "Claude Code Audio Plugin",
-		Long:    "Claudio is a hook-based audio plugin for Claude Code that plays contextual sounds based on tool usage and events.",
+		Short:   "Coding-agent audio plugin",
+		Long:    "Claudio is a hook-based audio plugin for coding agents that plays contextual sounds based on tool usage and events.",
 		Version: Version,
 		RunE:    runStdinModeE, // Default behavior when no subcommand is provided
 	}
 	// Preserve the historical version output shape ("claudio version X (Version X)\n...")
 	// that downstream tooling and tests check against.
-	rootCmd.SetVersionTemplate("claudio version " + Version + " (Version " + Version + ")\nClaude Code Audio Plugin - Hook-based sound system\n")
+	rootCmd.SetVersionTemplate("claudio version " + Version + " (Version " + Version + ")\nCoding-agent audio plugin - Hook-based sound system\n")
 
 	// Add install subcommand
 	installCmd := newInstallCommand()
@@ -88,8 +87,12 @@ func NewCLI() *CLI {
 	rootCmd.PersistentFlags().Bool("silent", false, "Silent mode - no audio playback")
 	rootCmd.PersistentFlags().Bool("daemon-child", false, "Internal: run as detached hook worker")
 	rootCmd.PersistentFlags().String("hook-input-file", "", "Internal: hook payload file for detached worker")
+	rootCmd.PersistentFlags().String("hook-agent", "", "Internal: agent that invoked this hook")
+	rootCmd.PersistentFlags().String("hook-event", "", "Internal: event name when hook payload omits it")
 	_ = rootCmd.PersistentFlags().MarkHidden("daemon-child")
 	_ = rootCmd.PersistentFlags().MarkHidden("hook-input-file")
+	_ = rootCmd.PersistentFlags().MarkHidden("hook-agent")
+	_ = rootCmd.PersistentFlags().MarkHidden("hook-event")
 
 	// Note: cobra automatically registers a `--version` boolean flag (and
 	// short `-v`) once rootCmd.Version is set. We do not register a manual
@@ -426,26 +429,13 @@ func processHookInput(cmd *cobra.Command, cli *CLI, cfg *config.Config, inputDat
 		return nil
 	}
 
-	// Parse hook JSON
-	var hookEvent hooks.HookEvent
-	err := json.Unmarshal(inputData, &hookEvent)
+	parser := hooks.NewHookEventParser()
+	defaultEvent, _ := cmd.Flags().GetString("hook-event")
+	hookEvent, err := parser.ParseWithDefaultEvent(inputData, defaultEvent)
 	if err != nil {
-		cmd.PrintErrf("Error parsing hook JSON: %v\n", err)
+		cmd.PrintErrf("Error: %v\n", err)
 		slog.Error("hook JSON parsing failed", "error", err)
 		return fmt.Errorf("error parsing hook JSON: %w", err)
-	}
-
-	// Validate hook event
-	if hookEvent.EventName == "" {
-		cmd.PrintErrln("Error: missing required field 'hook_event_name'")
-		slog.Error("missing hook_event_name field")
-		return fmt.Errorf("missing required field 'hook_event_name'")
-	}
-
-	if hookEvent.SessionID == "" {
-		cmd.PrintErrln("Error: missing required field 'session_id'")
-		slog.Error("missing session_id field")
-		return fmt.Errorf("missing required field 'session_id'")
 	}
 
 	slog.Info("hook event parsed",
@@ -454,7 +444,7 @@ func processHookInput(cmd *cobra.Command, cli *CLI, cfg *config.Config, inputDat
 		"tool_name", getStringPtr(hookEvent.ToolName))
 
 	// Process hook event.
-	cli.processHookEvent(&hookEvent, cfg, cmd.OutOrStdout(), cmd.ErrOrStderr())
+	cli.processHookEvent(hookEvent, cfg, cmd.OutOrStdout(), cmd.ErrOrStderr())
 
 	return nil
 }
@@ -493,7 +483,7 @@ func runStdinModeE(cmd *cobra.Command, args []string) error {
 			slog.Error("detached hook worker start failed", "error", err)
 			return err
 		}
-		return nil
+		return writeJSONHookSuccessResponse(cmd, inputData)
 	}
 
 	// Initialize tracking (before audio system initialization). Pass the
@@ -509,7 +499,24 @@ func runStdinModeE(cmd *cobra.Command, args []string) error {
 	}
 
 	// Process hook input payload.
-	return processHookInput(cmd, cli, cfg, inputData)
+	if err := processHookInput(cmd, cli, cfg, inputData); err != nil {
+		return err
+	}
+	return writeJSONHookSuccessResponse(cmd, inputData)
+}
+
+func writeJSONHookSuccessResponse(cmd *cobra.Command, inputData []byte) error {
+	if len(inputData) == 0 {
+		return nil
+	}
+	hookAgent, _ := cmd.Flags().GetString("hook-agent")
+	hookAgent = strings.ToLower(strings.TrimSpace(hookAgent))
+	if hookAgent == "gemini" || hookAgent == "qwen" || hookAgent == "copilot" {
+		if _, err := fmt.Fprintln(cmd.OutOrStdout(), "{}"); err != nil {
+			return fmt.Errorf("failed to write %s hook response: %w", hookAgent, err)
+		}
+	}
+	return nil
 }
 
 // Run executes the CLI with the given arguments and I/O streams
@@ -542,6 +549,7 @@ func (c *CLI) Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 	slog.Debug("about to call initializeSystems()")
 	c.initializeSystems()
 	slog.Debug("initializeSystems() completed")
+	setupDefaultCommandLogging(stderr)
 
 	// Ensure resources are cleaned up on exit
 	defer func() {
@@ -575,6 +583,12 @@ func (c *CLI) Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 	}
 
 	return 0
+}
+
+func setupDefaultCommandLogging(stderr io.Writer) {
+	slog.SetDefault(slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{
+		Level: slog.LevelError,
+	})))
 }
 
 // initializeConfigManager initializes only the config manager early for log level configuration

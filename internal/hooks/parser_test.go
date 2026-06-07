@@ -3,6 +3,7 @@ package hooks
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -96,6 +97,7 @@ func TestEventCategory_String_NewCategories(t *testing.T) {
 		{"Interactive category", Interactive, "interactive"},
 		{"Completion category", Completion, "completion"},
 		{"System category", System, "system"},
+		{"Silent category", Silent, "silent"},
 	}
 
 	for _, tt := range tests {
@@ -103,6 +105,27 @@ func TestEventCategory_String_NewCategories(t *testing.T) {
 			result := tt.category.String()
 			if result != tt.expected {
 				t.Errorf("EventCategory.String() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGeminiNoSoundEventsAreSilent(t *testing.T) {
+	for _, eventName := range []string{"BeforeModel", "AfterModel", "BeforeToolSelection"} {
+		t.Run(eventName, func(t *testing.T) {
+			event := &HookEvent{
+				SessionID:      "session",
+				TranscriptPath: "/tmp/transcript",
+				CWD:            "/tmp",
+				EventName:      eventName,
+			}
+
+			context := event.GetContext()
+			if context.Category != Silent {
+				t.Errorf("category = %v, want Silent", context.Category)
+			}
+			if context.Operation != strings.ToLower(eventName) {
+				t.Errorf("operation = %q, want %q", context.Operation, strings.ToLower(eventName))
 			}
 		})
 	}
@@ -1125,9 +1148,9 @@ func TestPostToolUseSuffixesUnchanged(t *testing.T) {
 	}
 }
 
-// TestMCPToolNormalization verifies that mcp__<server>__<tool> tool names are
-// normalized to "mcp" for sound mapping, making all MCP servers produce the
-// same generic mcp sounds regardless of which server or tool is called.
+// TestMCPToolNormalization verifies that MCP tool names are normalized to "mcp"
+// for sound mapping, making all MCP servers produce the same generic mcp sounds
+// regardless of which server or tool is called.
 func TestMCPToolNormalization(t *testing.T) {
 	parser := NewHookEventParser()
 
@@ -1186,6 +1209,35 @@ func TestMCPToolNormalization(t *testing.T) {
 		}
 	})
 
+	t.Run("BeforeTool Gemini mcp_filesystem_read_file normalizes to mcp", func(t *testing.T) {
+		data := `{
+			"session_id": "test",
+			"transcript_path": "/test",
+			"cwd": "/test",
+			"hook_event_name": "BeforeTool",
+			"tool_name": "mcp_filesystem_read_file",
+			"tool_input": {}
+		}`
+		event, err := parser.Parse([]byte(data))
+		if err != nil {
+			t.Fatalf("Parse failed: %v", err)
+		}
+		ctx := event.GetContext()
+
+		if ctx.ToolName != "mcp" {
+			t.Errorf("ToolName: expected 'mcp', got '%s'", ctx.ToolName)
+		}
+		if ctx.OriginalTool != "mcp_filesystem_read_file" {
+			t.Errorf("OriginalTool: expected 'mcp_filesystem_read_file', got '%s'", ctx.OriginalTool)
+		}
+		if ctx.SoundHint != "mcp-start" {
+			t.Errorf("SoundHint: expected 'mcp-start', got '%s'", ctx.SoundHint)
+		}
+		if ctx.Category != Loading {
+			t.Errorf("Category: expected Loading, got %s", ctx.Category.String())
+		}
+	})
+
 	t.Run("PostToolUse success mcp__github__create_issue normalizes to mcp-success", func(t *testing.T) {
 		data := `{
 			"session_id": "test",
@@ -1207,6 +1259,36 @@ func TestMCPToolNormalization(t *testing.T) {
 		}
 		if ctx.OriginalTool != "mcp__github__create_issue" {
 			t.Errorf("OriginalTool: expected 'mcp__github__create_issue', got '%s'", ctx.OriginalTool)
+		}
+		if ctx.SoundHint != "mcp-success" {
+			t.Errorf("SoundHint: expected 'mcp-success', got '%s'", ctx.SoundHint)
+		}
+		if ctx.Category != Success {
+			t.Errorf("Category: expected Success, got %s", ctx.Category.String())
+		}
+	})
+
+	t.Run("AfterTool success Gemini mcp_filesystem_read_file normalizes to mcp-success", func(t *testing.T) {
+		data := `{
+			"session_id": "test",
+			"transcript_path": "/test",
+			"cwd": "/test",
+			"hook_event_name": "AfterTool",
+			"tool_name": "mcp_filesystem_read_file",
+			"tool_input": {},
+			"tool_response": {"content": "file contents", "isError": false}
+		}`
+		event, err := parser.Parse([]byte(data))
+		if err != nil {
+			t.Fatalf("Parse failed: %v", err)
+		}
+		ctx := event.GetContext()
+
+		if ctx.ToolName != "mcp" {
+			t.Errorf("ToolName: expected 'mcp', got '%s'", ctx.ToolName)
+		}
+		if ctx.OriginalTool != "mcp_filesystem_read_file" {
+			t.Errorf("OriginalTool: expected 'mcp_filesystem_read_file', got '%s'", ctx.OriginalTool)
 		}
 		if ctx.SoundHint != "mcp-success" {
 			t.Errorf("SoundHint: expected 'mcp-success', got '%s'", ctx.SoundHint)
@@ -1394,6 +1476,48 @@ func TestGetContextCodexApplyPatchPostToolUseSuccess(t *testing.T) {
 	}
 }
 
+func TestGetContextCodexStringToolResponseIsSuccess(t *testing.T) {
+	tool := "Bash"
+	input := json.RawMessage(`{"command":"git status --short"}`)
+	resp := json.RawMessage(`"Exit code: 0\nWall time: 0.1 seconds\nOutput:\nclean"`)
+	event := &HookEvent{
+		SessionID:    "a",
+		CWD:          "/tmp",
+		EventName:    "PostToolUse",
+		ToolName:     &tool,
+		ToolInput:    &input,
+		ToolResponse: &resp,
+	}
+	ctx := event.GetContext()
+	if ctx.Category != Success {
+		t.Errorf("expected Success, got %v", ctx.Category)
+	}
+	if ctx.SoundHint != "git-status-success" {
+		t.Errorf("expected git-status-success, got %q", ctx.SoundHint)
+	}
+}
+
+func TestGetContextCodexStringToolResponseWithNonzeroExitCodeIsError(t *testing.T) {
+	tool := "Bash"
+	input := json.RawMessage(`{"command":"git status --short"}`)
+	resp := json.RawMessage(`"Exit code: 1\nWall time: 0.1 seconds\nOutput:\nfatal: not a git repository"`)
+	event := &HookEvent{
+		SessionID:    "a",
+		CWD:          "/tmp",
+		EventName:    "PostToolUse",
+		ToolName:     &tool,
+		ToolInput:    &input,
+		ToolResponse: &resp,
+	}
+	ctx := event.GetContext()
+	if ctx.Category != Error {
+		t.Errorf("expected Error, got %v", ctx.Category)
+	}
+	if ctx.SoundHint != "git-status-error" {
+		t.Errorf("expected git-status-error, got %q", ctx.SoundHint)
+	}
+}
+
 func TestGetContextCodexMcpToolNormalized(t *testing.T) {
 	tool := "mcp__filesystem__read_file"
 	event := &HookEvent{SessionID: "a", CWD: "/tmp", EventName: "PreToolUse", ToolName: &tool}
@@ -1403,5 +1527,222 @@ func TestGetContextCodexMcpToolNormalized(t *testing.T) {
 	}
 	if ctx.SoundHint != "mcp-start" {
 		t.Errorf("expected mcp-start, got %q", ctx.SoundHint)
+	}
+}
+
+func TestGetContextGeminiBeforeToolShellCommand(t *testing.T) {
+	tool := "run_shell_command"
+	input := json.RawMessage(`{"command":"git status --short"}`)
+	event := &HookEvent{SessionID: "a", CWD: "/tmp", EventName: "BeforeTool", ToolName: &tool, ToolInput: &input}
+	ctx := event.GetContext()
+	if ctx.Category != Loading {
+		t.Errorf("expected Loading, got %v", ctx.Category)
+	}
+	if ctx.OriginalTool != "Bash" || ctx.ToolName != "git" {
+		t.Errorf("tool normalization = original %q tool %q, want Bash/git", ctx.OriginalTool, ctx.ToolName)
+	}
+	if ctx.SoundHint != "git-status-start" {
+		t.Errorf("expected git-status-start, got %q", ctx.SoundHint)
+	}
+}
+
+func TestGetContextGeminiAfterToolWriteFileSuccess(t *testing.T) {
+	tool := "write_file"
+	resp := json.RawMessage(`{"success":true}`)
+	event := &HookEvent{SessionID: "a", CWD: "/tmp", EventName: "AfterTool", ToolName: &tool, ToolResponse: &resp}
+	ctx := event.GetContext()
+	if ctx.Category != Success {
+		t.Errorf("expected Success, got %v", ctx.Category)
+	}
+	if ctx.ToolName != "Write" {
+		t.Errorf("expected normalized tool Write, got %q", ctx.ToolName)
+	}
+	if ctx.SoundHint != "write-success" {
+		t.Errorf("expected write-success, got %q", ctx.SoundHint)
+	}
+}
+
+func TestGetContextGeminiAgentAndCompressEvents(t *testing.T) {
+	cases := []struct {
+		eventName string
+		category  EventCategory
+		hint      string
+		operation string
+	}{
+		{"BeforeAgent", Interactive, "before-agent", "before-agent"},
+		{"AfterAgent", Completion, "agent-complete", "after-agent"},
+		{"PreCompress", System, "compacting", "compact"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.eventName, func(t *testing.T) {
+			event := &HookEvent{SessionID: "a", CWD: "/tmp", EventName: tc.eventName}
+			ctx := event.GetContext()
+			if ctx.Category != tc.category {
+				t.Errorf("category = %v, want %v", ctx.Category, tc.category)
+			}
+			if ctx.SoundHint != tc.hint {
+				t.Errorf("hint = %q, want %q", ctx.SoundHint, tc.hint)
+			}
+			if ctx.Operation != tc.operation {
+				t.Errorf("operation = %q, want %q", ctx.Operation, tc.operation)
+			}
+		})
+	}
+}
+
+func TestGetContextQwenFailureEvents(t *testing.T) {
+	tool := "run_shell_command"
+	input := json.RawMessage(`{"command":"git status"}`)
+	resp := json.RawMessage(`{"stderr":"fatal: not a git repository"}`)
+	event := &HookEvent{SessionID: "a", CWD: "/tmp", EventName: "PostToolUseFailure", ToolName: &tool, ToolInput: &input, ToolResponse: &resp}
+	ctx := event.GetContext()
+	if ctx.Category != Error {
+		t.Errorf("expected Error, got %v", ctx.Category)
+	}
+	if ctx.SoundHint != "git-status-error" {
+		t.Errorf("expected git-status-error, got %q", ctx.SoundHint)
+	}
+
+	event = &HookEvent{SessionID: "a", CWD: "/tmp", EventName: "ErrorOccurred"}
+	ctx = event.GetContext()
+	if ctx.Category != Error {
+		t.Errorf("expected ErrorOccurred to map to Error, got %v", ctx.Category)
+	}
+	if ctx.SoundHint != "error-occurred" {
+		t.Errorf("expected error-occurred, got %q", ctx.SoundHint)
+	}
+}
+
+func TestGetContextCopilotToolNames(t *testing.T) {
+	tool := "powershell"
+	input := json.RawMessage(`{"command":"git status"}`)
+	event := &HookEvent{SessionID: "a", CWD: "/tmp", EventName: "PreToolUse", ToolName: &tool, ToolInput: &input}
+	ctx := event.GetContext()
+	if ctx.Category != Loading {
+		t.Errorf("expected Loading, got %v", ctx.Category)
+	}
+	if ctx.OriginalTool != "Bash" || ctx.ToolName != "git" {
+		t.Errorf("tool normalization = original %q tool %q, want Bash/git", ctx.OriginalTool, ctx.ToolName)
+	}
+	if ctx.SoundHint != "git-status-start" {
+		t.Errorf("expected git-status-start, got %q", ctx.SoundHint)
+	}
+
+	tool = "view"
+	event = &HookEvent{SessionID: "a", CWD: "/tmp", EventName: "PreToolUse", ToolName: &tool}
+	ctx = event.GetContext()
+	if ctx.ToolName != "Read" || ctx.SoundHint != "read-start" {
+		t.Errorf("view normalization = tool %q hint %q, want Read/read-start", ctx.ToolName, ctx.SoundHint)
+	}
+}
+
+func TestParseCopilotResultAliases(t *testing.T) {
+	payload := []byte(`{
+		"sessionId": "copilot-session",
+		"hook_event_name": "PostToolUse",
+		"cwd": "/tmp",
+		"tool_name": "Write",
+		"tool_result": {"success": true}
+	}`)
+
+	event, err := NewHookEventParser().Parse(payload)
+	if err != nil {
+		t.Fatalf("Parse returned error: %v", err)
+	}
+	if event.SessionID != "copilot-session" {
+		t.Errorf("session id = %q, want copilot-session", event.SessionID)
+	}
+	if event.ToolResponse == nil {
+		t.Fatal("expected tool_result alias to populate ToolResponse")
+	}
+
+	ctx := event.GetContext()
+	if ctx.SoundHint != "write-success" {
+		t.Errorf("sound hint = %q, want write-success", ctx.SoundHint)
+	}
+}
+
+func TestParseCopilotNotificationSessionAlias(t *testing.T) {
+	payload := []byte(`{
+		"sessionId": "copilot-session",
+		"hook_event_name": "Notification",
+		"cwd": "/tmp",
+		"message": "Permission needed"
+	}`)
+
+	event, err := NewHookEventParser().Parse(payload)
+	if err != nil {
+		t.Fatalf("Parse returned error: %v", err)
+	}
+
+	ctx := event.GetContext()
+	if ctx.SoundHint != "notification-permission" {
+		t.Errorf("sound hint = %q, want notification-permission", ctx.SoundHint)
+	}
+}
+
+func TestParseWithDefaultEventNormalizesCopilotSubagentStart(t *testing.T) {
+	payload := []byte(`{
+		"sessionId": "copilot-session",
+		"cwd": "/tmp"
+	}`)
+
+	event, err := NewHookEventParser().ParseWithDefaultEvent(payload, "subagentStart")
+	if err != nil {
+		t.Fatalf("ParseWithDefaultEvent returned error: %v", err)
+	}
+	if event.EventName != "SubagentStart" {
+		t.Errorf("event name = %q, want SubagentStart", event.EventName)
+	}
+
+	ctx := event.GetContext()
+	if ctx.SoundHint != "subagent-start" {
+		t.Errorf("sound hint = %q, want subagent-start", ctx.SoundHint)
+	}
+}
+
+func TestGetContextCurrentLifecycleEvents(t *testing.T) {
+	tests := []struct {
+		eventName string
+		category  EventCategory
+		hint      string
+		operation string
+	}{
+		{"Setup", System, "setup", "setup"},
+		{"UserPromptExpansion", Interactive, "prompt-expansion", "prompt-expansion"},
+		{"PermissionDenied", Error, "permission-denied", "permission-denied"},
+		{"PostToolUseFailure", Error, "tool-error", "tool-complete"},
+		{"PostToolBatch", Success, "tool-batch", "tool-batch"},
+		{"MessageDisplay", Silent, "", "message-display"},
+		{"TaskCreated", Loading, "task-created", "task-created"},
+		{"TaskCompleted", Completion, "task-completed", "task-completed"},
+		{"StopFailure", Error, "stop-failure", "stop-failure"},
+		{"TeammateIdle", Interactive, "teammate-idle", "teammate-idle"},
+		{"InstructionsLoaded", System, "instructions-loaded", "instructions-loaded"},
+		{"ConfigChange", System, "config-change", "config-change"},
+		{"CwdChanged", System, "cwd-changed", "cwd-changed"},
+		{"FileChanged", System, "file-changed", "file-changed"},
+		{"WorktreeCreate", System, "worktree-create", "worktree-create"},
+		{"WorktreeRemove", System, "worktree-remove", "worktree-remove"},
+		{"Elicitation", Interactive, "elicitation", "elicitation"},
+		{"ElicitationResult", Interactive, "elicitation-result", "elicitation-result"},
+		{"TodoCreated", Loading, "todo-created", "todo-created"},
+		{"TodoCompleted", Completion, "todo-completed", "todo-completed"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.eventName, func(t *testing.T) {
+			event := &HookEvent{SessionID: "a", CWD: "/tmp", EventName: tt.eventName}
+			ctx := event.GetContext()
+			if ctx.Category != tt.category {
+				t.Errorf("category = %v, want %v", ctx.Category, tt.category)
+			}
+			if ctx.SoundHint != tt.hint {
+				t.Errorf("hint = %q, want %q", ctx.SoundHint, tt.hint)
+			}
+			if ctx.Operation != tt.operation {
+				t.Errorf("operation = %q, want %q", ctx.Operation, tt.operation)
+			}
+		})
 	}
 }

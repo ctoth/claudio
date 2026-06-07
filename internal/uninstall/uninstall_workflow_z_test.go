@@ -96,3 +96,16 @@ func TestRunUninstallWorkflowAgentResolverError(t *testing.T) {
 		t.Errorf("expected wrapping error message; got %q", err.Error())
 	}
 }
+
+func TestRunUninstallWorkflowMissingSettingsFileIsNoop(t *testing.T) {
+	settingsPath := filepath.Join(t.TempDir(), "missing", "settings.json")
+	swapAgentResolver(t, fixedPathResolver(settingsPath))
+
+	if err := RunUninstallWorkflow(afero.NewOsFs(), install.ScopeGlobal, install.AgentClaude); err != nil {
+		t.Fatalf("missing settings file should be an idempotent uninstall, got: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Dir(settingsPath)); !os.IsNotExist(err) {
+		t.Fatalf("uninstall should not create missing settings directory, stat err: %v", err)
+	}
+}
