@@ -59,14 +59,38 @@ claudio install-commands --agent antigravity
 
 Claude Code installs these default-enabled hooks:
 
-- `PreToolUse`
-- `PostToolUse`
-- `UserPromptSubmit`
-- `Notification`
-- `Stop`
-- `SubagentStop`
-- `PreCompact`
 - `SessionStart`
+- `Setup`
+- `UserPromptSubmit`
+- `UserPromptExpansion`
+- `PreToolUse`
+- `PermissionRequest`
+- `PermissionDenied`
+- `PostToolUse`
+- `PostToolUseFailure`
+- `PostToolBatch`
+- `Notification`
+- `SubagentStart`
+- `SubagentStop`
+- `TaskCreated`
+- `TaskCompleted`
+- `Stop`
+- `StopFailure`
+- `TeammateIdle`
+- `InstructionsLoaded`
+- `ConfigChange`
+- `CwdChanged`
+- `WorktreeCreate`
+- `WorktreeRemove`
+- `PreCompact`
+- `PostCompact`
+- `Elicitation`
+- `ElicitationResult`
+- `SessionEnd`
+
+Claude Code also has `MessageDisplay` and `FileChanged` in Claudio's registry,
+but they are disabled by default to avoid noisy audio from streamed text and
+broad file watchers.
 
 Codex installs these default-enabled hooks:
 
@@ -111,6 +135,24 @@ Qwen Code installs these default-enabled hooks:
 - `PostCompact`
 - `Notification`
 - `PermissionRequest`
+- `TodoCreated`
+- `TodoCompleted`
+
+GitHub Copilot CLI installs these default-enabled hooks:
+
+- `PreToolUse`
+- `PostToolUse`
+- `PostToolUseFailure`
+- `UserPromptSubmit`
+- `SessionStart`
+- `SessionEnd`
+- `Stop`
+- `subagentStart`
+- `SubagentStop`
+- `PreCompact`
+- `Notification`
+- `PermissionRequest`
+- `ErrorOccurred`
 
 ## How Sound Selection Works
 

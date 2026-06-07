@@ -168,6 +168,31 @@ func TestDefaultHookAgentDoesNotWriteJSONResponse(t *testing.T) {
 	}
 }
 
+func TestCopilotHookEventFlagSuppliesMissingEventName(t *testing.T) {
+	testenv.IsolateXDG(t)
+	cli := NewCLI()
+
+	hookJSON := `{
+		"sessionId": "test",
+		"cwd": "/test"
+	}`
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	exitCode := cli.Run(
+		[]string{"claudio", "--silent", "--hook-agent", "copilot", "--hook-event", "subagentStart"},
+		strings.NewReader(hookJSON),
+		stdout,
+		stderr,
+	)
+	if exitCode != 0 {
+		t.Fatalf("exit code = %d; stderr=%q", exitCode, stderr.String())
+	}
+	if stdout.String() != "{}\n" {
+		t.Fatalf("stdout = %q, want empty copilot hook JSON response", stdout.String())
+	}
+}
+
 func TestCLIFlags(t *testing.T) {
 	testenv.IsolateXDG(t)
 	// Preserve original slog configuration to avoid test interference

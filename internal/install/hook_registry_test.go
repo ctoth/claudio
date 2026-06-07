@@ -7,19 +7,15 @@ import (
 )
 
 func TestGetAllHooks(t *testing.T) {
-	// TDD RED: Test that GetAllHooks returns all 8 expected hooks
 	allHooks := GetAllHooks()
 
-	expectedCount := 8
+	expectedCount := len(expectedClaudeHookNames())
 	if len(allHooks) != expectedCount {
 		t.Errorf("Expected %d hooks, got %d", expectedCount, len(allHooks))
 	}
 
 	// Verify all expected hook names are present
-	expectedNames := []string{
-		"PreToolUse", "PostToolUse", "UserPromptSubmit",
-		"Notification", "Stop", "SubagentStop", "PreCompact", "SessionStart",
-	}
+	expectedNames := expectedClaudeHookNames()
 
 	hookMap := make(map[string]bool)
 	for _, hook := range allHooks {
@@ -34,11 +30,9 @@ func TestGetAllHooks(t *testing.T) {
 }
 
 func TestGetEnabledHooks(t *testing.T) {
-	// TDD RED: Test that GetEnabledHooks filters correctly
 	enabledHooks := GetEnabledHooks()
 
-	// All hooks should be enabled by default
-	expectedCount := 8
+	expectedCount := len(expectedClaudeHookNames()) - len(defaultDisabledClaudeHookNames())
 	if len(enabledHooks) != expectedCount {
 		t.Errorf("Expected %d enabled hooks, got %d", expectedCount, len(enabledHooks))
 	}
@@ -65,6 +59,12 @@ func TestGetHookByName(t *testing.T) {
 		{"SubagentStop", true},
 		{"PreCompact", true},
 		{"SessionStart", true},
+		{"SessionEnd", true},
+		{"PostToolUseFailure", true},
+		{"PostToolBatch", true},
+		{"PermissionRequest", true},
+		{"PermissionDenied", true},
+		{"PostCompact", true},
 		{"NonExistentHook", false},
 	}
 
@@ -87,13 +87,9 @@ func TestGetHookByName(t *testing.T) {
 }
 
 func TestGetHookNames(t *testing.T) {
-	// TDD RED: Test that GetHookNames returns correct slice of names
 	hookNames := GetHookNames()
 
-	expectedNames := []string{
-		"PreToolUse", "PostToolUse", "UserPromptSubmit",
-		"Notification", "Stop", "SubagentStop", "PreCompact", "SessionStart",
-	}
+	expectedNames := expectedClaudeHookNames()
 
 	if len(hookNames) != len(expectedNames) {
 		t.Errorf("Expected %d hook names, got %d", len(expectedNames), len(hookNames))
@@ -112,18 +108,39 @@ func TestGetHookNames(t *testing.T) {
 }
 
 func TestHookCategoriesMatchParser(t *testing.T) {
-	// TDD RED: Test that hook categories match parser expectations
 	allHooks := GetAllHooks()
 
 	expectedCategories := map[string]hooks.EventCategory{
-		"PreToolUse":       hooks.Loading,
-		"PostToolUse":      hooks.Success, // Note: PostToolUse can be Success or Error, using Success as default
-		"UserPromptSubmit": hooks.Interactive,
-		"Notification":     hooks.Interactive,
-		"Stop":             hooks.Completion,
-		"SubagentStop":     hooks.Completion,
-		"PreCompact":       hooks.System,
-		"SessionStart":     hooks.System,
+		"PreToolUse":          hooks.Loading,
+		"PostToolUse":         hooks.Success, // Note: PostToolUse can be Success or Error, using Success as default
+		"PostToolUseFailure":  hooks.Error,
+		"PostToolBatch":       hooks.Success,
+		"UserPromptSubmit":    hooks.Interactive,
+		"UserPromptExpansion": hooks.Interactive,
+		"Notification":        hooks.Interactive,
+		"MessageDisplay":      hooks.Silent,
+		"Stop":                hooks.Completion,
+		"StopFailure":         hooks.Error,
+		"PermissionRequest":   hooks.Interactive,
+		"PermissionDenied":    hooks.Error,
+		"Setup":               hooks.System,
+		"SubagentStart":       hooks.Loading,
+		"SubagentStop":        hooks.Completion,
+		"TaskCreated":         hooks.Loading,
+		"TaskCompleted":       hooks.Completion,
+		"TeammateIdle":        hooks.Interactive,
+		"InstructionsLoaded":  hooks.System,
+		"ConfigChange":        hooks.System,
+		"CwdChanged":          hooks.System,
+		"FileChanged":         hooks.System,
+		"WorktreeCreate":      hooks.System,
+		"WorktreeRemove":      hooks.System,
+		"PreCompact":          hooks.System,
+		"PostCompact":         hooks.System,
+		"SessionStart":        hooks.System,
+		"SessionEnd":          hooks.Interactive,
+		"Elicitation":         hooks.Interactive,
+		"ElicitationResult":   hooks.Interactive,
 	}
 
 	for _, hook := range allHooks {
@@ -152,12 +169,37 @@ func TestHookDescriptionsNonEmpty(t *testing.T) {
 }
 
 func TestDefaultEnabledStatus(t *testing.T) {
-	// TDD RED: Test that all hooks are enabled by default
 	allHooks := GetAllHooks()
+	disabled := defaultDisabledClaudeHookNames()
 
 	for _, hook := range allHooks {
+		if disabled[hook.Name] {
+			if hook.DefaultEnabled {
+				t.Errorf("Hook '%s' should be disabled by default", hook.Name)
+			}
+			continue
+		}
 		if !hook.DefaultEnabled {
 			t.Errorf("Hook '%s' is not enabled by default", hook.Name)
+		}
+	}
+}
+
+func TestClaudeRegistryTracksCurrentHookEvents(t *testing.T) {
+	want := map[string]bool{}
+	for _, name := range expectedClaudeHookNames() {
+		want[name] = true
+	}
+	got := map[string]bool{}
+	for _, h := range AllHooks {
+		got[h.Name] = true
+	}
+	if len(got) != len(want) {
+		t.Errorf("claude registry has %d events, want %d", len(got), len(want))
+	}
+	for name := range want {
+		if !got[name] {
+			t.Errorf("claude registry missing %q", name)
 		}
 	}
 }
@@ -193,6 +235,7 @@ func TestQwenRegistryContents(t *testing.T) {
 		"Stop": true, "StopFailure": true, "SubagentStart": true,
 		"SubagentStop": true, "PreCompact": true, "PostCompact": true,
 		"Notification": true, "PermissionRequest": true,
+		"TodoCreated": true, "TodoCompleted": true,
 	}
 	got := map[string]bool{}
 	for _, h := range QwenHooks {
@@ -208,12 +251,64 @@ func TestQwenRegistryContents(t *testing.T) {
 	}
 }
 
+func expectedClaudeHookNames() []string {
+	return []string{
+		"SessionStart",
+		"Setup",
+		"UserPromptSubmit",
+		"UserPromptExpansion",
+		"PreToolUse",
+		"PermissionRequest",
+		"PermissionDenied",
+		"PostToolUse",
+		"PostToolUseFailure",
+		"PostToolBatch",
+		"Notification",
+		"MessageDisplay",
+		"SubagentStart",
+		"SubagentStop",
+		"TaskCreated",
+		"TaskCompleted",
+		"Stop",
+		"StopFailure",
+		"TeammateIdle",
+		"InstructionsLoaded",
+		"ConfigChange",
+		"CwdChanged",
+		"FileChanged",
+		"WorktreeCreate",
+		"WorktreeRemove",
+		"PreCompact",
+		"PostCompact",
+		"Elicitation",
+		"ElicitationResult",
+		"SessionEnd",
+	}
+}
+
+func defaultDisabledClaudeHookNames() map[string]bool {
+	return map[string]bool{
+		"FileChanged":    true,
+		"MessageDisplay": true,
+	}
+}
+
+func enabledHookNames(agent Agent) []string {
+	definitions := agent.EnabledHooks()
+	names := make([]string, len(definitions))
+	for i, definition := range definitions {
+		names[i] = definition.Name
+	}
+	return names
+}
+
 func TestCopilotRegistryContents(t *testing.T) {
 	want := map[string]bool{
 		"PreToolUse": true, "PostToolUse": true, "PostToolUseFailure": true,
 		"UserPromptSubmit": true, "SessionStart": true, "SessionEnd": true,
 		"Stop": true, "SubagentStop": true, "PreCompact": true,
-		"Notification": true, "PermissionRequest": true, "ErrorOccurred": true,
+		"subagentStart": true, "Notification": true, "PermissionRequest": true,
+		"ErrorOccurred": true,
 	}
 	got := map[string]bool{}
 	for _, h := range CopilotHooks {
