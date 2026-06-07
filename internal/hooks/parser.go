@@ -91,6 +91,12 @@ func NewHookEventParser() *HookEventParser {
 
 // Parse parses hook JSON data into a HookEvent
 func (p *HookEventParser) Parse(data []byte) (*HookEvent, error) {
+	return p.ParseWithDefaultEvent(data, "")
+}
+
+// ParseWithDefaultEvent parses hook JSON and uses defaultEvent when the
+// payload format does not include hook_event_name.
+func (p *HookEventParser) ParseWithDefaultEvent(data []byte, defaultEvent string) (*HookEvent, error) {
 	if len(data) == 0 {
 		err := fmt.Errorf("empty JSON data")
 		slog.Error("parse failed: empty data", "error", err)
@@ -108,6 +114,10 @@ func (p *HookEventParser) Parse(data []byte) (*HookEvent, error) {
 	if err := event.applyCompatibilityAliases(data); err != nil {
 		return nil, err
 	}
+	if event.EventName == "" {
+		event.EventName = defaultEvent
+	}
+	event.EventName = NormalizeEventName(event.EventName)
 
 	// Validate required fields
 	if event.SessionID == "" {
@@ -135,6 +145,17 @@ func (p *HookEventParser) Parse(data []byte) (*HookEvent, error) {
 		"has_tool_response", event.ToolResponse != nil)
 
 	return &event, nil
+}
+
+// NormalizeEventName converts agent-specific hook keys to Claudio's canonical
+// event names for sound mapping.
+func NormalizeEventName(name string) string {
+	switch strings.TrimSpace(name) {
+	case "subagentStart":
+		return "SubagentStart"
+	default:
+		return name
+	}
 }
 
 type hookEventAliases struct {
@@ -193,6 +214,11 @@ func (e *HookEvent) GetContext() *EventContext {
 		context.SoundHint = "message-sent"
 		context.Operation = "prompt"
 
+	case "UserPromptExpansion":
+		context.Category = Interactive
+		context.SoundHint = "prompt-expansion"
+		context.Operation = "prompt-expansion"
+
 	case "Notification":
 		context.Category = Interactive
 		context.SoundHint = e.detectNotificationType()
@@ -206,6 +232,11 @@ func (e *HookEvent) GetContext() *EventContext {
 
 	case "PostToolUseFailure":
 		e.populatePostToolContext(context, true)
+
+	case "PostToolBatch":
+		context.Category = Success
+		context.SoundHint = "tool-batch"
+		context.Operation = "tool-batch"
 
 	case "Stop":
 		context.Category = Completion
@@ -249,6 +280,13 @@ func (e *HookEvent) GetContext() *EventContext {
 		context.Operation = "permission-request"
 		slog.Debug("categorizing PermissionRequest event as Interactive", "hint", context.SoundHint, "operation", context.Operation)
 
+	case "PermissionDenied":
+		context.Category = Error
+		context.HasError = true
+		context.SoundHint = "permission-denied"
+		context.Operation = "permission-denied"
+		slog.Debug("categorizing PermissionDenied event as Error", "hint", context.SoundHint, "operation", context.Operation)
+
 	case "SessionEnd":
 		context.Category = Interactive
 		context.SoundHint = "session-end"
@@ -280,6 +318,95 @@ func (e *HookEvent) GetContext() *EventContext {
 		context.SoundHint = "error-occurred"
 		context.Operation = "error-occurred"
 		slog.Debug("categorizing ErrorOccurred event as Error", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "Setup":
+		context.Category = System
+		context.SoundHint = "setup"
+		context.Operation = "setup"
+		slog.Debug("categorizing Setup event as System", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "MessageDisplay":
+		context.Category = Silent
+		context.Operation = "message-display"
+		slog.Debug("categorizing MessageDisplay event as Silent")
+
+	case "TaskCreated":
+		context.Category = Loading
+		context.SoundHint = "task-created"
+		context.Operation = "task-created"
+		slog.Debug("categorizing TaskCreated event as Loading", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "TaskCompleted":
+		context.Category = Completion
+		context.SoundHint = "task-completed"
+		context.Operation = "task-completed"
+		slog.Debug("categorizing TaskCompleted event as Completion", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "TeammateIdle":
+		context.Category = Interactive
+		context.SoundHint = "teammate-idle"
+		context.Operation = "teammate-idle"
+		slog.Debug("categorizing TeammateIdle event as Interactive", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "InstructionsLoaded":
+		context.Category = System
+		context.SoundHint = "instructions-loaded"
+		context.Operation = "instructions-loaded"
+		slog.Debug("categorizing InstructionsLoaded event as System", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "ConfigChange":
+		context.Category = System
+		context.SoundHint = "config-change"
+		context.Operation = "config-change"
+		slog.Debug("categorizing ConfigChange event as System", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "CwdChanged":
+		context.Category = System
+		context.SoundHint = "cwd-changed"
+		context.Operation = "cwd-changed"
+		slog.Debug("categorizing CwdChanged event as System", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "FileChanged":
+		context.Category = System
+		context.SoundHint = "file-changed"
+		context.Operation = "file-changed"
+		slog.Debug("categorizing FileChanged event as System", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "WorktreeCreate":
+		context.Category = System
+		context.SoundHint = "worktree-create"
+		context.Operation = "worktree-create"
+		slog.Debug("categorizing WorktreeCreate event as System", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "WorktreeRemove":
+		context.Category = System
+		context.SoundHint = "worktree-remove"
+		context.Operation = "worktree-remove"
+		slog.Debug("categorizing WorktreeRemove event as System", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "Elicitation":
+		context.Category = Interactive
+		context.SoundHint = "elicitation"
+		context.Operation = "elicitation"
+		slog.Debug("categorizing Elicitation event as Interactive", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "ElicitationResult":
+		context.Category = Interactive
+		context.SoundHint = "elicitation-result"
+		context.Operation = "elicitation-result"
+		slog.Debug("categorizing ElicitationResult event as Interactive", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "TodoCreated":
+		context.Category = Loading
+		context.SoundHint = "todo-created"
+		context.Operation = "todo-created"
+		slog.Debug("categorizing TodoCreated event as Loading", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "TodoCompleted":
+		context.Category = Completion
+		context.SoundHint = "todo-completed"
+		context.Operation = "todo-completed"
+		slog.Debug("categorizing TodoCompleted event as Completion", "hint", context.SoundHint, "operation", context.Operation)
 
 	case "BeforeModel", "AfterModel", "BeforeToolSelection":
 		context.Category = Silent

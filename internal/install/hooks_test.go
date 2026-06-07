@@ -16,8 +16,8 @@ func TestGenerateClaudioHooks(t *testing.T) {
 	}{
 		{
 			name:           "registry-based hook generation",
-			expectHooks:    GetHookNames(),                                                                                   // Should use registry instead of hardcoded
-			expectCommands: []string{"claudio", "claudio", "claudio", "claudio", "claudio", "claudio", "claudio", "claudio"}, // 8 hooks now
+			expectHooks:    enabledHookNames(AgentClaude),
+			expectCommands: []string{"claudio", "claudio", "claudio", "claudio", "claudio", "claudio", "claudio", "claudio"},
 		},
 	}
 
@@ -56,7 +56,7 @@ func TestGenerateClaudioHooks(t *testing.T) {
 
 			// Verify hooks exist and have correct structure
 			// (detailed structure testing is in TestGenerateClaudioHooksCorrectFormat)
-			expectedCount := len(GetEnabledHooks()) // Should be 8 hooks from registry
+			expectedCount := len(GetEnabledHooks())
 			if len(parsedHooks) != expectedCount {
 				t.Errorf("Expected %d hooks from registry, got %d", expectedCount, len(parsedHooks))
 			}
@@ -636,6 +636,11 @@ func TestGenerateClaudioHooksForCopilotAgent(t *testing.T) {
 	}
 	if commandConfig["command"] != "/usr/local/bin/claudio --hook-agent copilot" {
 		t.Errorf("copilot command = %v, want claudio with hook-agent flag", commandConfig["command"])
+	}
+	subagentStartArr := hooks["subagentStart"].([]interface{})
+	subagentStartConfig := subagentStartArr[0].(map[string]interface{})
+	if subagentStartConfig["command"] != "/usr/local/bin/claudio --hook-agent copilot --hook-event subagentStart" {
+		t.Errorf("copilot subagentStart command = %v, want explicit hook-event flag", subagentStartConfig["command"])
 	}
 	if commandConfig["timeoutSec"] != 30 {
 		t.Errorf("copilot timeoutSec = %v, want 30", commandConfig["timeoutSec"])

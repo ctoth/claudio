@@ -88,9 +88,11 @@ func NewCLI() *CLI {
 	rootCmd.PersistentFlags().Bool("daemon-child", false, "Internal: run as detached hook worker")
 	rootCmd.PersistentFlags().String("hook-input-file", "", "Internal: hook payload file for detached worker")
 	rootCmd.PersistentFlags().String("hook-agent", "", "Internal: agent that invoked this hook")
+	rootCmd.PersistentFlags().String("hook-event", "", "Internal: event name when hook payload omits it")
 	_ = rootCmd.PersistentFlags().MarkHidden("daemon-child")
 	_ = rootCmd.PersistentFlags().MarkHidden("hook-input-file")
 	_ = rootCmd.PersistentFlags().MarkHidden("hook-agent")
+	_ = rootCmd.PersistentFlags().MarkHidden("hook-event")
 
 	// Note: cobra automatically registers a `--version` boolean flag (and
 	// short `-v`) once rootCmd.Version is set. We do not register a manual
@@ -434,7 +436,8 @@ func processHookInput(cmd *cobra.Command, cli *CLI, cfg *config.Config, inputDat
 	}
 
 	parser := hooks.NewHookEventParser()
-	hookEvent, err := parser.Parse(inputData)
+	defaultEvent, _ := cmd.Flags().GetString("hook-event")
+	hookEvent, err := parser.ParseWithDefaultEvent(inputData, defaultEvent)
 	if err != nil {
 		cmd.PrintErrf("Error: %v\n", err)
 		slog.Error("hook JSON parsing failed", "error", err)

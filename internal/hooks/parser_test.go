@@ -1680,3 +1680,69 @@ func TestParseCopilotNotificationSessionAlias(t *testing.T) {
 		t.Errorf("sound hint = %q, want notification-permission", ctx.SoundHint)
 	}
 }
+
+func TestParseWithDefaultEventNormalizesCopilotSubagentStart(t *testing.T) {
+	payload := []byte(`{
+		"sessionId": "copilot-session",
+		"cwd": "/tmp"
+	}`)
+
+	event, err := NewHookEventParser().ParseWithDefaultEvent(payload, "subagentStart")
+	if err != nil {
+		t.Fatalf("ParseWithDefaultEvent returned error: %v", err)
+	}
+	if event.EventName != "SubagentStart" {
+		t.Errorf("event name = %q, want SubagentStart", event.EventName)
+	}
+
+	ctx := event.GetContext()
+	if ctx.SoundHint != "subagent-start" {
+		t.Errorf("sound hint = %q, want subagent-start", ctx.SoundHint)
+	}
+}
+
+func TestGetContextCurrentLifecycleEvents(t *testing.T) {
+	tests := []struct {
+		eventName string
+		category  EventCategory
+		hint      string
+		operation string
+	}{
+		{"Setup", System, "setup", "setup"},
+		{"UserPromptExpansion", Interactive, "prompt-expansion", "prompt-expansion"},
+		{"PermissionDenied", Error, "permission-denied", "permission-denied"},
+		{"PostToolUseFailure", Error, "tool-error", "tool-complete"},
+		{"PostToolBatch", Success, "tool-batch", "tool-batch"},
+		{"MessageDisplay", Silent, "", "message-display"},
+		{"TaskCreated", Loading, "task-created", "task-created"},
+		{"TaskCompleted", Completion, "task-completed", "task-completed"},
+		{"StopFailure", Error, "stop-failure", "stop-failure"},
+		{"TeammateIdle", Interactive, "teammate-idle", "teammate-idle"},
+		{"InstructionsLoaded", System, "instructions-loaded", "instructions-loaded"},
+		{"ConfigChange", System, "config-change", "config-change"},
+		{"CwdChanged", System, "cwd-changed", "cwd-changed"},
+		{"FileChanged", System, "file-changed", "file-changed"},
+		{"WorktreeCreate", System, "worktree-create", "worktree-create"},
+		{"WorktreeRemove", System, "worktree-remove", "worktree-remove"},
+		{"Elicitation", Interactive, "elicitation", "elicitation"},
+		{"ElicitationResult", Interactive, "elicitation-result", "elicitation-result"},
+		{"TodoCreated", Loading, "todo-created", "todo-created"},
+		{"TodoCompleted", Completion, "todo-completed", "todo-completed"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.eventName, func(t *testing.T) {
+			event := &HookEvent{SessionID: "a", CWD: "/tmp", EventName: tt.eventName}
+			ctx := event.GetContext()
+			if ctx.Category != tt.category {
+				t.Errorf("category = %v, want %v", ctx.Category, tt.category)
+			}
+			if ctx.SoundHint != tt.hint {
+				t.Errorf("hint = %q, want %q", ctx.SoundHint, tt.hint)
+			}
+			if ctx.Operation != tt.operation {
+				t.Errorf("operation = %q, want %q", ctx.Operation, tt.operation)
+			}
+		})
+	}
+}

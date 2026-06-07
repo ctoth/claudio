@@ -179,14 +179,38 @@ Claude Code defaults:
 
 | Hook | Category |
 | --- | --- |
-| `PreToolUse` | loading |
-| `PostToolUse` | success or error |
-| `UserPromptSubmit` | interactive |
-| `Notification` | interactive |
-| `Stop` | completion |
-| `SubagentStop` | completion |
-| `PreCompact` | system |
 | `SessionStart` | system |
+| `Setup` | system |
+| `UserPromptSubmit` | interactive |
+| `UserPromptExpansion` | interactive |
+| `PreToolUse` | loading |
+| `PermissionRequest` | interactive |
+| `PermissionDenied` | error |
+| `PostToolUse` | success or error |
+| `PostToolUseFailure` | error |
+| `PostToolBatch` | success |
+| `Notification` | interactive |
+| `SubagentStart` | loading |
+| `SubagentStop` | completion |
+| `TaskCreated` | loading |
+| `TaskCompleted` | completion |
+| `Stop` | completion |
+| `StopFailure` | error |
+| `TeammateIdle` | interactive |
+| `InstructionsLoaded` | system |
+| `ConfigChange` | system |
+| `CwdChanged` | system |
+| `WorktreeCreate` | system |
+| `WorktreeRemove` | system |
+| `PreCompact` | system |
+| `PostCompact` | system |
+| `Elicitation` | interactive |
+| `ElicitationResult` | interactive |
+| `SessionEnd` | interactive |
+
+`MessageDisplay` and `FileChanged` are registered but disabled by default.
+Enable them manually only if you want audio for streamed text or broad file
+change events.
 
 Codex defaults:
 
@@ -237,6 +261,26 @@ Qwen Code defaults:
 | `PostCompact` | system |
 | `Notification` | interactive |
 | `PermissionRequest` | interactive |
+| `TodoCreated` | loading |
+| `TodoCompleted` | completion |
+
+GitHub Copilot CLI defaults:
+
+| Hook | Category |
+| --- | --- |
+| `PreToolUse` | loading |
+| `PostToolUse` | success |
+| `PostToolUseFailure` | error |
+| `UserPromptSubmit` | interactive |
+| `SessionStart` | system |
+| `SessionEnd` | interactive |
+| `Stop` | completion |
+| `subagentStart` | loading |
+| `SubagentStop` | completion |
+| `PreCompact` | system |
+| `Notification` | interactive |
+| `PermissionRequest` | interactive |
+| `ErrorOccurred` | error |
 
 ## Optional Agent Commands
 

@@ -14,18 +14,20 @@ type HookDefinition struct {
 	DefaultEnabled bool                // Whether enabled by default
 }
 
-// AllHooks defines the complete registry of all Claude Code hooks supported by Claudio
+// AllHooks defines the complete registry of Claude Code hooks supported by Claudio.
+// Chatty streaming or watch-style hooks stay in the registry but are disabled
+// by default so install does not create noisy audio loops.
 var AllHooks = []HookDefinition{
 	{
-		Name:           "PreToolUse",
-		Category:       hooks.Loading,
-		Description:    "Play loading/thinking sounds before tool execution",
+		Name:           "SessionStart",
+		Category:       hooks.System,
+		Description:    "Play sounds when Claude Code session starts or resumes",
 		DefaultEnabled: true,
 	},
 	{
-		Name:           "PostToolUse",
-		Category:       hooks.Success, // Note: Can also be Error category depending on outcome
-		Description:    "Play success/error sounds after tool execution",
+		Name:           "Setup",
+		Category:       hooks.System,
+		Description:    "Play sounds when Claude Code setup-only mode runs",
 		DefaultEnabled: true,
 	},
 	{
@@ -35,15 +37,63 @@ var AllHooks = []HookDefinition{
 		DefaultEnabled: true,
 	},
 	{
+		Name:           "UserPromptExpansion",
+		Category:       hooks.Interactive,
+		Description:    "Play interaction sounds when slash commands expand into prompts",
+		DefaultEnabled: true,
+	},
+	{
+		Name:           "PreToolUse",
+		Category:       hooks.Loading,
+		Description:    "Play loading/thinking sounds before tool execution",
+		DefaultEnabled: true,
+	},
+	{
+		Name:           "PermissionRequest",
+		Category:       hooks.Interactive,
+		Description:    "Play sounds when Claude Code asks for tool permission",
+		DefaultEnabled: true,
+	},
+	{
+		Name:           "PermissionDenied",
+		Category:       hooks.Error,
+		Description:    "Play error sounds when a permission request is denied",
+		DefaultEnabled: true,
+	},
+	{
+		Name:           "PostToolUse",
+		Category:       hooks.Success, // Note: Can also be Error category depending on outcome
+		Description:    "Play success/error sounds after tool execution",
+		DefaultEnabled: true,
+	},
+	{
+		Name:           "PostToolUseFailure",
+		Category:       hooks.Error,
+		Description:    "Play error sounds after failed tool execution",
+		DefaultEnabled: true,
+	},
+	{
+		Name:           "PostToolBatch",
+		Category:       hooks.Success,
+		Description:    "Play sounds after a batch of tool calls completes",
+		DefaultEnabled: true,
+	},
+	{
 		Name:           "Notification",
 		Category:       hooks.Interactive,
 		Description:    "Play sounds for permission requests and idle notifications",
 		DefaultEnabled: true,
 	},
 	{
-		Name:           "Stop",
-		Category:       hooks.Completion,
-		Description:    "Play sounds when main Claude agent finishes responding",
+		Name:           "MessageDisplay",
+		Category:       hooks.Silent,
+		Description:    "Keep display-stream hook registered but silent by default",
+		DefaultEnabled: false,
+	},
+	{
+		Name:           "SubagentStart",
+		Category:       hooks.Loading,
+		Description:    "Play sounds when a Task tool subagent starts",
 		DefaultEnabled: true,
 	},
 	{
@@ -53,15 +103,99 @@ var AllHooks = []HookDefinition{
 		DefaultEnabled: true,
 	},
 	{
+		Name:           "TaskCreated",
+		Category:       hooks.Loading,
+		Description:    "Play sounds when Claude Code creates a task",
+		DefaultEnabled: true,
+	},
+	{
+		Name:           "TaskCompleted",
+		Category:       hooks.Completion,
+		Description:    "Play sounds when Claude Code completes a task",
+		DefaultEnabled: true,
+	},
+	{
+		Name:           "Stop",
+		Category:       hooks.Completion,
+		Description:    "Play sounds when main Claude agent finishes responding",
+		DefaultEnabled: true,
+	},
+	{
+		Name:           "StopFailure",
+		Category:       hooks.Error,
+		Description:    "Play error sounds when Claude Code fails to stop cleanly",
+		DefaultEnabled: true,
+	},
+	{
+		Name:           "TeammateIdle",
+		Category:       hooks.Interactive,
+		Description:    "Play sounds when Claude Code reports teammate idle state",
+		DefaultEnabled: true,
+	},
+	{
+		Name:           "InstructionsLoaded",
+		Category:       hooks.System,
+		Description:    "Play sounds when Claude Code loads instructions",
+		DefaultEnabled: true,
+	},
+	{
+		Name:           "ConfigChange",
+		Category:       hooks.System,
+		Description:    "Play sounds when Claude Code configuration changes",
+		DefaultEnabled: true,
+	},
+	{
+		Name:           "CwdChanged",
+		Category:       hooks.System,
+		Description:    "Play sounds when Claude Code changes working directory",
+		DefaultEnabled: true,
+	},
+	{
+		Name:           "FileChanged",
+		Category:       hooks.System,
+		Description:    "Keep file-watch hook available without enabling broad file-change audio",
+		DefaultEnabled: false,
+	},
+	{
+		Name:           "WorktreeCreate",
+		Category:       hooks.System,
+		Description:    "Play sounds when Claude Code creates a worktree",
+		DefaultEnabled: true,
+	},
+	{
+		Name:           "WorktreeRemove",
+		Category:       hooks.System,
+		Description:    "Play sounds when Claude Code removes a worktree",
+		DefaultEnabled: true,
+	},
+	{
 		Name:           "PreCompact",
 		Category:       hooks.System,
 		Description:    "Play sounds before Claude Code context compression",
 		DefaultEnabled: true,
 	},
 	{
-		Name:           "SessionStart",
+		Name:           "PostCompact",
 		Category:       hooks.System,
-		Description:    "Play sounds when Claude Code session starts or resumes",
+		Description:    "Play sounds after Claude Code context compression",
+		DefaultEnabled: true,
+	},
+	{
+		Name:           "Elicitation",
+		Category:       hooks.Interactive,
+		Description:    "Play sounds when Claude Code requests elicitation",
+		DefaultEnabled: true,
+	},
+	{
+		Name:           "ElicitationResult",
+		Category:       hooks.Interactive,
+		Description:    "Play sounds when Claude Code receives elicitation result",
+		DefaultEnabled: true,
+	},
+	{
+		Name:           "SessionEnd",
+		Category:       hooks.Interactive,
+		Description:    "Play sounds when Claude Code session ends",
 		DefaultEnabled: true,
 	},
 }
@@ -112,10 +246,14 @@ var QwenHooks = []HookDefinition{
 	{Name: "PostCompact", Category: hooks.System, Description: "Play sounds after Qwen context compaction", DefaultEnabled: true},
 	{Name: "Notification", Category: hooks.Interactive, Description: "Play sounds for Qwen notifications", DefaultEnabled: true},
 	{Name: "PermissionRequest", Category: hooks.Interactive, Description: "Play sounds for Qwen permission requests", DefaultEnabled: true},
+	{Name: "TodoCreated", Category: hooks.Loading, Description: "Play sounds when Qwen creates a todo item", DefaultEnabled: true},
+	{Name: "TodoCompleted", Category: hooks.Completion, Description: "Play sounds when Qwen completes a todo item", DefaultEnabled: true},
 }
 
 // CopilotHooks defines the registry of GitHub Copilot CLI hooks supported by Claudio.
 // PascalCase event names request VS Code-compatible snake_case payloads.
+// Copilot's subagentStart hook currently only uses the native camelCase
+// payload, so Claudio passes its event name explicitly in the hook command.
 var CopilotHooks = []HookDefinition{
 	{Name: "PreToolUse", Category: hooks.Loading, Description: "Play loading sounds before Copilot tool execution", DefaultEnabled: true},
 	{Name: "PostToolUse", Category: hooks.Success, Description: "Play success sounds after Copilot tool execution", DefaultEnabled: true},
@@ -124,6 +262,7 @@ var CopilotHooks = []HookDefinition{
 	{Name: "SessionStart", Category: hooks.System, Description: "Play sounds when a Copilot session starts or resumes", DefaultEnabled: true},
 	{Name: "SessionEnd", Category: hooks.Interactive, Description: "Play sounds when a Copilot session ends", DefaultEnabled: true},
 	{Name: "Stop", Category: hooks.Completion, Description: "Play sounds when Copilot finishes responding", DefaultEnabled: true},
+	{Name: "subagentStart", Category: hooks.Loading, Description: "Play sounds when a Copilot subagent starts", DefaultEnabled: true},
 	{Name: "SubagentStop", Category: hooks.Completion, Description: "Play sounds when a Copilot subagent finishes", DefaultEnabled: true},
 	{Name: "PreCompact", Category: hooks.System, Description: "Play sounds before Copilot context compaction", DefaultEnabled: true},
 	{Name: "Notification", Category: hooks.Interactive, Description: "Play sounds for Copilot notifications", DefaultEnabled: true},

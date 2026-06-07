@@ -112,7 +112,7 @@ func TestMergeHooksIdempotent(t *testing.T) {
 				if !ok {
 					t.Errorf("Hooks should be a map, got: %T", hooks)
 				} else {
-					expectedHooks := GetHookNames() // Use registry instead of hardcoded list
+					expectedHooks := enabledHookNames(AgentClaude)
 					for _, expectedHook := range expectedHooks {
 						if val, exists := hooksMap[expectedHook]; !exists {
 							t.Errorf("Expected hook '%s' missing after merge", expectedHook)
@@ -247,7 +247,7 @@ func TestMergeHooksPreservesExisting(t *testing.T) {
 			if hooks, exists := (*result)["hooks"]; exists {
 				hooksMap, ok := hooks.(map[string]interface{})
 				if ok {
-					claudioHookNames := GetHookNames() // Use registry instead of hardcoded list
+					claudioHookNames := enabledHookNames(AgentClaude)
 					for _, hookName := range claudioHookNames {
 						if val, exists := hooksMap[hookName]; !exists {
 							t.Errorf("Claudio hook '%s' missing after merge", hookName)
@@ -460,11 +460,11 @@ func findSubstring(s, substr string) bool {
 func TestMergeHookValues(t *testing.T) {
 	// TDD RED: Test the mergeHookValues function in isolation
 	testCases := []struct {
-		name           string
-		existingValue  interface{}
-		claudioValue   interface{}
-		expectedCount  int // expected number of commands in result
-		expectError    bool
+		name          string
+		existingValue interface{}
+		claudioValue  interface{}
+		expectedCount int // expected number of commands in result
+		expectError   bool
 	}{
 		{
 			name:          "merge string hook with claudio array",

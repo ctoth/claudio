@@ -51,10 +51,10 @@ func GenerateClaudioHooksForAgent(executablePath string, agent Agent) (interface
 	hooks := make(HooksMap)
 
 	// Helper function to create hook config structure
-	createHookConfig := func() interface{} {
+	createHookConfig := func(hookDef HookDefinition) interface{} {
 		commandConfig := map[string]interface{}{
 			"type":    "command",
-			"command": hookCommandForAgent(executablePath, agent),
+			"command": hookCommandForHook(executablePath, agent, hookDef.Name),
 		}
 		addAgentHookMetadata(commandConfig, agent)
 
@@ -74,7 +74,7 @@ func GenerateClaudioHooksForAgent(executablePath string, agent Agent) (interface
 
 	// Generate hooks for all enabled hooks in the agent's registry
 	for _, hookDef := range enabledHooks {
-		hooks[hookDef.Name] = createHookConfig()
+		hooks[hookDef.Name] = createHookConfig(hookDef)
 		slog.Debug("added hook from registry",
 			"agent", agent,
 			"hook_name", hookDef.Name,
@@ -97,6 +97,14 @@ func hookCommandForAgent(executablePath string, agent Agent) string {
 	default:
 		return executablePath
 	}
+}
+
+func hookCommandForHook(executablePath string, agent Agent, hookName string) string {
+	command := hookCommandForAgent(executablePath, agent)
+	if agent == AgentCopilot && hookName == "subagentStart" {
+		return command + " --hook-event subagentStart"
+	}
+	return command
 }
 
 func addAgentHookMetadata(commandConfig map[string]interface{}, agent Agent) {
