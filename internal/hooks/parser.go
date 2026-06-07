@@ -430,7 +430,7 @@ func normalizeToolName(toolName string) string {
 	if toolName == "" {
 		return ""
 	}
-	if strings.HasPrefix(toolName, "mcp__") {
+	if isMCPToolName(toolName) {
 		return "mcp"
 	}
 
@@ -467,7 +467,7 @@ func normalizeToolName(toolName string) string {
 }
 
 func isMCPToolName(toolName string) bool {
-	return toolName == "mcp" || strings.HasPrefix(toolName, "mcp__")
+	return toolName == "mcp" || strings.HasPrefix(toolName, "mcp__") || strings.HasPrefix(toolName, "mcp_")
 }
 
 // analyzeToolResponse examines tool response to determine success/error status and error type
