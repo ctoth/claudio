@@ -58,7 +58,13 @@ type AudioPlayer struct {
 	volume      atomic.Uint32
 	mutex       sync.RWMutex
 	deviceMutex sync.Mutex
-	closed      bool
+	// deviceInitMutex serializes malgo.InitDevice calls against the shared
+	// context. Some host backends (notably PulseAudio) can abort the process
+	// when multiple goroutines enter ma_device_init concurrently on the same
+	// context, before Go can receive an ordinary error and skip device-free
+	// tests.
+	deviceInitMutex sync.Mutex
+	closed          bool
 	// contextInitOnce gates the lazy malgo.InitContext allocation in
 	// PlaySoundWithContext. Two concurrent first-Play goroutines used to both
 	// observe p.context==nil and both call NewContext(), leaking the loser's
@@ -353,8 +359,12 @@ func (p *AudioPlayer) PlaySoundWithContext(ctx context.Context, soundID string) 
 		Data: onSamples,
 	}
 	
-	// Create and start device
+	// Create device. InitDevice touches shared C-side context state; serialize
+	// that narrow critical section while allowing playback callbacks to run
+	// concurrently after devices are initialized.
+	p.deviceInitMutex.Lock()
 	device, err := malgo.InitDevice(p.context.GetContext().Context, deviceConfig, deviceCallbacks)
+	p.deviceInitMutex.Unlock()
 	if err != nil {
 		slog.Error("failed to initialize playback device", "sound_id", soundID, "error", err)
 		return fmt.Errorf("failed to initialize playback device: %w", err)
