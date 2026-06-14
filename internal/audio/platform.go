@@ -49,21 +49,33 @@ func detectOptimalBackendWithChecker(isWSL bool, commandChecker func(string) boo
 
 // getPreferredSystemCommandWithChecker allows dependency injection for testing
 func getPreferredSystemCommandWithChecker(commandChecker func(string) bool) string {
-	// Priority order: paplay (PulseAudio) > ffplay (FFmpeg) > aplay (ALSA) > afplay (macOS)
-	preferredCommands := []string{
+	available := getAvailableSystemCommandsWithChecker(commandChecker)
+	if len(available) == 0 {
+		slog.Debug("no preferred system audio commands found")
+		return ""
+	}
+
+	slog.Debug("preferred system command found", "command", available[0])
+	return available[0]
+}
+
+// getAvailableSystemCommandsWithChecker returns all available system audio
+// commands in priority order.
+func getAvailableSystemCommandsWithChecker(commandChecker func(string) bool) []string {
+	allCommands := []string{
 		"paplay", // PulseAudio - most common on modern Linux
 		"ffplay", // FFmpeg - widely available and versatile
 		"aplay",  // ALSA - lower-level Linux audio
 		"afplay", // macOS built-in audio player
 	}
 
-	for _, cmd := range preferredCommands {
+	var available []string
+	for _, cmd := range allCommands {
 		if commandChecker(cmd) {
-			slog.Debug("preferred system command found", "command", cmd)
-			return cmd
+			available = append(available, cmd)
 		}
 	}
 
-	slog.Debug("no preferred system audio commands found")
-	return ""
+	slog.Debug("available system audio commands", "commands", available, "count", len(available))
+	return available
 }

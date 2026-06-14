@@ -1,6 +1,7 @@
 package audio
 
 import (
+	"reflect"
 	"runtime"
 	"testing"
 )
@@ -184,6 +185,48 @@ func TestGetPreferredSystemCommand(t *testing.T) {
 			}
 			if !tt.expectEmpty && result != tt.expectedCommand {
 				t.Errorf("expected command %q, got %q", tt.expectedCommand, result)
+			}
+		})
+	}
+}
+
+func TestGetAvailableSystemCommands(t *testing.T) {
+	tests := []struct {
+		name              string
+		availableCommands []string
+		want              []string
+	}{
+		{
+			name:              "returns all commands in priority order",
+			availableCommands: []string{"aplay", "paplay", "afplay", "ffplay"},
+			want:              []string{"paplay", "ffplay", "aplay", "afplay"},
+		},
+		{
+			name:              "returns subset in priority order",
+			availableCommands: []string{"aplay", "ffplay"},
+			want:              []string{"ffplay", "aplay"},
+		},
+		{
+			name:              "returns empty slice when none are available",
+			availableCommands: []string{},
+			want:              nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			commandChecker := func(cmd string) bool {
+				for _, available := range tt.availableCommands {
+					if cmd == available {
+						return true
+					}
+				}
+				return false
+			}
+
+			got := getAvailableSystemCommandsWithChecker(commandChecker)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("getAvailableSystemCommandsWithChecker() = %v, want %v", got, tt.want)
 			}
 		})
 	}

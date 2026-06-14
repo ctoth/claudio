@@ -1,6 +1,7 @@
 package audio
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -10,12 +11,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 )
 
 // SystemCommandBackend implements AudioBackend using system commands like paplay
 type SystemCommandBackend struct {
-	command          string
+	commands         []string
 	volume           float32
 	isPlaying        bool
 	closed           bool
@@ -23,12 +25,15 @@ type SystemCommandBackend struct {
 	warnNoVolumeOnce sync.Once // one WARN per backend instance for aplay
 }
 
-// NewSystemCommandBackend creates a new SystemCommandBackend with the specified command
-func NewSystemCommandBackend(command string) *SystemCommandBackend {
-	slog.Debug("creating new SystemCommandBackend", "command", command)
+// NewSystemCommandBackend creates a new SystemCommandBackend with the specified
+// commands in priority order. A single command preserves the historical call
+// shape; multiple commands enable best-effort fallback when the primary command
+// fails or cannot handle the file format.
+func NewSystemCommandBackend(commands ...string) *SystemCommandBackend {
+	slog.Debug("creating new SystemCommandBackend", "commands", commands)
 	return &SystemCommandBackend{
-		command: command,
-		volume:  1.0, // Default full volume
+		commands: append([]string(nil), commands...),
+		volume:   1.0, // Default full volume
 	}
 }
 
@@ -119,7 +124,7 @@ func (scb *SystemCommandBackend) Play(ctx context.Context, source AudioSource) e
 		scb.mutex.Unlock()
 	}()
 
-	slog.Debug("SystemCommandBackend starting playback", "command", scb.command)
+	slog.Debug("SystemCommandBackend starting playback", "commands", scb.commands)
 
 	// Fast path: source can provide a file path directly (FileSource). Exec
 	// the player binary against the path without the read-then-write-temp
@@ -151,16 +156,27 @@ func (scb *SystemCommandBackend) loadVolume() float32 {
 	return scb.volume
 }
 
-// buildPlayerArgv returns the argv (NOT including scb.command itself) to play
-// filePath at volume v on the configured backend. v is in [0.0, 1.0]; the
-// function scales it to the backend's native value space. Backends without a
+func (scb *SystemCommandBackend) primaryCommand() string {
+	if len(scb.commands) == 0 {
+		return ""
+	}
+	return scb.commands[0]
+}
+
+// buildPlayerArgv returns the argv (NOT including the command itself) to play
+// filePath at volume v on the primary configured backend. v is in [0.0, 1.0];
+// the function scales it to the backend's native value space. Backends without a
 // native volume flag (e.g. aplay) ignore v and log a one-time WARN.
 //
 // Verified mappings (paplay, ffplay, afplay) come from each player's
 // authoritative documentation. afplay's mapping is identity — review finding
 // #4 incorrectly claimed 0..255 scaling; afplay treats `-v 1.0` as 100%.
 func (scb *SystemCommandBackend) buildPlayerArgv(filePath string, v float64) []string {
-	switch filepath.Base(scb.command) {
+	return scb.buildPlayerArgvForCommand(scb.primaryCommand(), filePath, v)
+}
+
+func (scb *SystemCommandBackend) buildPlayerArgvForCommand(command, filePath string, v float64) []string {
+	switch filepath.Base(command) {
 	case "paplay":
 		// PulseAudio: --volume=N where N is uint32, 65536 = 100%.
 		n := uint32(math.Round(v * 65536))
@@ -180,7 +196,7 @@ func (scb *SystemCommandBackend) buildPlayerArgv(filePath string, v float64) []s
 		if v != 1.0 {
 			scb.warnNoVolumeOnce.Do(func() {
 				slog.Warn("aplay has no native volume flag; configured volume ignored",
-					"command", scb.command, "volume", v)
+					"command", command, "volume", v)
 			})
 		}
 		return []string{filePath}
@@ -191,25 +207,65 @@ func (scb *SystemCommandBackend) buildPlayerArgv(filePath string, v float64) []s
 	}
 }
 
-// playFile plays a file directly using the system command
+// commandSupportsFormat reports whether a system audio command should be tried
+// for a file extension. aplay is limited to WAV on the supported platforms; the
+// other known command players are treated as general-purpose decoders.
+func commandSupportsFormat(command, ext string) bool {
+	if filepath.Base(command) != "aplay" {
+		return true
+	}
+	return strings.EqualFold(ext, ".wav")
+}
+
+// playFile plays a file directly using the configured system command chain.
 func (scb *SystemCommandBackend) playFile(ctx context.Context, filePath string) error {
-	slog.Debug("playing file via system command", "file", filePath, "command", scb.command)
+	slog.Debug("playing file via system command", "file", filePath, "commands", scb.commands)
 
 	v := scb.loadVolume()
-	argv := scb.buildPlayerArgv(filePath, float64(v))
+	ext := filepath.Ext(filePath)
+	var lastErr error
+	var attempted int
 
-	// Create command with context for cancellation
-	cmd := exec.CommandContext(ctx, scb.command, argv...)
+	for i, command := range scb.commands {
+		if !commandSupportsFormat(command, ext) {
+			slog.Debug("skipping system command unsupported for format",
+				"command", command, "ext", ext, "file", filePath)
+			continue
+		}
 
-	// Run the command and wait for completion
-	err := cmd.Run()
-	if err != nil {
-		slog.Error("system command failed", "command", scb.command, "argv", argv, "file", filePath, "error", err)
-		return fmt.Errorf("system command failed: %w", err)
+		attempted++
+		argv := scb.buildPlayerArgvForCommand(command, filePath, float64(v))
+		cmd := exec.CommandContext(ctx, command, argv...)
+		var stderr bytes.Buffer
+		cmd.Stderr = &stderr
+
+		err := cmd.Run()
+		if err == nil {
+			if i > 0 {
+				slog.Info("playback succeeded via fallback",
+					"command", command, "argv", argv, "file", filePath, "attempt", i+1)
+			} else {
+				slog.Debug("file playback completed successfully", "file", filePath, "argv", argv)
+			}
+			return nil
+		}
+
+		lastErr = err
+		stderrText := strings.TrimSpace(stderr.String())
+		if attempted == 1 {
+			slog.Warn("primary audio command failed",
+				"command", command, "argv", argv, "file", filePath, "error", err, "stderr", stderrText)
+		} else {
+			slog.Warn("fallback audio command failed",
+				"command", command, "argv", argv, "file", filePath, "error", err, "stderr", stderrText)
+		}
 	}
 
-	slog.Debug("file playback completed successfully", "file", filePath, "argv", argv)
-	return nil
+	if lastErr == nil {
+		return fmt.Errorf("no audio commands support format %q", ext)
+	}
+	slog.Error("all audio commands failed", "file", filePath, "commands_tried", attempted, "error", lastErr)
+	return fmt.Errorf("all audio commands failed for %s: %w", filepath.Base(filePath), lastErr)
 }
 
 // playReaderViaTempFile writes reader data to a temporary file and plays it

@@ -2,6 +2,7 @@ package audio
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 )
 
@@ -179,13 +180,14 @@ func TestNewBackend_SystemCommandSelection(t *testing.T) {
 	tests := []struct {
 		name              string
 		availableCommands []string
+		expectedCommands  []string
 		expectError       bool
 	}{
-		{"paplay preferred", []string{"aplay", "paplay", "ffplay"}, false},
-		{"ffplay when no paplay", []string{"aplay", "ffplay"}, false},
-		{"aplay fallback", []string{"aplay"}, false},
-		{"afplay on macOS-like", []string{"afplay"}, false},
-		{"no commands", []string{}, true},
+		{"paplay preferred", []string{"aplay", "paplay", "ffplay"}, []string{"paplay", "ffplay", "aplay"}, false},
+		{"ffplay when no paplay", []string{"aplay", "ffplay"}, []string{"ffplay", "aplay"}, false},
+		{"aplay fallback", []string{"aplay"}, []string{"aplay"}, false},
+		{"afplay on macOS-like", []string{"afplay"}, []string{"afplay"}, false},
+		{"no commands", []string{}, nil, true},
 	}
 
 	for _, tt := range tests {
@@ -208,8 +210,12 @@ func TestNewBackend_SystemCommandSelection(t *testing.T) {
 				t.Errorf("unexpected error: %v", err)
 			}
 			if !tt.expectError {
-				if _, ok := backend.(*SystemCommandBackend); !ok {
+				scb, ok := backend.(*SystemCommandBackend)
+				if !ok {
 					t.Errorf("expected *SystemCommandBackend, got %T", backend)
+				}
+				if ok && !reflect.DeepEqual(scb.commands, tt.expectedCommands) {
+					t.Errorf("commands = %v, want %v", scb.commands, tt.expectedCommands)
 				}
 				if backend != nil {
 					_ = backend.Close()
