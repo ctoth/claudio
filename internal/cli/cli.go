@@ -243,6 +243,12 @@ func initializeAudioSystem(cmd *cobra.Command, cli *CLI, cfg *config.Config) err
 			slog.Warn("failed to load embedded platform soundpack from config",
 				"identifier", cfg.DefaultSoundpack, "error", err)
 		}
+	} else if embeddedIdentifier, ok := embeddedPlatformSoundpackIdentifier(cfg.DefaultSoundpack); ok {
+		mapper, err = loadEmbeddedPlatformSoundpack(embeddedIdentifier)
+		if err != nil {
+			slog.Warn("failed to load embedded platform soundpack from config name",
+				"name", cfg.DefaultSoundpack, "identifier", embeddedIdentifier, "error", err)
+		}
 	} else {
 		// Resolve soundpack name to path: if default_soundpack is a name (not a path),
 		// search soundpack_paths for a matching entry

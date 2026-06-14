@@ -4,13 +4,76 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"claudio.click/internal/cli/testenv"
+	"claudio.click/internal/config"
 	"claudio.click/internal/hooks"
-	"claudio.click/internal/sounds"
 	"claudio.click/internal/soundpack"
+	"claudio.click/internal/sounds"
 )
+
+func TestEmbeddedPlatformSoundpackIdentifierRecognizesBarePlatformNames(t *testing.T) {
+	tests := []struct {
+		name string
+		want string
+	}{
+		{name: "windows", want: "embedded:windows.json"},
+		{name: "wsl", want: "embedded:wsl.json"},
+		{name: "darwin", want: "embedded:darwin.json"},
+		{name: "linux", want: "embedded:linux.json"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := embeddedPlatformSoundpackIdentifier(tt.name)
+			if !ok {
+				t.Fatalf("expected %q to be recognized as a bare embedded soundpack name", tt.name)
+			}
+			if got != tt.want {
+				t.Fatalf("expected %q, got %q", tt.want, got)
+			}
+		})
+	}
+}
+
+func TestInitializeAudioSystemUsesBareEmbeddedLinuxSoundpack(t *testing.T) {
+	testenv.IsolateXDG(t)
+
+	tempDir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(tempDir, "linux"), 0755); err != nil {
+		t.Fatalf("failed to create same-name directory: %v", err)
+	}
+	t.Chdir(tempDir)
+
+	cli := NewCLI()
+	cfg := &config.Config{
+		DefaultSoundpack: "linux",
+		Enabled:          false,
+	}
+
+	if err := initializeAudioSystem(cli.rootCmd, cli, cfg); err != nil {
+		t.Fatalf("initializeAudioSystem returned error: %v", err)
+	}
+	if cli.soundpackResolver == nil {
+		t.Fatal("soundpack resolver was not initialized")
+	}
+	if got := cli.soundpackResolver.GetType(); got != "json" {
+		t.Fatalf("expected bare linux to initialize embedded JSON resolver, got type %q", got)
+	}
+	if got := cli.soundpackResolver.GetName(); got != "linux-default" {
+		t.Fatalf("expected embedded linux resolver name %q, got %q", "linux-default", got)
+	}
+
+	resolved, err := cli.soundpackResolver.ResolveSound("default.wav")
+	if err != nil {
+		t.Fatalf("expected embedded linux resolver to resolve default.wav: %v", err)
+	}
+	if _, err := os.Stat(resolved); err != nil {
+		t.Fatalf("resolved default.wav path %q does not exist: %v", resolved, err)
+	}
+}
 
 // TestEmbeddedLinuxSoundpackResolves proves the native-Linux default pack
 // resolves its default tones out of the box on any host.
