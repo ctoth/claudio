@@ -108,16 +108,17 @@ func newBackendWithChecker(backendType string, isWSLFunc func() bool, commandExi
 	}
 }
 
-// createSystemCommandBackendWithChecker picks the best available system
-// audio command and constructs a SystemCommandBackend.
+// createSystemCommandBackendWithChecker captures every available system audio
+// command in priority order so playback can fall back when the primary command
+// fails or cannot handle a file format.
 func createSystemCommandBackendWithChecker(commandExists func(string) bool) (AudioBackend, error) {
-	preferred := getPreferredSystemCommandWithChecker(commandExists)
-	if preferred == "" {
+	commands := getAvailableSystemCommandsWithChecker(commandExists)
+	if len(commands) == 0 {
 		slog.Error("no system audio commands available")
 		return nil, fmt.Errorf("%w: no system audio commands found", ErrBackendNotAvailable)
 	}
-	slog.Debug("system command backend created", "command", preferred)
-	return NewSystemCommandBackend(preferred), nil
+	slog.Debug("system command backend created", "commands", commands)
+	return NewSystemCommandBackend(commands...), nil
 }
 
 // createRegisteredBackend instantiates a backend whose constructor was

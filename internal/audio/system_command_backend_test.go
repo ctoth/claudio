@@ -1,11 +1,48 @@
 package audio
 
 import (
+	"context"
 	"math"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 )
+
+func TestNewSystemCommandBackendStoresFallbackChain(t *testing.T) {
+	scb := NewSystemCommandBackend("paplay", "ffplay", "aplay")
+	want := []string{"paplay", "ffplay", "aplay"}
+	if !reflect.DeepEqual(scb.commands, want) {
+		t.Fatalf("commands = %v, want %v", scb.commands, want)
+	}
+}
+
+func TestCommandSupportsFormat(t *testing.T) {
+	tests := []struct {
+		name    string
+		command string
+		ext     string
+		want    bool
+	}{
+		{name: "aplay supports wav", command: "aplay", ext: ".wav", want: true},
+		{name: "aplay supports wav case-insensitive", command: "/usr/bin/aplay", ext: ".WAV", want: true},
+		{name: "aplay rejects mp3", command: "aplay", ext: ".mp3", want: false},
+		{name: "aplay rejects aiff", command: "aplay", ext: ".aiff", want: false},
+		{name: "paplay accepts mp3", command: "paplay", ext: ".mp3", want: true},
+		{name: "ffplay accepts aiff", command: "ffplay", ext: ".aiff", want: true},
+		{name: "unknown accepts mp3", command: "custom-player", ext: ".mp3", want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := commandSupportsFormat(tt.command, tt.ext)
+			if got != tt.want {
+				t.Fatalf("commandSupportsFormat(%q, %q) = %v, want %v", tt.command, tt.ext, got, tt.want)
+			}
+		})
+	}
+}
 
 // TestSetVolume_RejectsNaN verifies SetVolume rejects NaN. NaN evaluates as
 // false for both bounds checks, so without an explicit guard it would slip
@@ -180,4 +217,50 @@ func TestBuildPlayerArgv_VolumeReachesArgv(t *testing.T) {
 	if !reflect.DeepEqual(argv, want) {
 		t.Errorf("volume set via SetVolume should reach argv as --volume=16384; got %v", argv)
 	}
+}
+
+func TestPlayFileWithFallbackChain(t *testing.T) {
+	tmpDir := t.TempDir()
+	wavFile := filepath.Join(tmpDir, "sound.wav")
+	if err := os.WriteFile(wavFile, []byte("fake wav"), 0644); err != nil {
+		t.Fatalf("write wav fixture: %v", err)
+	}
+
+	t.Run("primary command fails then fallback succeeds", func(t *testing.T) {
+		scb := NewSystemCommandBackend("nonexistent-command-claudio", successfulNoopCommand())
+		if err := scb.playFile(context.Background(), wavFile); err != nil {
+			t.Fatalf("playFile should succeed via fallback: %v", err)
+		}
+	})
+
+	t.Run("all commands fail", func(t *testing.T) {
+		scb := NewSystemCommandBackend("nonexistent-command-one", "nonexistent-command-two")
+		if err := scb.playFile(context.Background(), wavFile); err == nil {
+			t.Fatal("playFile should fail when every command fails")
+		}
+	})
+
+	t.Run("skips format-incompatible commands", func(t *testing.T) {
+		mp3File := filepath.Join(tmpDir, "sound.mp3")
+		if err := os.WriteFile(mp3File, []byte("fake mp3"), 0644); err != nil {
+			t.Fatalf("write mp3 fixture: %v", err)
+		}
+
+		scb := NewSystemCommandBackend("aplay", successfulNoopCommand())
+		if err := scb.playFile(context.Background(), mp3File); err != nil {
+			t.Fatalf("playFile should skip aplay for mp3 and use fallback: %v", err)
+		}
+	})
+
+	t.Run("all commands skipped for unsupported format", func(t *testing.T) {
+		mp3File := filepath.Join(tmpDir, "unsupported.mp3")
+		if err := os.WriteFile(mp3File, []byte("fake mp3"), 0644); err != nil {
+			t.Fatalf("write mp3 fixture: %v", err)
+		}
+
+		scb := NewSystemCommandBackend("aplay")
+		if err := scb.playFile(context.Background(), mp3File); err == nil {
+			t.Fatal("playFile should fail when every command is format-incompatible")
+		}
+	})
 }
