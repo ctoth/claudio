@@ -24,6 +24,27 @@ type soundpackInfo struct {
 	Path       string
 }
 
+var embeddedPlatformSoundpackFiles = []string{"windows.json", "wsl.json", "darwin.json", "linux.json"}
+
+func embeddedPlatformSoundpackIdentifier(name string) (string, bool) {
+	if name == "" || strings.ContainsAny(name, `/\`) || filepath.Ext(name) != "" {
+		return "", false
+	}
+
+	filename := name + ".json"
+	for _, embedded := range embeddedPlatformSoundpackFiles {
+		if filename == embedded {
+			return "embedded:" + filename, true
+		}
+	}
+
+	if _, err := config.GetEmbeddedPlatformSoundpackData(filename); err == nil {
+		return "embedded:" + filename, true
+	}
+
+	return "", false
+}
+
 // discoverSoundpacks finds all available soundpacks from embedded, XDG, and config sources.
 // Returns a deduplicated list of soundpack info structs.
 func discoverSoundpacks() ([]soundpackInfo, error) {
@@ -80,12 +101,11 @@ func discoverSoundpacks() ([]soundpackInfo, error) {
 	return packs, nil
 }
 
-// discoverEmbeddedSoundpacks returns info for the 3 embedded platform packs
+// discoverEmbeddedSoundpacks returns info for embedded platform packs.
 func discoverEmbeddedSoundpacks() ([]soundpackInfo, error) {
-	platformFiles := []string{"windows.json", "wsl.json", "darwin.json"}
 	var packs []soundpackInfo
 
-	for _, file := range platformFiles {
+	for _, file := range embeddedPlatformSoundpackFiles {
 		data, err := config.GetEmbeddedPlatformSoundpackData(file)
 		if err != nil {
 			slog.Warn("failed to read embedded platform soundpack", "file", file, "error", err)
@@ -292,15 +312,14 @@ func countNonEmptyMappings(mappings map[string]string) int {
 	return count
 }
 
-// ExtractAllSoundKeys reads all 3 embedded platform JSONs and returns the sorted
+// ExtractAllSoundKeys reads all embedded platform JSONs and returns the sorted
 // union of all mapping keys. It uses PeekJSONSoundpackFromBytes (which
 // applies the size and mappings-count caps but skips path/existence
 // checks) since we only need the keys.
 func ExtractAllSoundKeys() ([]string, error) {
-	platformFiles := []string{"windows.json", "wsl.json", "darwin.json"}
 	keySet := make(map[string]struct{})
 
-	for _, file := range platformFiles {
+	for _, file := range embeddedPlatformSoundpackFiles {
 		data, err := config.GetEmbeddedPlatformSoundpackData(file)
 		if err != nil {
 			slog.Warn("failed to read embedded platform soundpack", "file", file, "error", err)
