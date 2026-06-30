@@ -393,12 +393,18 @@ func TestAudioLoggingLevels(t *testing.T) {
 		"all sound playback stopped",
 	}
 
+	// Check each routine message on its OWN line. The global default logger is
+	// shared, so unrelated INFO/ERROR lines from leftover goroutines (e.g. an
+	// async device-init failure on a headless CI runner) can land in this
+	// buffer. A whole-buffer "contains level=INFO" check would be tripped by
+	// those leaked lines, so we must inspect the level of the specific line
+	// carrying each routine message.
+	lines := strings.Split(logOutput, "\n")
 	for _, logMsg := range problematicInfoLogs {
-		if strings.Contains(logOutput, logMsg) {
-			// Check if it appears with INFO level (bad) vs DEBUG level (good)
-			if strings.Contains(logOutput, "level=INFO") && strings.Contains(logOutput, logMsg) {
+		for _, line := range lines {
+			if strings.Contains(line, logMsg) && strings.Contains(line, "level=INFO") {
 				t.Errorf("Routine operation '%s' should use DEBUG level, not INFO level", logMsg)
-				t.Logf("Full log output: %s", logOutput)
+				t.Logf("Offending line: %s", line)
 			}
 		}
 	}
