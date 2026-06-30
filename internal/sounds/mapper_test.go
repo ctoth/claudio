@@ -7,9 +7,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	"claudio.click/internal/hooks"
 	"claudio.click/internal/soundpack"
+	"github.com/stretchr/testify/require"
 )
 
 // newTestResolver builds a real soundpack.SoundpackResolver backed by a
@@ -29,6 +29,17 @@ func TestSoundMapper(t *testing.T) {
 
 	if mapper == nil {
 		t.Fatal("NewSoundMapper returned nil")
+	}
+}
+
+func TestMapSoundSilentContextReturnsNil(t *testing.T) {
+	mapper := NewSoundMapper()
+	result := mapper.MapSound(context.Background(), &hooks.EventContext{
+		Category:  hooks.Silent,
+		Operation: "beforemodel",
+	})
+	if result != nil {
+		t.Fatalf("silent context returned sound result: %#v", result)
 	}
 }
 
@@ -814,17 +825,17 @@ func TestSimpleEvent4LevelFallback(t *testing.T) {
 func TestSoundMapper_BugReproduction_AllPathsFallbackToDefault(t *testing.T) {
 	// This test reproduces the original bug where all sounds fallback to default.wav
 	// because SoundChecker can't find logical paths
-	
+
 	// Create temp files for realistic testing
 	tempDir := t.TempDir()
 	bashSuccessFile := filepath.Join(tempDir, "bash-success.wav")
 	defaultFile := filepath.Join(tempDir, "default.wav")
-	
+
 	err := os.WriteFile(bashSuccessFile, []byte("test"), 0644)
 	require.NoError(t, err)
 	err = os.WriteFile(defaultFile, []byte("test"), 0644)
 	require.NoError(t, err)
-	
+
 	// Real resolver mapping logical → physical absolute paths. Anything not
 	// in the map produces a MapPath miss, so the resolver walks the chain
 	// the same way the production resolver does.
@@ -833,25 +844,25 @@ func TestSoundMapper_BugReproduction_AllPathsFallbackToDefault(t *testing.T) {
 		"default.wav":              defaultFile,
 		// Note: success/tool-complete.wav and success/success.wav are NOT mapped
 	})
-	
+
 	mapper := NewSoundMapperWithResolver(resolver)
-	
+
 	eventCtx := &hooks.EventContext{
 		Category:  hooks.Success,
 		ToolName:  "bash",
 		Operation: "tool-complete",
 	}
-	
+
 	result := mapper.MapSound(context.Background(), eventCtx)
-	
+
 	// Should find bash-success.wav (level 1) instead of falling back to default.wav
 	expectedPath := "success/bash-success.wav"
 	if result.SelectedPath != expectedPath {
-		t.Errorf("Expected selected path %s, got %s (fallback level %d)", 
+		t.Errorf("Expected selected path %s, got %s (fallback level %d)",
 			expectedPath, result.SelectedPath, result.FallbackLevel)
 		t.Logf("All paths: %v", result.AllPaths)
 	}
-	
+
 	// Should be fallback level 1 (first path found)
 	if result.FallbackLevel != 1 {
 		t.Errorf("Expected fallback level 1, got %d", result.FallbackLevel)
@@ -860,34 +871,34 @@ func TestSoundMapper_BugReproduction_AllPathsFallbackToDefault(t *testing.T) {
 
 func TestSoundMapper_BugReproduction_NoSpecificSoundFallsToDefault(t *testing.T) {
 	// Test case where specific sound doesn't exist, should fallback properly
-	
+
 	tempDir := t.TempDir()
 	defaultFile := filepath.Join(tempDir, "default.wav")
-	
+
 	err := os.WriteFile(defaultFile, []byte("test"), 0644)
 	require.NoError(t, err)
-	
+
 	// Resolver only has default.wav, no specific sounds
 	resolver := newTestResolver(map[string]string{
 		"default.wav": defaultFile,
 	})
-	
+
 	mapper := NewSoundMapperWithResolver(resolver)
-	
+
 	eventCtx := &hooks.EventContext{
 		Category:  hooks.Success,
 		ToolName:  "unknowntool",
 		Operation: "tool-complete",
 	}
-	
+
 	result := mapper.MapSound(context.Background(), eventCtx)
-	
+
 	// Should fallback to default.wav (last level)
 	expectedPath := "default.wav"
 	if result.SelectedPath != expectedPath {
 		t.Errorf("Expected selected path %s, got %s", expectedPath, result.SelectedPath)
 	}
-	
+
 	// Should be fallback level = len(paths) (last level)
 	if result.FallbackLevel != len(result.AllPaths) {
 		t.Errorf("Expected fallback level %d (last), got %d", len(result.AllPaths), result.FallbackLevel)

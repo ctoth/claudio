@@ -16,8 +16,8 @@ func TestGenerateClaudioHooks(t *testing.T) {
 	}{
 		{
 			name:           "registry-based hook generation",
-			expectHooks:    GetHookNames(),                                                                                   // Should use registry instead of hardcoded
-			expectCommands: []string{"claudio", "claudio", "claudio", "claudio", "claudio", "claudio", "claudio", "claudio"}, // 8 hooks now
+			expectHooks:    enabledHookNames(AgentClaude),
+			expectCommands: []string{"claudio", "claudio", "claudio", "claudio", "claudio", "claudio", "claudio", "claudio"},
 		},
 	}
 
@@ -56,7 +56,7 @@ func TestGenerateClaudioHooks(t *testing.T) {
 
 			// Verify hooks exist and have correct structure
 			// (detailed structure testing is in TestGenerateClaudioHooksCorrectFormat)
-			expectedCount := len(GetEnabledHooks()) // Should be 8 hooks from registry
+			expectedCount := len(GetEnabledHooks())
 			if len(parsedHooks) != expectedCount {
 				t.Errorf("Expected %d hooks from registry, got %d", expectedCount, len(parsedHooks))
 			}
@@ -362,7 +362,7 @@ func TestGenerateClaudioHooksCorrectFormat(t *testing.T) {
 
 			// Since generateTestHooks() uses mock path, expect mock path
 			expectedPath := "/test/mock/claudio"
-			
+
 			// The command should be unquoted (quotes are handled by JSON marshaling)
 			if commandStr != expectedPath {
 				t.Errorf("Hook %s command should be '%s', got '%s'", hookName, expectedPath, commandStr)
@@ -493,6 +493,160 @@ func TestGenerateClaudioHooksForCodexAgent(t *testing.T) {
 	cfg := arr[0].(map[string]interface{})
 	if cfg["matcher"] != "*" {
 		t.Errorf("codex matcher = %v, want *", cfg["matcher"])
+	}
+	hookList := cfg["hooks"].([]interface{})
+	commandConfig := hookList[0].(map[string]interface{})
+	if _, exists := commandConfig["statusMessage"]; exists {
+		t.Errorf("codex statusMessage should be omitted, got %v", commandConfig["statusMessage"])
+	}
+}
+
+func TestGenerateClaudioHooksOmitStatusMessageForAllAgents(t *testing.T) {
+	for _, agent := range ConcreteAgents() {
+		t.Run(agent.String(), func(t *testing.T) {
+			result, err := GenerateClaudioHooksForAgent("/usr/local/bin/claudio", agent)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			hooks, ok := result.(HooksMap)
+			if !ok {
+				t.Fatalf("expected HooksMap, got %T", result)
+			}
+
+			for hookName, hookValue := range hooks {
+				for _, commandConfig := range collectGeneratedCommandConfigs(t, hookValue) {
+					if _, exists := commandConfig["statusMessage"]; exists {
+						t.Errorf("%s generated statusMessage for %s: %v", agent, hookName, commandConfig["statusMessage"])
+					}
+				}
+			}
+		})
+	}
+}
+
+func collectGeneratedCommandConfigs(t *testing.T, hookValue interface{}) []map[string]interface{} {
+	t.Helper()
+	arr, ok := hookValue.([]interface{})
+	if !ok {
+		t.Fatalf("expected hook array, got %T", hookValue)
+	}
+
+	var commandConfigs []map[string]interface{}
+	for _, item := range arr {
+		itemMap, ok := item.(map[string]interface{})
+		if !ok {
+			t.Fatalf("expected hook item map, got %T", item)
+		}
+		if nestedHooks, ok := itemMap["hooks"].([]interface{}); ok {
+			for _, nested := range nestedHooks {
+				nestedMap, ok := nested.(map[string]interface{})
+				if !ok {
+					t.Fatalf("expected nested hook map, got %T", nested)
+				}
+				commandConfigs = append(commandConfigs, nestedMap)
+			}
+			continue
+		}
+		commandConfigs = append(commandConfigs, itemMap)
+	}
+	return commandConfigs
+}
+
+func TestGenerateClaudioHooksForGeminiAgent(t *testing.T) {
+	result, err := GenerateClaudioHooksForAgent("/usr/local/bin/claudio", AgentGemini)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	hooks, ok := result.(HooksMap)
+	if !ok {
+		t.Fatalf("expected HooksMap, got %T", result)
+	}
+	if len(hooks) != len(GeminiHooks) {
+		t.Errorf("expected %d gemini hooks, got %d", len(GeminiHooks), len(hooks))
+	}
+	if _, ok := hooks["BeforeModel"]; !ok {
+		t.Error("expected BeforeModel in gemini hooks")
+	}
+
+	arr := hooks["BeforeTool"].([]interface{})
+	cfg := arr[0].(map[string]interface{})
+	if cfg["matcher"] != "" {
+		t.Errorf("gemini matcher = %v, want empty matcher", cfg["matcher"])
+	}
+
+	hookList := cfg["hooks"].([]interface{})
+	command := hookList[0].(map[string]interface{})["command"]
+	if command != "/usr/local/bin/claudio --hook-agent gemini" {
+		t.Errorf("gemini command = %v, want claudio with hook-agent flag", command)
+	}
+	if hookList[0].(map[string]interface{})["name"] != "claudio" {
+		t.Errorf("gemini hook name = %v, want claudio", hookList[0].(map[string]interface{})["name"])
+	}
+}
+
+func TestGenerateClaudioHooksForQwenAgent(t *testing.T) {
+	result, err := GenerateClaudioHooksForAgent("/usr/local/bin/claudio", AgentQwen)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	hooks, ok := result.(HooksMap)
+	if !ok {
+		t.Fatalf("expected HooksMap, got %T", result)
+	}
+	if len(hooks) != len(QwenHooks) {
+		t.Errorf("expected %d qwen hooks, got %d", len(QwenHooks), len(hooks))
+	}
+	arr := hooks["PreToolUse"].([]interface{})
+	cfg := arr[0].(map[string]interface{})
+	if cfg["matcher"] != ".*" {
+		t.Errorf("qwen matcher = %v, want .*", cfg["matcher"])
+	}
+	hookList := cfg["hooks"].([]interface{})
+	commandConfig := hookList[0].(map[string]interface{})
+	if commandConfig["command"] != "/usr/local/bin/claudio --hook-agent qwen" {
+		t.Errorf("qwen command = %v, want claudio with hook-agent flag", commandConfig["command"])
+	}
+	if commandConfig["name"] != "claudio" {
+		t.Errorf("qwen hook name = %v, want claudio", commandConfig["name"])
+	}
+	if _, exists := commandConfig["statusMessage"]; exists {
+		t.Errorf("qwen statusMessage should be omitted, got %v", commandConfig["statusMessage"])
+	}
+}
+
+func TestGenerateClaudioHooksForCopilotAgent(t *testing.T) {
+	result, err := GenerateClaudioHooksForAgent("/usr/local/bin/claudio", AgentCopilot)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	hooks, ok := result.(HooksMap)
+	if !ok {
+		t.Fatalf("expected HooksMap, got %T", result)
+	}
+	if len(hooks) != len(CopilotHooks) {
+		t.Errorf("expected %d copilot hooks, got %d", len(CopilotHooks), len(hooks))
+	}
+	arr := hooks["PreToolUse"].([]interface{})
+	commandConfig := arr[0].(map[string]interface{})
+	if _, exists := commandConfig["matcher"]; exists {
+		t.Errorf("copilot command hook must not use Claude/Gemini matcher wrapper: %v", commandConfig)
+	}
+	if _, exists := commandConfig["hooks"]; exists {
+		t.Errorf("copilot command hook must be direct, got nested hooks: %v", commandConfig)
+	}
+	if commandConfig["command"] != "/usr/local/bin/claudio --hook-agent copilot" {
+		t.Errorf("copilot command = %v, want claudio with hook-agent flag", commandConfig["command"])
+	}
+	subagentStartArr := hooks["subagentStart"].([]interface{})
+	subagentStartConfig := subagentStartArr[0].(map[string]interface{})
+	if subagentStartConfig["command"] != "/usr/local/bin/claudio --hook-agent copilot --hook-event subagentStart" {
+		t.Errorf("copilot subagentStart command = %v, want explicit hook-event flag", subagentStartConfig["command"])
+	}
+	if commandConfig["timeoutSec"] != 30 {
+		t.Errorf("copilot timeoutSec = %v, want 30", commandConfig["timeoutSec"])
+	}
+	if !IsClaudioHook(arr) {
+		t.Error("copilot direct command array should be detected as Claudio hook")
 	}
 }
 

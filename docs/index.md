@@ -1,8 +1,8 @@
 ---
 layout: default
 title: "Claudio"
-description: "Hook-based audio feedback for Claude Code and OpenAI Codex CLI."
-keywords: "Claude Code, Codex CLI, hooks, audio feedback, soundpacks, developer tools"
+description: "Hook-based audio feedback for Claude Code, OpenAI Codex CLI, Gemini CLI, Qwen Code, and GitHub Copilot CLI."
+keywords: "Claude Code, Codex CLI, Gemini CLI, Qwen Code, GitHub Copilot CLI, hooks, audio feedback, soundpacks, developer tools"
 canonical_url: "https://claudio.click"
 ---
 
@@ -22,28 +22,32 @@ sound different.
 
 ```bash
 go install claudio.click/cmd/claudio@latest
-claudio install --agent claude --scope user
+claudio install
 claudio status
 ```
 
-For Codex:
+`claudio install` uses `--agent auto --scope global` by default. It detects
+Claude Code, Codex CLI, Gemini CLI, Qwen Code, and GitHub Copilot CLI, then
+installs hooks for the agents it finds.
+
+For Codex, trust the hook after installation:
 
 ```bash
-go install claudio.click/cmd/claudio@latest
-claudio install --agent codex --scope user
+/hooks
 ```
-
-Then run `/hooks` in Codex and trust the Claudio hook.
 
 ## What Claudio Installs
 
 `claudio install` writes hook entries into the selected agent's settings file
 and preserves non-Claudio hooks.
 
-| Agent | Command | User settings | Project settings |
+| Agent | Command | Global settings | Project settings |
 | --- | --- | --- | --- |
 | Claude Code | `claudio install --agent claude` | `~/.claude/settings.json` | `./.claude/settings.json` |
 | Codex | `claudio install --agent codex` | `$CODEX_HOME/hooks.json` or `~/.codex/hooks.json` | `./.codex/hooks.json` |
+| Gemini | `claudio install --agent gemini` | `~/.gemini/settings.json` | `./.gemini/settings.json` |
+| Qwen Code | `claudio install --agent qwen` | `~/.qwen/settings.json` | `./.qwen/settings.json` |
+| GitHub Copilot CLI | `claudio install --agent copilot` | `~/.copilot/settings.json` | `./.github/copilot/settings.local.json` |
 
 Antigravity support is command-artifact only:
 
@@ -55,14 +59,38 @@ claudio install-commands --agent antigravity
 
 Claude Code installs these default-enabled hooks:
 
-- `PreToolUse`
-- `PostToolUse`
-- `UserPromptSubmit`
-- `Notification`
-- `Stop`
-- `SubagentStop`
-- `PreCompact`
 - `SessionStart`
+- `Setup`
+- `UserPromptSubmit`
+- `UserPromptExpansion`
+- `PreToolUse`
+- `PermissionRequest`
+- `PermissionDenied`
+- `PostToolUse`
+- `PostToolUseFailure`
+- `PostToolBatch`
+- `Notification`
+- `SubagentStart`
+- `SubagentStop`
+- `TaskCreated`
+- `TaskCompleted`
+- `Stop`
+- `StopFailure`
+- `TeammateIdle`
+- `InstructionsLoaded`
+- `ConfigChange`
+- `CwdChanged`
+- `WorktreeCreate`
+- `WorktreeRemove`
+- `PreCompact`
+- `PostCompact`
+- `Elicitation`
+- `ElicitationResult`
+- `SessionEnd`
+
+Claude Code also has `MessageDisplay` and `FileChanged` in Claudio's registry,
+but they are disabled by default to avoid noisy audio from streamed text and
+broad file watchers.
 
 Codex installs these default-enabled hooks:
 
@@ -76,6 +104,55 @@ Codex installs these default-enabled hooks:
 - `PostCompact`
 - `SessionStart`
 - `PermissionRequest`
+
+Gemini installs these default-enabled hooks:
+
+- `BeforeTool`
+- `AfterTool`
+- `BeforeAgent`
+- `AfterAgent`
+- `BeforeModel` (silent no-op)
+- `AfterModel` (silent no-op)
+- `BeforeToolSelection` (silent no-op)
+- `SessionStart`
+- `SessionEnd`
+- `Notification`
+- `PreCompress`
+
+Qwen Code installs these default-enabled hooks:
+
+- `PreToolUse`
+- `PostToolUse`
+- `PostToolUseFailure`
+- `UserPromptSubmit`
+- `SessionStart`
+- `SessionEnd`
+- `Stop`
+- `StopFailure`
+- `SubagentStart`
+- `SubagentStop`
+- `PreCompact`
+- `PostCompact`
+- `Notification`
+- `PermissionRequest`
+- `TodoCreated`
+- `TodoCompleted`
+
+GitHub Copilot CLI installs these default-enabled hooks:
+
+- `PreToolUse`
+- `PostToolUse`
+- `PostToolUseFailure`
+- `UserPromptSubmit`
+- `SessionStart`
+- `SessionEnd`
+- `Stop`
+- `subagentStart`
+- `SubagentStop`
+- `PreCompact`
+- `Notification`
+- `PermissionRequest`
+- `ErrorOccurred`
 
 ## How Sound Selection Works
 

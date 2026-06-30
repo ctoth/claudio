@@ -12,8 +12,16 @@ import (
 	"testing"
 	"time"
 
+	"claudio.click/internal/platform"
 	"github.com/gen2brain/malgo"
 )
+
+func skipIfWSLMalgoPlayback(t *testing.T) {
+	t.Helper()
+	if platform.IsWSL() {
+		t.Skip("skipping malgo hardware playback on WSL; PulseAudio may abort in C before Go can handle an init error")
+	}
+}
 
 // skipIfNoAudioDevice skips the test if the error indicates no audio device
 // is available (e.g. CI runners without sound hardware).
@@ -165,6 +173,7 @@ func TestAudioPlayerPlaySound(t *testing.T) {
 	}
 
 	t.Run("play preloaded sound", func(t *testing.T) {
+		skipIfWSLMalgoPlayback(t)
 		soundID := "play-test"
 
 		// Preload first
@@ -219,6 +228,7 @@ func TestAudioPlayerPlaySoundWithTimeout(t *testing.T) {
 	}
 
 	t.Run("play with sufficient timeout", func(t *testing.T) {
+		skipIfWSLMalgoPlayback(t)
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
@@ -261,6 +271,7 @@ func TestAudioPlayerConcurrentPlayback(t *testing.T) {
 	}
 
 	t.Run("concurrent playback", func(t *testing.T) {
+		skipIfWSLMalgoPlayback(t)
 		// Play all sounds concurrently
 		errChan := make(chan error, len(sounds))
 
@@ -482,6 +493,8 @@ func TestSetVolume_RejectsNonFinite(t *testing.T) {
 // and is skipped on CI runners without a device. The device-free hammer test
 // above is the load-bearing regression — this one is icing for dev boxes.
 func TestPlayWithConcurrentSetVolume_NoRace(t *testing.T) {
+	skipIfWSLMalgoPlayback(t)
+
 	player := NewAudioPlayer()
 	defer func() { _ = player.Close() }()
 
@@ -530,6 +543,8 @@ func TestPlayWithConcurrentSetVolume_NoRace(t *testing.T) {
 // the Once gate, all goroutines either succeed (real audio device present)
 // or fail uniformly with the same init error (no device on CI).
 func TestPlaySound_ContextInitOnce_NoRace(t *testing.T) {
+	skipIfWSLMalgoPlayback(t)
+
 	player := NewAudioPlayer()
 	defer func() { _ = player.Close() }()
 
@@ -586,6 +601,8 @@ func TestPlaySound_ContextInitOnce_NoRace(t *testing.T) {
 // asserts the behavioural guarantee: no panic, no crash, IsPlaying false
 // after both paths return. Regression for review finding #33.
 func TestStopAll_NoDoubleFree(t *testing.T) {
+	skipIfWSLMalgoPlayback(t)
+
 	player := NewAudioPlayer()
 	defer func() { _ = player.Close() }()
 
@@ -638,6 +655,8 @@ func TestStopAll_NoDoubleFree(t *testing.T) {
 // guards both the halt AND the device release, since IsPlaying is now
 // derived from len(p.devices).)
 func TestStop_HaltsAndReleasesDevices(t *testing.T) {
+	skipIfWSLMalgoPlayback(t)
+
 	player := NewAudioPlayer()
 	defer func() { _ = player.Close() }()
 

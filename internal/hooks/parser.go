@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 )
 
@@ -17,6 +18,7 @@ const (
 	Interactive
 	Completion
 	System
+	Silent
 )
 
 func (c EventCategory) String() string {
@@ -35,13 +37,15 @@ func (c EventCategory) String() string {
 	case System:
 		slog.Debug("EventCategory.String() returning system")
 		return "system"
+	case Silent:
+		return "silent"
 	default:
 		slog.Warn("EventCategory.String() received unknown category", "category", int(c))
 		return "unknown"
 	}
 }
 
-// HookEvent represents a parsed Claude Code hook event
+// HookEvent represents a parsed agent hook event.
 type HookEvent struct {
 	// Base fields (always present)
 	SessionID      string `json:"session_id"`
@@ -76,7 +80,7 @@ type CommandInfo struct {
 	HasSubcommand bool   // True if subcommand was found
 }
 
-// HookEventParser parses Claude Code hook JSON into structured events
+// HookEventParser parses agent hook JSON into structured events.
 type HookEventParser struct{}
 
 // NewHookEventParser creates a new hook event parser
@@ -87,6 +91,12 @@ func NewHookEventParser() *HookEventParser {
 
 // Parse parses hook JSON data into a HookEvent
 func (p *HookEventParser) Parse(data []byte) (*HookEvent, error) {
+	return p.ParseWithDefaultEvent(data, "")
+}
+
+// ParseWithDefaultEvent parses hook JSON and uses defaultEvent when the
+// payload format does not include hook_event_name.
+func (p *HookEventParser) ParseWithDefaultEvent(data []byte, defaultEvent string) (*HookEvent, error) {
 	if len(data) == 0 {
 		err := fmt.Errorf("empty JSON data")
 		slog.Error("parse failed: empty data", "error", err)
@@ -101,6 +111,13 @@ func (p *HookEventParser) Parse(data []byte) (*HookEvent, error) {
 		slog.Error("failed to unmarshal hook JSON", "error", err, "data_preview", string(data[:min(100, len(data))]))
 		return nil, fmt.Errorf("failed to parse hook JSON: %w", err)
 	}
+	if err := event.applyCompatibilityAliases(data); err != nil {
+		return nil, err
+	}
+	if event.EventName == "" {
+		event.EventName = defaultEvent
+	}
+	event.EventName = NormalizeEventName(event.EventName)
 
 	// Validate required fields
 	if event.SessionID == "" {
@@ -130,10 +147,61 @@ func (p *HookEventParser) Parse(data []byte) (*HookEvent, error) {
 	return &event, nil
 }
 
+// NormalizeEventName converts agent-specific hook keys to Claudio's canonical
+// event names for sound mapping.
+func NormalizeEventName(name string) string {
+	switch strings.TrimSpace(name) {
+	case "subagentStart":
+		return "SubagentStart"
+	default:
+		return name
+	}
+}
+
+type hookEventAliases struct {
+	SessionID      string           `json:"sessionId"`
+	TranscriptPath string           `json:"transcriptPath"`
+	EventName      string           `json:"hookEventName"`
+	ToolName       string           `json:"toolName"`
+	ToolInput      *json.RawMessage `json:"toolArgs"`
+	ToolResponse   *json.RawMessage `json:"toolResult"`
+	ToolResult     *json.RawMessage `json:"tool_result"`
+}
+
+func (e *HookEvent) applyCompatibilityAliases(data []byte) error {
+	var aliases hookEventAliases
+	if err := json.Unmarshal(data, &aliases); err != nil {
+		slog.Error("failed to unmarshal hook JSON aliases", "error", err)
+		return fmt.Errorf("failed to parse hook JSON aliases: %w", err)
+	}
+	if e.SessionID == "" {
+		e.SessionID = aliases.SessionID
+	}
+	if e.TranscriptPath == "" {
+		e.TranscriptPath = aliases.TranscriptPath
+	}
+	if e.EventName == "" {
+		e.EventName = aliases.EventName
+	}
+	if e.ToolName == nil && aliases.ToolName != "" {
+		e.ToolName = &aliases.ToolName
+	}
+	if e.ToolInput == nil {
+		e.ToolInput = aliases.ToolInput
+	}
+	if e.ToolResponse == nil {
+		e.ToolResponse = aliases.ToolResponse
+	}
+	if e.ToolResponse == nil {
+		e.ToolResponse = aliases.ToolResult
+	}
+	return nil
+}
+
 // GetContext extracts actionable context from the hook event for sound mapping
 func (e *HookEvent) GetContext() *EventContext {
 	context := &EventContext{
-		ToolName: getStringPtr(e.ToolName),
+		ToolName: normalizeToolName(getStringPtr(e.ToolName)),
 	}
 
 	slog.Debug("extracting event context",
@@ -146,127 +214,29 @@ func (e *HookEvent) GetContext() *EventContext {
 		context.SoundHint = "message-sent"
 		context.Operation = "prompt"
 
+	case "UserPromptExpansion":
+		context.Category = Interactive
+		context.SoundHint = "prompt-expansion"
+		context.Operation = "prompt-expansion"
+
 	case "Notification":
 		context.Category = Interactive
 		context.SoundHint = e.detectNotificationType()
 		context.Operation = "notification"
 
-	case "PreToolUse":
-		context.Category = Loading
-		context.Operation = "tool-start"
+	case "PreToolUse", "BeforeTool":
+		e.populatePreToolContext(context)
 
-		// Enhanced logic for Bash tools
-		if context.ToolName == "Bash" {
-			commandInfo := e.extractCommandInfo()
-			if commandInfo.Command != "" {
-				context.OriginalTool = "Bash"
-				context.ToolName = commandInfo.Command
+	case "PostToolUse", "AfterTool":
+		e.populatePostToolContext(context, false)
 
-				if commandInfo.HasSubcommand {
-					context.SoundHint = strings.ToLower(commandInfo.Command) + "-" +
-						strings.ToLower(commandInfo.Subcommand) + "-start"
-				} else {
-					context.SoundHint = strings.ToLower(commandInfo.Command) + "-start"
-				}
-			} else {
-				// Fallback to original behavior
-				context.SoundHint = strings.ToLower(context.ToolName) + "-start"
-			}
-		} else if strings.HasPrefix(context.ToolName, "mcp__") {
-			context.OriginalTool = context.ToolName
-			context.ToolName = "mcp"
-			context.SoundHint = "mcp-start"
-		} else if context.ToolName != "" {
-			context.SoundHint = strings.ToLower(context.ToolName) + "-start"
-		} else {
-			context.SoundHint = "tool-loading"
-		}
+	case "PostToolUseFailure":
+		e.populatePostToolContext(context, true)
 
-	case "PostToolUse":
-		// Analyze tool response for success/error
-		success, hasError, errorType := e.analyzeToolResponse()
-		context.IsSuccess = success
-		context.HasError = hasError
-
-		if hasError {
-			context.Category = Error
-
-			// Enhanced logic for Bash tools
-			if context.ToolName == "Bash" {
-				commandInfo := e.extractCommandInfo()
-				if commandInfo.Command != "" {
-					context.OriginalTool = "Bash"
-					context.ToolName = commandInfo.Command
-
-					if errorType != "" {
-						context.SoundHint = errorType
-					} else if commandInfo.HasSubcommand {
-						context.SoundHint = strings.ToLower(commandInfo.Command) + "-" +
-							strings.ToLower(commandInfo.Subcommand) + "-error"
-					} else {
-						context.SoundHint = strings.ToLower(commandInfo.Command) + "-error"
-					}
-				} else {
-					// Fallback to original behavior
-					if errorType != "" {
-						context.SoundHint = errorType
-					} else {
-						context.SoundHint = strings.ToLower(context.ToolName) + "-error"
-					}
-				}
-			} else if strings.HasPrefix(context.ToolName, "mcp__") {
-				context.OriginalTool = context.ToolName
-				context.ToolName = "mcp"
-				if errorType != "" {
-					context.SoundHint = errorType
-				} else {
-					context.SoundHint = "mcp-error"
-				}
-			} else {
-				// Original logic for non-Bash tools
-				if errorType != "" {
-					context.SoundHint = errorType
-				} else if context.ToolName != "" {
-					context.SoundHint = strings.ToLower(context.ToolName) + "-error"
-				} else {
-					context.SoundHint = "tool-error"
-				}
-			}
-		} else {
-			context.Category = Success
-
-			// Enhanced logic for Bash tools
-			if context.ToolName == "Bash" {
-				commandInfo := e.extractCommandInfo()
-				if commandInfo.Command != "" {
-					context.OriginalTool = "Bash"
-					context.ToolName = commandInfo.Command
-
-					if commandInfo.HasSubcommand {
-						context.SoundHint = strings.ToLower(commandInfo.Command) + "-" +
-							strings.ToLower(commandInfo.Subcommand) + "-success"
-					} else {
-						context.SoundHint = strings.ToLower(commandInfo.Command) + "-success"
-					}
-				} else {
-					// Fallback to original behavior
-					context.SoundHint = strings.ToLower(context.ToolName) + "-success"
-				}
-			} else if strings.HasPrefix(context.ToolName, "mcp__") {
-				context.OriginalTool = context.ToolName
-				context.ToolName = "mcp"
-				context.SoundHint = "mcp-success"
-			} else {
-				// Original logic for non-Bash tools
-				if context.ToolName != "" {
-					context.SoundHint = strings.ToLower(context.ToolName) + "-success"
-				} else {
-					context.SoundHint = "tool-success"
-				}
-			}
-		}
-
-		context.Operation = "tool-complete"
+	case "PostToolBatch":
+		context.Category = Success
+		context.SoundHint = "tool-batch"
+		context.Operation = "tool-batch"
 
 	case "Stop":
 		context.Category = Completion
@@ -292,11 +262,11 @@ func (e *HookEvent) GetContext() *EventContext {
 		context.Operation = "post-compact"
 		slog.Debug("categorizing PostCompact event as System", "hint", context.SoundHint, "operation", context.Operation)
 
-	case "PreCompact":
+	case "PreCompact", "PreCompress":
 		context.Category = System
 		context.SoundHint = "compacting"
 		context.Operation = "compact"
-		slog.Debug("categorizing PreCompact event as System", "hint", context.SoundHint, "operation", context.Operation)
+		slog.Debug("categorizing compaction event as System", "event_name", e.EventName, "hint", context.SoundHint, "operation", context.Operation)
 
 	case "SessionStart":
 		context.Category = System
@@ -310,11 +280,138 @@ func (e *HookEvent) GetContext() *EventContext {
 		context.Operation = "permission-request"
 		slog.Debug("categorizing PermissionRequest event as Interactive", "hint", context.SoundHint, "operation", context.Operation)
 
+	case "PermissionDenied":
+		context.Category = Error
+		context.HasError = true
+		context.SoundHint = "permission-denied"
+		context.Operation = "permission-denied"
+		slog.Debug("categorizing PermissionDenied event as Error", "hint", context.SoundHint, "operation", context.Operation)
+
 	case "SessionEnd":
 		context.Category = Interactive
 		context.SoundHint = "session-end"
 		context.Operation = "session-end"
 		slog.Debug("categorizing SessionEnd event as Interactive", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "BeforeAgent":
+		context.Category = Interactive
+		context.SoundHint = "before-agent"
+		context.Operation = "before-agent"
+		slog.Debug("categorizing BeforeAgent event as Interactive", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "AfterAgent":
+		context.Category = Completion
+		context.SoundHint = "agent-complete"
+		context.Operation = "after-agent"
+		slog.Debug("categorizing AfterAgent event as Completion", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "StopFailure":
+		context.Category = Error
+		context.HasError = true
+		context.SoundHint = "stop-failure"
+		context.Operation = "stop-failure"
+		slog.Debug("categorizing StopFailure event as Error", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "ErrorOccurred":
+		context.Category = Error
+		context.HasError = true
+		context.SoundHint = "error-occurred"
+		context.Operation = "error-occurred"
+		slog.Debug("categorizing ErrorOccurred event as Error", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "Setup":
+		context.Category = System
+		context.SoundHint = "setup"
+		context.Operation = "setup"
+		slog.Debug("categorizing Setup event as System", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "MessageDisplay":
+		context.Category = Silent
+		context.Operation = "message-display"
+		slog.Debug("categorizing MessageDisplay event as Silent")
+
+	case "TaskCreated":
+		context.Category = Loading
+		context.SoundHint = "task-created"
+		context.Operation = "task-created"
+		slog.Debug("categorizing TaskCreated event as Loading", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "TaskCompleted":
+		context.Category = Completion
+		context.SoundHint = "task-completed"
+		context.Operation = "task-completed"
+		slog.Debug("categorizing TaskCompleted event as Completion", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "TeammateIdle":
+		context.Category = Interactive
+		context.SoundHint = "teammate-idle"
+		context.Operation = "teammate-idle"
+		slog.Debug("categorizing TeammateIdle event as Interactive", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "InstructionsLoaded":
+		context.Category = System
+		context.SoundHint = "instructions-loaded"
+		context.Operation = "instructions-loaded"
+		slog.Debug("categorizing InstructionsLoaded event as System", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "ConfigChange":
+		context.Category = System
+		context.SoundHint = "config-change"
+		context.Operation = "config-change"
+		slog.Debug("categorizing ConfigChange event as System", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "CwdChanged":
+		context.Category = System
+		context.SoundHint = "cwd-changed"
+		context.Operation = "cwd-changed"
+		slog.Debug("categorizing CwdChanged event as System", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "FileChanged":
+		context.Category = System
+		context.SoundHint = "file-changed"
+		context.Operation = "file-changed"
+		slog.Debug("categorizing FileChanged event as System", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "WorktreeCreate":
+		context.Category = System
+		context.SoundHint = "worktree-create"
+		context.Operation = "worktree-create"
+		slog.Debug("categorizing WorktreeCreate event as System", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "WorktreeRemove":
+		context.Category = System
+		context.SoundHint = "worktree-remove"
+		context.Operation = "worktree-remove"
+		slog.Debug("categorizing WorktreeRemove event as System", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "Elicitation":
+		context.Category = Interactive
+		context.SoundHint = "elicitation"
+		context.Operation = "elicitation"
+		slog.Debug("categorizing Elicitation event as Interactive", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "ElicitationResult":
+		context.Category = Interactive
+		context.SoundHint = "elicitation-result"
+		context.Operation = "elicitation-result"
+		slog.Debug("categorizing ElicitationResult event as Interactive", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "TodoCreated":
+		context.Category = Loading
+		context.SoundHint = "todo-created"
+		context.Operation = "todo-created"
+		slog.Debug("categorizing TodoCreated event as Loading", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "TodoCompleted":
+		context.Category = Completion
+		context.SoundHint = "todo-completed"
+		context.Operation = "todo-completed"
+		slog.Debug("categorizing TodoCompleted event as Completion", "hint", context.SoundHint, "operation", context.Operation)
+
+	case "BeforeModel", "AfterModel", "BeforeToolSelection":
+		context.Category = Silent
+		context.Operation = strings.ToLower(e.EventName)
+		slog.Debug("categorizing no-sound event as Silent", "event_name", e.EventName)
 
 	default:
 		slog.Warn("unknown hook event type", "event_name", e.EventName)
@@ -342,6 +439,164 @@ func (e *HookEvent) GetContext() *EventContext {
 	return context
 }
 
+func (e *HookEvent) populatePreToolContext(context *EventContext) {
+	context.Category = Loading
+	context.Operation = "tool-start"
+
+	if context.ToolName == "Bash" {
+		commandInfo := e.extractCommandInfo()
+		if commandInfo.Command != "" {
+			context.OriginalTool = "Bash"
+			context.ToolName = commandInfo.Command
+
+			if commandInfo.HasSubcommand {
+				context.SoundHint = strings.ToLower(commandInfo.Command) + "-" +
+					strings.ToLower(commandInfo.Subcommand) + "-start"
+			} else {
+				context.SoundHint = strings.ToLower(commandInfo.Command) + "-start"
+			}
+		} else {
+			context.SoundHint = strings.ToLower(context.ToolName) + "-start"
+		}
+	} else if isMCPToolName(context.ToolName) {
+		context.OriginalTool = getStringPtr(e.ToolName)
+		context.ToolName = "mcp"
+		context.SoundHint = "mcp-start"
+	} else if context.ToolName != "" {
+		context.SoundHint = strings.ToLower(context.ToolName) + "-start"
+	} else {
+		context.SoundHint = "tool-loading"
+	}
+}
+
+func (e *HookEvent) populatePostToolContext(context *EventContext, forceError bool) {
+	success, hasError, errorType := e.analyzeToolResponse()
+	if forceError {
+		success = false
+		hasError = true
+	}
+	context.IsSuccess = success
+	context.HasError = hasError
+
+	if hasError {
+		context.Category = Error
+		e.populatePostToolErrorHint(context, errorType)
+	} else {
+		context.Category = Success
+		e.populatePostToolSuccessHint(context)
+	}
+
+	context.Operation = "tool-complete"
+}
+
+func (e *HookEvent) populatePostToolErrorHint(context *EventContext, errorType string) {
+	if context.ToolName == "Bash" {
+		commandInfo := e.extractCommandInfo()
+		if commandInfo.Command != "" {
+			context.OriginalTool = "Bash"
+			context.ToolName = commandInfo.Command
+
+			if errorType != "" {
+				context.SoundHint = errorType
+			} else if commandInfo.HasSubcommand {
+				context.SoundHint = strings.ToLower(commandInfo.Command) + "-" +
+					strings.ToLower(commandInfo.Subcommand) + "-error"
+			} else {
+				context.SoundHint = strings.ToLower(commandInfo.Command) + "-error"
+			}
+		} else if errorType != "" {
+			context.SoundHint = errorType
+		} else {
+			context.SoundHint = strings.ToLower(context.ToolName) + "-error"
+		}
+	} else if isMCPToolName(context.ToolName) {
+		context.OriginalTool = getStringPtr(e.ToolName)
+		context.ToolName = "mcp"
+		if errorType != "" {
+			context.SoundHint = errorType
+		} else {
+			context.SoundHint = "mcp-error"
+		}
+	} else if errorType != "" {
+		context.SoundHint = errorType
+	} else if context.ToolName != "" {
+		context.SoundHint = strings.ToLower(context.ToolName) + "-error"
+	} else {
+		context.SoundHint = "tool-error"
+	}
+}
+
+func (e *HookEvent) populatePostToolSuccessHint(context *EventContext) {
+	if context.ToolName == "Bash" {
+		commandInfo := e.extractCommandInfo()
+		if commandInfo.Command != "" {
+			context.OriginalTool = "Bash"
+			context.ToolName = commandInfo.Command
+
+			if commandInfo.HasSubcommand {
+				context.SoundHint = strings.ToLower(commandInfo.Command) + "-" +
+					strings.ToLower(commandInfo.Subcommand) + "-success"
+			} else {
+				context.SoundHint = strings.ToLower(commandInfo.Command) + "-success"
+			}
+		} else {
+			context.SoundHint = strings.ToLower(context.ToolName) + "-success"
+		}
+	} else if isMCPToolName(context.ToolName) {
+		context.OriginalTool = getStringPtr(e.ToolName)
+		context.ToolName = "mcp"
+		context.SoundHint = "mcp-success"
+	} else if context.ToolName != "" {
+		context.SoundHint = strings.ToLower(context.ToolName) + "-success"
+	} else {
+		context.SoundHint = "tool-success"
+	}
+}
+
+func normalizeToolName(toolName string) string {
+	if toolName == "" {
+		return ""
+	}
+	if isMCPToolName(toolName) {
+		return "mcp"
+	}
+
+	key := strings.ToLower(strings.TrimSpace(toolName))
+	key = strings.ReplaceAll(key, "-", "_")
+	switch key {
+	case "bash", "shell", "powershell", "run_shell_command":
+		return "Bash"
+	case "write", "writefile", "write_file", "create":
+		return "Write"
+	case "edit", "edit_file", "replace":
+		return "Edit"
+	case "multiedit", "multi_edit":
+		return "MultiEdit"
+	case "read", "readfile", "read_file", "read_many_files", "view":
+		return "Read"
+	case "ls", "list_directory":
+		return "LS"
+	case "grep", "grep_search":
+		return "Grep"
+	case "glob":
+		return "Glob"
+	case "webfetch", "web_fetch":
+		return "WebFetch"
+	case "websearch", "web_search", "google_web_search":
+		return "WebSearch"
+	case "todowrite", "todo_write", "write_todos":
+		return "TodoWrite"
+	case "read_mcp_resource", "list_mcp_resources":
+		return "mcp"
+	default:
+		return toolName
+	}
+}
+
+func isMCPToolName(toolName string) bool {
+	return toolName == "mcp" || strings.HasPrefix(toolName, "mcp__") || strings.HasPrefix(toolName, "mcp_")
+}
+
 // analyzeToolResponse examines tool response to determine success/error status and error type
 func (e *HookEvent) analyzeToolResponse() (success bool, hasError bool, errorType string) {
 	if e.ToolResponse == nil {
@@ -352,6 +607,10 @@ func (e *HookEvent) analyzeToolResponse() (success bool, hasError bool, errorTyp
 	var response map[string]interface{}
 	err := json.Unmarshal(*e.ToolResponse, &response)
 	if err != nil {
+		var responseText string
+		if stringErr := json.Unmarshal(*e.ToolResponse, &responseText); stringErr == nil {
+			return analyzeTextToolResponse(responseText)
+		}
 		slog.Error("failed to parse tool response", "error", err)
 		return false, true, ""
 	}
@@ -371,6 +630,14 @@ func (e *HookEvent) analyzeToolResponse() (success bool, hasError bool, errorTyp
 	}
 
 	// Check for common error indicators
+	if errorValue, ok := response["error"]; ok && errorValue != nil {
+		if errorString, ok := errorValue.(string); !ok || errorString != "" {
+			slog.Debug("tool response has error field")
+			return false, true, ""
+		}
+	}
+
+	// Check stderr output after structured error fields.
 	if stderr, ok := response["stderr"].(string); ok && stderr != "" {
 		slog.Debug("tool response has stderr", "stderr_length", len(stderr))
 		return false, true, ""
@@ -378,7 +645,7 @@ func (e *HookEvent) analyzeToolResponse() (success bool, hasError bool, errorTyp
 
 	// Check for tool-specific error patterns
 	if e.ToolName != nil {
-		switch *e.ToolName {
+		switch normalizeToolName(*e.ToolName) {
 		case "Bash":
 			// Bash is success if no stderr and not interrupted
 			return true, false, ""
@@ -412,6 +679,33 @@ func (e *HookEvent) analyzeToolResponse() (success bool, hasError bool, errorTyp
 
 	// Default: assume success if no clear error indicators
 	return true, false, ""
+}
+
+func analyzeTextToolResponse(responseText string) (success bool, hasError bool, errorType string) {
+	if exitCode, ok := parseExitCode(responseText); ok && exitCode != 0 {
+		return false, true, ""
+	}
+	return true, false, ""
+}
+
+func parseExitCode(responseText string) (int, bool) {
+	for _, line := range strings.Split(responseText, "\n") {
+		line = strings.TrimSpace(line)
+		rest, ok := strings.CutPrefix(strings.ToLower(line), "exit code:")
+		if !ok {
+			continue
+		}
+		fields := strings.Fields(rest)
+		if len(fields) == 0 {
+			return 0, false
+		}
+		exitCode, err := strconv.Atoi(fields[0])
+		if err != nil {
+			return 0, false
+		}
+		return exitCode, true
+	}
+	return 0, false
 }
 
 // extractFileType attempts to extract file type from tool input

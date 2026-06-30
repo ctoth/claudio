@@ -42,7 +42,8 @@ Tool events can also include `tool_name`, `tool_input`, and `tool_response`.
 
 ## `claudio install`
 
-Installs hooks for Claude Code or Codex.
+Installs hooks for Claude Code, Codex CLI, Gemini CLI, Qwen Code, or GitHub
+Copilot CLI.
 
 ```bash
 claudio install [flags]
@@ -52,8 +53,8 @@ Flags:
 
 | Flag | Default | Meaning |
 | --- | --- | --- |
-| `--agent`, `-a` | `claude` | `claude` or `codex`. |
-| `--scope`, `-s` | `user` | `user` or `project`. |
+| `--agent`, `-a` | `auto` | `auto`, `all`, `claude`, `codex`, `gemini`, `qwen`, or `copilot`. |
+| `--scope`, `-s` | `global` | `global` or `project`. |
 | `--dry-run`, `-d` | false | Show what would happen without writing. |
 | `--print`, `-p` | false | Print target configuration details. |
 | `--quiet`, `-q` | false | Reduce output. |
@@ -61,16 +62,22 @@ Flags:
 Examples:
 
 ```bash
-claudio install --agent claude --scope user
+claudio install
+claudio install --agent all --scope global
+claudio install --agent claude --scope global
 claudio install --agent codex --scope project
-claudio install --agent codex --scope user --dry-run
+claudio install --agent gemini --scope global
+claudio install --agent qwen --scope global
+claudio install --agent copilot --scope global
+claudio install --agent codex --scope global --dry-run
 ```
 
 Codex users must trust the hook with `/hooks` after installation.
 
 ## `claudio uninstall`
 
-Removes Claudio hooks for Claude Code or Codex.
+Removes Claudio hooks for Claude Code, Codex CLI, Gemini CLI, Qwen Code, or
+GitHub Copilot CLI.
 
 ```bash
 claudio uninstall [flags]
@@ -80,8 +87,8 @@ Flags match `install`:
 
 | Flag | Default | Meaning |
 | --- | --- | --- |
-| `--agent`, `-a` | `claude` | `claude` or `codex`. |
-| `--scope`, `-s` | `user` | `user` or `project`. |
+| `--agent`, `-a` | `auto` | `auto`, `all`, `claude`, `codex`, `gemini`, `qwen`, or `copilot`. |
+| `--scope`, `-s` | `global` | `global` or `project`. |
 | `--dry-run`, `-d` | false | Show what would be removed. |
 | `--print`, `-p` | false | Print removal details. |
 | `--quiet`, `-q` | false | Reduce output. |
