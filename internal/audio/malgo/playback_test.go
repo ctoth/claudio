@@ -273,17 +273,26 @@ func TestAudioPlayerConcurrentPlayback(t *testing.T) {
 	t.Run("concurrent playback", func(t *testing.T) {
 		skipIfWSLMalgoPlayback(t)
 		// Play all sounds concurrently
+		var wg sync.WaitGroup
 		errChan := make(chan error, len(sounds))
 
 		for _, soundID := range sounds {
+			wg.Add(1)
 			go func(id string) {
+				defer wg.Done()
 				errChan <- player.PlaySound(id)
 			}(soundID)
 		}
 
-		// Collect results
-		for i := 0; i < len(sounds); i++ {
-			err := <-errChan
+		// Join every goroutine BEFORE inspecting results. skipIfNoAudioDevice
+		// calls t.Skip -> runtime.Goexit; skipping mid-collection would abandon
+		// the still-running PlaySound goroutines, which then log device-init
+		// errors into the global slog default after this subtest is gone and
+		// pollute a later test's captured log buffer (see TestAudioLoggingLevels).
+		wg.Wait()
+		close(errChan)
+
+		for err := range errChan {
 			skipIfNoAudioDevice(t, err)
 			if err != nil {
 				t.Errorf("Concurrent playback failed: %v", err)
@@ -523,6 +532,12 @@ func TestPlayWithConcurrentSetVolume_NoRace(t *testing.T) {
 			_ = player.SetVolume(float32(i%101) / 100.0)
 		}
 	}()
+	// Join the hammer goroutine even if the loop below skips early. The
+	// skipIfNoAudioDevice call calls t.Skip -> runtime.Goexit, which would
+	// otherwise bypass the receive and leak this goroutine into a later test.
+	// Deferred receives run during Goexit; LIFO ordering places this before
+	// the player.Close() defer so the goroutine stops mutating first.
+	defer func() { <-done }()
 
 	for i := 0; i < 3; i++ {
 		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
@@ -536,7 +551,6 @@ func TestPlayWithConcurrentSetVolume_NoRace(t *testing.T) {
 			break
 		}
 	}
-	<-done
 }
 
 // TestPlaySound_ContextInitOnce_NoRace asserts the sync.Once gate on
