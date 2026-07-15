@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"claudio.click/internal/fs"
+	captainhook "github.com/ctoth/captain-hook"
 )
 
 // HooksMap represents an agent settings hooks section.
@@ -36,6 +37,26 @@ var executableRecognizer = func(name string) bool {
 // GenerateClaudioHooks creates the Claude Code hook configuration (backward-compatible default).
 func GenerateClaudioHooks(executablePath string) (interface{}, error) {
 	return GenerateClaudioHooksForAgent(executablePath, AgentClaude)
+}
+
+// GenerateCodexHookSpecs returns Claudio's desired Codex hooks in the shared
+// Captain Hook representation.
+func GenerateCodexHookSpecs(executablePath string) []captainhook.HookSpec {
+	executablePath = strings.ReplaceAll(executablePath, `\`, "/")
+	command := quoteCommandArg(executablePath)
+	commandWindows := `& "` + executablePath + `"`
+
+	hooks := AgentCodex.EnabledHooks()
+	specs := make([]captainhook.HookSpec, 0, len(hooks))
+	for _, hook := range hooks {
+		specs = append(specs, captainhook.HookSpec{
+			Event:          hook.Name,
+			Matcher:        AgentCodex.Matcher(),
+			Command:        command,
+			CommandWindows: commandWindows,
+		})
+	}
+	return specs
 }
 
 // GenerateClaudioHooksForAgent creates hook configuration for the given agent

@@ -4,6 +4,7 @@ go 1.24.0
 
 require (
 	github.com/adrg/xdg v0.5.3
+	github.com/ctoth/captain-hook v0.1.2
 	github.com/gabriel-vasile/mimetype v1.4.9
 	github.com/gen2brain/malgo v0.11.23
 	github.com/go-audio/aiff v1.1.0

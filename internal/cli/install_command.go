@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"claudio.click/internal/install"
+	captainhook "github.com/ctoth/captain-hook"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 )
@@ -268,18 +269,30 @@ func runInstallWorkflow(agent install.Agent, scope string, settingsPath string) 
 		return fmt.Errorf("failed to get executable path: %w", err)
 	}
 
-	claudioHooks, err := install.GenerateClaudioHooksForAgent(execPath, agent)
-	if err != nil {
-		return fmt.Errorf("failed to generate Claudio hooks: %w", err)
-	}
+	var mergedSettings *install.SettingsMap
+	if agent == install.AgentCodex {
+		captainSettings := captainhook.SettingsMap(*existingSettings)
+		if err := captainhook.Install(
+			&captainSettings,
+			install.GenerateCodexHookSpecs(execPath),
+			captainhook.IdentityFunc(install.IsClaudioCommandString),
+		); err != nil {
+			return fmt.Errorf("failed to install Codex hooks: %w", err)
+		}
+		converted := install.SettingsMap(captainSettings)
+		mergedSettings = &converted
+	} else {
+		claudioHooks, err := install.GenerateClaudioHooksForAgent(execPath, agent)
+		if err != nil {
+			return fmt.Errorf("failed to generate Claudio hooks: %w", err)
+		}
 
-	slog.Info("generated Claudio hooks", "hooks", claudioHooks)
-
-	// Step 4: Merge Claudio hooks into existing settings
-	slog.Debug("merging Claudio hooks into existing settings")
-	mergedSettings, err := install.MergeHooksIntoSettings(existingSettings, claudioHooks)
-	if err != nil {
-		return fmt.Errorf("failed to merge Claudio hooks into settings: %w", err)
+		slog.Info("generated Claudio hooks", "hooks", claudioHooks)
+		slog.Debug("merging Claudio hooks into existing settings")
+		mergedSettings, err = install.MergeHooksIntoSettings(existingSettings, claudioHooks)
+		if err != nil {
+			return fmt.Errorf("failed to merge Claudio hooks into settings: %w", err)
+		}
 	}
 
 	slog.Info("merged Claudio hooks into settings",

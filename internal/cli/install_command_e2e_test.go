@@ -136,3 +136,59 @@ func TestRunInstallWorkflow_EndToEnd_NoDryRun(t *testing.T) {
 		}
 	}
 }
+
+func TestRunInstallWorkflowCodexUsesCaptainHookSpecs(t *testing.T) {
+	root := t.TempDir()
+	settingsPath := filepath.Join(root, "hooks.json")
+	existing := []byte(`{"hooks":{"Stop":[{"matcher":"custom","hooks":[{"type":"command","command":"user-stop"}]}]}}`)
+	if err := os.WriteFile(settingsPath, existing, 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CLAUDIO_TEST_RECOGNIZE_GO_TEST", "1")
+
+	if err := runInstallWorkflow(install.AgentCodex, install.ScopeGlobal, settingsPath); err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := os.ReadFile(settingsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var settings map[string]interface{}
+	if err := json.Unmarshal(data, &settings); err != nil {
+		t.Fatal(err)
+	}
+	hooks := settings["hooks"].(map[string]interface{})
+
+	stopGroups := hooks["Stop"].([]interface{})
+	customFound := false
+	for _, groupRaw := range stopGroups {
+		group := groupRaw.(map[string]interface{})
+		for _, entryRaw := range group["hooks"].([]interface{}) {
+			entry := entryRaw.(map[string]interface{})
+			if entry["command"] == "user-stop" {
+				customFound = true
+			}
+		}
+	}
+	if !customFound {
+		t.Fatal("pre-existing Stop hook was not preserved")
+	}
+
+	for _, definition := range install.AgentCodex.EnabledHooks() {
+		groups := hooks[definition.Name].([]interface{})
+		windowsCommandFound := false
+		for _, groupRaw := range groups {
+			group := groupRaw.(map[string]interface{})
+			for _, entryRaw := range group["hooks"].([]interface{}) {
+				entry := entryRaw.(map[string]interface{})
+				if command, ok := entry["commandWindows"].(string); ok && strings.HasPrefix(command, `& "`) {
+					windowsCommandFound = true
+				}
+			}
+		}
+		if !windowsCommandFound {
+			t.Errorf("%s has no PowerShell-safe Claudio command", definition.Name)
+		}
+	}
+}

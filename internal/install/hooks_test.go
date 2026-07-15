@@ -501,6 +501,25 @@ func TestGenerateClaudioHooksForCodexAgent(t *testing.T) {
 	}
 }
 
+func TestGenerateCodexHookSpecs(t *testing.T) {
+	specs := GenerateCodexHookSpecs(`C:\Program Files\Claudio\claudio.exe`)
+	if len(specs) != len(CodexHooks) {
+		t.Fatalf("specs = %d, want %d", len(specs), len(CodexHooks))
+	}
+
+	for _, spec := range specs {
+		if spec.Matcher != "*" {
+			t.Errorf("%s matcher = %q, want *", spec.Event, spec.Matcher)
+		}
+		if spec.Command != `"C:/Program Files/Claudio/claudio.exe"` {
+			t.Errorf("%s command = %q", spec.Event, spec.Command)
+		}
+		if spec.CommandWindows != `& "C:/Program Files/Claudio/claudio.exe"` {
+			t.Errorf("%s commandWindows = %q", spec.Event, spec.CommandWindows)
+		}
+	}
+}
+
 func TestGenerateClaudioHooksOmitStatusMessageForAllAgents(t *testing.T) {
 	for _, agent := range ConcreteAgents() {
 		t.Run(agent.String(), func(t *testing.T) {
