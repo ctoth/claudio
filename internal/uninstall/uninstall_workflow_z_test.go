@@ -109,3 +109,60 @@ func TestRunUninstallWorkflowMissingSettingsFileIsNoop(t *testing.T) {
 		t.Fatalf("uninstall should not create missing settings directory, stat err: %v", err)
 	}
 }
+
+func TestRunUninstallWorkflowCodexPreservesMixedGroupSibling(t *testing.T) {
+	settingsPath := filepath.Join(t.TempDir(), "settings.json")
+	initial := install.SettingsMap{
+		"hooks": map[string]interface{}{
+			"Stop": []interface{}{
+				map[string]interface{}{
+					"matcher": "*",
+					"hooks": []interface{}{
+						map[string]interface{}{
+							"type":           "command",
+							"command":        "C:/Users/Q/bin/claudio.exe",
+							"commandWindows": `& "C:/Users/Q/bin/claudio.exe"`,
+						},
+						map[string]interface{}{
+							"type":    "command",
+							"command": "custom-stop-hook",
+						},
+					},
+				},
+			},
+		},
+		"version": "test",
+	}
+	data, err := json.Marshal(initial)
+	if err != nil {
+		t.Fatalf("marshal initial settings: %v", err)
+	}
+	if err := os.WriteFile(settingsPath, data, 0644); err != nil {
+		t.Fatalf("write settings: %v", err)
+	}
+
+	swapAgentResolver(t, fixedPathResolver(settingsPath))
+	if err := RunUninstallWorkflow(afero.NewOsFs(), install.ScopeGlobal, install.AgentCodex); err != nil {
+		t.Fatalf("workflow failed: %v", err)
+	}
+
+	after, err := os.ReadFile(settingsPath)
+	if err != nil {
+		t.Fatalf("read settings after uninstall: %v", err)
+	}
+	var settings install.SettingsMap
+	if err := json.Unmarshal(after, &settings); err != nil {
+		t.Fatalf("unmarshal settings after uninstall: %v", err)
+	}
+	hooks := settings["hooks"].(map[string]interface{})
+	groups := hooks["Stop"].([]interface{})
+	group := groups[0].(map[string]interface{})
+	entries := group["hooks"].([]interface{})
+	if len(entries) != 1 {
+		t.Fatalf("expected one surviving custom command, got %v", entries)
+	}
+	entry := entries[0].(map[string]interface{})
+	if command := entry["command"]; command != "custom-stop-hook" {
+		t.Fatalf("expected custom sibling to survive, got command %v", command)
+	}
+}

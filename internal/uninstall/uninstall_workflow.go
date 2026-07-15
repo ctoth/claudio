@@ -5,6 +5,7 @@ import (
 	"log/slog"
 
 	"claudio.click/internal/install"
+	captainhook "github.com/ctoth/captain-hook"
 	"github.com/spf13/afero"
 )
 
@@ -89,13 +90,23 @@ func RunUninstallWorkflow(filesystem afero.Fs, scope string, agent install.Agent
 
 	slog.Info("detected claudio hooks for removal", "hooks", claudioHooks)
 
-	// Step 4: Remove simple claudio hooks (string format)
-	slog.Debug("removing simple claudio hooks")
-	removeSimpleClaudioHooks(existingSettings, claudioHooks)
+	if agent == install.AgentCodex {
+		captainSettings := captainhook.SettingsMap(*existingSettings)
+		captainhook.Uninstall(
+			&captainSettings,
+			captainhook.IdentityFunc(install.IsClaudioCommandString),
+		)
+		converted := install.SettingsMap(captainSettings)
+		existingSettings = &converted
+	} else {
+		// Step 4: Remove simple claudio hooks (string format)
+		slog.Debug("removing simple claudio hooks")
+		removeSimpleClaudioHooks(existingSettings, claudioHooks)
 
-	// Step 5: Remove complex claudio hooks (array format)
-	slog.Debug("removing complex claudio hooks")
-	removeComplexClaudioHooks(existingSettings, claudioHooks)
+		// Step 5: Remove complex claudio hooks (array format)
+		slog.Debug("removing complex claudio hooks")
+		removeComplexClaudioHooks(existingSettings, claudioHooks)
+	}
 
 	// Step 6: Write updated settings back to file
 	slog.Debug("writing updated settings to file", "path", settingsPath)
