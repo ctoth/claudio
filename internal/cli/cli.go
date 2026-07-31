@@ -419,7 +419,10 @@ func readHookInput(cmd *cobra.Command) ([]byte, error) {
 		return inputData, nil
 	}
 
-	inputData, err := safeio.ReadAllCapped(cmd.InOrStdin(), safeio.MaxHookPayloadBytes, "hook payload")
+	// Bounded, not ReadAllCapped: the hook stdin pipe is not guaranteed to
+	// deliver EOF (Windows git-bash holds it open — see ReadJSONBounded), and
+	// blocking here wedges the spawning agent at "running stop hooks".
+	inputData, err := safeio.ReadJSONBounded(cmd.InOrStdin(), safeio.MaxHookPayloadBytes, safeio.DefaultHookReadDeadline, "hook payload")
 	if err != nil {
 		return nil, fmt.Errorf("error reading from stdin: %w", err)
 	}
