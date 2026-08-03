@@ -278,6 +278,10 @@ appropriate for your environment.
 The `fake` backend is for tests. It accepts playback calls but produces no
 audio.
 
+If the agent runs on a remote machine over SSH, that box usually has no audio
+device at all. Forward a PulseAudio socket instead; see
+[Remote Audio Over SSH](remote-audio-ssh).
+
 ## Debug Logs
 
 Enable debug file logging:
@@ -365,3 +369,4 @@ Include:
 - [CLI Reference](cli-reference)
 - [Configuration](configuration)
 - [Soundpacks](soundpacks)
+- [Remote Audio Over SSH](remote-audio-ssh)

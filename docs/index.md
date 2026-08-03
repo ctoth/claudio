@@ -233,4 +233,5 @@ See [Configuration](configuration) for every field and override.
 - [Configuration](configuration)
 - [Soundpacks](soundpacks)
 - [Examples](examples)
+- [Remote Audio Over SSH](remote-audio-ssh)
 - [Troubleshooting](troubleshooting)
