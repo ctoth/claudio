@@ -95,6 +95,13 @@ claudio analyze missing --preset last-week
 
 Use these reports to decide which sounds your custom pack should add next.
 
+## Remote Sessions
+
+If the agent runs on a remote machine over SSH, that box usually has no audio
+device and Claudio stays silent. Forward a PulseAudio socket from your local
+machine (WSLg on Windows already provides one) and point the remote box at it.
+See [docs/remote-audio-ssh.md](docs/remote-audio-ssh.md).
+
 ## Build And Test
 
 ```bash
