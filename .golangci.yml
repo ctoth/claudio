@@ -1,0 +1,21 @@
+version: "2"
+
+linters:
+  settings:
+    staticcheck:
+      checks:
+        - all
+        - -QF*
+        - -ST1000
+        - -ST1003
+        - -ST1016
+        - -ST1020
+        - -ST1021
+        - -ST1022
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling

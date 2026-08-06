@@ -44,7 +44,9 @@ jobs:
       - name: Install ALSA headers
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev
 
-      - uses: golangci/golangci-lint-action@v6
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.12
 
   build-nocgo:
     runs-on: ubuntu-latest
