@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -194,7 +195,13 @@ func resolveCommandArtifacts(agent commandArtifactAgent) ([]commandArtifact, err
 
 	switch agent {
 	case commandArtifactAgentClaude:
-		commandsDir := filepath.Join(homeDir, ".claude", "commands")
+		// Honor CLAUDE_CONFIG_DIR like Claude Code itself: when set, it
+		// replaces ~/.claude as the configuration directory.
+		claudeDir := filepath.Join(homeDir, ".claude")
+		if configDir := strings.TrimSpace(os.Getenv("CLAUDE_CONFIG_DIR")); configDir != "" {
+			claudeDir = configDir
+		}
+		commandsDir := filepath.Join(claudeDir, "commands")
 		return []commandArtifact{{
 			Agent:     agent,
 			Kind:      "slash command",
