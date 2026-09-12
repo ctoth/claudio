@@ -1017,3 +1017,50 @@ func TestAnalyzeUsageCommandHelp(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateAnalyzeFilterValues(t *testing.T) {
+	tests := []struct {
+		name     string
+		category string
+		preset   string
+		wantErr  bool
+	}{
+		{name: "empty filters", wantErr: false},
+		{name: "valid category", category: "success", wantErr: false},
+		{name: "valid preset", preset: "last-week", wantErr: false},
+		{name: "invalid category", category: "succes", wantErr: true},
+		{name: "invalid preset", preset: "todya", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateAnalyzeFilterValues(tt.category, tt.preset)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("validateAnalyzeFilterValues(%q, %q) error = %v, wantErr %v", tt.category, tt.preset, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestAnalyzeCommandsRejectInvalidFilters(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		args []string
+		want string
+	}{
+		{name: "usage category", args: []string{"claudio", "analyze", "usage", "--category", "succes"}, want: "invalid category"},
+		{name: "missing preset", args: []string{"claudio", "analyze", "missing", "--preset", "todya"}, want: "invalid date preset"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			testenv.IsolateXDG(t)
+			cli := NewCLI()
+			stdout := &bytes.Buffer{}
+			stderr := &bytes.Buffer{}
+			if exitCode := cli.Run(tt.args, strings.NewReader(""), stdout, stderr); exitCode == 0 {
+				t.Fatalf("expected invalid filter to fail; stdout=%q", stdout.String())
+			}
+			if !strings.Contains(stderr.String(), tt.want) {
+				t.Fatalf("stderr = %q, want %q", stderr.String(), tt.want)
+			}
+		})
+	}
+}

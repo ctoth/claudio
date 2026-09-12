@@ -23,6 +23,7 @@ import (
 type deviceEntry struct {
 	device     *malgo.Device
 	uninitOnce sync.Once
+	done       chan struct{}
 }
 
 // uninit stops and uninits the wrapped device exactly once, regardless of
@@ -30,6 +31,9 @@ type deviceEntry struct {
 // times from any goroutine.
 func (e *deviceEntry) uninit() {
 	e.uninitOnce.Do(func() {
+		if e.done != nil {
+			defer close(e.done)
+		}
 		if e.device == nil {
 			return
 		}
@@ -46,11 +50,11 @@ func (e *deviceEntry) uninit() {
 type AudioPlayer struct {
 	context *Context
 	sounds  map[string]*AudioData
-	// devices maps soundID -> *deviceEntry. The map is the single source of
+	// devices tracks each playback instance by entry identity. The map is the single source of
 	// truth for "is anything playing": IsPlaying() returns len(devices) > 0
 	// under deviceMutex, and there is no separate isPlaying bool to drift
 	// out of sync.
-	devices map[string]*deviceEntry
+	devices map[*deviceEntry]struct{}
 	// volume holds the playback gain (0.0..1.0) as a float32 encoded via
 	// math.Float32bits and accessed atomically. Lock-free access is mandatory:
 	// the malgo realtime audio callback reads this on every buffer fill and
@@ -65,6 +69,12 @@ type AudioPlayer struct {
 	// tests.
 	deviceInitMutex sync.Mutex
 	closed          bool
+	// Playback holds a read lease until device cleanup finishes. Close signals
+	// shutdown before taking the write lease, then safely frees the context.
+	lifecycle sync.RWMutex
+	shutdown  chan struct{}
+	closeOnce sync.Once
+	closeErr  error
 	// contextInitOnce gates the lazy malgo.InitContext allocation in
 	// PlaySoundWithContext. Two concurrent first-Play goroutines used to both
 	// observe p.context==nil and both call NewContext(), leaking the loser's
@@ -79,9 +89,10 @@ func NewAudioPlayer() *AudioPlayer {
 	slog.Debug("creating new audio player instance")
 
 	player := &AudioPlayer{
-		sounds:  make(map[string]*AudioData),
-		devices: make(map[string]*deviceEntry),
-		mutex:   sync.RWMutex{},
+		sounds:   make(map[string]*AudioData),
+		devices:  make(map[*deviceEntry]struct{}),
+		mutex:    sync.RWMutex{},
+		shutdown: make(chan struct{}),
 	}
 	// atomic.Uint32 cannot be initialised in a struct literal with a non-zero
 	// value; seed the default full-volume after construction.
@@ -132,10 +143,10 @@ func (p *AudioPlayer) IsSoundLoaded(soundID string) bool {
 	if soundID == "" {
 		return false
 	}
-	
+
 	p.mutex.RLock()
 	defer p.mutex.RUnlock()
-	
+
 	_, exists := p.sounds[soundID]
 	slog.Debug("sound load status check", "sound_id", soundID, "loaded", exists)
 	return exists
@@ -148,34 +159,37 @@ func (p *AudioPlayer) PreloadSound(soundID string, audioData *AudioData) error {
 		slog.Error("preload failed: empty sound ID", "error", err)
 		return err
 	}
-	
+
 	if audioData == nil {
 		err := fmt.Errorf("audio data cannot be nil")
 		slog.Error("preload failed: nil audio data", "sound_id", soundID, "error", err)
 		return err
 	}
-	
-	slog.Debug("preloading sound", 
+
+	slog.Debug("preloading sound",
 		"sound_id", soundID,
 		"channels", audioData.Channels,
 		"sample_rate", audioData.SampleRate,
 		"format", audioData.Format,
 		"data_size", len(audioData.Samples))
-	
+
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
-	
+	if p.closed {
+		return fmt.Errorf("player is closed")
+	}
+
 	// Check if we're overwriting an existing sound
 	if _, exists := p.sounds[soundID]; exists {
 		slog.Debug("overwriting existing preloaded sound", "sound_id", soundID)
 	}
-	
+
 	p.sounds[soundID] = audioData
-	
+
 	slog.Debug("sound preloaded successfully",
 		"sound_id", soundID,
 		"total_preloaded", len(p.sounds))
-	
+
 	return nil
 }
 
@@ -184,21 +198,21 @@ func (p *AudioPlayer) UnloadSound(soundID string) error {
 	if soundID == "" {
 		return fmt.Errorf("sound ID cannot be empty")
 	}
-	
+
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
-	
+
 	if _, exists := p.sounds[soundID]; !exists {
 		slog.Debug("attempted to unload non-existent sound", "sound_id", soundID)
 		return nil // Not an error, already unloaded
 	}
-	
+
 	delete(p.sounds, soundID)
-	
+
 	slog.Debug("sound unloaded successfully",
 		"sound_id", soundID,
 		"remaining_preloaded", len(p.sounds))
-	
+
 	return nil
 }
 
@@ -209,12 +223,14 @@ func (p *AudioPlayer) PlaySound(soundID string) error {
 
 // PlaySoundWithContext plays a preloaded sound with context cancellation
 func (p *AudioPlayer) PlaySoundWithContext(ctx context.Context, soundID string) error {
+	p.lifecycle.RLock()
+	defer p.lifecycle.RUnlock()
 	if soundID == "" {
 		err := fmt.Errorf("sound ID cannot be empty")
 		slog.Error("playback failed: empty sound ID", "error", err)
 		return err
 	}
-	
+
 	p.mutex.RLock()
 	if p.closed {
 		p.mutex.RUnlock()
@@ -222,7 +238,7 @@ func (p *AudioPlayer) PlaySoundWithContext(ctx context.Context, soundID string) 
 		slog.Error("playback failed: player closed", "sound_id", soundID, "error", err)
 		return err
 	}
-	
+
 	audioData, exists := p.sounds[soundID]
 	if !exists {
 		p.mutex.RUnlock()
@@ -231,9 +247,9 @@ func (p *AudioPlayer) PlaySoundWithContext(ctx context.Context, soundID string) 
 		return err
 	}
 	p.mutex.RUnlock()
-	
+
 	slog.Debug("starting sound playback", "sound_id", soundID)
-	
+
 	// Check context cancellation before starting
 	select {
 	case <-ctx.Done():
@@ -242,7 +258,7 @@ func (p *AudioPlayer) PlaySoundWithContext(ctx context.Context, soundID string) 
 		return err
 	default:
 	}
-	
+
 	// Initialize audio context if needed. sync.Once guarantees exactly one
 	// NewContext() / malgo.InitContext call across concurrent first-Play
 	// goroutines — preventing the C-side handle leak that occurred when the
@@ -265,23 +281,23 @@ func (p *AudioPlayer) PlaySoundWithContext(ctx context.Context, soundID string) 
 		slog.Error("audio context unexpectedly nil", "sound_id", soundID, "error", err)
 		return err
 	}
-	
+
 	// Create device configuration for this sound
 	deviceConfig := malgo.DefaultDeviceConfig(malgo.Playback)
 	deviceConfig.Playback.Format = audioData.Format
 	deviceConfig.Playback.Channels = audioData.Channels
 	deviceConfig.SampleRate = audioData.SampleRate
 	deviceConfig.Alsa.NoMMap = 1
-	
-	slog.Debug("device configuration", 
+
+	slog.Debug("device configuration",
 		"sound_id", soundID,
 		"format", audioData.Format,
 		"channels", audioData.Channels,
 		"sample_rate", audioData.SampleRate)
-	
+
 	// Track playback position for this sound instance
 	var frameOffset uint32
-	
+
 	// Calculate bytes per sample based on format. Unknown formats are
 	// refused outright — silently defaulting to 2 bytes produced garbage
 	// frame math (wrong duration, wrong callback offsets, distorted audio).
@@ -297,7 +313,7 @@ func (p *AudioPlayer) PlaySoundWithContext(ctx context.Context, soundID string) 
 	// the timer just needs to wait long enough for that final fire.
 	bytesPerFrame := int(audioData.Channels) * bytesPerSample
 	totalFrames := uint32((len(audioData.Samples) + bytesPerFrame - 1) / bytesPerFrame)
-	
+
 	// Audio callback function
 	onSamples := func(pOutputSample, pInputSamples []byte, framecount uint32) {
 		// Check context cancellation during playback
@@ -307,12 +323,12 @@ func (p *AudioPlayer) PlaySoundWithContext(ctx context.Context, soundID string) 
 			return
 		default:
 		}
-		
+
 		// Calculate byte offset in our audio data
 		bytesPerFrame := int(audioData.Channels) * bytesPerSample
 		startByte := int(frameOffset) * bytesPerFrame
 		requestedBytes := int(framecount) * bytesPerFrame
-		
+
 		// Check if we've reached the end
 		if startByte >= len(audioData.Samples) {
 			// Fill with silence
@@ -321,23 +337,23 @@ func (p *AudioPlayer) PlaySoundWithContext(ctx context.Context, soundID string) 
 			}
 			return
 		}
-		
+
 		// Calculate how many bytes we can actually copy
 		availableBytes := len(audioData.Samples) - startByte
 		bytesToCopy := requestedBytes
 		if bytesToCopy > availableBytes {
 			bytesToCopy = availableBytes
 		}
-		
+
 		// Copy audio data
 		copy(pOutputSample[:bytesToCopy], audioData.Samples[startByte:startByte+bytesToCopy])
-		
+
 		// CRITICAL: Fill any remaining space with silence
 		// We MUST fill the entire buffer or we'll get garbage/crackling
 		for i := bytesToCopy; i < len(pOutputSample); i++ {
 			pOutputSample[i] = 0
 		}
-		
+
 		// Apply volume if needed.
 		//
 		// REALTIME HOT PATH: this callback runs on malgo's audio thread under a
@@ -347,39 +363,45 @@ func (p *AudioPlayer) PlaySoundWithContext(ctx context.Context, soundID string) 
 		if volume != 1.0 {
 			applyVolumeToSamples(pOutputSample[:bytesToCopy], audioData.Format, volume)
 		}
-		
+
 		frameOffset += framecount
-		
+
 		if frameOffset >= totalFrames {
 			slog.Debug("sound playback completed", "sound_id", soundID, "frames_played", frameOffset)
 		}
 	}
-	
+
 	deviceCallbacks := malgo.DeviceCallbacks{
 		Data: onSamples,
 	}
-	
+
 	// Create device. InitDevice touches shared C-side context state; serialize
 	// that narrow critical section while allowing playback callbacks to run
 	// concurrently after devices are initialized.
 	p.deviceInitMutex.Lock()
+	select {
+	case <-p.shutdown:
+		p.deviceInitMutex.Unlock()
+		return fmt.Errorf("player is closed")
+	default:
+	}
 	device, err := malgo.InitDevice(p.context.GetContext().Context, deviceConfig, deviceCallbacks)
-	p.deviceInitMutex.Unlock()
 	if err != nil {
+		p.deviceInitMutex.Unlock()
 		slog.Error("failed to initialize playback device", "sound_id", soundID, "error", err)
 		return fmt.Errorf("failed to initialize playback device: %w", err)
 	}
-	
+
 	slog.Debug("playback device initialized", "sound_id", soundID)
 
 	// Wrap in a deviceEntry whose uninitOnce makes Uninit idempotent. Both
 	// this goroutine's inline cleanup and any concurrent StopAll/Close can
 	// call entry.uninit() safely; only the first call reaches malgo.
-	entry := &deviceEntry{device: device}
+	entry := &deviceEntry{device: device, done: make(chan struct{})}
 
 	// Store entry for cleanup
 	p.deviceMutex.Lock()
-	p.devices[soundID] = entry
+	p.devices[entry] = struct{}{}
 	p.deviceMutex.Unlock()
 
 	// Start playback
@@ -387,11 +409,13 @@ func (p *AudioPlayer) PlaySoundWithContext(ctx context.Context, soundID string) 
 	if err != nil {
 		entry.uninit()
 		p.deviceMutex.Lock()
-		delete(p.devices, soundID)
+		delete(p.devices, entry)
 		p.deviceMutex.Unlock()
+		p.deviceInitMutex.Unlock()
 		slog.Error("failed to start playback", "sound_id", soundID, "error", err)
 		return fmt.Errorf("failed to start playback: %w", err)
 	}
+	p.deviceInitMutex.Unlock()
 
 	slog.Debug("sound playback started successfully", "sound_id", soundID)
 
@@ -407,6 +431,8 @@ func (p *AudioPlayer) PlaySoundWithContext(ctx context.Context, soundID string) 
 		slog.Debug("playback context cancelled", "sound_id", soundID)
 	case <-timer.C:
 		slog.Debug("playback duration elapsed", "sound_id", soundID)
+	case <-p.shutdown:
+	case <-entry.done:
 	}
 
 	// Cleanup device — idempotent via deviceEntry.uninitOnce. Map removal
@@ -416,12 +442,12 @@ func (p *AudioPlayer) PlaySoundWithContext(ctx context.Context, soundID string) 
 	// the subsequent uninit (which can be slow — it joins the malgo worker
 	// thread) proceeds at its own pace without lying about IsPlaying.
 	p.deviceMutex.Lock()
-	delete(p.devices, soundID)
+	delete(p.devices, entry)
 	stillPlaying := len(p.devices) > 0
 	p.deviceMutex.Unlock()
 
 	entry.uninit()
-	
+
 	slog.Debug("sound playback cleanup completed", "sound_id", soundID, "still_playing", stillPlaying)
 	return nil
 }
@@ -441,13 +467,16 @@ func (p *AudioPlayer) Stop() error {
 // own inline cleanup — only the first uninit call reaches malgo.
 func (p *AudioPlayer) StopAll() error {
 	slog.Debug("stopping all sound playback")
+	// A device must finish Start before any teardown can reach Uninit.
+	p.deviceInitMutex.Lock()
+	defer p.deviceInitMutex.Unlock()
 
 	p.deviceMutex.Lock()
 	entries := make([]*deviceEntry, 0, len(p.devices))
-	for _, entry := range p.devices {
+	for entry := range p.devices {
 		entries = append(entries, entry)
 	}
-	p.devices = make(map[string]*deviceEntry) // Clear map
+	p.devices = make(map[*deviceEntry]struct{}) // Clear map
 	p.deviceMutex.Unlock()
 
 	// Uninit each entry. The uninitOnce inside deviceEntry guarantees this
@@ -463,47 +492,23 @@ func (p *AudioPlayer) StopAll() error {
 
 // Close shuts down the audio player and releases resources
 func (p *AudioPlayer) Close() error {
-	slog.Debug("closing audio player")
-
-	// Synchronize with any in-flight PlaySoundWithContext that's mid
-	// context-init. If init has already completed, this Do is a free no-op
-	// (sync.Once is one-shot). If init is racing, Close's no-op Do
-	// participates in the Once barrier so the subsequent read of p.context
-	// observes a settled state — closing the publication race the scout
-	// flagged where Close read p.context without going through the Once.
-	p.contextInitOnce.Do(func() {})
-
-	p.mutex.Lock()
-	if p.closed {
+	p.closeOnce.Do(func() {
+		p.mutex.Lock()
+		p.closed = true
+		close(p.shutdown)
 		p.mutex.Unlock()
-		slog.Debug("audio player already closed")
-		return nil
-	}
-	p.closed = true
-	p.mutex.Unlock()
-	
-	// Stop all playback
-	err := p.StopAll()
-	if err != nil {
-		slog.Error("error stopping playback during close", "error", err)
-	}
-	
-	// Close audio context
-	if p.context != nil {
-		err := p.context.Close()
-		if err != nil {
-			slog.Error("error closing audio context", "error", err)
+
+		p.lifecycle.Lock()
+		defer p.lifecycle.Unlock()
+		_ = p.StopAll()
+		if p.context != nil {
+			p.closeErr = p.context.Close()
 		}
-	}
-	
-	// Clear preloaded sounds
-	p.mutex.Lock()
-	soundCount := len(p.sounds)
-	p.sounds = make(map[string]*AudioData)
-	p.mutex.Unlock()
-	
-	slog.Debug("audio player closed successfully", "sounds_cleared", soundCount)
-	return nil
+		p.mutex.Lock()
+		p.sounds = make(map[string]*AudioData)
+		p.mutex.Unlock()
+	})
+	return p.closeErr
 }
 
 // getBytesPerSample returns the number of bytes per sample for a given
@@ -545,10 +550,10 @@ func applyVolumeToSamples(samples []byte, format malgo.FormatType, volume float3
 			if sample&0x800000 != 0 {
 				sample |= ^0xFFFFFF // Set upper 8 bits to 1 for negative numbers
 			}
-			
+
 			// Apply volume
 			sample = int32(float32(sample) * volume)
-			
+
 			// Write back (little endian, truncate to 24-bit)
 			samples[i] = byte(sample)
 			samples[i+1] = byte(sample >> 8)

@@ -1,0 +1,28 @@
+{
+  "directory_accepted_as_sound": true,
+  "invalid_filter_args": [
+    1789241454,
+    0
+  ],
+  "invalid_filter_where": "timestamp \u003c= ? AND JSON_EXTRACT(context, '$.Category') = ?",
+  "observer_with_both_files_present": [
+    {
+      "path": "first.wav",
+      "reported_exists": true
+    },
+    {
+      "path": "second.wav",
+      "reported_exists": false
+    }
+  ],
+  "second_memory_connection_error": "SQL logic error: no such table: hook_events (1)",
+  "usage_filtered_to_Write": [
+    {
+      "path": "shared.wav",
+      "play_count": 1,
+      "category": "success",
+      "tool_name": "Read",
+      "last_played": 1
+    }
+  ]
+}

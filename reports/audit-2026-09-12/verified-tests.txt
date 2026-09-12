@@ -1,0 +1,20 @@
+	claudio.click/cmd/claudio		coverage: 0.0% of statements
+ok  	claudio.click/cmd/hook-logger	0.868s	coverage: 74.7% of statements
+ok  	claudio.click/internal/audio	5.940s	coverage: 93.3% of statements
+ok  	claudio.click/internal/audio/malgo	15.157s	coverage: 76.3% of statements
+ok  	claudio.click/internal/ci	0.562s	coverage: [no statements]
+ok  	claudio.click/internal/cli	36.864s	coverage: 73.9% of statements
+ok  	claudio.click/internal/cli/testenv	0.642s	coverage: 100.0% of statements
+ok  	claudio.click/internal/config	1.816s	coverage: 74.5% of statements
+	claudio.click/internal/devtools/buildcheck		coverage: 0.0% of statements
+ok  	claudio.click/internal/devtools/coveragefloor	0.510s	coverage: 9.5% of statements
+ok  	claudio.click/internal/fs	1.191s	coverage: 75.0% of statements
+ok  	claudio.click/internal/hooks	0.756s	coverage: 99.8% of statements
+ok  	claudio.click/internal/install	5.688s	coverage: 98.0% of statements
+ok  	claudio.click/internal/integration	3.608s	coverage: [no statements]
+ok  	claudio.click/internal/platform	0.785s	coverage: 94.7% of statements
+ok  	claudio.click/internal/safeio	1.187s	coverage: 97.1% of statements
+ok  	claudio.click/internal/soundpack	2.672s	coverage: 83.6% of statements
+ok  	claudio.click/internal/sounds	1.630s	coverage: 86.9% of statements
+ok  	claudio.click/internal/tracking	5.827s	coverage: 79.9% of statements
+ok  	claudio.click/internal/uninstall	0.914s	coverage: 87.3% of statements

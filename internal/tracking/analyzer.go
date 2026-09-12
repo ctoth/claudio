@@ -2,7 +2,6 @@ package tracking
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 )
 
@@ -10,8 +9,8 @@ import (
 type MissingSound struct {
 	Path         string   `json:"path"`
 	RequestCount int      `json:"request_count"`
-	Tools        []string `json:"tools,omitempty"` // Which tools requested this sound
-	Category     string   `json:"category,omitempty"` // Category from context JSON (loading, success, error, etc.)
+	Tools        []string `json:"tools,omitempty"`     // Which tools requested this sound
+	Category     string   `json:"category,omitempty"`  // Category from context JSON (loading, success, error, etc.)
 	ToolName     string   `json:"tool_name,omitempty"` // Tool name from context JSON
 }
 
@@ -23,11 +22,12 @@ func GetMissingSounds(db *sql.DB, filter QueryFilter) ([]MissingSound, error) {
 
 	// Build the base query for missing sounds
 	baseQuery := `
-		SELECT 
+		SELECT
 			pl.path,
 			COUNT(*) as request_count,
 			GROUP_CONCAT(DISTINCT he.tool_name) as tools,
-			he.context
+			JSON_EXTRACT(he.context, '$.Category') as category,
+			JSON_EXTRACT(he.context, '$.ToolName') as context_tool
 		FROM path_lookups pl
 		JOIN hook_events he ON pl.event_id = he.id
 		WHERE pl.found = 0`
@@ -38,13 +38,13 @@ func GetMissingSounds(db *sql.DB, filter QueryFilter) ([]MissingSound, error) {
 		baseQuery += " AND " + whereClause
 	}
 
-	// Group by path and order by frequency
-	// We group by path and take any context (since all requests for same path should have similar context)
+	// Keep tool/category ownership explicit. Generic fallback paths can be
+	// requested by several tools and must not inherit an arbitrary context.
 	baseQuery += `
-		GROUP BY pl.path
+		GROUP BY pl.path, category, context_tool
 		ORDER BY request_count DESC`
 
-	// Add limit if specified  
+	// Add limit if specified
 	if filter.Limit > 0 {
 		baseQuery += fmt.Sprintf(" LIMIT %d", filter.Limit)
 	}
@@ -59,9 +59,10 @@ func GetMissingSounds(db *sql.DB, filter QueryFilter) ([]MissingSound, error) {
 	for rows.Next() {
 		var sound MissingSound
 		var toolsStr sql.NullString
-		var contextStr sql.NullString
+		var categoryInt sql.NullFloat64
+		var contextTool sql.NullString
 
-		err := rows.Scan(&sound.Path, &sound.RequestCount, &toolsStr, &contextStr)
+		err := rows.Scan(&sound.Path, &sound.RequestCount, &toolsStr, &categoryInt, &contextTool)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan missing sound row: %w", err)
 		}
@@ -75,18 +76,18 @@ func GetMissingSounds(db *sql.DB, filter QueryFilter) ([]MissingSound, error) {
 					toolMap[tool] = true
 				}
 			}
-			
+
 			// Convert back to slice
 			for tool := range toolMap {
 				sound.Tools = append(sound.Tools, tool)
 			}
 		}
 
-		// Parse context JSON to extract Category and ToolName
-		if contextStr.Valid && contextStr.String != "" {
-			category, toolName := extractFromContextJSON(contextStr.String)
-			sound.Category = category
-			sound.ToolName = toolName
+		if categoryInt.Valid {
+			sound.Category = categoryToString(int(categoryInt.Float64))
+		}
+		if contextTool.Valid {
+			sound.ToolName = contextTool.String
 		}
 
 		results = append(results, sound)
@@ -107,7 +108,7 @@ func GetMissingSoundsSummary(db *sql.DB, filter QueryFilter) (map[string]interfa
 
 	// Build summary query
 	summaryQuery := `
-		SELECT 
+		SELECT
 			COUNT(DISTINCT pl.path) as unique_missing_sounds,
 			COUNT(*) as total_missing_requests,
 			COUNT(DISTINCT he.tool_name) as tools_with_missing_sounds
@@ -128,11 +129,11 @@ func GetMissingSoundsSummary(db *sql.DB, filter QueryFilter) (map[string]interfa
 	}
 
 	summary := map[string]interface{}{
-		"unique_missing_sounds":      uniqueSounds,
-		"total_missing_requests":     totalRequests,
-		"tools_with_missing_sounds":  toolsWithMissing,
-		"query_days":                 filter.Days,
-		"query_tool_filter":          filter.Tool,
+		"unique_missing_sounds":     uniqueSounds,
+		"total_missing_requests":    totalRequests,
+		"tools_with_missing_sounds": toolsWithMissing,
+		"query_days":                filter.Days,
+		"query_tool_filter":         filter.Tool,
 	}
 
 	return summary, nil
@@ -143,7 +144,7 @@ func parseCommaSeparated(s string) []string {
 	if s == "" {
 		return nil
 	}
-	
+
 	var result []string
 	for _, part := range splitString(s, ",") {
 		trimmed := trimString(part)
@@ -159,10 +160,10 @@ func splitString(s, delimiter string) []string {
 	if s == "" {
 		return nil
 	}
-	
+
 	var result []string
 	start := 0
-	
+
 	for i := 0; i <= len(s)-len(delimiter); i++ {
 		if s[i:i+len(delimiter)] == delimiter {
 			result = append(result, s[start:i])
@@ -170,7 +171,7 @@ func splitString(s, delimiter string) []string {
 		}
 	}
 	result = append(result, s[start:])
-	
+
 	return result
 }
 
@@ -178,54 +179,23 @@ func splitString(s, delimiter string) []string {
 func trimString(s string) string {
 	start := 0
 	end := len(s)
-	
+
 	// Trim leading whitespace
 	for start < end && isWhitespace(s[start]) {
 		start++
 	}
-	
+
 	// Trim trailing whitespace
 	for end > start && isWhitespace(s[end-1]) {
 		end--
 	}
-	
+
 	return s[start:end]
 }
 
 // isWhitespace checks if a character is whitespace
 func isWhitespace(c byte) bool {
 	return c == ' ' || c == '\t' || c == '\n' || c == '\r'
-}
-
-// extractFromContextJSON parses context JSON to extract Category and ToolName
-func extractFromContextJSON(contextJSON string) (category, toolName string) {
-	if contextJSON == "" {
-		return "", ""
-	}
-	
-	// Parse the JSON context to extract Category and ToolName
-	var context map[string]interface{}
-	err := json.Unmarshal([]byte(contextJSON), &context)
-	if err != nil {
-		// If JSON parsing fails, return empty strings (graceful degradation)
-		return "", ""
-	}
-	
-	// Extract Category (as integer) and convert to string
-	if categoryVal, exists := context["Category"]; exists {
-		if categoryInt, ok := categoryVal.(float64); ok { // JSON numbers are float64
-			category = categoryToString(int(categoryInt))
-		}
-	}
-	
-	// Extract ToolName (as string)
-	if toolNameVal, exists := context["ToolName"]; exists {
-		if toolNameStr, ok := toolNameVal.(string); ok {
-			toolName = toolNameStr
-		}
-	}
-	
-	return category, toolName
 }
 
 // categoryToString converts category integer to string representation
@@ -312,7 +282,16 @@ func GetSoundUsage(db *sql.DB, filter QueryFilter) ([]SoundUsage, error) {
 			he.selected_path,
 			COUNT(*) as play_count,
 			MAX(he.timestamp) as last_played,
-			(SELECT context FROM hook_events he2 WHERE he2.selected_path = he.selected_path LIMIT 1) as context
+			CASE
+				WHEN COUNT(*) = COUNT(JSON_EXTRACT(he.context, '$.Category'))
+					AND COUNT(DISTINCT JSON_EXTRACT(he.context, '$.Category')) = 1
+				THEN MAX(JSON_EXTRACT(he.context, '$.Category'))
+			END as category,
+			CASE
+				WHEN COUNT(*) = COUNT(JSON_EXTRACT(he.context, '$.ToolName'))
+					AND COUNT(DISTINCT JSON_EXTRACT(he.context, '$.ToolName')) = 1
+				THEN MAX(JSON_EXTRACT(he.context, '$.ToolName'))
+			END as context_tool
 		FROM hook_events he
 		WHERE he.selected_path != ''`
 
@@ -340,18 +319,19 @@ func GetSoundUsage(db *sql.DB, filter QueryFilter) ([]SoundUsage, error) {
 	var results []SoundUsage
 	for rows.Next() {
 		var usage SoundUsage
-		var contextStr sql.NullString
+		var categoryInt sql.NullFloat64
+		var contextTool sql.NullString
 
-		err := rows.Scan(&usage.Path, &usage.PlayCount, &usage.LastPlayed, &contextStr)
+		err := rows.Scan(&usage.Path, &usage.PlayCount, &usage.LastPlayed, &categoryInt, &contextTool)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan sound usage row: %w", err)
 		}
 
-		// Extract category and tool name from context JSON
-		if contextStr.Valid && contextStr.String != "" {
-			category, toolName := extractFromContextJSON(contextStr.String)
-			usage.Category = category
-			usage.ToolName = toolName
+		if categoryInt.Valid {
+			usage.Category = categoryToString(int(categoryInt.Float64))
+		}
+		if contextTool.Valid {
+			usage.ToolName = contextTool.String
 		}
 
 		results = append(results, usage)
@@ -550,7 +530,7 @@ func GetCategoryDistribution(db *sql.DB, filter QueryFilter) ([]CategoryDistribu
 
 	// Build query to get category distribution
 	baseQuery := `
-		SELECT 
+		SELECT
 			JSON_EXTRACT(he.context, '$.Category') as category_int,
 			COUNT(*) as count
 		FROM hook_events he
@@ -607,4 +587,3 @@ func GetCategoryDistribution(db *sql.DB, filter QueryFilter) ([]CategoryDistribu
 
 	return results, nil
 }
-

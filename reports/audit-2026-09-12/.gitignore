@@ -1,0 +1,10 @@
+/private/
+/*.log
+/*.out
+/implementation-rules.md
+/navigation-fixture.html
+/module-tidy.diff
+/module-verify.txt
+/nocgo-tests.txt
+/review-lint.txt
+/decoded-assets.json

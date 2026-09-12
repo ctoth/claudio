@@ -5,6 +5,38 @@ release tags and current checkout history.
 
 ## Unreleased
 
+### Fixed
+- Made JSON soundpack installs self-contained and portable by copying referenced
+  audio files with the manifest.
+- Preserved malformed configs, customized agent command files, and existing
+  soundpacks when installation or replacement fails. Soundpack commands now
+  honor `--config` and serialize config and registry writes.
+- Corrected soundpack discovery, false missing-sound reports, ambiguous usage
+  labels, and invalid analytics filters.
+- Made tracking schema migrations atomic and serialized concurrent openers.
+- Fixed audio shutdown and concurrent playback tracking, including repeated
+  plays of the same sound.
+- Rejected WAV headers that could panic the decoder and reduced WAV decoding's
+  intermediate memory use.
+- Quoted Codex PowerShell executable paths literally.
+- Made the documentation site's mobile navigation available to keyboards and
+  assistive technology.
+- Isolated integration-test cache and tracking data from the user's profile.
+
+### Changed
+- Set Go 1.25.13 as the minimum supported version and Go 1.26.6 as the
+  recommended toolchain.
+- Updated dependencies with published vulnerability fixes.
+- Limited decoded MP3 data to 100 MiB, matching the encoded audio-file limit.
+- Moved developer hook logs to private, uniquely named files in the user cache.
+  Complete valid JSON no longer waits for stdin to close.
+
+### Documentation
+- Corrected soundpack paths, shell commands, agent support, platform paths, and
+  release history.
+
+## v1.14.0 - 2026-06-29
+
 ### Added
 - Added command artifact installation for additional agents, including Antigravity.
 - Added native Linux embedded default sounds.

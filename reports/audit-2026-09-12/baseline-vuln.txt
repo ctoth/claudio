@@ -1,0 +1,23 @@
+go: downloading golang.org/x/vuln v1.8.0
+go: downloading golang.org/x/telemetry v0.0.0-20260908163034-4bcc4b2ee518
+go: downloading golang.org/x/mod v0.41.0
+go: downloading golang.org/x/tools v0.50.0
+go: downloading golang.org/x/sync v0.23.0
+go: downloading golang.org/x/sys v0.48.0
+=== Symbol Results ===
+
+Vulnerability #1: GO-2026-6088
+    Add recursion depth guard during decode in encoding/xml
+  More info: https://pkg.go.dev/vuln/GO-2026-6088
+  Standard library
+    Found in: encoding/xml@go1.26.4
+    Fixed in: encoding/xml@go1.26.6
+    Example traces found:
+      #1: internal/audio/malgo/registry.go:166:26: malgo.DecoderRegistry.DetectFormatWithContent calls mimetype.Detect, which eventually calls xml.Decoder.RawToken
+
+Your code is affected by 1 vulnerability from the Go standard library.
+This scan also found 9 vulnerabilities in packages you import and 1
+vulnerability in modules you require, but your code doesn't appear to call these
+vulnerabilities.
+Use '-show verbose' for more details.
+exit status 3

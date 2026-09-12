@@ -264,17 +264,15 @@ func initializeAudioSystem(cmd *cobra.Command, cli *CLI, cfg *config.Config) err
 			}
 		}
 		if _, statErr := os.Stat(resolvedPath); statErr != nil {
-			// Not a direct path — try to find it in soundpack_paths
-			for _, sp := range cfg.SoundpackPaths {
-				if _, spErr := os.Stat(sp); spErr == nil {
-					base := filepath.Base(sp)
-					name := strings.TrimSuffix(base, filepath.Ext(base))
-					if name == cfg.DefaultSoundpack {
-						slog.Debug("resolved soundpack name to path",
-							"name", cfg.DefaultSoundpack, "path", sp)
-						resolvedPath = sp
-						break
-					}
+			// Not a direct path. Search both canonical XDG candidates and
+			// configured paths; JSON metadata is authoritative when the
+			// installed canonical filename is soundpack.json.
+			for _, candidate := range soundpackPaths {
+				if soundpackPathMatchesName(candidate, cfg.DefaultSoundpack) {
+					slog.Debug("resolved soundpack name to path",
+						"name", cfg.DefaultSoundpack, "path", candidate)
+					resolvedPath = candidate
+					break
 				}
 			}
 		}

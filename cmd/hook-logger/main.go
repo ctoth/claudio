@@ -1,125 +1,144 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"time"
+	"unicode"
 
 	"claudio.click/internal/safeio"
 )
 
 func main() {
-	// Initialize structured logging
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-		Level: slog.LevelDebug,
-	}))
-	slog.SetDefault(logger)
+	os.Exit(run(os.Stdin, os.Stderr))
+}
 
-	slog.Info("hook logger started", "args", os.Args, "stdin_available", true)
+func run(stdin io.Reader, stderr io.Writer) int {
+	logger := slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	logger.Info("hook logger started")
+	logger.Warn("hook logger stores and prints complete valid hook payloads; logs may contain sensitive data")
 
-	// Read JSON from stdin (Claude Code sends hook data via stdin)
-	input, err := safeio.ReadAllCapped(os.Stdin, safeio.MaxHookPayloadBytes, "hook payload")
+	input, err := safeio.ReadJSONBounded(
+		stdin,
+		safeio.MaxHookPayloadBytes,
+		safeio.DefaultHookReadDeadline,
+		"hook payload",
+	)
 	if err != nil {
-		slog.Error("failed to read stdin", "error", err)
-		os.Exit(1)
+		logger.Error("failed to read stdin", "error", err)
+		return 1
+	}
+	if len(bytes.TrimSpace(input)) == 0 {
+		logger.Error("no input received from stdin")
+		return 1
 	}
 
-	if len(input) == 0 {
-		slog.Error("no input received from stdin")
-		os.Exit(1)
+	var hookData map[string]any
+	if err := json.Unmarshal(input, &hookData); err != nil {
+		logger.Error("failed to parse hook JSON", "error", err)
+		return 1
 	}
 
-	slog.Info("received hook data", "size_bytes", len(input))
-
-	// Parse JSON to validate and pretty-print
-	var hookData map[string]interface{}
-	err = json.Unmarshal(input, &hookData)
-	if err != nil {
-		slog.Error("failed to parse JSON", "error", err, "raw_input", string(input))
-		// Still save the raw data even if invalid JSON
-		saveRawData(input, "invalid")
-		os.Exit(1)
-	}
-
-	// Extract hook event name for better organization
 	eventName := "unknown"
 	if name, ok := hookData["hook_event_name"].(string); ok {
-		eventName = name
+		eventName = sanitizeEventName(name)
 	}
 
-	slog.Info("parsed hook event",
+	logger.Info("parsed hook event",
 		"event_name", eventName,
-		"fields", getJsonKeys(hookData))
+		"size_bytes", len(input),
+		"fields", getJSONKeys(hookData))
 
-	// Save the JSON data to timestamped file
-	err = saveHookData(input, eventName)
+	savedPath, err := saveHookData(input, eventName)
 	if err != nil {
-		slog.Error("failed to save hook data", "error", err)
-		os.Exit(1)
+		logger.Error("failed to save hook data", "error", err)
+		return 1
 	}
+	logger.Info("hook data saved", "file", savedPath, "size_bytes", len(input))
 
-	// Pretty print to stderr for immediate viewing
 	prettyJSON, err := json.MarshalIndent(hookData, "", "  ")
 	if err != nil {
-		slog.Error("failed to pretty print JSON", "error", err)
+		logger.Error("failed to pretty print hook JSON", "error", err)
 	} else {
-		fmt.Fprintf(os.Stderr, "\n=== HOOK EVENT: %s ===\n%s\n\n", eventName, string(prettyJSON))
+		fmt.Fprintf(stderr, "\n=== HOOK EVENT: %s ===\n%s\n\n", eventName, prettyJSON)
 	}
 
-	slog.Info("hook logging completed successfully", "event_name", eventName)
+	logger.Info("hook logging completed successfully", "event_name", eventName)
+	return 0
 }
 
-// saveHookData saves hook JSON to timestamped file in logs directory
-func saveHookData(data []byte, eventName string) error {
-	// Create logs directory if it doesn't exist
-	logsDir := "/tmp/claudio-hook-logs"
-	err := os.MkdirAll(logsDir, 0755)
+func saveHookData(data []byte, eventName string) (string, error) {
+	cacheDir, err := os.UserCacheDir()
 	if err != nil {
-		return fmt.Errorf("failed to create logs directory: %w", err)
+		return "", fmt.Errorf("find user cache directory: %w", err)
 	}
 
-	// Generate timestamped filename
-	timestamp := time.Now().Format("2006-01-02_15-04-05.000")
-	filename := fmt.Sprintf("%s_%s.json", timestamp, eventName)
-	filepath := filepath.Join(logsDir, filename)
-
-	// Write JSON data to file
-	err = os.WriteFile(filepath, data, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to write hook data to file: %w", err)
+	logsDir := filepath.Join(cacheDir, "claudio", "hook-logs")
+	if err := os.MkdirAll(logsDir, 0o700); err != nil {
+		return "", fmt.Errorf("create hook log directory: %w", err)
 	}
-
-	slog.Info("hook data saved", "file", filepath, "size_bytes", len(data))
-	return nil
-}
-
-// saveRawData saves invalid JSON for debugging
-func saveRawData(data []byte, suffix string) {
-	logsDir := "/tmp/claudio-hook-logs"
-	if err := os.MkdirAll(logsDir, 0755); err != nil {
-		slog.Error("failed to create logs directory", "error", err)
-		return
+	if err := os.Chmod(logsDir, 0o700); err != nil {
+		return "", fmt.Errorf("secure hook log directory: %w", err)
 	}
 
 	timestamp := time.Now().Format("2006-01-02_15-04-05.000")
-	filename := fmt.Sprintf("%s_%s.raw", timestamp, suffix)
-	filepath := filepath.Join(logsDir, filename)
-
-	if err := os.WriteFile(filepath, data, 0644); err != nil {
-		slog.Error("failed to write raw data", "file", filepath, "error", err)
-		return
+	pattern := fmt.Sprintf("%s_%s_*.json", timestamp, sanitizeEventName(eventName))
+	file, err := os.CreateTemp(logsDir, pattern)
+	if err != nil {
+		return "", fmt.Errorf("create hook log file: %w", err)
 	}
-	slog.Info("raw data saved", "file", filepath)
+	path := file.Name()
+
+	if err := file.Chmod(0o600); err != nil {
+		_ = file.Close()
+		return "", fmt.Errorf("secure hook log file: %w", err)
+	}
+	if _, err := file.Write(data); err != nil {
+		_ = file.Close()
+		return "", fmt.Errorf("write hook log file: %w", err)
+	}
+	if err := file.Close(); err != nil {
+		return "", fmt.Errorf("close hook log file: %w", err)
+	}
+	return path, nil
 }
 
-// getJsonKeys extracts top-level keys from JSON object for logging
-func getJsonKeys(data map[string]interface{}) []string {
+func sanitizeEventName(name string) string {
+	name = strings.TrimSpace(name)
+	var sanitized strings.Builder
+	previousSeparator := false
+	for _, r := range name {
+		allowed := r < unicode.MaxASCII && (unicode.IsLetter(r) || unicode.IsDigit(r) || r == '-' || r == '_')
+		if allowed {
+			sanitized.WriteRune(r)
+			previousSeparator = false
+		} else if !previousSeparator {
+			sanitized.WriteByte('_')
+			previousSeparator = true
+		}
+		if sanitized.Len() >= 64 {
+			break
+		}
+	}
+	result := strings.Trim(sanitized.String(), "_-.")
+	if result == "" {
+		return "unknown"
+	}
+	return result
+}
+
+func getJSONKeys(data map[string]any) []string {
 	keys := make([]string, 0, len(data))
 	for key := range data {
 		keys = append(keys, key)
 	}
+	sort.Strings(keys)
 	return keys
 }

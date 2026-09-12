@@ -1,0 +1,58 @@
+Fetching vulnerabilities from the database...
+
+Checking the code against the vulnerabilities...
+
+The package pattern matched the following 20 root packages:
+  claudio.click/internal/platform
+  claudio.click/internal/audio
+  claudio.click/internal/safeio
+  claudio.click/internal/audio/malgo
+  claudio.click/internal/config
+  claudio.click/internal/hooks
+  claudio.click/internal/fs
+  claudio.click/internal/install
+  claudio.click/internal/soundpack
+  claudio.click/internal/sounds
+  claudio.click/internal/tracking
+  claudio.click/internal/uninstall
+  claudio.click/internal/cli
+  claudio.click/cmd/claudio
+  claudio.click/cmd/hook-logger
+  claudio.click/internal/ci
+  claudio.click/internal/cli/testenv
+  claudio.click/internal/devtools/buildcheck
+  claudio.click/internal/devtools/coveragefloor
+  claudio.click/internal/integration
+Govulncheck scanned the following 30 modules and the go1.26.6 standard library:
+  claudio.click
+  github.com/adrg/xdg@v0.5.3
+  github.com/ctoth/captain-hook@v0.1.2
+  github.com/dustin/go-humanize@v1.0.1
+  github.com/gabriel-vasile/mimetype@v1.4.9
+  github.com/gen2brain/malgo@v0.11.23
+  github.com/go-audio/aiff@v1.1.0
+  github.com/go-audio/audio@v1.0.0
+  github.com/gofrs/flock@v0.13.0
+  github.com/hajimehoshi/go-mp3@v0.3.4
+  github.com/inconshreveable/mousetrap@v1.1.0
+  github.com/mattn/go-isatty@v0.0.20
+  github.com/ncruces/go-strftime@v0.1.9
+  github.com/remyoudompheng/bigfft@v0.0.0-20230129092748-24d4a6f8daec
+  github.com/spf13/afero@v1.14.0
+  github.com/spf13/cobra@v1.9.1
+  github.com/spf13/pflag@v1.0.6
+  github.com/tj/go-naturaldate@v1.3.0
+  github.com/youpy/go-riff@v0.1.0
+  github.com/youpy/go-wav@v0.3.2
+  github.com/zaf/g711@v0.0.0-20190814101024-76a4a538f52b
+  golang.org/x/exp@v0.0.0-20250620022241-b7579e27df2b
+  golang.org/x/net@v0.56.0
+  golang.org/x/sys@v0.46.0
+  golang.org/x/text@v0.39.0
+  gopkg.in/natefinch/lumberjack.v2@v2.2.1
+  modernc.org/libc@v1.66.3
+  modernc.org/mathutil@v1.7.1
+  modernc.org/memory@v1.11.0
+  modernc.org/sqlite@v1.38.2
+
+No vulnerabilities found.

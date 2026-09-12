@@ -14,6 +14,10 @@ Full documentation starts at [docs/index.md](docs/index.md).
 
 ## Install
 
+Claudio requires Go 1.25.13 or newer. With Go's default automatic toolchain
+selection, commands run from this repository use the recommended Go 1.26.6
+toolchain declared in `go.mod`.
+
 ```bash
 go install claudio.click/cmd/claudio@latest
 ```
@@ -64,7 +68,7 @@ Claudio ships platform defaults and supports three custom soundpack forms:
 
 - Directory soundpacks under `loading/`, `success/`, `error/`, `interactive/`,
   `completion/`, and `system/`
-- JSON soundpacks that map Claudio sound keys to files anywhere on disk
+- JSON soundpacks that map Claudio sound keys to files stored with the manifest
 - Managed git soundpacks installed with `claudio soundpack add`
 
 Useful commands:

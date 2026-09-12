@@ -1,15 +1,11 @@
 # Architectural Debt Log
 
-This file records architectural items that the post-review-fixes campaign
-identified but deliberately did NOT address. They are not bugs in the
-"would-crash-or-corrupt" sense — every one of them is shipping safely
-today. They are debt: known shape problems that future work should pick
-up with proper scoping rather than as an afterthought in a different
-chunk.
+This file records deferred architecture work. These items describe
+maintainability or testability costs rather than known user-facing failures.
 
 Each entry names the finding, the location, the severity (impact if
 left unfixed), the blast radius (what changes when you do fix it), and
-the original analyst report so the trail can be picked up cleanly.
+the original audit reference when that source is still available.
 
 ---
 
@@ -33,7 +29,7 @@ commit to a context-DI pattern (`ctx`-borne `*CLI`) or pass deps as
 function arguments. The "half-applied DI container" state is the worst
 of both worlds.
 
-**Original finding:** Chunk 19 scout (`reports/chunk-19a-scout-cli-hygiene-report.md`).
+**Original finding:** Internal audit item #51; the source report is not retained.
 
 ---
 
@@ -55,7 +51,7 @@ from soundpack resolution. The split is mechanical but the function is
 long, well-tested, and currently green; risk is in subtly changing
 resolution precedence during the move.
 
-**Original finding:** Chunk 19 scout (#52, deferred as architectural).
+**Original finding:** Internal audit item #52; the source report is not retained.
 
 ---
 
@@ -78,7 +74,7 @@ non-CLI consumers (e.g. a future TUI) reuse the discovery.
 move is `git mv` + import updates. The shared `soundpackInfo` type
 would need to move with it.
 
-**Original finding:** Chunk 19 scout (#54, deferred as architectural).
+**Original finding:** Internal audit item #54; the source report is not retained.
 
 ---
 
@@ -100,8 +96,8 @@ Settings_io keeps its lock and backup discipline on top; atomic_io
 becomes a thin wrapper. Both call sites continue to pass through their
 own pre-write validation.
 
-**Original finding:** Chunk 4 analyst H2 (atomic .bak write) plus
-Chunk 7 coder report ("near-duplicate copies … suggested follow-up").
+**Original finding:** Internal audit items from chunks 4 and 7; the source
+reports are not retained.
 
 ---
 
@@ -123,24 +119,21 @@ same file object. Eliminates the second stat at the cost of moving
 file-handle ownership up to the resolver. Test surface is moderate:
 every test that constructs a fake resolver would change shape.
 
-**Original finding:** Chunk 14 analyst F7 (pre-existing, flagged for
-later).
+**Original finding:** Internal audit item F7; the source report is not retained.
 
 ---
 
-## Codex and Gemini install e2e variants not yet written
+## Gemini install e2e variant not yet written
 
-**Location:** `internal/cli/install_command_e2e_test.go` — covers
-Claude install end-to-end; Codex and Gemini variants have no equivalent
-test.
+**Location:** `internal/cli/install_command_e2e_test.go` covers Claude and
+Codex install end-to-end; Gemini has no equivalent test.
 
-**Severity:** Low. The Codex and Gemini install paths are unit-tested via
-the agent registry and settings merge tests. The missing piece is a full
-install workflow test against `.codex/hooks.json` and `.gemini/settings.json`
-under `CLAUDIO_TEST_RECOGNIZE_GO_TEST`. If a schema drifts, unit tests should
-catch most of it, but the full install path is still covered only for Claude.
+**Severity:** Low. The Gemini install path is unit-tested through the agent
+registry and settings merge tests. The missing piece is a full install workflow
+test against `.gemini/settings.json` under
+`CLAUDIO_TEST_RECOGNIZE_GO_TEST`.
 
-**Blast radius if fixed:** One new test file paralleling the existing
-Claude e2e test, using Codex and Gemini targets. The plumbing exists.
+**Blast radius if fixed:** Add a Gemini case beside the existing Claude and
+Codex end-to-end tests.
 
-**Original finding:** Chunk 18 analyst F6.
+**Original finding:** Internal audit item F6; the source report is not retained.

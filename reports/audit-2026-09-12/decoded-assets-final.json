@@ -1,0 +1,786 @@
+[
+  {
+    "channels": 1,
+    "path": "internal/config/embedded_sounds/default-error.wav",
+    "pcm_bytes": 29988,
+    "pcm_sha256": "dd651449368f1eaa59b8f06249a0874859f4d0830902357a1d3ae8a35336ad7f",
+    "sample_rate": 44100
+  },
+  {
+    "channels": 1,
+    "path": "internal/config/embedded_sounds/default-interactive.wav",
+    "pcm_bytes": 17640,
+    "pcm_sha256": "3aa8c53f6b83f942741b8dda15e36a41b708983fed9d45d95096f948570bf8c8",
+    "sample_rate": 44100
+  },
+  {
+    "channels": 1,
+    "path": "internal/config/embedded_sounds/default-loading.wav",
+    "pcm_bytes": 14112,
+    "pcm_sha256": "4dad9d48d75a98f9c235f65399e7537c850d78c04582c8a698672af2434c100f",
+    "sample_rate": 44100
+  },
+  {
+    "channels": 1,
+    "path": "internal/config/embedded_sounds/default-success.wav",
+    "pcm_bytes": 24696,
+    "pcm_sha256": "4cce6ac82ebd859c445c35e083f2f6d5be21fa504b404abc81c63763c5c55804",
+    "sample_rate": 44100
+  },
+  {
+    "channels": 1,
+    "path": "internal/config/embedded_sounds/default.wav",
+    "pcm_bytes": 14112,
+    "pcm_sha256": "13d723e6971e00cc25817794ee098aa37d9524560e36cd536001f53931485ad0",
+    "sample_rate": 44100
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/completion/agent-complete.mp3",
+    "pcm_bytes": 898560,
+    "pcm_sha256": "f1ca6effb97fd431feb6755ab968d69e3e6b4316f23eb4c5582c321461ceb704",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/completion/completion.mp3",
+    "pcm_bytes": 903168,
+    "pcm_sha256": "3926dbf18204052b023627f3095a329d27a55aa230b7214360961c6161900390",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/completion/stop.mp3",
+    "pcm_bytes": 267264,
+    "pcm_sha256": "90c0d0d4f42d575515b0b8adc99838062a051e8e8f604d4c3645f026bcc74a97",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/default.mp3",
+    "pcm_bytes": 101376,
+    "pcm_sha256": "a009c7efa148ec95d304d7e8e95f1b61eac4d315c8eea356237571368cd2789b",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/error/bash-error.mp3",
+    "pcm_bytes": 124416,
+    "pcm_sha256": "2b3510583c76be5777e1bbb6d3863cde17ab5126bb9a01e4ba6cd4bccdd242d9",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/error/critical.mp3",
+    "pcm_bytes": 115200,
+    "pcm_sha256": "a2412d3cc0268c56259b448c1e83ebaf3be580da19842b8ba9b7ff20ecb2545b",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/error/edit-error.mp3",
+    "pcm_bytes": 161280,
+    "pcm_sha256": "0d904d2bdf1644792778366eff5a31982809de4c76f6492d176db477ea48298d",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/error/error.mp3",
+    "pcm_bytes": 165888,
+    "pcm_sha256": "282f11a9684b6c331cfa8cd7d810e47c1dc4529c59b30938ec42313fd963231a",
+    "sample_rate": 44100
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/error/failure.mp3",
+    "pcm_bytes": 124416,
+    "pcm_sha256": "2b3510583c76be5777e1bbb6d3863cde17ab5126bb9a01e4ba6cd4bccdd242d9",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/error/glob-error.mp3",
+    "pcm_bytes": 101376,
+    "pcm_sha256": "557569ed3a2326bbec2654255b4cf47b78d6525e189607d1f7644ee0bf1bc668",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/error/grep-error.mp3",
+    "pcm_bytes": 161280,
+    "pcm_sha256": "d9a617ab4058cd09b26b2df9c4b057e55d8b5f60f7362ff51005f0319bc085d8",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/error/ls-error.mp3",
+    "pcm_bytes": 161280,
+    "pcm_sha256": "0d904d2bdf1644792778366eff5a31982809de4c76f6492d176db477ea48298d",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/error/mcp-error.mp3",
+    "pcm_bytes": 161280,
+    "pcm_sha256": "0d904d2bdf1644792778366eff5a31982809de4c76f6492d176db477ea48298d",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/error/multiedit-error.mp3",
+    "pcm_bytes": 101376,
+    "pcm_sha256": "557569ed3a2326bbec2654255b4cf47b78d6525e189607d1f7644ee0bf1bc668",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/error/read-error.mp3",
+    "pcm_bytes": 115200,
+    "pcm_sha256": "a2412d3cc0268c56259b448c1e83ebaf3be580da19842b8ba9b7ff20ecb2545b",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/error/task-error.mp3",
+    "pcm_bytes": 124416,
+    "pcm_sha256": "2b3510583c76be5777e1bbb6d3863cde17ab5126bb9a01e4ba6cd4bccdd242d9",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/error/timeout.mp3",
+    "pcm_bytes": 165888,
+    "pcm_sha256": "5c2c2d49467bd712e37380aa4dcdc51f8b153c2b1623e4391af4171a1398545a",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/error/todowrite-error.mp3",
+    "pcm_bytes": 161280,
+    "pcm_sha256": "d9a617ab4058cd09b26b2df9c4b057e55d8b5f60f7362ff51005f0319bc085d8",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/error/tool-error.mp3",
+    "pcm_bytes": 359424,
+    "pcm_sha256": "2b8929b6b0284efd2c67b55e475c3aad40a30ca0da3412707d687fc9a84289ec",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/error/tool-interrupted.mp3",
+    "pcm_bytes": 124416,
+    "pcm_sha256": "2b3510583c76be5777e1bbb6d3863cde17ab5126bb9a01e4ba6cd4bccdd242d9",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/error/webfetch-error.mp3",
+    "pcm_bytes": 359424,
+    "pcm_sha256": "2b8929b6b0284efd2c67b55e475c3aad40a30ca0da3412707d687fc9a84289ec",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/error/websearch-error.mp3",
+    "pcm_bytes": 161280,
+    "pcm_sha256": "0d904d2bdf1644792778366eff5a31982809de4c76f6492d176db477ea48298d",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/error/write-error.mp3",
+    "pcm_bytes": 165888,
+    "pcm_sha256": "5c2c2d49467bd712e37380aa4dcdc51f8b153c2b1623e4391af4171a1398545a",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/interactive/chimes.mp3",
+    "pcm_bytes": 603648,
+    "pcm_sha256": "80adeb8907290dd5977831d4b97225928279cfd55382e6c09b27aad9d6f86539",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/interactive/compact.mp3",
+    "pcm_bytes": 898560,
+    "pcm_sha256": "ec0dc795fe1f2ee559fd7a459b4fc44fb96ae3a6cd59b288ff3c890a1b63a595",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/interactive/interactive.mp3",
+    "pcm_bytes": 87552,
+    "pcm_sha256": "ba4d78966c085d2994dffaa5badd4042570a76c9cc9f38e93febfdc9004880f7",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/interactive/message-sent.mp3",
+    "pcm_bytes": 115200,
+    "pcm_sha256": "9b1f47d59a7598bbe96ce0cb4cba6fd4261874ee4fc9154ea2ae644508dbb7ea",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/interactive/notification-permission.mp3",
+    "pcm_bytes": 59904,
+    "pcm_sha256": "d52ac049fbda9959009bb93cb77a3bdcbdb0ea5a65545ff7482938f0fcb079e5",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/interactive/notification.mp3",
+    "pcm_bytes": 1022976,
+    "pcm_sha256": "987c07b72983d85c757c4d220a22c84758ca8948dc9002908bf7bdfd8e7218e3",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/interactive/notify.mp3",
+    "pcm_bytes": 239616,
+    "pcm_sha256": "6b28a9a39d81fd081f5e8a8ca956c824096e847e3d2bcd20eff9cd19fc5d6b40",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/interactive/prompt-submit.mp3",
+    "pcm_bytes": 82944,
+    "pcm_sha256": "6b6fad157ce711603acc2a74bb08a5a1f392b0ad95c4e8078157828f59fb7510",
+    "sample_rate": 44100
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/interactive/stop.mp3",
+    "pcm_bytes": 898560,
+    "pcm_sha256": "3ca1d8722eaa55d6a1afa4807d10fcc21da35f7af2d26b9dfd400eaf2b3fde06",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/interactive/subagent-stop.mp3",
+    "pcm_bytes": 898560,
+    "pcm_sha256": "3ca1d8722eaa55d6a1afa4807d10fcc21da35f7af2d26b9dfd400eaf2b3fde06",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/loading/bash-start.mp3",
+    "pcm_bytes": 147456,
+    "pcm_sha256": "958783a83c3a7dc64e1f2a738bcccee9ceb9cb8785696641aa63da83f7a47836",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/loading/connect.mp3",
+    "pcm_bytes": 211968,
+    "pcm_sha256": "6d1272f31ca809caf65b6aebf1350747db072cf91f1fd081ae38cd01c1a712d2",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/loading/echo-start.mp3",
+    "pcm_bytes": 82944,
+    "pcm_sha256": "37a60b5c6a37e87dbaaa34f35b80000074dd12c859ad1247be37fbdca644a400",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/loading/edit-start.mp3",
+    "pcm_bytes": 78336,
+    "pcm_sha256": "9c6c8d8ecac64946fb540d10c5a6b5704e5a7bafea47286603cc46cbfa67aebb",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/loading/exitplanmode-start.mp3",
+    "pcm_bytes": 170496,
+    "pcm_sha256": "0e5c68c89b0b57c8f1be9232f112fdf26396e53ea7daf94ee3c8cfcf493cf0f1",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/loading/file-editing.mp3",
+    "pcm_bytes": 115200,
+    "pcm_sha256": "c6e331493a88839cd88d5d96f657858e6eb5402d155ae8b3acc81578ccb5e7eb",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/loading/file-reading.mp3",
+    "pcm_bytes": 290304,
+    "pcm_sha256": "c5a40a89839f810fa8fb5f55266752914aa0ce1e7867827ab88268cc1318ea92",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/loading/git-add-start.mp3",
+    "pcm_bytes": 73728,
+    "pcm_sha256": "e91862c96dfbcb132377839e059b320d4ff45a9904f334f2aa3d4303b78ca915",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/loading/git-commit-start.mp3",
+    "pcm_bytes": 64512,
+    "pcm_sha256": "e7560e84be1244d6cefd9f7e2622031974a29183441d15ca31acab78131433b0",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/loading/git-diff-start.mp3",
+    "pcm_bytes": 82944,
+    "pcm_sha256": "e5843246e2fc18c668acff42ee9d05a8b671821e8876a288023d2a9a383d67b8",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/loading/git-log-start.mp3",
+    "pcm_bytes": 207360,
+    "pcm_sha256": "cfc6283c100d2fa03de192de3f2d32c3146533a78fe3c4385c06dcc7f690bcac",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/loading/git-pull-start.mp3",
+    "pcm_bytes": 64512,
+    "pcm_sha256": "1b280567d1ddd1144287d544991abe7bf88a554c90ffc27cbbe45046bf31597f",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/loading/git-push-start.mp3",
+    "pcm_bytes": 165888,
+    "pcm_sha256": "830129191caab85128793b0c705100959bc56ee7529db91a00dd7d33b299dcfe",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/loading/git-status-start.mp3",
+    "pcm_bytes": 32256,
+    "pcm_sha256": "29c0dea0b7b60c5878ee6450921708dc762f26d4b0115ea67d178fbc6beae682",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/loading/glob-start.mp3",
+    "pcm_bytes": 32256,
+    "pcm_sha256": "29837fe4f2d3401737b00efad0e971249ccef415b60db2540a650a85150814c0",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/loading/go-build-start.mp3",
+    "pcm_bytes": 115200,
+    "pcm_sha256": "20857c4aeb64e06f0fa79d086c25ea1c660cf7dfe55784f2e5572b971b5caf53",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/loading/grep-start.mp3",
+    "pcm_bytes": 594432,
+    "pcm_sha256": "a171e0712c92794e50514467604985d1728e6eac76ffff286bc9b9912452473a",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/loading/loading.mp3",
+    "pcm_bytes": 248832,
+    "pcm_sha256": "aceeb104e425739935707d01ae0e8eec8b12dc1df9bbe60582a42ec4dbacf29c",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/loading/ls-start.mp3",
+    "pcm_bytes": 110592,
+    "pcm_sha256": "3f9a5003de5056ce81f5827ce01ff761e7c48d9c12a94e3a2415285be15a83b4",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/loading/mcp-start.mp3",
+    "pcm_bytes": 96768,
+    "pcm_sha256": "c2fef5c824dac3ba7ab772140c423c61da32ead48ef2b596ffa6c1900d423ed6",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/loading/multiedit-start.mp3",
+    "pcm_bytes": 170496,
+    "pcm_sha256": "554c5624b509a1171c37ce6232e287e198ccbb658d3ea3cf54fbba21c2647a9f",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/loading/processing.mp3",
+    "pcm_bytes": 308736,
+    "pcm_sha256": "4504ed0d1cbbbb46eea31ebd26362992a2546e089689e6111205398241472c7f",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/loading/read-start.mp3",
+    "pcm_bytes": 115200,
+    "pcm_sha256": "672101c718c3c5d07a2d4dd68281792d2d151b21124625ebfb174e9b3417ac46",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/loading/task-start.mp3",
+    "pcm_bytes": 82944,
+    "pcm_sha256": "37a60b5c6a37e87dbaaa34f35b80000074dd12c859ad1247be37fbdca644a400",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/loading/todowrite-start.mp3",
+    "pcm_bytes": 152064,
+    "pcm_sha256": "b0e07d0cd4a19ef1710dc86dc127da6525a725c079bb31daa80ad8bd590057d8",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/loading/tool-start.mp3",
+    "pcm_bytes": 290304,
+    "pcm_sha256": "b8ea093662bed6747b42fd88e0d666b8d38edb10737ef65b761b906d07a934a6",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/loading/webfetch-start.mp3",
+    "pcm_bytes": 101376,
+    "pcm_sha256": "c16672f99b4df9cb1cef0df81203851579c6096afc07f93b6fb187eb1d3c56e9",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/loading/websearch-start.mp3",
+    "pcm_bytes": 138240,
+    "pcm_sha256": "233a2bed9d41b7271ce583d4ac4bed465ab5bc47ac4e4d677f4fbccce37a0ed0",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/loading/write-start.mp3",
+    "pcm_bytes": 101376,
+    "pcm_sha256": "b9fad047ba78f1542920bec67b3ce7fe9e5355c64af8ed9461601c24a6932e08",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/bash-success.mp3",
+    "pcm_bytes": 129024,
+    "pcm_sha256": "1e981bb7ff845751941507755c0b2cff7142bc871b86746386be5503e8bb7e74",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/celebration.mp3",
+    "pcm_bytes": 92160,
+    "pcm_sha256": "3697b2f81966ca4c3209d1d8b2a3b6ddc79e81c4af63f6ed785b64504d72d1a4",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/complete.mp3",
+    "pcm_bytes": 13824,
+    "pcm_sha256": "d02040cd242e43c807194ee8776bd9a09a2ca869dd998ee61d2be8b82593d46f",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/e2e-test-bat-success.mp3",
+    "pcm_bytes": 50688,
+    "pcm_sha256": "dba759dca91f4c97532b7e44ddaf519402a6583d218377641445821ae85eab7b",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/e2e-test-bat-tee-success.mp3",
+    "pcm_bytes": 23040,
+    "pcm_sha256": "a41c9c2fedb7b6747373ae6fd3f1db86913593e02faadeea65ffcf81e31866b4",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/echo-success.mp3",
+    "pcm_bytes": 110592,
+    "pcm_sha256": "ca5a15089a85babe86f95ff9dd8a94d3b7a253b57aa414ce5eb648724404e97f",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/edit-success.mp3",
+    "pcm_bytes": 170496,
+    "pcm_sha256": "8388da47404762461b31fa6166c3662e4f55cba693e77d4dc9ebb00d6a7a2c86",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/exitplanmode-success.mp3",
+    "pcm_bytes": 179712,
+    "pcm_sha256": "e1f7957d686f5c70cb409a21c3453ee35eaa90f321bea329428e9d8ba8e7c5f6",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/file-read.mp3",
+    "pcm_bytes": 216576,
+    "pcm_sha256": "f39289f56ace142f410296019185b3e9decaa23095bc2934c83823862463e685",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/file-saved.mp3",
+    "pcm_bytes": 308736,
+    "pcm_sha256": "b523da8a7c413aaa9bb6bf17571e35cde1d2f56820b52f9b8b49bab875957524",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/find-f-success.mp3",
+    "pcm_bytes": 82944,
+    "pcm_sha256": "d92732f9a219e79e7e631eb6d21afc6b3a13dc429b2be0018b5d4b63c7f25cab",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/find-success.mp3",
+    "pcm_bytes": 96768,
+    "pcm_sha256": "b275aa99d34419b72a9b0776a6ff165269e9c30e5565d57f3eaacc2ac81a710d",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/gh-repo-success.mp3",
+    "pcm_bytes": 179712,
+    "pcm_sha256": "78abb99210b2b848e43b38146012ad1fe28b0476a79add239738ab046525312d",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/gh-success.mp3",
+    "pcm_bytes": 87552,
+    "pcm_sha256": "ec81ec0f4262b78c296a8b3c5aa11aee53cd440bb585038dd72960ac4240e734",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/git-add-success.mp3",
+    "pcm_bytes": 82944,
+    "pcm_sha256": "c1ab2aa047b435785e45dc8a3145ea94a6b3cb34396d86e418ce67d67c18e21c",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/git-commit-success.mp3",
+    "pcm_bytes": 142848,
+    "pcm_sha256": "f508efe91d5439547a3c76f5da7ad5b88685707027e0af5bbf7f6dd7997515ba",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/git-diff-success.mp3",
+    "pcm_bytes": 27648,
+    "pcm_sha256": "9e99260bc4f64ddd4b6906092ead7b29f07f8f33f715ec02abf7473e10ff88d0",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/git-log-success.mp3",
+    "pcm_bytes": 211968,
+    "pcm_sha256": "fdff314b7d724bb7a1464455b5ffb45ce6c729fec447b4c3756f77fd9b1146de",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/git-pull-success.mp3",
+    "pcm_bytes": 78336,
+    "pcm_sha256": "b215ef8db776410e46ce165138a88b1f6752ca0394bf21949f8d77c9a56e5e98",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/git-push-success.mp3",
+    "pcm_bytes": 290304,
+    "pcm_sha256": "4d69f35a029ddb475bd74ecddc1ca35356ff4373c2d48adc6bcf3cc0b395ec82",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/git-status-success.mp3",
+    "pcm_bytes": 36864,
+    "pcm_sha256": "4ab1d90125061550820b3205e4ff20980c32542e41a93277d051bec5e419c306",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/git-success.mp3",
+    "pcm_bytes": 244224,
+    "pcm_sha256": "a58bea98ff3f3929fdea380e9b2da1167e70e576964cddd16d7a519ae526395b",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/glob-success.mp3",
+    "pcm_bytes": 129024,
+    "pcm_sha256": "1e981bb7ff845751941507755c0b2cff7142bc871b86746386be5503e8bb7e74",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/go-build-success.mp3",
+    "pcm_bytes": 73728,
+    "pcm_sha256": "ba52e27d452df93aaab1270c45794abc659f78a92511cc03890b5fdc78bca572",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/grep-head-success.mp3",
+    "pcm_bytes": 184320,
+    "pcm_sha256": "ffffcfe9a6b39b36ce4d314bbc9b0f3849faf26a501256a4778b7b2cd60d7ca5",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/grep-success.mp3",
+    "pcm_bytes": 129024,
+    "pcm_sha256": "1e981bb7ff845751941507755c0b2cff7142bc871b86746386be5503e8bb7e74",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/ls-success.mp3",
+    "pcm_bytes": 27648,
+    "pcm_sha256": "e2ffc8d6498887c2c6dfdd58e8842515643c923811decc123ca2ebecd3bfb57b",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/mcp-success.mp3",
+    "pcm_bytes": 313344,
+    "pcm_sha256": "842445cf339c48aaa7f8f4dcb3475d706be3da1dcd7553bf7e16f0b4f4fa1848",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/multiedit-success.mp3",
+    "pcm_bytes": 110592,
+    "pcm_sha256": "d95392ecfbfeb3843cddfd2c4fde9aca88de1bf5650655434d9db9ba98f32ac6",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/npm-success.mp3",
+    "pcm_bytes": 105984,
+    "pcm_sha256": "cc3300330598e58135e607ac45eeaa91a2f0d7bbaa71f3e500824fe050bdd019",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/read-success.mp3",
+    "pcm_bytes": 129024,
+    "pcm_sha256": "9c461f9e8a8f17334cec9582fc49f4ada292eea11f5cd593495e9c75a54c46b6",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/success.mp3",
+    "pcm_bytes": 101376,
+    "pcm_sha256": "a009c7efa148ec95d304d7e8e95f1b61eac4d315c8eea356237571368cd2789b",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/tail-success.mp3",
+    "pcm_bytes": 69120,
+    "pcm_sha256": "164e1a1dfbdb13fade746d598401baae54d6014698be893192b7ec85b21143d1",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/task-success.mp3",
+    "pcm_bytes": 110592,
+    "pcm_sha256": "ca5a15089a85babe86f95ff9dd8a94d3b7a253b57aa414ce5eb648724404e97f",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/todowrite-success.mp3",
+    "pcm_bytes": 110592,
+    "pcm_sha256": "d95392ecfbfeb3843cddfd2c4fde9aca88de1bf5650655434d9db9ba98f32ac6",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/tool-complete.mp3",
+    "pcm_bytes": 612864,
+    "pcm_sha256": "f65084a691445577e0bad1143b421c85f6ca2b09996b8b2d29811d9ad81d5380",
+    "sample_rate": 44100
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/uv-run-success.mp3",
+    "pcm_bytes": 92160,
+    "pcm_sha256": "e8be86028f8154757dbce6ed156199f2aee177fdbc4f455767d5e8affec92cd7",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/uv-success.mp3",
+    "pcm_bytes": 248832,
+    "pcm_sha256": "97f4e179b174789b0680bf6db150515e97bee3f6f3267390d0d39160611318b9",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/webfetch-success.mp3",
+    "pcm_bytes": 96768,
+    "pcm_sha256": "c2fef5c824dac3ba7ab772140c423c61da32ead48ef2b596ffa6c1900d423ed6",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/websearch-success.mp3",
+    "pcm_bytes": 41472,
+    "pcm_sha256": "d5db67594e0718e1231bae1476fb4a214b00619c69dd8b72ec8f0a1eec341dfb",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/success/write-success.mp3",
+    "pcm_bytes": 124416,
+    "pcm_sha256": "e9e8f391ecefa3ce3687887da75c5c342d6a2a3b107f3d1a92f0a8e2913b702f",
+    "sample_rate": 44100
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/system/compacting.mp3",
+    "pcm_bytes": 336384,
+    "pcm_sha256": "1c3f0a20db036f09f506b86af3fec5dc281013e7147ff30cf1e6e7793fbb8509",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/system/pre-compact.mp3",
+    "pcm_bytes": 92160,
+    "pcm_sha256": "e8be86028f8154757dbce6ed156199f2aee177fdbc4f455767d5e8affec92cd7",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/system/session-start.mp3",
+    "pcm_bytes": 43716096,
+    "pcm_sha256": "9cf8cdfb42fae04a1f21d191fb10a6d365924641715a602b99612677c7b257b7",
+    "sample_rate": 48000
+  },
+  {
+    "channels": 2,
+    "path": "soundpacks/startrek-bridge/system/system.mp3",
+    "pcm_bytes": 35850240,
+    "pcm_sha256": "0e265c50d867cda88548ec3c9b9efb5175db6315db79517e83567b1f48f2af02",
+    "sample_rate": 48000
+  }
+]

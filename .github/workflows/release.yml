@@ -8,7 +8,30 @@ permissions:
   contents: write
 
 jobs:
+  version-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install ALSA headers
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+
+      - name: Verify tag matches binary version
+        shell: bash
+        run: |
+          expected="${GITHUB_REF_NAME#v}"
+          actual="$(go run ./cmd/claudio --version | sed -n '1s/^claudio version \([^ ]*\).*/\1/p')"
+          if [[ "$actual" != "$expected" ]]; then
+            echo "tag $GITHUB_REF_NAME does not match binary version $actual" >&2
+            exit 1
+          fi
+
   release:
+    needs: version-check
     strategy:
       matrix:
         include:
@@ -35,6 +58,9 @@ jobs:
       - name: Install ALSA headers
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+
+      - name: Vet
+        run: go vet ./...
 
       - name: Test
         run: go test ./... -count=1

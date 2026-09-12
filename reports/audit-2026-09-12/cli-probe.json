@@ -1,0 +1,45 @@
+{
+  "relative_assets": {
+    "source_validation": {
+      "exit_code": 0,
+      "stdout": "Validating: audit-pack\nName: audit-pack\n\nCoverage Summary:\n  Total:       1/107 (0.9%)\n  completion:    0/3 (0.0%)\n  default:       1/1 (100.0%)\n  error:         0/19 (0.0%)\n  interactive:   0/10 (0.0%)\n  loading:       0/29 (0.0%)\n  success:       0/41 (0.0%)\n  system:        0/4 (0.0%)\n\nEmpty Mappings (no file assigned):\n  completion/agent-complete.wav\n  completion/completion.wav\n  completion/stop.wav\n  error/bash-error.wav\n  error/critical.wav\n  error/edit-error.wav\n  error/error.wav\n  error/failure.wav\n  error/glob-error.wav\n  error/grep-error.wav\n  error/ls-error.wav\n  error/mcp-error.wav\n  error/multiedit-error.wav\n  error/read-error.wav\n  error/task-error.wav\n  error/timeout.wav\n  error/todowrite-error.wav\n  error/tool-error.wav\n  error/tool-interrupted.wav\n  error/webfetch-error.wav\n  error/websearch-error.wav\n  error/write-error.wav\n  interactive/chimes.wav\n  interactive/compact.wav\n  interactive/interactive.wav\n  interactive/message-sent.wav\n  interactive/notification-permission.wav\n  interactive/notification.wav\n  interactive/notify.wav\n  interactive/prompt-submit.wav\n  interactive/stop.wav\n  interactive/subagent-stop.wav\n  loading/bash-start.wav\n  loading/connect.wav\n  loading/echo-start.wav\n  loading/edit-start.wav\n  loading/exitplanmode-start.wav\n  loading/file-editing.wav\n  loading/file-reading.wav\n  loading/git-add-start.wav\n  loading/git-commit-start.wav\n  loading/git-diff-start.wav\n  loading/git-log-start.wav\n  loading/git-pull-start.wav\n  loading/git-push-start.wav\n  loading/git-status-start.wav\n  loading/glob-start.wav\n  loading/go-build-start.wav\n  loading/grep-start.wav\n  loading/loading.wav\n  loading/ls-start.wav\n  loading/mcp-start.wav\n  loading/multiedit-start.wav\n  loading/processing.wav\n  loading/read-start.wav\n  loading/task-start.wav\n  loading/todowrite-start.wav\n  loading/tool-start.wav\n  loading/webfetch-start.wav\n  loading/websearch-start.wav\n  loading/write-start.wav\n  success/bash-success.wav\n  success/celebration.wav\n  success/complete.wav\n  success/e2e-test-bat-success.wav\n  success/e2e-test-bat-tee-success.wav\n  success/echo-success.wav\n  success/edit-success.wav\n  success/exitplanmode-success.wav\n  success/file-read.wav\n  success/file-saved.wav\n  success/find-f-success.wav\n  success/find-success.wav\n  success/gh-repo-success.wav\n  success/gh-success.wav\n  success/git-add-success.wav\n  success/git-commit-success.wav\n  success/git-diff-success.wav\n  success/git-log-success.wav\n  success/git-pull-success.wav\n  success/git-push-success.wav\n  success/git-status-success.wav\n  success/git-success.wav\n  success/glob-success.wav\n  success/go-build-success.wav\n  success/grep-head-success.wav\n  success/grep-success.wav\n  success/ls-success.wav\n  success/mcp-success.wav\n  success/multiedit-success.wav\n  success/npm-success.wav\n  success/read-success.wav\n  success/success.wav\n  success/tail-success.wav\n  success/task-success.wav\n  success/todowrite-success.wav\n  success/tool-complete.wav\n  success/uv-run-success.wav\n  success/uv-success.wav\n  success/webfetch-success.wav\n  success/websearch-success.wav\n  success/write-success.wav\n  system/compacting.wav\n  system/pre-compact.wav\n  system/session-start.wav\n  system/system.wav\n",
+      "stderr": ""
+    },
+    "installation": {
+      "exit_code": 0,
+      "stdout": "Installed soundpack 'audit-pack' to <user-profile>\\AppData\\Local\\Temp\\claudio-cli-audit-ojeausg6\\data\\claudio\\audit-pack.json\n",
+      "stderr": ""
+    },
+    "installed_validation": {
+      "exit_code": 1,
+      "stdout": "Validating: audit-pack\nName: audit-pack\n\nCoverage Summary:\n  Total:       1/107 (0.9%)\n  completion:    0/3 (0.0%)\n  default:       1/1 (100.0%)\n  error:         0/19 (0.0%)\n  interactive:   0/10 (0.0%)\n  loading:       0/29 (0.0%)\n  success:       0/41 (0.0%)\n  system:        0/4 (0.0%)\n\nBroken References (files not found):\n  default.wav -> <user-profile>\\AppData\\Local\\Temp\\claudio-cli-audit-ojeausg6\\data\\claudio\\tone.wav\n\nEmpty Mappings (no file assigned):\n  completion/agent-complete.wav\n  completion/completion.wav\n  completion/stop.wav\n  error/bash-error.wav\n  error/critical.wav\n  error/edit-error.wav\n  error/error.wav\n  error/failure.wav\n  error/glob-error.wav\n  error/grep-error.wav\n  error/ls-error.wav\n  error/mcp-error.wav\n  error/multiedit-error.wav\n  error/read-error.wav\n  error/task-error.wav\n  error/timeout.wav\n  error/todowrite-error.wav\n  error/tool-error.wav\n  error/tool-interrupted.wav\n  error/webfetch-error.wav\n  error/websearch-error.wav\n  error/write-error.wav\n  interactive/chimes.wav\n  interactive/compact.wav\n  interactive/interactive.wav\n  interactive/message-sent.wav\n  interactive/notification-permission.wav\n  interactive/notification.wav\n  interactive/notify.wav\n  interactive/prompt-submit.wav\n  interactive/stop.wav\n  interactive/subagent-stop.wav\n  loading/bash-start.wav\n  loading/connect.wav\n  loading/echo-start.wav\n  loading/edit-start.wav\n  loading/exitplanmode-start.wav\n  loading/file-editing.wav\n  loading/file-reading.wav\n  loading/git-add-start.wav\n  loading/git-commit-start.wav\n  loading/git-diff-start.wav\n  loading/git-log-start.wav\n  loading/git-pull-start.wav\n  loading/git-push-start.wav\n  loading/git-status-start.wav\n  loading/glob-start.wav\n  loading/go-build-start.wav\n  loading/grep-start.wav\n  loading/loading.wav\n  loading/ls-start.wav\n  loading/mcp-start.wav\n  loading/multiedit-start.wav\n  loading/processing.wav\n  loading/read-start.wav\n  loading/task-start.wav\n  loading/todowrite-start.wav\n  loading/tool-start.wav\n  loading/webfetch-start.wav\n  loading/websearch-start.wav\n  loading/write-start.wav\n  success/bash-success.wav\n  success/celebration.wav\n  success/complete.wav\n  success/e2e-test-bat-success.wav\n  success/e2e-test-bat-tee-success.wav\n  success/echo-success.wav\n  success/edit-success.wav\n  success/exitplanmode-success.wav\n  success/file-read.wav\n  success/file-saved.wav\n  success/find-f-success.wav\n  success/find-success.wav\n  success/gh-repo-success.wav\n  success/gh-success.wav\n  success/git-add-success.wav\n  success/git-commit-success.wav\n  success/git-diff-success.wav\n  success/git-log-success.wav\n  success/git-pull-success.wav\n  success/git-push-success.wav\n  success/git-status-success.wav\n  success/git-success.wav\n  success/glob-success.wav\n  success/go-build-success.wav\n  success/grep-head-success.wav\n  success/grep-success.wav\n  success/ls-success.wav\n  success/mcp-success.wav\n  success/multiedit-success.wav\n  success/npm-success.wav\n  success/read-success.wav\n  success/success.wav\n  success/tail-success.wav\n  success/task-success.wav\n  success/todowrite-success.wav\n  success/tool-complete.wav\n  success/uv-run-success.wav\n  success/uv-success.wav\n  success/webfetch-success.wav\n  success/websearch-success.wav\n  success/write-success.wav\n  system/compacting.wav\n  system/pre-compact.wav\n  system/session-start.wav\n  system/system.wav\nUsage:\n  claudio soundpack validate <path> [flags]\n\nFlags:\n  -h, --help   help for validate\n\nGlobal Flags:\n      --config string      Path to config file\n      --silent             Silent mode - no audio playback\n      --soundpack string   Set soundpack to use\n      --volume string      Set volume (0.0 to 1.0)\n\n",
+      "stderr": "Error: validation failed: 1 broken reference(s)\ntime=2026-09-12T13:26:01.837-06:00 level=ERROR msg=\"cobra execution failed\" error=\"validation failed: 1 broken reference(s)\"\n"
+    },
+    "installed_audio_exists": false
+  },
+  "name_containment": {
+    "installation": {
+      "exit_code": 0,
+      "stdout": "Installed soundpack '../audit-escape' to <user-profile>\\AppData\\Local\\Temp\\claudio-cli-audit-ojeausg6\\data\\audit-escape.json\n",
+      "stderr": ""
+    },
+    "outside_claudio_directory_overwritten": true
+  },
+  "malformed_config": {
+    "command": {
+      "exit_code": 0,
+      "stdout": "Switched active soundpack to 'windows'.\n",
+      "stderr": "time=2026-09-12T13:26:02.036-06:00 level=ERROR msg=\"failed to parse config JSON\" file_path=<user-profile>\\AppData\\Local\\Temp\\claudio-cli-audit-ojeausg6\\config\\claudio\\config.json error=\"invalid character 'r' looking for beginning of object key string\"\ntime=2026-09-12T13:26:02.038-06:00 level=ERROR msg=\"failed to parse config JSON\" file_path=<user-profile>\\AppData\\Local\\Temp\\claudio-cli-audit-ojeausg6\\config\\claudio\\config.json error=\"invalid character 'r' looking for beginning of object key string\"\n"
+    },
+    "original_preserved": false
+  },
+  "explicit_config": {
+    "command": {
+      "exit_code": 0,
+      "stdout": "Switched active soundpack to 'linux'.\n",
+      "stderr": ""
+    },
+    "custom_changed": false,
+    "default_changed": true
+  }
+}

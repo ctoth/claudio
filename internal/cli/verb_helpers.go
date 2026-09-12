@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 
 	"claudio.click/internal/config"
@@ -47,4 +48,67 @@ func loadConfigForVerb(cli *CLI, configPath string) (*config.Config, error) {
 		return nil, fmt.Errorf("load config %s: %w", configPath, err)
 	}
 	return cfg, nil
+}
+
+// mutateConfigForCommand performs one locked read-modify-write operation on
+// the config selected by --config/XDG precedence. Existing malformed configs
+// are returned as errors and are never replaced with defaults.
+func mutateConfigForCommand(cmd *cobra.Command, mutate func(*config.Config) error) error {
+	cli := cliFromContext(cmd.Context())
+	if cli == nil {
+		return fmt.Errorf("CLI instance not found in context")
+	}
+
+	configPath, err := resolveWritableConfigPath(cmd, cli)
+	if err != nil {
+		return err
+	}
+	lock, err := config.LockConfigDir(configPath)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if unlockErr := lock.Unlock(); unlockErr != nil {
+			slog.Warn("failed to release config lock", "path", configPath, "error", unlockErr)
+		}
+	}()
+
+	cfg, err := loadConfigForVerb(cli, configPath)
+	if err != nil {
+		return err
+	}
+	if err := mutate(cfg); err != nil {
+		return err
+	}
+	if err := cli.configManager.ValidateConfig(cfg); err != nil {
+		return err
+	}
+	if err := config.WriteConfigFile(afero.NewOsFs(), configPath, cfg); err != nil {
+		return fmt.Errorf("write config %s: %w", configPath, err)
+	}
+	return nil
+}
+
+// validateConfigMutationTarget verifies that the selected config can be read
+// before a command performs an irreversible filesystem operation.
+func validateConfigMutationTarget(cmd *cobra.Command) error {
+	cli := cliFromContext(cmd.Context())
+	if cli == nil {
+		return fmt.Errorf("CLI instance not found in context")
+	}
+	configPath, err := resolveWritableConfigPath(cmd, cli)
+	if err != nil {
+		return err
+	}
+	lock, err := config.LockConfigDir(configPath)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if unlockErr := lock.Unlock(); unlockErr != nil {
+			slog.Warn("failed to release config validation lock", "path", configPath, "error", unlockErr)
+		}
+	}()
+	_, err = loadConfigForVerb(cli, configPath)
+	return err
 }

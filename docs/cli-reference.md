@@ -220,7 +220,9 @@ Flags:
 | `--default` | false | Set the installed soundpack as `default_soundpack`. |
 | `--skip-validate` | false | Skip validation before copying. |
 
-JSON files install to `<XDG_DATA_HOME>/claudio/<name>.json`.
+JSON files and their referenced audio files install under
+`<XDG_DATA_HOME>/claudio/soundpacks/<name>/`, with the installed manifest at
+`soundpack.json`.
 Directories install to `<XDG_DATA_HOME>/claudio/soundpacks/<name>/`.
 
 ### `soundpack use`
@@ -333,10 +335,22 @@ claudio analyze missing --preset all-time --limit 50
 claudio analyze missing --category error
 ```
 
+## `claudio completion`
+
+Generates a shell completion script for Bash, Fish, PowerShell, or Zsh.
+
+```bash
+claudio completion bash
+claudio completion fish
+claudio completion powershell
+claudio completion zsh
+```
+
 ## Exit Codes
 
-Most command failures return exit code `1`. Validation and configuration
-errors are printed to stderr with the failing command context.
+Most subcommand failures return exit code `1`. During hook processing, a
+missing or invalid config is logged and Claudio continues with defaults so an
+agent hook is not blocked.
 
 ## See Also
 

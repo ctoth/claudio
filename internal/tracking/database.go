@@ -1,17 +1,22 @@
 package tracking
 
 import (
+	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
-	_ "modernc.org/sqlite" // SQLite driver
+	"modernc.org/sqlite"
 )
 
 // schemaUserVersion is the current schema version. Incremented when the
 // schema changes; migrate() walks any older DB up to this version.
 const schemaUserVersion = 2
+
+const schemaConnectionRetryTimeout = 10 * time.Second
 
 // NewDatabase creates a new SQLite database with the specified path and applies the schema
 func NewDatabase(dbPath string) (*sql.DB, error) {
@@ -42,6 +47,11 @@ func NewDatabase(dbPath string) (*sql.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
+	if dbPath == ":memory:" {
+		// Each SQLite :memory: connection owns a separate database. Pin the
+		// pool so schema creation and every later query use the same one.
+		db.SetMaxOpenConns(1)
+	}
 
 	// Belt-and-suspenders for `:memory:` and for any consumer relying on
 	// PRAGMA visibility on the very first connection: re-exec the same
@@ -64,24 +74,81 @@ func NewDatabase(dbPath string) (*sql.DB, error) {
 		}
 	}
 
-	// Ensure schema exists (fresh DBs get the current shape directly)
-	if err := ensureSchema(db); err != nil {
+	// Schema creation and migrations share one connection and transaction.
+	// BEGIN IMMEDIATE reserves the writer before inspecting user_version, so
+	// concurrent openers serialize instead of running the same DDL together.
+	if err := initializeSchema(db); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("failed to ensure schema: %w", err)
-	}
-
-	// Apply any pending migrations (existing DBs get rewritten to current
-	// shape; fresh DBs just have user_version stamped).
-	if err := migrate(db); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("failed to migrate schema: %w", err)
+		return nil, fmt.Errorf("failed to initialize schema: %w", err)
 	}
 
 	return db, nil
 }
 
+type schemaConnection interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func initializeSchema(db *sql.DB) error {
+	ctx := context.Background()
+	conn, err := acquireSchemaConnection(ctx, db)
+	if err != nil {
+		return fmt.Errorf("acquire schema connection: %w", err)
+	}
+	defer conn.Close()
+
+	if _, err := conn.ExecContext(ctx, "BEGIN IMMEDIATE"); err != nil {
+		return fmt.Errorf("begin schema transaction: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_, _ = conn.ExecContext(context.Background(), "ROLLBACK")
+		}
+	}()
+
+	if err := ensureSchema(ctx, conn); err != nil {
+		return fmt.Errorf("ensure schema: %w", err)
+	}
+	if err := migrate(ctx, conn); err != nil {
+		return fmt.Errorf("migrate schema: %w", err)
+	}
+	if _, err := conn.ExecContext(ctx, "COMMIT"); err != nil {
+		return fmt.Errorf("commit schema transaction: %w", err)
+	}
+	committed = true
+	return nil
+}
+
+func acquireSchemaConnection(ctx context.Context, db *sql.DB) (*sql.Conn, error) {
+	deadline := time.Now().Add(schemaConnectionRetryTimeout)
+	for {
+		conn, err := db.Conn(ctx)
+		if err == nil {
+			return conn, nil
+		}
+		if !isSQLiteBusy(err) || time.Now().After(deadline) {
+			return nil, err
+		}
+		timer := time.NewTimer(10 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
+	}
+}
+
+func isSQLiteBusy(err error) bool {
+	var sqliteErr *sqlite.Error
+	return errors.As(err, &sqliteErr) && sqliteErr.Code()&0xff == 5
+}
+
 // ensureSchema creates the database schema if it doesn't exist
-func ensureSchema(db *sql.DB) error {
+func ensureSchema(ctx context.Context, db schemaConnection) error {
 	// Fresh-database schema is the current shape:
 	//   - no fallback_level (conflated path-index across three chain shapes;
 	//     see review finding #20)
@@ -119,7 +186,7 @@ CREATE INDEX IF NOT EXISTS idx_lookups_missing ON path_lookups(path) WHERE found
 `
 
 	// Execute schema creation
-	if _, err := db.Exec(schema); err != nil {
+	if _, err := db.ExecContext(ctx, schema); err != nil {
 		return fmt.Errorf("failed to create schema: %w", err)
 	}
 
@@ -129,14 +196,14 @@ CREATE INDEX IF NOT EXISTS idx_lookups_missing ON path_lookups(path) WHERE found
 // migrate brings a database up to schemaUserVersion. Idempotent: fresh
 // databases just have user_version stamped; existing databases get any
 // missing migrations applied in sequence.
-func migrate(db *sql.DB) error {
+func migrate(ctx context.Context, db schemaConnection) error {
 	var v int
-	if err := db.QueryRow("PRAGMA user_version").Scan(&v); err != nil {
+	if err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&v); err != nil {
 		return fmt.Errorf("read user_version: %w", err)
 	}
 
 	if v < schemaUserVersion {
-		if err := migrateToV2(db); err != nil {
+		if err := migrateToV2(ctx, db); err != nil {
 			return err
 		}
 	}
@@ -148,23 +215,23 @@ func migrate(db *sql.DB) error {
 // chain_type column. Idempotent: detects columns via PRAGMA table_info
 // so it can also stamp user_version on a fresh DB that already has the
 // target shape.
-func migrateToV2(db *sql.DB) error {
-	hasFallback, hasChainType, err := hookEventsColumns(db)
+func migrateToV2(ctx context.Context, db schemaConnection) error {
+	hasFallback, hasChainType, err := hookEventsColumnsContext(ctx, db)
 	if err != nil {
 		return fmt.Errorf("inspect hook_events columns: %w", err)
 	}
 
 	if hasFallback {
-		if _, err := db.Exec("ALTER TABLE hook_events DROP COLUMN fallback_level"); err != nil {
+		if _, err := db.ExecContext(ctx, "ALTER TABLE hook_events DROP COLUMN fallback_level"); err != nil {
 			return fmt.Errorf("drop fallback_level: %w", err)
 		}
 	}
 	if !hasChainType {
-		if _, err := db.Exec("ALTER TABLE hook_events ADD COLUMN chain_type TEXT"); err != nil {
+		if _, err := db.ExecContext(ctx, "ALTER TABLE hook_events ADD COLUMN chain_type TEXT"); err != nil {
 			return fmt.Errorf("add chain_type: %w", err)
 		}
 	}
-	if _, err := db.Exec("PRAGMA user_version = 2"); err != nil {
+	if _, err := db.ExecContext(ctx, "PRAGMA user_version = 2"); err != nil {
 		return fmt.Errorf("set user_version: %w", err)
 	}
 	return nil
@@ -173,7 +240,11 @@ func migrateToV2(db *sql.DB) error {
 // hookEventsColumns reports which of the schema-migration-relevant columns
 // exist on hook_events today.
 func hookEventsColumns(db *sql.DB) (hasFallback, hasChainType bool, err error) {
-	rows, err := db.Query("PRAGMA table_info(hook_events)")
+	return hookEventsColumnsContext(context.Background(), db)
+}
+
+func hookEventsColumnsContext(ctx context.Context, db schemaConnection) (hasFallback, hasChainType bool, err error) {
+	rows, err := db.QueryContext(ctx, "PRAGMA table_info(hook_events)")
 	if err != nil {
 		return false, false, err
 	}

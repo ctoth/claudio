@@ -1,0 +1,4 @@
+ok  	claudio.click/internal/hooks	0.260s	coverage: 99.8% of statements
+OK: ./internal/hooks coverage 99.8% (floor 97.9%)
+ok  	claudio.click/internal/install	3.385s	coverage: 98.0% of statements
+OK: ./internal/install coverage 98.0% (floor 97.9%)

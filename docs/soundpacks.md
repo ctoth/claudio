@@ -14,6 +14,10 @@ Supported audio formats are:
 - MP3
 - AIFF
 
+Playback reads at most 100 MiB from any referenced audio file. MP3 decoding
+also stops when the decoded stereo PCM exceeds 100 MiB, so a compressed MP3
+smaller than 100 MiB can still exceed the playback limit after decoding.
+
 This page has three parts: using a pack someone else made (or one that's
 already built in), building your own, and — for anyone extending Claudio
 itself — how sound selection actually works under the hood.
@@ -43,7 +47,7 @@ folder there).
 | Item | Linux | macOS | Windows | WSL |
 | --- | --- | --- | --- | --- |
 | Directory packs | `~/.local/share/claudio/soundpacks/<name>/` | `~/Library/Application Support/claudio/soundpacks/<name>/` | `%LOCALAPPDATA%\claudio\soundpacks\<name>\` | `~/.local/share/claudio/soundpacks/<name>/` |
-| JSON packs | `~/.local/share/claudio/<name>.json` | `~/Library/Application Support/claudio/<name>.json` | `%LOCALAPPDATA%\claudio\<name>.json` | `~/.local/share/claudio/<name>.json` |
+| JSON packs | `~/.local/share/claudio/soundpacks/<name>/soundpack.json` | `~/Library/Application Support/claudio/soundpacks/<name>/soundpack.json` | `%LOCALAPPDATA%\claudio\soundpacks\<name>\soundpack.json` | `~/.local/share/claudio/soundpacks/<name>/soundpack.json` |
 | Managed git clones | `~/.local/share/claudio/soundpack-repos/<name>/` | `~/Library/Application Support/claudio/soundpack-repos/<name>/` | `%LOCALAPPDATA%\claudio\soundpack-repos\<name>\` | `~/.local/share/claudio/soundpack-repos/<name>/` |
 | Managed git registry | `~/.config/claudio/soundpacks.json` | `~/Library/Application Support/claudio/soundpacks.json` | `%LOCALAPPDATA%\claudio\soundpacks.json` | `~/.config/claudio/soundpacks.json` |
 | `config.json` | `~/.config/claudio/config.json` | `~/Library/Application Support/claudio/config.json` | `%LOCALAPPDATA%\claudio\config.json` | `~/.config/claudio/config.json` |
@@ -73,12 +77,9 @@ claudio soundpack use <name>
 already appear in `claudio soundpack list` — embedded, directory, JSON, and
 managed git packs are all valid targets.
 
-`soundpack use` only checks that the name is *listed*, not that it will
-actually resolve at runtime — see
-[Discovery Vs. Runtime Resolution](#discovery-vs-runtime-resolution) under
-Directory Soundpacks below. For packs installed with `soundpack install` or
-`soundpack add` this is a non-issue since both commands also wire up
-`soundpack_paths` or the git registry. It only bites hand-copied packs.
+`soundpack use` accepts packs found in the embedded set, canonical XDG
+soundpack directories, configured `soundpack_paths`, or the managed git
+registry.
 
 A one-off override without touching config:
 
@@ -139,16 +140,15 @@ How you remove a pack depends on how it was installed:
   ```
 
 - **Directory and JSON packs installed with `soundpack install`** — there is
-  no dedicated remove command. Delete the installed path by hand and, for
-  JSON packs, drop the matching entry from `soundpack_paths` in
-  `config.json`:
+  no dedicated remove command. Delete the installed path by hand and drop the
+  matching entry from `soundpack_paths` in `config.json`:
 
   ```bash
   # directory pack
   rm -rf <XDG_DATA_HOME>/claudio/soundpacks/my-pack
 
-  # JSON pack — also remove its soundpack_paths entry in config.json
-  rm <XDG_DATA_HOME>/claudio/my-pack.json
+  # JSON pack
+  rm -rf <XDG_DATA_HOME>/claudio/soundpacks/my-pack
   ```
 
 If the removed pack was `default_soundpack`, set a new one with
@@ -216,35 +216,22 @@ Directory packs are copied to:
 <XDG_DATA_HOME>/claudio/soundpacks/<name>/
 ```
 
-`claudio soundpack install` validates, copies, and records the path in
-`soundpack_paths` for you — that `soundpack_paths` entry is what makes the
-pack actually playable, not just listed.
+`claudio soundpack install` validates the source, copies it, and records its
+installed path in `soundpack_paths`. Canonical XDG soundpack directories are
+also resolved directly by name.
 
-#### Discovery Vs. Runtime Resolution
+#### Discovery And Runtime Resolution
 
-`claudio soundpack list` and `claudio soundpack use <name>` scan the
-locations under [Where Soundpacks Live](#where-soundpacks-live) directly, so
-a directory or JSON pack you copy into place by hand shows up and can be
-selected by name. Actually *using* a pack at hook-processing time is a
-separate, narrower lookup: Claudio resolves `default_soundpack` by checking,
-in order, whether it's a literal path that exists, a name in the managed git
-registry, or a name matching an entry in `soundpack_paths`. The canonical
-`soundpacks/<name>/` and `<name>.json` locations are **not** consulted at
-that step.
-
-In practice this means a hand-copied pack that isn't in `soundpack_paths`
-will list and even `use` successfully, then silently fall back to the
-platform default the moment a hook actually fires — no error, just the wrong
-sound. `claudio soundpack install` avoids this because it adds the
-`soundpack_paths` entry for you. If you place files by hand, either add the
-path to `soundpack_paths` in `config.json` yourself, or set
-`default_soundpack` directly to the pack's full path instead of its bare
-name.
+`claudio soundpack list`, `soundpack use`, and hook processing all recognize
+packs under the canonical XDG `soundpacks/<name>/` directories. A directory
+containing `soundpack.json` loads that manifest; other directories use the
+category layout described above. Arbitrary locations still need an entry in
+`soundpack_paths` or an explicit full path.
 
 ### JSON Soundpacks
 
-JSON soundpacks map sound keys to files anywhere on disk. Paths can be absolute
-or relative to the JSON file.
+JSON soundpacks map sound keys to files under the manifest directory. Mapping
+paths must be relative to the JSON file and cannot escape that directory.
 
 ```json
 {
@@ -253,7 +240,7 @@ or relative to the JSON file.
   "version": "1.0.0",
   "mappings": {
     "success/success.wav": "./sounds/success.wav",
-    "error/error.wav": "/home/me/sounds/error.mp3",
+    "error/error.wav": "./sounds/error.mp3",
     "loading/loading.wav": "./sounds/loading.wav",
     "interactive/message-sent.wav": "./sounds/message-sent.aiff",
     "default.wav": "./sounds/default.wav"
@@ -280,15 +267,16 @@ claudio soundpack validate ./my-pack.json
 claudio soundpack install ./my-pack.json --default
 ```
 
-JSON packs are copied to:
+JSON packs and their referenced audio files are copied into a self-contained
+directory. Relative subdirectories are preserved:
 
 ```text
-<XDG_DATA_HOME>/claudio/<name>.json
+<XDG_DATA_HOME>/claudio/soundpacks/<name>/soundpack.json
 ```
 
-`claudio soundpack install` records this path in `soundpack_paths`, which is
-what makes the pack playable rather than merely listed — see
-[Discovery Vs. Runtime Resolution](#discovery-vs-runtime-resolution) above.
+`claudio soundpack install` records the exact installed manifest in
+`soundpack_paths`; bare-name resolution also recognizes the containing
+directory and the manifest's `name` field.
 
 ### Validation
 

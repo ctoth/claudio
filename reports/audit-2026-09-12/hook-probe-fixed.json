@@ -1,0 +1,98 @@
+{
+  "installed": {
+    "executable": "<user-profile>\\go\\bin\\claudio.exe",
+    "normal_stdin": [
+      {
+        "milliseconds": 213.7,
+        "timed_out": false,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      {
+        "milliseconds": 184.7,
+        "timed_out": false,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      {
+        "milliseconds": 122.7,
+        "timed_out": false,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      {
+        "milliseconds": 109.3,
+        "timed_out": false,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      {
+        "milliseconds": 112.6,
+        "timed_out": false,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": ""
+      }
+    ],
+    "median_ms": 122.7,
+    "held_open_stdin": {
+      "milliseconds": 3019.7,
+      "timed_out": true,
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": ""
+    }
+  },
+  "checkout": {
+    "executable": "<user-profile>\\gitrepos\\claudio\\audit-claudio-fixed.exe",
+    "normal_stdin": [
+      {
+        "milliseconds": 184.4,
+        "timed_out": false,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      {
+        "milliseconds": 208.7,
+        "timed_out": false,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      {
+        "milliseconds": 239.2,
+        "timed_out": false,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      {
+        "milliseconds": 226.0,
+        "timed_out": false,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      {
+        "milliseconds": 149.0,
+        "timed_out": false,
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": ""
+      }
+    ],
+    "median_ms": 208.7,
+    "held_open_stdin": {
+      "milliseconds": 125.9,
+      "timed_out": false,
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  }
+}

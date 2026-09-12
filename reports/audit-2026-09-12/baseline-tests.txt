@@ -1,0 +1,24 @@
+go: downloading github.com/ctoth/captain-hook v0.1.2
+go: downloading golang.org/x/sys v0.45.0
+go: downloading golang.org/x/text v0.37.0
+go: downloading golang.org/x/net v0.55.0
+	claudio.click/cmd/claudio		coverage: 0.0% of statements
+	claudio.click/cmd/hook-logger		coverage: 0.0% of statements
+ok  	claudio.click/internal/audio	6.919s	coverage: 92.1% of statements
+ok  	claudio.click/internal/audio/malgo	39.211s	coverage: 73.3% of statements
+ok  	claudio.click/internal/ci	1.679s	coverage: [no statements]
+ok  	claudio.click/internal/cli	48.758s	coverage: 72.1% of statements
+ok  	claudio.click/internal/cli/testenv	9.174s	coverage: 100.0% of statements
+ok  	claudio.click/internal/config	14.648s	coverage: 74.6% of statements
+	claudio.click/internal/devtools/buildcheck		coverage: 0.0% of statements
+ok  	claudio.click/internal/devtools/coveragefloor	2.741s	coverage: 9.5% of statements
+ok  	claudio.click/internal/fs	1.835s	coverage: 75.0% of statements
+ok  	claudio.click/internal/hooks	5.004s	coverage: 99.8% of statements
+ok  	claudio.click/internal/install	20.079s	coverage: 98.0% of statements
+ok  	claudio.click/internal/integration	20.407s	coverage: [no statements]
+ok  	claudio.click/internal/platform	4.002s	coverage: 94.7% of statements
+ok  	claudio.click/internal/safeio	6.318s	coverage: 97.1% of statements
+ok  	claudio.click/internal/soundpack	5.090s	coverage: 83.4% of statements
+ok  	claudio.click/internal/sounds	1.112s	coverage: 86.9% of statements
+ok  	claudio.click/internal/tracking	4.837s	coverage: 78.7% of statements
+ok  	claudio.click/internal/uninstall	0.762s	coverage: 87.3% of statements

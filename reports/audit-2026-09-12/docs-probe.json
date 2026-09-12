@@ -1,0 +1,115 @@
+{
+  "800": {
+    "visible_navigation_links": 7,
+    "navigation_accessibility_tree": "- navigation:\n  - link \"Home\":\n    - /url: /audit-link\n  - link \"Installation\":\n    - /url: /audit-link\n  - link \"CLI Reference\":\n    - /url: /audit-link\n  - link \"Soundpacks\":\n    - /url: /audit-link\n  - link \"Configuration\":\n    - /url: /audit-link\n  - link \"Examples\":\n    - /url: /audit-link\n  - link \"Troubleshooting\":\n    - /url: /audit-link",
+    "tab_sequence": [
+      {
+        "tag": "A",
+        "text": "Before menu",
+        "id": ""
+      },
+      {
+        "tag": "A",
+        "text": "Home",
+        "id": ""
+      },
+      {
+        "tag": "A",
+        "text": "Installation",
+        "id": ""
+      },
+      {
+        "tag": "A",
+        "text": "CLI Reference",
+        "id": ""
+      },
+      {
+        "tag": "A",
+        "text": "Soundpacks",
+        "id": ""
+      },
+      {
+        "tag": "A",
+        "text": "Configuration",
+        "id": ""
+      },
+      {
+        "tag": "A",
+        "text": "Examples",
+        "id": ""
+      },
+      {
+        "tag": "A",
+        "text": "Troubleshooting",
+        "id": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "After menu",
+        "id": ""
+      },
+      {
+        "tag": "BODY",
+        "text": "Before menu\n                \n                \n                    \n             ",
+        "id": ""
+      }
+    ]
+  },
+  "375": {
+    "visible_navigation_links": 0,
+    "navigation_accessibility_tree": "- navigation:\n  - img",
+    "tab_sequence": [
+      {
+        "tag": "A",
+        "text": "Before menu",
+        "id": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "After menu",
+        "id": ""
+      },
+      {
+        "tag": "BODY",
+        "text": "Before menu\n                \n                \n                    \n             ",
+        "id": ""
+      },
+      {
+        "tag": "A",
+        "text": "Before menu",
+        "id": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "After menu",
+        "id": ""
+      },
+      {
+        "tag": "BODY",
+        "text": "Before menu\n                \n                \n                    \n             ",
+        "id": ""
+      },
+      {
+        "tag": "A",
+        "text": "Before menu",
+        "id": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "After menu",
+        "id": ""
+      },
+      {
+        "tag": "BODY",
+        "text": "Before menu\n                \n                \n                    \n             ",
+        "id": ""
+      },
+      {
+        "tag": "A",
+        "text": "Before menu",
+        "id": ""
+      }
+    ],
+    "visible_links_after_pointer_click": 7
+  }
+}

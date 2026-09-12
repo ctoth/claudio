@@ -779,11 +779,12 @@ func setupInstallTestEnv(t *testing.T) (dataDir, configDir string, cleanup func(
 // createTestJSONSoundpack creates a minimal valid JSON soundpack file in the given directory.
 func createTestJSONSoundpack(t *testing.T, dir, name string) string {
 	t.Helper()
+	createDummyWAV(t, filepath.Join(dir, "tone.wav"))
 	spFile := soundpack.JSONSoundpackFile{
 		Name:        name,
 		Description: "Test soundpack for install",
 		Version:     "1.0.0",
-		Mappings:    map[string]string{},
+		Mappings:    map[string]string{"default.wav": "tone.wav"},
 	}
 	jsonData, err := json.MarshalIndent(spFile, "", "  ")
 	if err != nil {
@@ -816,8 +817,8 @@ func TestSoundpackInstall_CopiesJSONToDataDir(t *testing.T) {
 		t.Fatalf("expected exit code 0, got %d, stdout: %s, stderr: %s", exitCode, stdout.String(), stderr.String())
 	}
 
-	// Assert file exists at expected XDG data path: <dataDir>/claudio/<name>.json
-	expectedPath := filepath.Join(dataDir, "claudio", "my-test-pack.json")
+	// Assert manifest exists inside the owned, self-contained install directory.
+	expectedPath := filepath.Join(dataDir, "claudio", "soundpacks", "my-test-pack", "soundpack.json")
 	if _, err := os.Stat(expectedPath); err != nil {
 		t.Errorf("expected installed file at %s, got error: %v", expectedPath, err)
 	}
@@ -962,6 +963,27 @@ func TestSoundpackInstall_IdempotentPathAddition(t *testing.T) {
 	}
 }
 
+func TestSoundpackInstallCanReinstallFromInstalledManifest(t *testing.T) {
+	dataDir, _, cleanup := setupInstallTestEnv(t)
+	defer cleanup()
+	source := createTestJSONSoundpack(t, t.TempDir(), "self-reinstall-pack")
+
+	cli := NewCLI()
+	for i := 0; i < 2; i++ {
+		if i == 1 {
+			source = filepath.Join(dataDir, "claudio", "soundpacks", "self-reinstall-pack", "soundpack.json")
+		}
+		stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
+		if code := cli.Run([]string{"claudio", "soundpack", "install", source}, nil, stdout, stderr); code != 0 {
+			t.Fatalf("install %d failed: code=%d stdout=%q stderr=%q", i+1, code, stdout, stderr)
+		}
+	}
+	manifest := filepath.Join(dataDir, "claudio", "soundpacks", "self-reinstall-pack", "soundpack.json")
+	if _, err := soundpack.CreateSoundpackMapper("self-reinstall-pack", manifest); err != nil {
+		t.Fatalf("reinstalled pack is not loadable: %v", err)
+	}
+}
+
 func TestSoundpackInstall_FailsOnInvalidPath(t *testing.T) {
 	_, _, cleanup := setupInstallTestEnv(t)
 	defer cleanup()
@@ -973,6 +995,199 @@ func TestSoundpackInstall_FailsOnInvalidPath(t *testing.T) {
 
 	if exitCode == 0 {
 		t.Error("expected non-zero exit code for non-existent path")
+	}
+}
+
+func TestSoundpackInstallRejectsManifestNameTraversal(t *testing.T) {
+	dataDir, _, cleanup := setupInstallTestEnv(t)
+	defer cleanup()
+
+	srcDir := t.TempDir()
+	createDummyWAV(t, filepath.Join(srcDir, "tone.wav"))
+	manifest := soundpack.JSONSoundpackFile{
+		Name:     "../escaped",
+		Mappings: map[string]string{"default.wav": "tone.wav"},
+	}
+	data, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifestPath := filepath.Join(srcDir, "pack.json")
+	if err := os.WriteFile(manifestPath, data, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cli := NewCLI()
+	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
+	if code := cli.Run([]string{"claudio", "soundpack", "install", manifestPath}, nil, stdout, stderr); code == 0 {
+		t.Fatalf("expected traversal name to be rejected, stdout=%q stderr=%q", stdout, stderr)
+	}
+	if _, err := os.Stat(filepath.Join(dataDir, "claudio", "escaped.json")); !os.IsNotExist(err) {
+		t.Fatalf("install escaped the Claudio data directory: %v", err)
+	}
+}
+
+func TestSoundpackInstallCopiesRelativeAssetsAndHonorsExplicitConfig(t *testing.T) {
+	dataDir, configDir, cleanup := setupInstallTestEnv(t)
+	defer cleanup()
+
+	srcDir := t.TempDir()
+	createDummyWAV(t, filepath.Join(srcDir, "sounds", "tone.wav"))
+	manifest := soundpack.JSONSoundpackFile{
+		Name:     "portable-pack",
+		Mappings: map[string]string{"default.wav": "sounds/tone.wav"},
+	}
+	data, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifestPath := filepath.Join(srcDir, "pack.json")
+	if err := os.WriteFile(manifestPath, data, 0644); err != nil {
+		t.Fatal(err)
+	}
+	customConfig := filepath.Join(t.TempDir(), "custom.json")
+
+	cli := NewCLI()
+	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
+	if code := cli.Run([]string{"claudio", "soundpack", "install", manifestPath, "--default", "--config", customConfig}, nil, stdout, stderr); code != 0 {
+		t.Fatalf("install failed: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+
+	installedDir := filepath.Join(dataDir, "claudio", "soundpacks", "portable-pack")
+	installedManifest := filepath.Join(installedDir, "soundpack.json")
+	if _, err := os.Stat(filepath.Join(installedDir, "sounds", "tone.wav")); err != nil {
+		t.Fatalf("relative companion asset was not installed: %v", err)
+	}
+	if _, err := soundpack.CreateSoundpackMapper("portable-pack", installedManifest); err != nil {
+		t.Fatalf("installed manifest is not loadable: %v", err)
+	}
+	cfg, err := config.NewConfigManager().LoadFromFile(customConfig)
+	if err != nil {
+		t.Fatalf("explicit config was not written: %v", err)
+	}
+	if cfg.DefaultSoundpack != "portable-pack" || len(cfg.SoundpackPaths) != 1 || cfg.SoundpackPaths[0] != installedManifest {
+		t.Fatalf("unexpected explicit config: %+v", cfg)
+	}
+	cfg.Enabled = false
+	runtimeCLI := NewCLI()
+	if err := initializeAudioSystem(runtimeCLI.rootCmd, runtimeCLI, cfg); err != nil {
+		t.Fatalf("installed --default pack did not initialize: %v", err)
+	}
+	if runtimeCLI.soundpackResolver.GetType() != "json" {
+		t.Fatalf("installed pack resolved as %q, want json", runtimeCLI.soundpackResolver.GetType())
+	}
+	resolved, err := runtimeCLI.soundpackResolver.ResolveSound("default.wav")
+	if err != nil || filepath.Clean(resolved) != filepath.Join(installedDir, "sounds", "tone.wav") {
+		t.Fatalf("installed default sound resolution: path=%q err=%v", resolved, err)
+	}
+	defaultConfig := filepath.Join(configDir, "claudio", "config.json")
+	if _, err := os.Stat(defaultConfig); !os.IsNotExist(err) {
+		t.Fatalf("default config was written despite --config: %v", err)
+	}
+}
+
+func TestSoundpackInstallRejectsNonPortableMappingPaths(t *testing.T) {
+	dataDir, _, cleanup := setupInstallTestEnv(t)
+	defer cleanup()
+	outside := filepath.Join(t.TempDir(), "outside.wav")
+	createDummyWAV(t, outside)
+
+	for _, tc := range []struct {
+		name    string
+		mapping string
+	}{
+		{name: "absolute", mapping: outside},
+		{name: "traversal", mapping: filepath.Join("..", filepath.Base(outside))},
+		{name: "reserved-marker", mapping: ".CLAUDIO-INSTALLED"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srcDir := t.TempDir()
+			manifest := soundpack.JSONSoundpackFile{Name: "bad-" + tc.name, Mappings: map[string]string{"default.wav": tc.mapping}}
+			data, _ := json.Marshal(manifest)
+			manifestPath := filepath.Join(srcDir, "pack.json")
+			if err := os.WriteFile(manifestPath, data, 0644); err != nil {
+				t.Fatal(err)
+			}
+			cli := NewCLI()
+			if code := cli.Run([]string{"claudio", "soundpack", "install", manifestPath, "--skip-validate"}, nil, &bytes.Buffer{}, &bytes.Buffer{}); code == 0 {
+				t.Fatalf("expected mapping %q to be rejected", tc.mapping)
+			}
+			target := filepath.Join(dataDir, "claudio", "soundpacks", manifest.Name)
+			if _, err := os.Stat(target); !os.IsNotExist(err) {
+				t.Fatalf("invalid pack destination exists: %v", err)
+			}
+		})
+	}
+}
+
+func TestSoundpackInstallRejectsDirectoryContainingDestination(t *testing.T) {
+	dataDir, _, cleanup := setupInstallTestEnv(t)
+	defer cleanup()
+	source := filepath.Join(dataDir, "claudio")
+	createDummyWAV(t, filepath.Join(source, "default.wav"))
+
+	cli := NewCLI()
+	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
+	if code := cli.Run([]string{"claudio", "soundpack", "install", source}, nil, stdout, stderr); code == 0 {
+		t.Fatalf("expected recursive source to be rejected, stdout=%q stderr=%q", stdout, stderr)
+	}
+	if _, err := os.Stat(filepath.Join(source, "soundpacks", "claudio")); !os.IsNotExist(err) {
+		t.Fatalf("recursive target was created: %v", err)
+	}
+}
+
+func TestSoundpackInstallRefusesForeignDestination(t *testing.T) {
+	dataDir, _, cleanup := setupInstallTestEnv(t)
+	defer cleanup()
+
+	target := filepath.Join(dataDir, "claudio", "soundpacks", "foreign-pack")
+	if err := os.MkdirAll(target, 0755); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(target, "keep.txt")
+	if err := os.WriteFile(marker, []byte("foreign"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	srcDir := t.TempDir()
+	createDummyWAV(t, filepath.Join(srcDir, "tone.wav"))
+	manifest := soundpack.JSONSoundpackFile{Name: "foreign-pack", Mappings: map[string]string{"default.wav": "tone.wav"}}
+	data, _ := json.Marshal(manifest)
+	manifestPath := filepath.Join(srcDir, "pack.json")
+	if err := os.WriteFile(manifestPath, data, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cli := NewCLI()
+	if code := cli.Run([]string{"claudio", "soundpack", "install", manifestPath}, nil, &bytes.Buffer{}, &bytes.Buffer{}); code == 0 {
+		t.Fatal("expected install to refuse a foreign destination")
+	}
+	got, err := os.ReadFile(marker)
+	if err != nil || string(got) != "foreign" {
+		t.Fatalf("foreign destination was modified: data=%q err=%v", got, err)
+	}
+}
+
+func TestSoundpackInstallValidatesConfigBeforeActivatingFiles(t *testing.T) {
+	dataDir, _, cleanup := setupInstallTestEnv(t)
+	defer cleanup()
+	source := createTestJSONSoundpack(t, t.TempDir(), "config-preflight-pack")
+	customConfig := filepath.Join(t.TempDir(), "custom.json")
+	want := []byte("{recover me")
+	if err := os.WriteFile(customConfig, want, 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	cli := NewCLI()
+	if code := cli.Run([]string{"claudio", "soundpack", "install", source, "--config", customConfig}, nil, &bytes.Buffer{}, &bytes.Buffer{}); code == 0 {
+		t.Fatal("expected malformed config error")
+	}
+	target := filepath.Join(dataDir, "claudio", "soundpacks", "config-preflight-pack")
+	if _, err := os.Stat(target); !os.IsNotExist(err) {
+		t.Fatalf("files were activated before config validation: %v", err)
+	}
+	got, err := os.ReadFile(customConfig)
+	if err != nil || !bytes.Equal(got, want) {
+		t.Fatalf("malformed config changed: got=%q err=%v", got, err)
 	}
 }
 
@@ -1008,6 +1223,30 @@ func TestSoundpackUseUpdatesConfig(t *testing.T) {
 	output := stdout.String()
 	if !strings.Contains(output, "windows") {
 		t.Errorf("expected stdout to mention 'windows', got: %s", output)
+	}
+}
+
+func TestSoundpackUsePreservesMalformedExplicitConfig(t *testing.T) {
+	_, _, cleanup := setupInstallTestEnv(t)
+	defer cleanup()
+
+	customConfig := filepath.Join(t.TempDir(), "custom.json")
+	want := []byte("{recover me")
+	if err := os.WriteFile(customConfig, want, 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	cli := NewCLI()
+	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
+	if code := cli.Run([]string{"claudio", "soundpack", "use", "windows", "--config", customConfig}, nil, stdout, stderr); code == 0 {
+		t.Fatalf("expected malformed config error, stdout=%q stderr=%q", stdout, stderr)
+	}
+	got, err := os.ReadFile(customConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("malformed config was overwritten: got %q want %q", got, want)
 	}
 }
 

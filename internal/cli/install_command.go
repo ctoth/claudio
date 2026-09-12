@@ -271,6 +271,21 @@ func runInstallWorkflow(agent install.Agent, scope string, settingsPath string) 
 
 	var mergedSettings *install.SettingsMap
 	if agent == install.AgentCodex {
+		// Captain Hook replaces malformed sections instead of returning an
+		// error. Reject those shapes before handing it user-owned settings.
+		if rawHooks, exists := (*existingSettings)["hooks"]; exists {
+			hookMap, ok := rawHooks.(map[string]interface{})
+			if !ok {
+				return fmt.Errorf("invalid Codex hooks section: expected an object")
+			}
+			for _, hook := range agent.EnabledHooks() {
+				if groups, exists := hookMap[hook.Name]; exists {
+					if _, ok := groups.([]interface{}); !ok {
+						return fmt.Errorf("invalid Codex %s hooks: expected an array", hook.Name)
+					}
+				}
+			}
+		}
 		captainSettings := captainhook.SettingsMap(*existingSettings)
 		if err := captainhook.Install(
 			&captainSettings,

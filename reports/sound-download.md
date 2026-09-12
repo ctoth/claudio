@@ -9,19 +9,21 @@
 | **Coverage** | 107/107 (100.0%) |
 | **Source** | TrekCore.com |
 | **Format** | MP3 |
-| **Commit** | `48fae0e` |
+| **Commit** | `62593b3` |
 
 ## Download Results
 
 All 107 sound files were downloaded successfully from TrekCore.com with HTTP 200 responses. No downloads failed.
 
-### URL Corrections from Scout Report
+### URL Corrections from Earlier Sourcing Notes
 
-The scout report (`reports/sound-sourcing-scout.md`) had several URLs that used guessed filenames. The actual TrekCore filenames were discovered by browsing the site with Chrome browser tools and extracting the real `<a href>` URLs from the page source.
+Earlier sourcing notes had several URLs that used guessed filenames. The actual
+TrekCore filenames were taken from links on the source pages. Those notes are
+not retained in this repository.
 
 Key differences from the scout report:
 
-| Scout Report Filename | Actual TrekCore Filename |
+| Earlier Note Filename | Actual TrekCore Filename |
 |---|---|
 | `keypress1.mp3` (in `/computer/`) | `tos_keypress1.mp3` (in `/toscomputer/`) |
 | `keypress2.mp3` | `tos_keypress2.mp3` |
@@ -336,8 +338,9 @@ soundpacks/startrek-bridge/system/system.mp3
 ## Notes
 
 - All sounds are MP3 format, which Claudio supports natively
-- The JSON manifest uses Windows absolute paths (`C:\Users\Q\code\claudio\soundpacks\startrek-bridge\...`)
+- The JSON manifest uses portable paths relative to the manifest file
 - The TrekCore audio page uses `_clean` suffixes for remastered versions of some sounds
 - Some sounds from the prompt plan (e.g., `inputok5.mp3`, `denybeep5.mp3`, `inputfailed3.mp3`) do not exist on TrekCore; equivalent sounds were reused
 - The "Keypress" files are in TrekCore's `toscomputer/` directory (TOS-era sounds), not `computer/` (TNG-era)
-- Sounds are copyrighted by Paramount/CBS Studios; this soundpack is for personal/hobby use only
+- The repository records source URLs and ownership attribution, but it does not
+  contain a separate license or redistribution-permission record for these files

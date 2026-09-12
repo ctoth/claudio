@@ -116,6 +116,18 @@ func TestLoadJSONSoundpack_AcceptsRelativeUnderBase(t *testing.T) {
 	}
 }
 
+func TestLoadJSONSoundpack_RejectsDirectoryMapping(t *testing.T) {
+	baseDir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(baseDir, "not-a-sound.wav"), 0755); err != nil {
+		t.Fatalf("mkdir mapped directory: %v", err)
+	}
+	data := []byte(`{"name":"bad","mappings":{"default.wav":"not-a-sound.wav"}}`)
+
+	if _, err := LoadJSONSoundpackFromBytes(data, baseDir); err == nil {
+		t.Fatal("expected a directory mapping to be rejected")
+	}
+}
+
 // TestLoadEmbeddedPlatformSoundpack_AcceptsAbsolutePaths asserts the
 // trusted entry point does NOT reject absolute paths. This is the
 // hard-stop test from the brief: shipped platform JSONs use absolute

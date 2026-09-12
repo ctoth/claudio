@@ -1,0 +1,25 @@
+{
+  "directory_accepted_as_sound": false,
+  "invalid_filter_args": [
+    1789245064,
+    0
+  ],
+  "invalid_filter_where": "timestamp \u003c= ? AND JSON_EXTRACT(context, '$.Category') = ?",
+  "memory_max_open_connections": 1,
+  "observer_with_both_files_present": [
+    {
+      "path": "first.wav",
+      "reported_exists": true
+    }
+  ],
+  "second_memory_connection_error": "context deadline exceeded",
+  "usage_filtered_to_Write": [
+    {
+      "path": "shared.wav",
+      "play_count": 1,
+      "category": "success",
+      "tool_name": "Write",
+      "last_played": 1
+    }
+  ]
+}

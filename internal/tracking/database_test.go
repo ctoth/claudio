@@ -298,6 +298,143 @@ PRAGMA user_version = 1;
 	}
 }
 
+func TestNewDatabase_ConcurrentLegacyMigration(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "concurrent-legacy.db")
+	seedLegacyDatabase(t, dbPath, `
+CREATE TABLE hook_events (
+    id INTEGER PRIMARY KEY,
+    timestamp INTEGER NOT NULL,
+    session_id TEXT NOT NULL,
+    tool_name TEXT,
+    selected_path TEXT NOT NULL,
+    fallback_level INTEGER NOT NULL CHECK (fallback_level > 0),
+    context JSON NOT NULL
+);`)
+
+	const workers = 12
+	start := make(chan struct{})
+	results := make(chan struct {
+		db  *sql.DB
+		err error
+	}, workers)
+	for range workers {
+		go func() {
+			<-start
+			db, err := NewDatabase(dbPath)
+			results <- struct {
+				db  *sql.DB
+				err error
+			}{db: db, err: err}
+		}()
+	}
+	close(start)
+
+	for range workers {
+		result := <-results
+		if result.db != nil {
+			_ = result.db.Close()
+		}
+		if result.err != nil {
+			t.Errorf("concurrent NewDatabase failed: %v", result.err)
+		}
+	}
+
+	db, err := NewDatabase(dbPath)
+	if err != nil {
+		t.Fatalf("reopen migrated database: %v", err)
+	}
+	defer db.Close()
+	hasFallback, hasChainType, err := hookEventsColumns(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hasFallback || !hasChainType {
+		t.Fatalf("migration columns: fallback=%v chain_type=%v", hasFallback, hasChainType)
+	}
+}
+
+func TestMigration_RollsBackDDLOnFailure(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "rollback-legacy.db")
+	// PRAGMA table_info intentionally omits generated columns. The migration
+	// therefore drops fallback_level and then fails trying to add the already
+	// existing chain_type column, giving us a real failure after the first DDL.
+	seedLegacyDatabase(t, dbPath, `
+CREATE TABLE hook_events (
+    id INTEGER PRIMARY KEY,
+    timestamp INTEGER NOT NULL,
+    session_id TEXT NOT NULL,
+    tool_name TEXT,
+    selected_path TEXT NOT NULL,
+    fallback_level INTEGER NOT NULL CHECK (fallback_level > 0),
+    chain_type TEXT GENERATED ALWAYS AS ('legacy') VIRTUAL,
+    context JSON NOT NULL
+);`)
+
+	if db, err := NewDatabase(dbPath); err == nil {
+		_ = db.Close()
+		t.Fatal("expected migration to fail on duplicate generated chain_type column")
+	}
+
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var version int
+	if err := db.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
+		t.Fatal(err)
+	}
+	if version != 1 {
+		t.Fatalf("user_version = %d, want 1 after rollback", version)
+	}
+	rows, err := db.Query("PRAGMA table_xinfo(hook_events)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	hasFallback := false
+	for rows.Next() {
+		var cid, notnull, pk, hidden int
+		var name, ctype string
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk, &hidden); err != nil {
+			t.Fatal(err)
+		}
+		if name == "fallback_level" {
+			hasFallback = true
+		}
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if !hasFallback {
+		t.Fatal("fallback_level drop survived failed migration; DDL was not rolled back")
+	}
+}
+
+func seedLegacyDatabase(t *testing.T, dbPath, hookEventsDDL string) {
+	t.Helper()
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	schema := hookEventsDDL + `
+CREATE TABLE path_lookups (
+    id INTEGER PRIMARY KEY,
+    event_id INTEGER NOT NULL REFERENCES hook_events(id) ON DELETE CASCADE,
+    path TEXT NOT NULL,
+    sequence INTEGER NOT NULL CHECK (sequence > 0),
+    found INTEGER NOT NULL CHECK (found IN (0,1)),
+    UNIQUE(event_id, sequence),
+    UNIQUE(event_id, path)
+);
+PRAGMA user_version = 1;`
+	if _, err := db.Exec(schema); err != nil {
+		t.Fatalf("seed legacy database: %v", err)
+	}
+}
+
 // TestFreshDatabase_NoFallbackLevelColumn verifies a brand new database
 // is created with the v2 shape directly (no fallback_level).
 func TestFreshDatabase_NoFallbackLevelColumn(t *testing.T) {
@@ -335,4 +472,16 @@ func setupTestDB(t *testing.T) *sql.DB {
 	})
 
 	return db
+}
+
+func TestNewDatabase_MemoryUsesSingleConnection(t *testing.T) {
+	db, err := NewDatabase(":memory:")
+	if err != nil {
+		t.Fatalf("NewDatabase: %v", err)
+	}
+	defer db.Close()
+
+	if got := db.Stats().MaxOpenConnections; got != 1 {
+		t.Fatalf("MaxOpenConnections = %d, want 1 so all callers share the same in-memory database", got)
+	}
 }

@@ -1,0 +1,2130 @@
+[
+  {
+    "path": "internal/config/embedded_sounds/default-error.wav",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "pcm_s16le",
+          "sample_rate": "44100",
+          "channels": 1
+        }
+      ],
+      "format": {
+        "duration": "0.340000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "internal/config/embedded_sounds/default-interactive.wav",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "pcm_s16le",
+          "sample_rate": "44100",
+          "channels": 1
+        }
+      ],
+      "format": {
+        "duration": "0.200000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "internal/config/embedded_sounds/default-loading.wav",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "pcm_s16le",
+          "sample_rate": "44100",
+          "channels": 1
+        }
+      ],
+      "format": {
+        "duration": "0.160000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "internal/config/embedded_sounds/default-success.wav",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "pcm_s16le",
+          "sample_rate": "44100",
+          "channels": 1
+        }
+      ],
+      "format": {
+        "duration": "0.280000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "internal/config/embedded_sounds/default.wav",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "pcm_s16le",
+          "sample_rate": "44100",
+          "channels": 1
+        }
+      ],
+      "format": {
+        "duration": "0.160000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/completion/agent-complete.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "4.680000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/completion/completion.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "4.704000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/completion/stop.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "1.392000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/default.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.528000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/error/bash-error.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.648000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/error/critical.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.600000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/error/edit-error.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.840000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/error/error.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "44100",
+          "channels": 1
+        }
+      ],
+      "format": {
+        "duration": "0.948375"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/error/failure.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.648000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/error/glob-error.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.528000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/error/grep-error.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.840000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/error/ls-error.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.840000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/error/mcp-error.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.840000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/error/multiedit-error.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.528000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/error/read-error.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.600000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/error/task-error.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.648000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/error/timeout.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.864000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/error/todowrite-error.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.840000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/error/tool-error.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "1.872000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/error/tool-interrupted.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.648000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/error/webfetch-error.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "1.872000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/error/websearch-error.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.840000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/error/write-error.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.864000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/interactive/chimes.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "3.144000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/interactive/compact.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "4.680000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/interactive/interactive.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.456000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/interactive/message-sent.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.600000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/interactive/notification-permission.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.312000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/interactive/notification.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "5.328000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/interactive/notify.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "1.248000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/interactive/prompt-submit.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "44100",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.394739"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/interactive/stop.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "4.680000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/interactive/subagent-stop.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "4.680000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/loading/bash-start.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.768000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/loading/connect.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "1.104000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/loading/echo-start.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.432000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/loading/edit-start.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.408000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/loading/exitplanmode-start.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.888000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/loading/file-editing.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.600000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/loading/file-reading.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "1.512000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/loading/git-add-start.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.384000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/loading/git-commit-start.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.336000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/loading/git-diff-start.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.432000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/loading/git-log-start.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "1.080000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/loading/git-pull-start.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.336000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/loading/git-push-start.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.864000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/loading/git-status-start.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.168000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/loading/glob-start.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.168000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/loading/go-build-start.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.600000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/loading/grep-start.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "3.096000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/loading/loading.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "1.296000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/loading/ls-start.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.576000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/loading/mcp-start.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.504000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/loading/multiedit-start.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.888000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/loading/processing.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "1.608000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/loading/read-start.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.600000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/loading/task-start.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.432000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/loading/todowrite-start.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.792000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/loading/tool-start.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "1.512000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/loading/webfetch-start.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.528000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/loading/websearch-start.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.720000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/loading/write-start.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.528000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/bash-success.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.672000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/celebration.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.480000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/complete.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.072000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/e2e-test-bat-success.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.264000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/e2e-test-bat-tee-success.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.120000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/echo-success.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.576000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/edit-success.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.888000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/exitplanmode-success.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.936000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/file-read.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "1.128000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/file-saved.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "1.608000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/find-f-success.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.432000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/find-success.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.504000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/gh-repo-success.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.936000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/gh-success.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.456000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/git-add-success.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.432000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/git-commit-success.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.744000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/git-diff-success.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.144000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/git-log-success.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "1.104000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/git-pull-success.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.408000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/git-push-success.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "1.512000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/git-status-success.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.192000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/git-success.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "1.272000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/glob-success.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.672000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/go-build-success.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.384000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/grep-head-success.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.960000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/grep-success.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.672000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/ls-success.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.144000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/mcp-success.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "1.632000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/multiedit-success.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.576000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/npm-success.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.552000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/read-success.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.672000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/success.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.528000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/tail-success.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.360000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/task-success.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.576000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/todowrite-success.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.576000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/tool-complete.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "44100",
+          "channels": 1
+        }
+      ],
+      "format": {
+        "duration": "3.482250"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/uv-run-success.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.480000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/uv-success.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "1.296000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/webfetch-success.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.504000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/websearch-success.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.216000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/success/write-success.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "44100",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.646871"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/system/compacting.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "1.752000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/system/pre-compact.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "0.480000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/system/session-start.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "227.688000"
+      }
+    },
+    "error": ""
+  },
+  {
+    "path": "soundpacks/startrek-bridge/system/system.mp3",
+    "exit_code": 0,
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "186.720000"
+      }
+    },
+    "error": ""
+  }
+]

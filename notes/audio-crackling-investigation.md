@@ -1,7 +1,7 @@
 # Audio Crackling Investigation
 
-> Investigation log, unresolved. See `reports/comprehensive-review.md` finding
-> #1 for the likely root cause.
+> Historical investigation log. The referenced review report was not retained
+> in this repository.
 
 ## Problem Statement
 - Audio playback in Claudio produces crackling sounds

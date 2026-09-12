@@ -1,0 +1,19 @@
+?   	claudio.click/cmd/claudio	[no test files]
+ok  	claudio.click/cmd/hook-logger	3.295s
+ok  	claudio.click/internal/audio	11.479s
+ok  	claudio.click/internal/ci	1.559s
+ok  	claudio.click/internal/cli	44.988s
+ok  	claudio.click/internal/cli/testenv	5.221s
+ok  	claudio.click/internal/config	8.777s
+?   	claudio.click/internal/devtools/buildcheck	[no test files]
+ok  	claudio.click/internal/devtools/coveragefloor	1.016s
+ok  	claudio.click/internal/fs	1.124s
+ok  	claudio.click/internal/hooks	1.118s
+ok  	claudio.click/internal/install	14.655s
+ok  	claudio.click/internal/integration	6.987s
+ok  	claudio.click/internal/platform	1.283s
+ok  	claudio.click/internal/safeio	1.850s
+ok  	claudio.click/internal/soundpack	10.031s
+ok  	claudio.click/internal/sounds	3.567s
+ok  	claudio.click/internal/tracking	7.503s
+ok  	claudio.click/internal/uninstall	4.019s

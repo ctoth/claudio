@@ -179,17 +179,17 @@ endif
 .PHONY: smoke
 smoke: build ## Run a silent hook payload through the freshly built binary.
 ifeq ($(OS),Windows_NT)
-	@'$(SMOKE_PAYLOAD)' | ./$(BIN) --config $(SMOKE_CONFIG) --soundpack $(SMOKE_SOUNDPACK) --silent
+	@$$env:CLAUDIO_SOUND_TRACKING = 'false'; $$env:CLAUDIO_FILE_LOGGING = 'false'; try { '$(SMOKE_PAYLOAD)' | ./$(BIN) --config $(SMOKE_CONFIG) --soundpack $(SMOKE_SOUNDPACK) --silent; if ($$LASTEXITCODE -ne 0) { throw "smoke test failed with exit code $$LASTEXITCODE" } } finally { Remove-Item Env:CLAUDIO_SOUND_TRACKING, Env:CLAUDIO_FILE_LOGGING -ErrorAction SilentlyContinue }
 else
-	@printf '%s\n' '$(SMOKE_PAYLOAD)' | ./$(BIN) --config $(SMOKE_CONFIG) --soundpack $(SMOKE_SOUNDPACK) --silent
+	@printf '%s\n' '$(SMOKE_PAYLOAD)' | CLAUDIO_SOUND_TRACKING=false CLAUDIO_FILE_LOGGING=false ./$(BIN) --config $(SMOKE_CONFIG) --soundpack $(SMOKE_SOUNDPACK) --silent
 endif
 
 .PHONY: smoke-debug
 smoke-debug: build ## Run the smoke test with debug logging enabled.
 ifeq ($(OS),Windows_NT)
-	@$$env:CLAUDIO_LOG_LEVEL = 'debug'; '$(SMOKE_PAYLOAD)' | ./$(BIN) --config $(SMOKE_CONFIG) --soundpack $(SMOKE_SOUNDPACK) --silent; Remove-Item Env:CLAUDIO_LOG_LEVEL -ErrorAction SilentlyContinue
+	@$$env:CLAUDIO_LOG_LEVEL = 'debug'; $$env:CLAUDIO_SOUND_TRACKING = 'false'; $$env:CLAUDIO_FILE_LOGGING = 'false'; try { '$(SMOKE_PAYLOAD)' | ./$(BIN) --config $(SMOKE_CONFIG) --soundpack $(SMOKE_SOUNDPACK) --silent; if ($$LASTEXITCODE -ne 0) { throw "smoke test failed with exit code $$LASTEXITCODE" } } finally { Remove-Item Env:CLAUDIO_LOG_LEVEL, Env:CLAUDIO_SOUND_TRACKING, Env:CLAUDIO_FILE_LOGGING -ErrorAction SilentlyContinue }
 else
-	@printf '%s\n' '$(SMOKE_PAYLOAD)' | CLAUDIO_LOG_LEVEL=debug ./$(BIN) --config $(SMOKE_CONFIG) --soundpack $(SMOKE_SOUNDPACK) --silent
+	@printf '%s\n' '$(SMOKE_PAYLOAD)' | CLAUDIO_LOG_LEVEL=debug CLAUDIO_SOUND_TRACKING=false CLAUDIO_FILE_LOGGING=false ./$(BIN) --config $(SMOKE_CONFIG) --soundpack $(SMOKE_SOUNDPACK) --silent
 endif
 
 .PHONY: version

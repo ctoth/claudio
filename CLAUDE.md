@@ -36,12 +36,12 @@ go test ./internal/cli -v
 # Use silent mode for testing without audio
 '...' | .\claudio.exe --silent
 
-# Test file logging (Windows config null is "NUL")
-'...' | .\claudio.exe --config NUL --silent
+# Test file logging with the repository's valid example config
+$env:CLAUDIO_SOUND_TRACKING='false'; '...' | .\claudio.exe --config config-example.json --silent
 Get-Content $env:LOCALAPPDATA\claudio\logs\claudio.log
 
 # Test with debug logging
-$env:CLAUDIO_LOG_LEVEL='debug'; '...' | .\claudio.exe --config NUL --silent
+$env:CLAUDIO_LOG_LEVEL='debug'; $env:CLAUDIO_SOUND_TRACKING='false'; '...' | .\claudio.exe --config config-example.json --silent
 ```
 
 ### Bash (Linux / macOS / WSL)
@@ -69,12 +69,13 @@ echo '...' | claudio --volume 0.7
 # Use silent mode for testing without audio
 echo '...' | claudio --silent
 
-# Test file logging (with default config that enables file logging)
-echo '...' | claudio --config /dev/null --silent
+# Test file logging with the repository's valid example config
+echo '...' | CLAUDIO_SOUND_TRACKING=false claudio --config config-example.json --silent
+# Linux/WSL path; macOS uses ~/Library/Caches/claudio/logs/claudio.log
 cat ~/.cache/claudio/logs/claudio.log
 
 # Test with debug logging
-CLAUDIO_LOG_LEVEL=debug echo '...' | claudio --config /dev/null --silent
+echo '...' | CLAUDIO_LOG_LEVEL=debug CLAUDIO_SOUND_TRACKING=false claudio --config config-example.json --silent
 ```
 
 ## Release Process
@@ -175,9 +176,9 @@ rm -f claudio
 4. **Configuration** (`internal/config/`)
    - XDG Base Directory compliant
    - Config search order: `$XDG_CONFIG_HOME/claudio/config.json` first, then each
-     directory in `$XDG_CONFIG_DIRS` (typically `/etc/xdg/claudio/config.json` on
-     Linux/macOS). Windows uses the Windows-native XDG mapping; `/etc/xdg` is
-     not checked there.
+     directory in `$XDG_CONFIG_DIRS`. Linux normally checks
+     `/etc/xdg/claudio/config.json`. macOS defaults config home to
+     `~/Library/Application Support`; Windows uses its native XDG mapping.
    - Environment variable precedence: CLI flag > env var > config file > default.
    - Production env vars (full reference in `docs/cli-reference.md`): `CLAUDIO_VOLUME`,
      `CLAUDIO_ENABLED`, `CLAUDIO_SOUNDPACK`, `CLAUDIO_LOG_LEVEL`,
@@ -190,7 +191,9 @@ rm -f claudio
 5. **File Logging System** (`internal/config/`)
    - Simple idiomatic Go logging using `io.MultiWriter` + `lumberjack.v2`
    - Dual output: stderr + rotated log files
-   - XDG-compliant log location: `~/.cache/claudio/logs/claudio.log`
+   - XDG cache log location: `~/.cache/claudio/logs/claudio.log` on Linux/WSL,
+     `~/Library/Caches/claudio/logs/claudio.log` on macOS, and the native XDG
+     cache directory on Windows
    - Default enabled for hook-based usage (CLI flags hard to pass)
    - Graceful degradation: continues with stderr-only if file logging fails
 
@@ -202,10 +205,11 @@ rm -f claudio
 
 ## Configuration
 
-Config is loaded from XDG-compliant locations (see `internal/config/`). On
-Linux/macOS the first hit is `$XDG_CONFIG_HOME/claudio/config.json` (typically
-`~/.config/claudio/config.json`), then `/etc/xdg/claudio/config.json`. On
-Windows it uses the Windows-native XDG mapping; `/etc/xdg` is never checked.
+Config is loaded from XDG locations (see `internal/config/`). Linux normally
+checks `~/.config/claudio/config.json` before
+`/etc/xdg/claudio/config.json`. macOS normally starts at
+`~/Library/Application Support/claudio/config.json`. Windows uses the native
+XDG mapping.
 
 Default values (these are baked into `GetDefaultConfig`, not a literal file
 shipped to users):
@@ -232,7 +236,7 @@ shipped to users):
 `soundpack_paths` defaults to `[]` — XDG data dirs (with the hardcoded
 `claudio/soundpacks/` subpath) are searched automatically.
 `default_soundpack` is computed at runtime by platform detection (windows /
-wsl / darwin embedded packs).
+wsl / darwin / linux embedded packs).
 
 ### File Logging Configuration
 
@@ -254,7 +258,7 @@ Directory soundpacks use a category-based structure (e.g. `loading/`,
 holds tool-specific or generic sounds resolved through the three fallback
 chains documented under "Sound Mapping" above. Installed soundpacks live under
 `~/.local/share/claudio/soundpacks/<id>/` (or the equivalent XDG data dir);
-embedded platform packs (windows / wsl / darwin) are baked into the binary and
+embedded platform packs (windows / wsl / darwin / linux) are baked into the binary and
 can be inspected via `claudio soundpack list`.
 
 ## Current Issues and Workarounds
@@ -266,12 +270,14 @@ can be inspected via `claudio soundpack list`.
 Beyond the default stdin-mode hook executor, claudio ships these subcommands
 (registered in `internal/cli/cli.go`):
 
-- `claudio install` / `claudio uninstall` — manage Claude/Codex/Antigravity hooks
+- `claudio install` / `claudio uninstall` — manage Claude, Codex, Gemini, Qwen,
+  and GitHub Copilot CLI hooks
 - `claudio install-commands` / `claudio uninstall-commands` — manage the
   Claude Code `/claudio` slash command, Codex `$claudio` skill, or Antigravity
   skill/CLI command artifacts
 - `claudio analyze usage` / `claudio analyze missing` — query the sound-tracking
   database for playback patterns and missing-sound gaps
+- `claudio completion` — generate Bash, Fish, PowerShell, or Zsh completion
 - `claudio soundpack` — manage soundpacks:
   - `init` — create a JSON template
   - `list` — list discoverable soundpacks
@@ -326,7 +332,8 @@ TDD: Short description of what was implemented
 ## Important File Locations
 
 - Hook Logger: `cmd/hook-logger/` — captures real Claude Code hook JSON for debugging
-- Embedded Soundpacks: `internal/config/embedded_soundpacks/` (windows.json, wsl.json, darwin.json)
+- Embedded Soundpack manifests: `internal/config/{windows,wsl,darwin,linux}.json`
+- Embedded Linux audio: `internal/config/embedded_sounds/`
 - User-installed soundpacks: `~/.local/share/claudio/soundpacks/<id>/` (XDG data dir; Windows uses Windows-native XDG mapping)
 - Log Files: `~/.cache/claudio/logs/claudio.log` — default file logging location
 
@@ -359,7 +366,7 @@ The file logging system follows Go best practices using standard library compone
 ### Default Behavior
 
 - **Hook Usage**: File logging defaults to **enabled** because CLI flags are difficult to pass in hook scenarios
-- **Log Location**: Uses XDG cache directory (`~/.cache/claudio/logs/claudio.log`) when no custom path specified
+- **Log Location**: Uses the XDG cache directory when no custom path is specified
 - **Log Level**: `log_level` controls the FILE handler. The stderr handler stays
   at ERROR — debug output requires tailing the log file.
 - **No Regression**: All existing slog calls work unchanged

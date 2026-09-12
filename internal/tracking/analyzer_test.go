@@ -1,10 +1,111 @@
 package tracking
 
 import (
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
 )
+
+func TestGetMissingSounds_GroupsSharedPathByToolAndCategory(t *testing.T) {
+	db, err := NewDatabase(":memory:")
+	if err != nil {
+		t.Fatalf("NewDatabase: %v", err)
+	}
+	defer db.Close()
+
+	for i, event := range []struct {
+		tool     string
+		category int
+	}{{"Edit", 1}, {"Bash", 0}} {
+		contextJSON := fmt.Sprintf(`{"Category":%d,"ToolName":%q}`, event.category, event.tool)
+		result, execErr := db.Exec(`INSERT INTO hook_events
+			(timestamp, session_id, tool_name, selected_path, chain_type, context)
+			VALUES (?, 'session', ?, 'default.wav', 'simple', ?)`,
+			time.Now().Unix(), event.tool, contextJSON)
+		if execErr != nil {
+			t.Fatalf("insert event: %v", execErr)
+		}
+		eventID, _ := result.LastInsertId()
+		if _, execErr = db.Exec(`INSERT INTO path_lookups (event_id, path, sequence, found) VALUES (?, 'default.wav', ?, 0)`, eventID, i+1); execErr != nil {
+			t.Fatalf("insert lookup: %v", execErr)
+		}
+	}
+
+	got, err := GetMissingSounds(db, QueryFilter{})
+	if err != nil {
+		t.Fatalf("GetMissingSounds: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %d rows, want one row per tool/category: %+v", len(got), got)
+	}
+	seen := map[string]string{}
+	for _, sound := range got {
+		seen[sound.ToolName] = sound.Category
+	}
+	if seen["Edit"] != "success" || seen["Bash"] != "loading" {
+		t.Fatalf("tool/category groups = %v", seen)
+	}
+}
+
+func TestGetSoundUsage_ContextComesFromFilteredEvents(t *testing.T) {
+	db, err := NewDatabase(":memory:")
+	if err != nil {
+		t.Fatalf("NewDatabase: %v", err)
+	}
+	defer db.Close()
+
+	for _, event := range []struct {
+		tool    string
+		context string
+	}{{"Bash", `{"Category":0,"ToolName":"Bash"}`}, {"Edit", `{"Category":1,"ToolName":"Edit"}`}} {
+		if _, err := db.Exec(`INSERT INTO hook_events
+			(timestamp, session_id, tool_name, selected_path, chain_type, context)
+			VALUES (?, 'session', ?, 'shared.wav', 'posttool', ?)`,
+			time.Now().Unix(), event.tool, event.context); err != nil {
+			t.Fatalf("insert event: %v", err)
+		}
+	}
+
+	got, err := GetSoundUsage(db, QueryFilter{Tool: "Edit"})
+	if err != nil {
+		t.Fatalf("GetSoundUsage: %v", err)
+	}
+	if len(got) != 1 || got[0].ToolName != "Edit" || got[0].Category != "success" {
+		t.Fatalf("filtered usage context = %+v, want Edit/success", got)
+	}
+}
+
+func TestGetSoundUsage_OmitsAmbiguousContext(t *testing.T) {
+	db, err := NewDatabase(":memory:")
+	if err != nil {
+		t.Fatalf("NewDatabase: %v", err)
+	}
+	defer db.Close()
+
+	for _, event := range []struct {
+		tool    string
+		context string
+	}{{"Bash", `{"Category":0,"ToolName":"Bash"}`}, {"Edit", `{"Category":1,"ToolName":"Edit"}`}} {
+		if _, err := db.Exec(`INSERT INTO hook_events
+			(timestamp, session_id, tool_name, selected_path, chain_type, context)
+			VALUES (?, 'session', ?, 'shared.wav', 'posttool', ?)`,
+			time.Now().Unix(), event.tool, event.context); err != nil {
+			t.Fatalf("insert event: %v", err)
+		}
+	}
+
+	got, err := GetSoundUsage(db, QueryFilter{})
+	if err != nil {
+		t.Fatalf("GetSoundUsage: %v", err)
+	}
+	if len(got) != 1 || got[0].PlayCount != 2 {
+		t.Fatalf("usage = %+v, want one two-play sound row", got)
+	}
+	if got[0].ToolName != "" || got[0].Category != "" {
+		t.Fatalf("ambiguous usage context = %s/%s, want empty labels", got[0].ToolName, got[0].Category)
+	}
+}
 
 // TDD RED: Test for GetMissingSounds with context extraction
 func TestGetMissingSoundsWithContext(t *testing.T) {
@@ -83,9 +184,9 @@ func TestGetMissingSoundsWithContext(t *testing.T) {
 
 	// Test the GetMissingSounds function with context extraction
 	filter := QueryFilter{
-		Days:  0,    // All time
-		Tool:  "",   // All tools
-		Limit: 20,   // Limit results
+		Days:  0,  // All time
+		Tool:  "", // All tools
+		Limit: 20, // Limit results
 	}
 
 	missingSounds, err := GetMissingSounds(db, filter)
@@ -165,11 +266,11 @@ func TestGetSoundUsage(t *testing.T) {
 	now := time.Now().Unix()
 	oneWeekAgo := now - (7 * 24 * 60 * 60)
 	testEvents := []struct {
-		timestamp   int64
-		sessionID   string
-		toolName    string
-		soundPath   string
-		contextJSON string
+		timestamp     int64
+		sessionID     string
+		toolName      string
+		soundPath     string
+		contextJSON   string
 		fallbackLevel int
 	}{
 		{
@@ -182,7 +283,7 @@ func TestGetSoundUsage(t *testing.T) {
 		},
 		{
 			timestamp:     now - 1800, // 30 minutes ago
-			sessionID:     "session-1", 
+			sessionID:     "session-1",
 			toolName:      "Edit",
 			soundPath:     "success/edit-success.wav",
 			contextJSON:   `{"Category":1,"ToolName":"Edit","IsSuccess":true}`,
@@ -200,7 +301,7 @@ func TestGetSoundUsage(t *testing.T) {
 			timestamp:     oneWeekAgo,
 			sessionID:     "session-old",
 			toolName:      "Git",
-			soundPath:     "success/git-push.wav", 
+			soundPath:     "success/git-push.wav",
 			contextJSON:   `{"Category":1,"ToolName":"Git","IsSuccess":true}`,
 			fallbackLevel: 1,
 		},
@@ -219,9 +320,9 @@ func TestGetSoundUsage(t *testing.T) {
 
 	// TDD RED: Test GetSoundUsage function that doesn't exist yet
 	filter := QueryFilter{
-		Days: 1, // Last 24 hours - should exclude week-old event
-		Limit: 10,
-		OrderBy: "frequency",
+		Days:      1, // Last 24 hours - should exclude week-old event
+		Limit:     10,
+		OrderBy:   "frequency",
 		OrderDesc: true,
 	}
 
@@ -274,11 +375,11 @@ func TestGetUsageSummary(t *testing.T) {
 	// Insert test data with mixed usage patterns
 	now := time.Now().Unix()
 	testEvents := []struct {
-		toolName    string
-		soundPath   string
-		contextJSON string
+		toolName      string
+		soundPath     string
+		contextJSON   string
 		fallbackLevel int
-		count       int // How many times to insert this event
+		count         int // How many times to insert this event
 	}{
 		{
 			toolName:      "Edit",
@@ -289,7 +390,7 @@ func TestGetUsageSummary(t *testing.T) {
 		},
 		{
 			toolName:      "Bash",
-			soundPath:     "success/tool-complete.wav", 
+			soundPath:     "success/tool-complete.wav",
 			contextJSON:   `{"Category":1,"ToolName":"Bash","IsSuccess":true}`,
 			fallbackLevel: 4, // High fallback to generic sound
 			count:         5,
@@ -317,7 +418,7 @@ func TestGetUsageSummary(t *testing.T) {
 
 	// TDD RED: Test GetUsageSummary function that doesn't exist yet
 	filter := QueryFilter{
-		Days: 0, // All time
+		Days:  0, // All time
 		Limit: 0, // No limit
 	}
 
@@ -437,7 +538,7 @@ func TestGetToolUsageStats(t *testing.T) {
 	}
 }
 
-// TDD RED: Test GetCategoryDistribution function that doesn't exist yet  
+// TDD RED: Test GetCategoryDistribution function that doesn't exist yet
 func TestGetCategoryDistribution(t *testing.T) {
 	// Create temporary directory for test database
 	tempDir := t.TempDir()
@@ -456,7 +557,7 @@ func TestGetCategoryDistribution(t *testing.T) {
 		category string
 		count    int
 	}{
-		{"success", 20},  // Most common
+		{"success", 20}, // Most common
 		{"loading", 15},
 		{"error", 10},
 		{"interactive", 5}, // Least common
@@ -465,7 +566,7 @@ func TestGetCategoryDistribution(t *testing.T) {
 	for _, event := range testEvents {
 		categoryInt := categoryStringToInt(event.category)
 		contextJSON := `{"Category":` + string(rune(categoryInt+48)) + `,"ToolName":"Test"}`
-		
+
 		for i := 0; i < event.count; i++ {
 			_, err = db.Exec(`
 				INSERT INTO hook_events (timestamp, session_id, tool_name, selected_path, chain_type, context)
