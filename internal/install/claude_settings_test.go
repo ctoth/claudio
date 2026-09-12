@@ -9,6 +9,7 @@ import (
 )
 
 func TestFindClaudeSettingsPathsGlobalScope(t *testing.T) {
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
@@ -29,6 +30,7 @@ func TestFindClaudeSettingsPathsGlobalScope(t *testing.T) {
 }
 
 func TestFindClaudeSettingsPathsGlobalFallbackWhenHomeMissing(t *testing.T) {
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
 	t.Setenv("HOME", "")
 	t.Setenv("USERPROFILE", "")
 	t.Setenv("HOMEDRIVE", "")
@@ -46,6 +48,7 @@ func TestFindClaudeSettingsPathsGlobalFallbackWhenHomeMissing(t *testing.T) {
 }
 
 func TestFindClaudeSettings(t *testing.T) {
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
 	// TDD RED: Test Claude settings path detection for user and project scopes
 	testCases := []struct {
 		name          string
@@ -159,6 +162,7 @@ func TestFindClaudeSettingsInvalidScope(t *testing.T) {
 }
 
 func TestFindClaudeSettingsExistingFiles(t *testing.T) {
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
 	// TDD RED: Test detection of existing Claude settings files
 	testCases := []struct {
 		name           string
@@ -262,6 +266,7 @@ func TestFindClaudeSettingsExistingFiles(t *testing.T) {
 }
 
 func TestFindClaudeSettingsMultiplePaths(t *testing.T) {
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
 	// TDD RED: Test that function returns multiple potential paths in priority order
 	testCases := []struct {
 		name         string
@@ -322,6 +327,7 @@ func TestFindClaudeSettingsMultiplePaths(t *testing.T) {
 }
 
 func TestFindClaudeSettingsPathValidation(t *testing.T) {
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
 	// TDD RED: Test that returned paths are valid and accessible
 	scopes := []string{"user", "project"}
 
@@ -427,6 +433,7 @@ func TestNormalizeMSYSPath(t *testing.T) {
 }
 
 func TestFindBestSettingsPath(t *testing.T) {
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
 	t.Run("returns existing file path over non-existing", func(t *testing.T) {
 		tempDir := t.TempDir()
 
@@ -517,6 +524,7 @@ func TestGetHomeDirectoryMSYSFallback(t *testing.T) {
 }
 
 func TestFindClaudeSettingsEnvironmentIntegration(t *testing.T) {
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
 	// TDD RED: Test integration with different environment configurations
 	testCases := []struct {
 		name    string

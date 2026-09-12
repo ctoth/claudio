@@ -10,6 +10,7 @@ import (
 )
 
 func TestIsolateXDG_SetsAllVars(t *testing.T) {
+	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
 	root := IsolateXDG(t)
 
 	if root == "" {
@@ -17,12 +18,13 @@ func TestIsolateXDG_SetsAllVars(t *testing.T) {
 	}
 
 	checks := []struct {
-		name  string
-		got   string
-		want  string
+		name string
+		got  string
+		want string
 	}{
 		{"HOME", os.Getenv("HOME"), root},
 		{"USERPROFILE", os.Getenv("USERPROFILE"), root},
+		{"CLAUDE_CONFIG_DIR", os.Getenv("CLAUDE_CONFIG_DIR"), ""},
 		{"XDG_CACHE_HOME", os.Getenv("XDG_CACHE_HOME"), filepath.Join(root, ".cache")},
 		{"XDG_DATA_HOME", os.Getenv("XDG_DATA_HOME"), filepath.Join(root, ".local", "share")},
 		{"XDG_CONFIG_HOME", os.Getenv("XDG_CONFIG_HOME"), filepath.Join(root, ".config")},

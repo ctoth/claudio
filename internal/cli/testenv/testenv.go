@@ -17,6 +17,7 @@ import (
 // IsolateXDG sets HOME, USERPROFILE, XDG_CACHE_HOME, XDG_DATA_HOME, and
 // XDG_CONFIG_HOME to subdirectories under t.TempDir() and calls
 // xdg.Reload() so the adrg/xdg library picks up the new values.
+// CLAUDE_CONFIG_DIR is cleared so Claude paths use the sandbox home.
 //
 // It also sets CLAUDIO_FILE_LOGGING=false so the lumberjack file
 // handle does not block t.TempDir() cleanup on Windows (where an
@@ -41,6 +42,7 @@ func IsolateXDG(t *testing.T) string {
 
 	t.Setenv("HOME", root)
 	t.Setenv("USERPROFILE", root)
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
 	t.Setenv("XDG_CACHE_HOME", filepath.Join(root, ".cache"))
 	t.Setenv("XDG_DATA_HOME", filepath.Join(root, ".local", "share"))
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, ".config"))

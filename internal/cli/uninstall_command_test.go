@@ -96,6 +96,7 @@ func addFakeUninstallAgentBinary(t *testing.T, dir string, name string) {
 
 func setIsolatedUninstallAgentEnv(t *testing.T, pathDir string, home string) {
 	t.Helper()
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
 	t.Setenv("PATH", pathDir)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)

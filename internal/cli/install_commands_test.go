@@ -151,15 +151,10 @@ func TestInstallCommandsOutputMessage(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpHome)
 
-	// Set HOME env var for the test
-	originalHome := os.Getenv("HOME")
-	originalUserProfile := os.Getenv("USERPROFILE")
-	os.Setenv("HOME", tmpHome)
-	os.Setenv("USERPROFILE", tmpHome)
-	defer func() {
-		os.Setenv("HOME", originalHome)
-		os.Setenv("USERPROFILE", originalUserProfile)
-	}()
+	// Keep command installation inside the temporary home.
+	t.Setenv("HOME", tmpHome)
+	t.Setenv("USERPROFILE", tmpHome)
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
 
 	cmd := newInstallCommandsCommand()
 
@@ -358,6 +353,7 @@ func TestUninstallCommandsRemovesClaudeSlashCommand(t *testing.T) {
 	tmpHome := t.TempDir()
 	t.Setenv("HOME", tmpHome)
 	t.Setenv("USERPROFILE", tmpHome)
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
 
 	commandsDir := filepath.Join(tmpHome, ".claude", "commands")
 	claudioMdPath := filepath.Join(commandsDir, "claudio.md")
