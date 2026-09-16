@@ -210,7 +210,7 @@ func (cm *ConfigManager) LoadConfig() (*Config, error) {
 	for i, configPath := range configPaths {
 		slog.Debug("checking config path", "path_index", i, "path", configPath)
 
-		if _, err := os.Stat(configPath); err == nil {
+		if _, err := cm.fs.Stat(configPath); err == nil {
 			slog.Debug("found config file", "path", configPath)
 			return cm.LoadFromFile(configPath)
 		} else {
