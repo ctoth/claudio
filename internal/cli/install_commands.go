@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"fmt"
 	"log/slog"
 	"os"
@@ -118,6 +119,9 @@ func runInstallCommandsE(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	if err := preflightCommandArtifacts(artifacts); err != nil {
+		return err
+	}
 	for _, artifact := range artifacts {
 		if err := installCommandArtifact(artifact); err != nil {
 			return fmt.Errorf("failed to install %s: %w", artifact.Kind, err)
@@ -147,6 +151,9 @@ func runUninstallCommandsE(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	if err := preflightCommandArtifacts(artifacts); err != nil {
+		return err
+	}
 	removedCount := 0
 	for _, artifact := range artifacts {
 		removed, err := uninstallCommandArtifact(artifact)
@@ -248,6 +255,24 @@ func installCommandsToPath(commandsDir, claudioMdPath string) error {
 	})
 }
 
+// Check every destination before a known conflict can cause a partial update.
+// Each mutation rechecks its own file to catch changes after the preflight.
+func preflightCommandArtifacts(artifacts []commandArtifact) error {
+	for _, artifact := range artifacts {
+		data, err := os.ReadFile(artifact.Path)
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("cannot inspect command artifact %s: %w", artifact.Path, err)
+		}
+		if !bytes.Equal(data, []byte(artifact.Content)) {
+			return fmt.Errorf("refusing to change existing customized command artifact: %s", artifact.Path)
+		}
+	}
+	return nil
+}
+
 func installCommandArtifact(artifact commandArtifact) error {
 	slog.Debug("installing command artifact", "agent", artifact.Agent, "dir", artifact.Directory, "file", artifact.Path)
 
@@ -259,10 +284,28 @@ func installCommandArtifact(artifact commandArtifact) error {
 
 	slog.Debug("command artifact directory ready", "path", artifact.Directory)
 
-	err = os.WriteFile(artifact.Path, []byte(artifact.Content), 0644)
+	existing, err := os.ReadFile(artifact.Path)
+	if err == nil {
+		if bytes.Equal(existing, []byte(artifact.Content)) {
+			return nil
+		}
+		return fmt.Errorf("refusing to overwrite existing or customized command artifact %s", artifact.Path)
+	}
+	if !os.IsNotExist(err) {
+		return fmt.Errorf("failed to inspect command artifact: %w", err)
+	}
+	file, err := os.OpenFile(artifact.Path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
 	if err != nil {
-		slog.Error("failed to write command artifact", "path", artifact.Path, "error", err)
-		return fmt.Errorf("failed to write command artifact: %w", err)
+		return fmt.Errorf("failed to create command artifact: %w", err)
+	}
+	_, writeErr := file.WriteString(artifact.Content)
+	closeErr := file.Close()
+	if writeErr != nil || closeErr != nil {
+		_ = os.Remove(artifact.Path)
+		if writeErr != nil {
+			return fmt.Errorf("failed to write command artifact: %w", writeErr)
+		}
+		return fmt.Errorf("failed to close command artifact: %w", closeErr)
 	}
 
 	slog.Debug("command artifact written successfully", "path", artifact.Path)
@@ -273,7 +316,17 @@ func installCommandArtifact(artifact commandArtifact) error {
 func uninstallCommandArtifact(artifact commandArtifact) (bool, error) {
 	slog.Debug("uninstalling command artifact", "agent", artifact.Agent, "file", artifact.Path)
 
-	err := os.Remove(artifact.Path)
+	existing, err := os.ReadFile(artifact.Path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to inspect command artifact: %w", err)
+	}
+	if !bytes.Equal(existing, []byte(artifact.Content)) {
+		return false, fmt.Errorf("refusing to remove customized command artifact %s", artifact.Path)
+	}
+	err = os.Remove(artifact.Path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return false, nil
