@@ -100,7 +100,7 @@ func existingAlternateAudioPaths(basePath, relativePath string) []string {
 		}
 		seen[key] = struct{}{}
 
-		if _, err := os.Stat(alternate); err == nil {
+		if info, err := os.Stat(alternate); err == nil && info.Mode().IsRegular() {
 			alternates = append(alternates, alternate)
 		}
 	}

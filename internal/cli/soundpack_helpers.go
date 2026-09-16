@@ -24,6 +24,25 @@ type soundpackInfo struct {
 	Path       string
 }
 
+func soundpackPathMatchesName(candidate, name string) bool {
+	info, err := os.Stat(candidate)
+	if err != nil {
+		return false
+	}
+	if info.IsDir() {
+		return filepath.Base(filepath.Clean(candidate)) == name
+	}
+	if !strings.EqualFold(filepath.Ext(candidate), ".json") {
+		return false
+	}
+	metadata, err := soundpack.PeekJSONSoundpackMetadataFromFile(candidate)
+	if err == nil && metadata.Name != "" {
+		return metadata.Name == name
+	}
+	base := filepath.Base(candidate)
+	return strings.TrimSuffix(base, filepath.Ext(base)) == name
+}
+
 var embeddedPlatformSoundpackFiles = []string{"windows.json", "wsl.json", "darwin.json", "linux.json"}
 
 func embeddedPlatformSoundpackIdentifier(name string) (string, bool) {
@@ -165,6 +184,16 @@ func discoverXDGSoundpacks() []soundpackInfo {
 			fullPath := filepath.Join(basePath, entry.Name())
 
 			if entry.IsDir() {
+				manifestPath := filepath.Join(fullPath, "soundpack.json")
+				if spFile, peekErr := soundpack.PeekJSONSoundpackFromFile(manifestPath); peekErr == nil && spFile.Name != "" {
+					packs = append(packs, soundpackInfo{
+						Name:       spFile.Name,
+						Type:       "json",
+						SoundCount: countNonEmptyMappings(spFile.Mappings),
+						Path:       manifestPath,
+					})
+					continue
+				}
 				// Directory soundpack - count audio files
 				count := countAudioFiles(fullPath)
 				slog.Debug("discovered directory soundpack", "name", entry.Name(), "path", fullPath, "sounds", count)
@@ -184,7 +213,10 @@ func discoverXDGSoundpacks() []soundpackInfo {
 					continue
 				}
 				soundCount := countNonEmptyMappings(spFile.Mappings)
-				name := strings.TrimSuffix(entry.Name(), ".json")
+				name := spFile.Name
+				if name == "" {
+					name = strings.TrimSuffix(entry.Name(), ".json")
+				}
 				slog.Debug("discovered JSON soundpack", "name", name, "path", fullPath, "sounds", soundCount)
 				packs = append(packs, soundpackInfo{
 					Name:       name,
@@ -217,7 +249,10 @@ func discoverXDGSoundpacks() []soundpackInfo {
 				continue
 			}
 			soundCount := countNonEmptyMappings(spFile.Mappings)
-			name := strings.TrimSuffix(entry.Name(), ".json")
+			name := spFile.Name
+			if name == "" {
+				name = strings.TrimSuffix(entry.Name(), ".json")
+			}
 			slog.Debug("discovered JSON soundpack in parent dir", "name", name, "path", fullPath, "sounds", soundCount)
 			packs = append(packs, soundpackInfo{
 				Name:       name,
@@ -268,7 +303,10 @@ func discoverConfigSoundpacks() []soundpackInfo {
 				continue
 			}
 			soundCount := countNonEmptyMappings(spFile.Mappings)
-			name := strings.TrimSuffix(filepath.Base(path), ".json")
+			name := spFile.Name
+			if name == "" {
+				name = strings.TrimSuffix(filepath.Base(path), ".json")
+			}
 			slog.Debug("discovered JSON soundpack from config", "name", name, "path", path, "sounds", soundCount)
 			packs = append(packs, soundpackInfo{
 				Name:       name,
