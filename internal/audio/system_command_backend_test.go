@@ -6,8 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestNewSystemCommandBackendStoresFallbackChain(t *testing.T) {
@@ -15,6 +17,37 @@ func TestNewSystemCommandBackendStoresFallbackChain(t *testing.T) {
 	want := []string{"paplay", "ffplay", "aplay"}
 	if !reflect.DeepEqual(scb.commands, want) {
 		t.Fatalf("commands = %v, want %v", scb.commands, want)
+	}
+}
+
+func TestSystemCommandBackend_IsPlayingTracksConcurrentCommands(t *testing.T) {
+	command := "sleep"
+	longArg := "2"
+	if runtime.GOOS == "windows" {
+		command = "ping.exe"
+		longArg = "127.0.0.1"
+	}
+
+	backend := NewSystemCommandBackend(command)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	longDone := make(chan error, 1)
+	go func() { longDone <- backend.Play(ctx, NewFileSource(longArg)) }()
+	deadline := time.Now().Add(time.Second)
+	for !backend.IsPlaying() && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if !backend.IsPlaying() {
+		t.Fatal("long command did not start")
+	}
+	shortCtx, cancelShort := context.WithCancel(context.Background())
+	cancelShort()
+	_ = backend.Play(shortCtx, NewFileSource("unused"))
+	if !backend.IsPlaying() {
+		t.Error("IsPlaying became false while the long command was still running")
+	}
+	if err := <-longDone; err != nil {
+		t.Fatalf("long command: %v", err)
 	}
 }
 
