@@ -5,6 +5,7 @@ package malgo
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"testing"
 
 	"github.com/gen2brain/malgo"
@@ -152,6 +153,42 @@ func TestWavDecoderDecodeValidData(t *testing.T) {
 			t.Error("expected sample data, got empty")
 		}
 	})
+}
+
+func TestWavDecoderDecodePreservesPCMBytesAcrossReadChunks(t *testing.T) {
+	const frames = 5001 // More than two go-wav ReadSamples chunks.
+
+	want := make([]byte, frames*4)
+	for frame := 0; frame < frames; frame++ {
+		left := int16(frame*31 - 16000)
+		right := int16(12000 - frame*17)
+		binary.LittleEndian.PutUint16(want[frame*4:], uint16(left))
+		binary.LittleEndian.PutUint16(want[frame*4+2:], uint16(right))
+	}
+
+	wavData := make([]byte, 44+len(want))
+	copy(wavData[0:4], "RIFF")
+	binary.LittleEndian.PutUint32(wavData[4:8], uint32(len(wavData)-8))
+	copy(wavData[8:12], "WAVE")
+	copy(wavData[12:16], "fmt ")
+	binary.LittleEndian.PutUint32(wavData[16:20], 16)
+	binary.LittleEndian.PutUint16(wavData[20:22], 1)
+	binary.LittleEndian.PutUint16(wavData[22:24], 2)
+	binary.LittleEndian.PutUint32(wavData[24:28], 44100)
+	binary.LittleEndian.PutUint32(wavData[28:32], 44100*4)
+	binary.LittleEndian.PutUint16(wavData[32:34], 4)
+	binary.LittleEndian.PutUint16(wavData[34:36], 16)
+	copy(wavData[36:40], "data")
+	binary.LittleEndian.PutUint32(wavData[40:44], uint32(len(want)))
+	copy(wavData[44:], want)
+
+	got, err := NewWavDecoder().Decode(context.Background(), bytes.NewReader(wavData))
+	if err != nil {
+		t.Fatalf("Decode() error = %v", err)
+	}
+	if !bytes.Equal(got.Samples, want) {
+		t.Fatalf("Decode() returned %d PCM bytes, want exact %d-byte input", len(got.Samples), len(want))
+	}
 }
 
 func TestNewWavDecoder(t *testing.T) {
