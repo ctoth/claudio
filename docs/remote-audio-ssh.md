@@ -192,7 +192,7 @@ To confirm what the hook process actually saw, use the log file rather than
 guessing:
 
 ```bash
-CLAUDIO_LOG_LEVEL=debug
+export CLAUDIO_LOG_LEVEL=debug
 tail -F ~/.cache/claudio/logs/claudio.log
 ```
 

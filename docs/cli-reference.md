@@ -333,10 +333,22 @@ claudio analyze missing --preset all-time --limit 50
 claudio analyze missing --category error
 ```
 
+## `claudio completion`
+
+Generates a shell completion script for Bash, Fish, PowerShell, or Zsh.
+
+```bash
+claudio completion bash
+claudio completion fish
+claudio completion powershell
+claudio completion zsh
+```
+
 ## Exit Codes
 
-Most command failures return exit code `1`. Validation and configuration
-errors are printed to stderr with the failing command context.
+Most subcommand failures return exit code `1`. During hook processing, a
+missing or invalid config is logged and Claudio continues with defaults so an
+agent hook is not blocked.
 
 ## See Also
 

@@ -21,15 +21,17 @@
 </head>
 
 <body>
+    <a class="skip-link" href="#main-content">Skip to content</a>
     <header class="site-header" role="banner">
         <div class="wrapper">
             <a class="site-title" rel="author" href="{{ "/" | relative_url }}">{{ site.title | escape }}</a>
             
-            <nav class="site-nav">
-                <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+            <nav class="site-nav" aria-label="Primary">
+                <input type="checkbox" id="nav-trigger" class="nav-trigger" aria-label="Navigation menu" />
                 <label for="nav-trigger">
+                    <span class="visually-hidden">Navigation menu</span>
                     <span class="menu-icon">
-                        <svg viewBox="0 0 18 15" width="18px" height="15px">
+                        <svg viewBox="0 0 18 15" width="18px" height="15px" aria-hidden="true" focusable="false">
                             <path d="m18,1.484c0,0.82-0.665,1.484-1.484,1.484h-15.032c-0.819,0-1.484-0.665-1.484-1.484s0.665-1.484,1.484-1.484h15.032c0.819,0,1.484,0.665,1.484,1.484zm0,5.516c0,0.82-0.665,1.484-1.484,1.484h-15.032c-0.819,0-1.484-0.665-1.484-1.484s0.665-1.484,1.484-1.484h15.032c0.819,0,1.484,0.665,1.484,1.484zm0,5.516c0,0.82-0.665,1.484-1.484,1.484h-15.032c-0.819,0-1.484-0.665-1.484-1.484s0.665-1.484,1.484-1.484h15.032c0.819,0,1.484,0.665,1.484,1.484z"/>
                         </svg>
                     </span>
@@ -48,7 +50,7 @@
         </div>
     </header>
 
-    <main class="page-content" aria-label="Content">
+    <main id="main-content" class="page-content" aria-label="Content">
         <div class="wrapper">
             {{ content }}
         </div>
@@ -60,7 +62,7 @@
                 <div class="footer-col footer-col-1">
                     <ul class="contact-list">
                         <li class="p-name">{{ site.title | escape }}</li>
-                        <li><a class="u-email" href="mailto:{{ site.email }}">{{ site.email }}</a></li>
+                        {% if site.email %}<li><a class="u-email" href="mailto:{{ site.email }}">{{ site.email }}</a></li>{% endif %}
                     </ul>
                 </div>
 
@@ -89,9 +91,12 @@
         .site-title, .site-title:visited { color: #424242; text-decoration: none; }
         .site-nav { float: right; line-height: 54px; }
         .site-nav .nav-trigger { display: none; }
+        .site-nav label[for="nav-trigger"] { display: none; }
         .site-nav .menu-icon { display: none; }
         .site-nav .page-link { color: #111; line-height: 1.5; margin-left: 20px; }
         .site-nav .page-link:not(:last-child) { margin-right: 0; }
+        .skip-link, .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+        .skip-link:focus { position: fixed; top: 8px; left: 8px; width: auto; height: auto; padding: 8px 12px; margin: 0; overflow: visible; clip: auto; white-space: normal; color: #111; background: #fdfdfd; border: 2px solid #111; z-index: 10; }
         .wrapper { max-width: -webkit-calc(800px - (30px * 2)); max-width: calc(800px - (30px * 2)); margin-right: auto; margin-left: auto; padding-right: 30px; padding-left: 30px; }
         .page-content { padding: 30px 0; flex: 1; }
         .site-footer { border-top: 1px solid #e8e8e8; padding: 30px 0; }
@@ -100,6 +105,8 @@
         
         @media screen and (max-width: 600px) {
             .site-nav { position: absolute; top: 9px; right: 15px; background-color: #fdfdfd; border: 1px solid #e8e8e8; border-radius: 5px; text-align: right; }
+            .site-nav .nav-trigger { display: block; position: absolute; top: 0; right: 0; width: 1px; height: 1px; margin: 0; opacity: 0; }
+            .site-nav .nav-trigger:focus-visible + label { outline: 2px solid #111; outline-offset: 2px; }
             .site-nav label[for="nav-trigger"] { display: block; float: right; width: 36px; height: 36px; z-index: 2; cursor: pointer; }
             .site-nav .menu-icon { display: block; float: right; width: 18px; height: 15px; line-height: 0; padding-top: 10px; text-align: center; }
             .site-nav .menu-icon > svg { fill: #424242; }
