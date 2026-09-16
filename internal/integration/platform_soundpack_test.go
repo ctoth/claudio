@@ -30,6 +30,8 @@ func TestExecutableDirectoryDetection(t *testing.T) {
 
 // TestPlatformSoundpackBasic tests basic platform soundpack functionality
 func TestPlatformSoundpackBasic(t *testing.T) {
+	isolateIntegrationXDG(t)
+
 	t.Run("CLI handles missing platform soundpack gracefully", func(t *testing.T) {
 		// Create test hook input
 		testInput := `{"session_id":"basic-test","transcript_path":"/test","cwd":"/test","hook_event_name":"PostToolUse","tool_name":"Bash","tool_response":{"stdout":"success","stderr":"","interrupted":false}}`
@@ -50,4 +52,3 @@ func TestPlatformSoundpackBasic(t *testing.T) {
 		t.Logf("CLI handled missing soundpack - Exit code: %d", exitCode)
 	})
 }
-
