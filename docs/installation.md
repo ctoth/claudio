@@ -12,6 +12,10 @@ Installation has two parts:
 
 ## Install The Binary
 
+Claudio requires Go 1.25.13 or newer. With Go's default automatic toolchain
+selection, commands run from this repository use the recommended Go 1.26.6
+toolchain declared in `go.mod`.
+
 ```bash
 go install claudio.click/cmd/claudio@latest
 ```

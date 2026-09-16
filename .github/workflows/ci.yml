@@ -46,7 +46,7 @@ jobs:
 
       - uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.12
+          version: v2.12.2
 
   build-nocgo:
     runs-on: ubuntu-latest
