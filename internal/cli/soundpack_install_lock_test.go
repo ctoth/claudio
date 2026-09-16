@@ -17,7 +17,11 @@ func TestSoundpackInstallRespectsNameLock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer lock.Unlock()
+	defer func() {
+		if err := lock.Unlock(); err != nil {
+			t.Errorf("unlock soundpack name: %v", err)
+		}
+	}()
 	var stdout, stderr bytes.Buffer
 	code := NewCLI().Run([]string{"claudio", "soundpack", "install", source}, nil, &stdout, &stderr)
 	if code == 0 || !strings.Contains(stderr.String(), "already running") {
