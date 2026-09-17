@@ -30,6 +30,45 @@ func TestWorkflowsUseModuleGoVersion(t *testing.T) {
 	}
 }
 
+func TestLintVersionIsConsistentAcrossDeveloperAndCIConfig(t *testing.T) {
+	root := repoRoot(t)
+
+	precommit := readRepoFile(t, root, ".pre-commit-config.yaml")
+	workflow := readRepoFile(t, root, ".github/workflows/ci.yml")
+	const lintVersion = "v2.12.2"
+
+	if !strings.Contains(precommit, "golangci-lint@"+lintVersion) {
+		t.Fatalf("pre-commit does not run golangci-lint %s", lintVersion)
+	}
+	if !strings.Contains(workflow, "version: "+lintVersion) {
+		t.Fatalf("CI does not run golangci-lint %s", lintVersion)
+	}
+	if strings.Contains(precommit, "files: \\.go$") {
+		t.Fatal("Go pre-commit hooks ignore go.mod, go.sum, and lint config changes")
+	}
+}
+
+func TestReleaseRunsVetBeforePublishing(t *testing.T) {
+	root := repoRoot(t)
+	release := readRepoFile(t, root, ".github/workflows/release.yml")
+	if !strings.Contains(release, "run: go vet ./...") {
+		t.Fatal("release workflow does not run go vet")
+	}
+	if !strings.Contains(release, `expected="${GITHUB_REF_NAME#v}"`) ||
+		!strings.Contains(release, `claudio version`) {
+		t.Fatal("release workflow does not verify that the tag matches the binary version")
+	}
+}
+
+func readRepoFile(t *testing.T, root, rel string) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(root, rel))
+	if err != nil {
+		t.Fatalf("read %s: %v", rel, err)
+	}
+	return string(data)
+}
+
 func repoRoot(t *testing.T) string {
 	t.Helper()
 
