@@ -12,7 +12,7 @@ paths.
 
 ```bash
 go install claudio.click/cmd/claudio@latest
-claudio install --agent claude --scope user
+claudio install --agent claude --scope global
 claudio status
 ```
 
@@ -27,7 +27,7 @@ claudio install --agent claude --scope project
 
 ```bash
 go install claudio.click/cmd/claudio@latest
-claudio install --agent codex --scope user
+claudio install --agent codex --scope global
 ```
 
 Then open Codex, run `/hooks`, and trust the Claudio hook.
