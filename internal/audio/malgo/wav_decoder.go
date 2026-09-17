@@ -3,6 +3,7 @@
 package malgo
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"log/slog"
@@ -23,9 +24,7 @@ func NewWavDecoder() *WavDecoder {
 }
 
 // Decode reads WAV audio data from reader and returns decoded PCM data.
-// ctx is checked at entry and after the bulk read. WAV decoding is otherwise
-// in-memory work over a pre-buffered byte slice so there is no other
-// meaningful cancellation point.
+// ctx is checked at entry, after the bulk read, and between sample chunks.
 func (d *WavDecoder) Decode(ctx context.Context, reader io.Reader) (*AudioData, error) {
 	slog.Debug("starting WAV decode operation")
 
@@ -50,7 +49,7 @@ func (d *WavDecoder) Decode(ctx context.Context, reader io.Reader) (*AudioData, 
 	}
 
 	// Create a ReadSeeker from the data
-	seekReader := strings.NewReader(string(data))
+	seekReader := bytes.NewReader(data)
 	wavReader := wav.NewReader(seekReader)
 
 	format, err := wavReader.Format()
@@ -71,6 +70,19 @@ func (d *WavDecoder) Decode(ctx context.Context, reader io.Reader) (*AudioData, 
 			"sample_rate", format.SampleRate)
 		return nil, ErrInvalidData
 	}
+	// go-wav stores two channel values per frame and indexes them directly.
+	if format.NumChannels > 2 {
+		return nil, ErrUnsupportedFormat
+	}
+	if format.AudioFormat != wav.AudioFormatPCM && format.AudioFormat != wav.AudioFormatIEEEFloat {
+		return nil, ErrUnsupportedFormat
+	}
+	if format.AudioFormat == wav.AudioFormatIEEEFloat && format.BitsPerSample != 32 {
+		return nil, ErrUnsupportedFormat
+	}
+	if format.BlockAlign == 0 || uint32(format.BlockAlign)*8 != uint32(format.NumChannels)*uint32(format.BitsPerSample) {
+		return nil, ErrInvalidData
+	}
 
 	// Convert bit depth to malgo format
 	var malgoFormat malgo.FormatType
@@ -89,15 +101,22 @@ func (d *WavDecoder) Decode(ctx context.Context, reader io.Reader) (*AudioData, 
 		return nil, ErrUnsupportedFormat
 	}
 
-	// Read all audio samples into memory
+	// Decode each sample chunk directly into the output buffer. Keeping the
+	// library's []wav.Sample representation for the whole file would use much
+	// more memory than the encoded PCM, especially for mono and 16-bit audio.
 	slog.Debug("reading WAV audio samples")
-	var allSamples []wav.Sample
+	rawBytes := make([]byte, 0, len(data))
+	totalSamples := 0
 
 	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+
 		samples, err := wavReader.ReadSamples()
 		if err != nil {
 			if err == io.EOF {
-				slog.Debug("reached end of WAV file", "total_samples", len(allSamples))
+				slog.Debug("reached end of WAV file", "total_samples", totalSamples)
 				break
 			}
 			slog.Error("failed to read WAV samples", "error", err)
@@ -108,41 +127,37 @@ func (d *WavDecoder) Decode(ctx context.Context, reader io.Reader) (*AudioData, 
 			break
 		}
 
-		allSamples = append(allSamples, samples...)
+		for _, sample := range samples {
+			// Process all channels in the sample (interleaved)
+			for ch := 0; ch < int(format.NumChannels); ch++ {
+				var val int
+				if ch < len(sample.Values) {
+					val = sample.Values[ch]
+				} else {
+					// If channel data is missing, use silence
+					val = 0
+				}
 
-		if len(allSamples)%16384 == 0 { // Log every 16K samples
-			slog.Debug("reading WAV data", "samples_read", len(allSamples))
+				switch format.BitsPerSample {
+				case 16:
+					rawBytes = append(rawBytes, byte(val), byte(val>>8))
+				case 24:
+					rawBytes = append(rawBytes, byte(val), byte(val>>8), byte(val>>16))
+				case 32:
+					rawBytes = append(rawBytes, byte(val), byte(val>>8), byte(val>>16), byte(val>>24))
+				}
+			}
+		}
+
+		totalSamples += len(samples)
+		if totalSamples%16384 == 0 { // Log every 16K samples
+			slog.Debug("reading WAV data", "samples_read", totalSamples)
 		}
 	}
 
-	if len(allSamples) == 0 {
+	if totalSamples == 0 {
 		slog.Error("no audio data found in WAV file")
 		return nil, ErrInvalidData
-	}
-
-	// Convert samples to raw bytes based on bit depth
-	var rawBytes []byte
-
-	for _, sample := range allSamples {
-		// Process all channels in the sample (interleaved)
-		for ch := 0; ch < int(format.NumChannels); ch++ {
-			var val int
-			if ch < len(sample.Values) {
-				val = sample.Values[ch]
-			} else {
-				// If channel data is missing, use silence
-				val = 0
-			}
-
-			switch format.BitsPerSample {
-			case 16:
-				rawBytes = append(rawBytes, byte(val), byte(val>>8))
-			case 24:
-				rawBytes = append(rawBytes, byte(val), byte(val>>8), byte(val>>16))
-			case 32:
-				rawBytes = append(rawBytes, byte(val), byte(val>>8), byte(val>>16), byte(val>>24))
-			}
-		}
 	}
 
 	audioData := &AudioData{
@@ -154,11 +169,11 @@ func (d *WavDecoder) Decode(ctx context.Context, reader io.Reader) (*AudioData, 
 
 	slog.Debug("WAV decode completed successfully",
 		"total_bytes", len(rawBytes),
-		"total_samples", len(allSamples),
+		"total_samples", totalSamples,
 		"channels", audioData.Channels,
 		"sample_rate", audioData.SampleRate,
 		"format", malgoFormat,
-		"duration_estimate_ms", (len(allSamples)*1000)/int(audioData.SampleRate))
+		"duration_estimate_ms", (totalSamples*1000)/int(audioData.SampleRate))
 
 	return audioData, nil
 }

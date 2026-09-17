@@ -14,6 +14,10 @@ Supported audio formats are:
 - MP3
 - AIFF
 
+Playback reads at most 100 MiB from any referenced audio file. MP3 decoding
+also stops when the decoded stereo PCM exceeds 100 MiB, so a compressed MP3
+smaller than 100 MiB can still exceed the playback limit after decoding.
+
 This page has three parts: using a pack someone else made (or one that's
 already built in), building your own, and — for anyone extending Claudio
 itself — how sound selection actually works under the hood.

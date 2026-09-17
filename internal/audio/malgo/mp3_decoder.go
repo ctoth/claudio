@@ -22,8 +22,8 @@ func NewMp3Decoder() *Mp3Decoder {
 }
 
 // Decode reads MP3 audio data from reader and returns decoded PCM data.
-// ctx is polled inside the read loop; if it's cancelled, Decode returns
-// ctx.Err() promptly rather than blocking on a stalled underlying reader.
+// Cancellation is checked before decoding and between PCM reads. It cannot
+// interrupt an underlying Read already in progress.
 func (d *Mp3Decoder) Decode(ctx context.Context, reader io.Reader) (*AudioData, error) {
 	slog.Debug("starting MP3 decode operation")
 
@@ -50,41 +50,9 @@ func (d *Mp3Decoder) Decode(ctx context.Context, reader io.Reader) (*AudioData, 
 
 	// Read all audio data into memory (better than malgo's streaming approach for hooks)
 	slog.Debug("reading MP3 audio samples")
-	var samples []byte
-	buf := make([]byte, 4096) // 4KB buffer for reading
-	totalBytesRead := 0
-
-	for {
-		// Poll ctx between read chunks. go-mp3.decoder.Read ultimately reads
-		// from the original reader; a slow source can block indefinitely
-		// without this check.
-		select {
-		case <-ctx.Done():
-			slog.Debug("MP3 decode cancelled mid-stream", "bytes_read", totalBytesRead)
-			return nil, ctx.Err()
-		default:
-		}
-
-		n, err := decoder.Read(buf)
-		if err != nil {
-			if err == io.EOF {
-				slog.Debug("reached end of MP3 file", "total_bytes", totalBytesRead)
-				break
-			}
-			slog.Error("failed to read MP3 PCM data", "error", err)
-			return nil, ErrReadFailure
-		}
-
-		if n == 0 {
-			break
-		}
-
-		samples = append(samples, buf[:n]...)
-		totalBytesRead += n
-
-		if totalBytesRead%16384 == 0 { // Log every 16KB
-			slog.Debug("reading MP3 data", "bytes_read", totalBytesRead)
-		}
+	samples, err := readDecodedPCM(ctx, decoder, MaxDecodedPCMBytes)
+	if err != nil {
+		return nil, err
 	}
 
 	if len(samples) == 0 {
