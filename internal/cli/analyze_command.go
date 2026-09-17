@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"time"
 
 	"claudio.click/internal/tracking"
 	"github.com/spf13/cobra"
@@ -15,23 +16,23 @@ import (
 // ToolGroup represents a tool with its missing sounds grouped by category
 type ToolGroup struct {
 	Name       string          `json:"name"`
-	Total      int             `json:"total"`       // Total requests across all categories
-	Count      int             `json:"count"`       // Total missing sounds count
+	Total      int             `json:"total"` // Total requests across all categories
+	Count      int             `json:"count"` // Total missing sounds count
 	Categories []CategoryGroup `json:"categories"`
 }
 
 // CategoryGroup represents a category of missing sounds within a tool
 type CategoryGroup struct {
-	Name   string                     `json:"name"`
-	Total  int                        `json:"total"`  // Total requests for this category
-	Count  int                        `json:"count"`  // Number of missing sounds
-	Sounds []tracking.MissingSound    `json:"sounds"`
+	Name   string                  `json:"name"`
+	Total  int                     `json:"total"` // Total requests for this category
+	Count  int                     `json:"count"` // Number of missing sounds
+	Sounds []tracking.MissingSound `json:"sounds"`
 }
 
 // Analysis represents the complete analysis of missing sounds grouped by tool
 type Analysis struct {
-	Tools []ToolGroup     `json:"tools"`  // Tool-specific missing sounds
-	Other []CategoryGroup `json:"other"`  // Non-tool-specific missing sounds (interactive, system, etc.)
+	Tools []ToolGroup     `json:"tools"` // Tool-specific missing sounds
+	Other []CategoryGroup `json:"other"` // Non-tool-specific missing sounds (interactive, system, etc.)
 }
 
 // newAnalyzeCommand creates the analyze command with subcommands
@@ -95,6 +96,9 @@ Examples:
 // runAnalyzeMissing executes the analyze missing command
 func runAnalyzeMissing(cmd *cobra.Command, days int, tool, category string, limit int, preset string) error {
 	slog.Debug("running analyze missing command", "days", days, "tool", tool, "category", category, "limit", limit, "preset", preset)
+	if err := validateAnalyzeFilterValues(category, preset); err != nil {
+		return err
+	}
 
 	// Extract CLI instance from context
 	cli := cliFromContext(cmd.Context())
@@ -118,13 +122,13 @@ func runAnalyzeMissing(cmd *cobra.Command, days int, tool, category string, limi
 
 	// Build query filter using new common infrastructure
 	filter := tracking.QueryFilter{
-		Days:      days,
-		Tool:      tool,
-		Category:  category,
-		Limit:     limit,
+		Days:       days,
+		Tool:       tool,
+		Category:   category,
+		Limit:      limit,
 		DatePreset: preset,
-		OrderBy:   "frequency",
-		OrderDesc: true,
+		OrderBy:    "frequency",
+		OrderDesc:  true,
 	}
 
 	// Get missing sounds data
@@ -476,6 +480,9 @@ Examples:
 // runAnalyzeUsage executes the analyze usage command
 func runAnalyzeUsage(cmd *cobra.Command, days int, tool, category string, limit int, preset string, showChains, showSummary bool) error {
 	slog.Debug("running analyze usage command", "days", days, "tool", tool, "category", category, "limit", limit, "preset", preset)
+	if err := validateAnalyzeFilterValues(category, preset); err != nil {
+		return err
+	}
 
 	// Extract CLI instance from context
 	cli := cliFromContext(cmd.Context())
@@ -501,13 +508,13 @@ func runAnalyzeUsage(cmd *cobra.Command, days int, tool, category string, limit 
 
 	// Build query filter
 	filter := tracking.QueryFilter{
-		Days:      days,
-		Tool:      tool,
-		Category:  category,
-		Limit:     limit,
+		Days:       days,
+		Tool:       tool,
+		Category:   category,
+		Limit:      limit,
 		DatePreset: preset,
-		OrderBy:   "frequency",
-		OrderDesc: true,
+		OrderBy:    "frequency",
+		OrderDesc:  true,
 	}
 
 	// Get sound usage statistics
@@ -637,5 +644,20 @@ func outputUsageStatistics(w io.Writer, usage []tracking.SoundUsage, filter trac
 		fmt.Fprintln(w, "  4. Use --show-summary to see overall statistics")
 	}
 
+	return nil
+}
+func validateAnalyzeFilterValues(category, preset string) error {
+	if category != "" {
+		switch category {
+		case "loading", "success", "error", "interactive", "completion", "system":
+		default:
+			return fmt.Errorf("invalid category %q: must be loading, success, error, interactive, completion, or system", category)
+		}
+	}
+	if preset != "" {
+		if _, _, err := tracking.ParseDatePreset(preset, time.Now()); err != nil {
+			return fmt.Errorf("invalid date preset %q: %w", preset, err)
+		}
+	}
 	return nil
 }
