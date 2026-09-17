@@ -22,6 +22,14 @@ func FindClaudeSettingsPaths(scope string) ([]string, error) {
 
 // findUserScopePaths returns potential user-scope Claude settings paths
 func findUserScopePaths() ([]string, error) {
+	// Claude Code honors CLAUDE_CONFIG_DIR as its configuration directory.
+	// When set, it replaces ~/.claude entirely, so it is the only candidate:
+	// falling back to ~/.claude would write hooks into a profile Claude Code
+	// is not reading.
+	if configDir := strings.TrimSpace(os.Getenv("CLAUDE_CONFIG_DIR")); configDir != "" {
+		return []string{filepath.Join(configDir, "settings.json")}, nil
+	}
+
 	var paths []string
 
 	// Get home directory - try multiple environment variables for cross-platform support

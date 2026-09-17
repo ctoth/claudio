@@ -587,3 +587,42 @@ func TestFindClaudeSettingsEnvironmentIntegration(t *testing.T) {
 		})
 	}
 }
+
+func TestFindClaudeSettingsPathsGlobalScopeHonorsClaudeConfigDir(t *testing.T) {
+	home := t.TempDir()
+	altProfile := filepath.Join(t.TempDir(), "alt-claude-profile")
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("HOMEDRIVE", "")
+	t.Setenv("HOMEPATH", "")
+	t.Setenv("CLAUDE_CONFIG_DIR", altProfile)
+
+	paths, err := FindClaudeSettingsPaths("global")
+	if err != nil {
+		t.Fatalf("FindClaudeSettingsPaths returned error: %v", err)
+	}
+
+	want := filepath.Join(altProfile, "settings.json")
+	if len(paths) != 1 || paths[0] != want {
+		t.Fatalf("paths = %v, want exactly [%q] (CLAUDE_CONFIG_DIR replaces ~/.claude)", paths, want)
+	}
+}
+
+func TestFindClaudeSettingsPathsGlobalScopeIgnoresBlankClaudeConfigDir(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("HOMEDRIVE", "")
+	t.Setenv("HOMEPATH", "")
+	t.Setenv("CLAUDE_CONFIG_DIR", "   ")
+
+	paths, err := FindClaudeSettingsPaths("global")
+	if err != nil {
+		t.Fatalf("FindClaudeSettingsPaths returned error: %v", err)
+	}
+
+	want := filepath.Join(home, ".claude", "settings.json")
+	if len(paths) == 0 || paths[0] != want {
+		t.Fatalf("first path = %v, want %q as primary when CLAUDE_CONFIG_DIR is blank", paths, want)
+	}
+}
