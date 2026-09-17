@@ -179,12 +179,15 @@ func stageAndInstallSoundpack(srcPath, installDir string, isDir bool) error {
 		if err != nil {
 			return fmt.Errorf("failed to resolve staging directory: %w", err)
 		}
-		rel, err := filepath.Rel(sourceAbs, stagingAbs)
-		if err != nil {
-			return fmt.Errorf("failed to compare source and staging directories: %w", err)
-		}
-		if rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))) {
-			return fmt.Errorf("refusing to install a directory that contains the Claudio soundpack destination: %s", srcPath)
+		// Different Windows volumes cannot lexically contain one another.
+		if strings.EqualFold(filepath.VolumeName(sourceAbs), filepath.VolumeName(stagingAbs)) {
+			rel, err := filepath.Rel(sourceAbs, stagingAbs)
+			if err != nil {
+				return fmt.Errorf("failed to compare source and staging directories: %w", err)
+			}
+			if rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))) {
+				return fmt.Errorf("refusing to install a directory that contains the Claudio soundpack destination: %s", srcPath)
+			}
 		}
 	}
 	if err := os.MkdirAll(parent, 0755); err != nil {
