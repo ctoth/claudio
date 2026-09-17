@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"claudio.click/internal/config"
@@ -64,6 +65,205 @@ func TestSoundpackAdd_ClonesGitRepositoryAndUpdatesConfig(t *testing.T) {
 	cfg := loadTestConfig(t, configDir)
 	if !containsPath(cfg.SoundpackPaths, expectedClone) {
 		t.Fatalf("expected soundpack_paths to contain %s, got %v", expectedClone, cfg.SoundpackPaths)
+	}
+}
+
+func TestSoundpackAddHonorsExplicitConfig(t *testing.T) {
+	_, configDir, cleanup := setupInstallTestEnv(t)
+	defer cleanup()
+	repoPath := createTestGitSoundpackRepo(t)
+	customConfig := filepath.Join(t.TempDir(), "custom.json")
+
+	cli := NewCLI()
+	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
+	if code := cli.Run([]string{"claudio", "soundpack", "add", repoPath, "--name", "custom-config-pack", "--config", customConfig}, nil, stdout, stderr); code != 0 {
+		t.Fatalf("add failed: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	cfg, err := config.NewConfigManager().LoadFromFile(customConfig)
+	if err != nil {
+		t.Fatalf("explicit config was not written: %v", err)
+	}
+	if len(cfg.SoundpackPaths) != 1 || !strings.Contains(cfg.SoundpackPaths[0], "custom-config-pack") {
+		t.Fatalf("unexpected explicit config paths: %v", cfg.SoundpackPaths)
+	}
+	if _, err := os.Stat(filepath.Join(configDir, "claudio", "config.json")); !os.IsNotExist(err) {
+		t.Fatalf("default config was written despite --config: %v", err)
+	}
+}
+
+func TestSoundpackAddValidatesConfigBeforeCloning(t *testing.T) {
+	dataDir, _, cleanup := setupInstallTestEnv(t)
+	defer cleanup()
+	repoPath := createTestGitSoundpackRepo(t)
+	customConfig := filepath.Join(t.TempDir(), "custom.json")
+	want := []byte("{recover me")
+	if err := os.WriteFile(customConfig, want, 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	cli := NewCLI()
+	if code := cli.Run([]string{"claudio", "soundpack", "add", repoPath, "--name", "preflight-pack", "--config", customConfig}, nil, &bytes.Buffer{}, &bytes.Buffer{}); code == 0 {
+		t.Fatal("expected malformed config error")
+	}
+	clone := filepath.Join(dataDir, "claudio", "soundpack-repos", "preflight-pack")
+	if _, err := os.Stat(clone); !os.IsNotExist(err) {
+		t.Fatalf("repo was cloned before config validation: %v", err)
+	}
+	registry, err := loadSoundpackRegistry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := registry.Packs["preflight-pack"]; ok {
+		t.Fatal("registry changed before config validation")
+	}
+	got, err := os.ReadFile(customConfig)
+	if err != nil || !bytes.Equal(got, want) {
+		t.Fatalf("malformed config changed: got=%q err=%v", got, err)
+	}
+}
+
+func TestSoundpackAddRetryRepairsConfigForMatchingManagedRecord(t *testing.T) {
+	_, configDir, cleanup := setupInstallTestEnv(t)
+	defer cleanup()
+	repo := createTestGitSoundpackRepo(t)
+	cli := NewCLI()
+	args := []string{"claudio", "soundpack", "add", repo, "--name", "retry-add"}
+	if code := cli.Run(args, nil, &bytes.Buffer{}, &bytes.Buffer{}); code != 0 {
+		t.Fatalf("initial add exited %d", code)
+	}
+	configPath := filepath.Join(configDir, "claudio", "config.json")
+	registry, err := loadSoundpackRegistry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	clonePath := registry.Packs["retry-add"].Path
+	cfg := config.NewConfigManager().GetDefaultConfig()
+	cfg.SoundpackPaths = []string{filepath.Join(clonePath, "obsolete-layout.json")}
+	if err := config.NewConfigManager().SaveToFile(cfg, configPath); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
+	if code := cli.Run(args, nil, stdout, stderr); code != 0 {
+		t.Fatalf("retry failed: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	got := loadTestConfig(t, configDir)
+	if len(got.SoundpackPaths) != 1 || filepath.Clean(got.SoundpackPaths[0]) != filepath.Clean(clonePath) {
+		t.Fatalf("retry did not repair config: %v", got.SoundpackPaths)
+	}
+}
+
+func TestSoundpackReplaceFailurePreservesExistingManagedPack(t *testing.T) {
+	dataDir, _, cleanup := setupInstallTestEnv(t)
+	defer cleanup()
+	repo := createTestGitSoundpackRepo(t)
+	cli := NewCLI()
+	if code := cli.Run([]string{"claudio", "soundpack", "add", repo, "--name", "replace-safe"}, nil, &bytes.Buffer{}, &bytes.Buffer{}); code != 0 {
+		t.Fatalf("initial add exited %d", code)
+	}
+	clone := filepath.Join(dataDir, "claudio", "soundpack-repos", "replace-safe")
+	before, err := currentGitCommit(clone)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if code := cli.Run([]string{"claudio", "soundpack", "add", repo, "--name", "replace-safe", "--replace", "--ref", "missing-ref"}, nil, &bytes.Buffer{}, &bytes.Buffer{}); code == 0 {
+		t.Fatal("expected invalid replacement ref to fail")
+	}
+	after, err := currentGitCommit(clone)
+	if err != nil {
+		t.Fatalf("existing clone was lost: %v", err)
+	}
+	if after != before {
+		t.Fatalf("existing clone changed after failed replacement: before=%s after=%s", before, after)
+	}
+	registry, err := loadSoundpackRegistry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if record := registry.Packs["replace-safe"]; record.ResolvedCommit != before || record.Path != clone {
+		t.Fatalf("existing registry record changed: %#v", record)
+	}
+}
+
+func TestConcurrentSoundpackAddsPreserveBothRegistryEntries(t *testing.T) {
+	_, _, cleanup := setupInstallTestEnv(t)
+	defer cleanup()
+	repos := []string{createTestGitSoundpackRepo(t), createTestGitSoundpackRepo(t)}
+	names := []string{"concurrent-a", "concurrent-b"}
+	start := make(chan struct{})
+	results := make(chan int, len(repos))
+	var wg sync.WaitGroup
+	for i := range repos {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			<-start
+			results <- NewCLI().Run(
+				[]string{"claudio", "soundpack", "add", repos[i], "--name", names[i]},
+				nil, &bytes.Buffer{}, &bytes.Buffer{},
+			)
+		}(i)
+	}
+	close(start)
+	wg.Wait()
+	close(results)
+	for code := range results {
+		if code != 0 {
+			t.Fatalf("concurrent add exited %d", code)
+		}
+	}
+	registry, err := loadSoundpackRegistry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range names {
+		if _, ok := registry.Packs[name]; !ok {
+			t.Fatalf("registry lost concurrent add %q: %#v", name, registry.Packs)
+		}
+	}
+}
+
+func TestConcurrentSameNameAddsConvergeOnOneValidInstall(t *testing.T) {
+	dataDir, _, cleanup := setupInstallTestEnv(t)
+	defer cleanup()
+	repo := createTestGitSoundpackRepo(t)
+	start := make(chan struct{})
+	results := make(chan int, 2)
+	var wg sync.WaitGroup
+	for range 2 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			results <- NewCLI().Run(
+				[]string{"claudio", "soundpack", "add", repo, "--name", "same-name"},
+				nil, &bytes.Buffer{}, &bytes.Buffer{},
+			)
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(results)
+	successes := 0
+	for code := range results {
+		if code == 0 {
+			successes++
+		}
+	}
+	if successes == 0 {
+		t.Fatal("both concurrent same-name adds failed")
+	}
+	clone := filepath.Join(dataDir, "claudio", "soundpack-repos", "same-name")
+	if _, err := os.Stat(filepath.Join(clone, "success", "success.wav")); err != nil {
+		t.Fatalf("winning clone is incomplete: %v", err)
+	}
+	registry, err := loadSoundpackRegistry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if record, ok := registry.Packs["same-name"]; !ok || record.Path != clone {
+		t.Fatalf("winning registry entry is missing or invalid: %#v", record)
 	}
 }
 
@@ -137,6 +337,104 @@ func TestSoundpackRemove_DeletesManagedCloneAndConfigEntries(t *testing.T) {
 	}
 	if cfg.DefaultSoundpack == "git-pack" {
 		t.Fatalf("expected default_soundpack to be reset after removal")
+	}
+}
+
+func TestSoundpackRemovePreservesMalformedExplicitConfigAndManagedClone(t *testing.T) {
+	dataDir, _, cleanup := setupInstallTestEnv(t)
+	defer cleanup()
+	repoPath := createTestGitSoundpackRepo(t)
+	customConfig := filepath.Join(t.TempDir(), "custom.json")
+
+	cli := NewCLI()
+	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
+	if code := cli.Run([]string{"claudio", "soundpack", "add", repoPath, "--name", "preserve-pack", "--config", customConfig}, nil, stdout, stderr); code != 0 {
+		t.Fatalf("add failed: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	want := []byte("{recover me")
+	if err := os.WriteFile(customConfig, want, 0600); err != nil {
+		t.Fatal(err)
+	}
+	clonePath := filepath.Join(dataDir, "claudio", "soundpack-repos", "preserve-pack")
+	stdout.Reset()
+	stderr.Reset()
+	if code := cli.Run([]string{"claudio", "soundpack", "remove", "preserve-pack", "--config", customConfig}, nil, stdout, stderr); code == 0 {
+		t.Fatalf("expected malformed config error, stdout=%q stderr=%q", stdout, stderr)
+	}
+	got, err := os.ReadFile(customConfig)
+	if err != nil || !bytes.Equal(got, want) {
+		t.Fatalf("malformed config changed: got=%q err=%v", got, err)
+	}
+	if _, err := os.Stat(clonePath); err != nil {
+		t.Fatalf("clone was removed before config validation: %v", err)
+	}
+	registry, err := loadSoundpackRegistry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := registry.Packs["preserve-pack"]; !ok {
+		t.Fatal("registry entry was removed before config validation")
+	}
+}
+
+func TestSoundpackRemoveHonorsPerNameOperationLock(t *testing.T) {
+	dataDir, _, cleanup := setupInstallTestEnv(t)
+	defer cleanup()
+	repo := createTestGitSoundpackRepo(t)
+	cli := NewCLI()
+	if code := cli.Run([]string{"claudio", "soundpack", "add", repo, "--name", "locked-pack"}, nil, &bytes.Buffer{}, &bytes.Buffer{}); code != 0 {
+		t.Fatalf("initial add exited %d", code)
+	}
+	lock, err := lockSoundpackName("locked-pack")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = lock.Unlock() }()
+
+	if code := cli.Run([]string{"claudio", "soundpack", "remove", "locked-pack"}, nil, &bytes.Buffer{}, &bytes.Buffer{}); code == 0 {
+		t.Fatal("remove ignored the held per-name operation lock")
+	}
+	clone := filepath.Join(dataDir, "claudio", "soundpack-repos", "locked-pack")
+	if _, err := os.Stat(filepath.Join(clone, "success", "success.wav")); err != nil {
+		t.Fatalf("remove mutated clone while name lock was held: %v", err)
+	}
+	registry, err := loadSoundpackRegistry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := registry.Packs["locked-pack"]; !ok {
+		t.Fatal("remove mutated registry while name lock was held")
+	}
+}
+
+func TestSoundpackRemoveRetryRepairsConfigAfterRegistryRemoval(t *testing.T) {
+	dataDir, configDir, cleanup := setupInstallTestEnv(t)
+	defer cleanup()
+	repo := createTestGitSoundpackRepo(t)
+	cli := NewCLI()
+	if code := cli.Run([]string{"claudio", "soundpack", "add", repo, "--name", "retry-remove", "--default"}, nil, &bytes.Buffer{}, &bytes.Buffer{}); code != 0 {
+		t.Fatalf("initial add exited %d", code)
+	}
+	registry, err := loadSoundpackRegistry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	delete(registry.Packs, "retry-remove")
+	if err := saveSoundpackRegistry(registry); err != nil {
+		t.Fatal(err)
+	}
+	clone := filepath.Join(dataDir, "claudio", "soundpack-repos", "retry-remove")
+	if err := removeManagedGitClone(clone); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
+	if code := cli.Run([]string{"claudio", "soundpack", "remove", "retry-remove"}, nil, stdout, stderr); code != 0 {
+		t.Fatalf("retry failed: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	cfg := loadTestConfig(t, configDir)
+	if cfg.DefaultSoundpack == "retry-remove" || containsPath(cfg.SoundpackPaths, clone) {
+		t.Fatalf("retry did not repair config: %+v", cfg)
 	}
 }
 

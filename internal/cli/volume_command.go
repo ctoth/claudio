@@ -54,7 +54,7 @@ func runVolumeE(cmd *cobra.Command, args []string) error {
 
 	// Read-only path: print and return.
 	if len(args) == 0 {
-		cfg, err := loadConfigForVerb(cli, configPath)
+		cfg, err := loadConfigForVerb(cmd, cli, configPath)
 		if err != nil {
 			return err
 		}
@@ -95,7 +95,7 @@ func runVolumeE(cmd *cobra.Command, args []string) error {
 		}
 	}()
 
-	cfg, err := loadConfigForVerb(cli, configPath)
+	cfg, err := loadConfigForVerb(cmd, cli, configPath)
 	if err != nil {
 		return err
 	}

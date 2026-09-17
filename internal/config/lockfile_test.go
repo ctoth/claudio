@@ -1,6 +1,7 @@
 package config
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -23,6 +24,22 @@ func TestLockConfigDir_Acquires(t *testing.T) {
 
 	if !lock.Locked() {
 		t.Error("expected Locked()==true after successful acquire")
+	}
+}
+
+func TestLockConfigDirCreatesMissingParent(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "missing", "nested", "config.json")
+	lock, err := LockConfigDir(configPath)
+	if err != nil {
+		t.Fatalf("LockConfigDir failed for missing parent: %v", err)
+	}
+	defer func() {
+		if err := lock.Unlock(); err != nil {
+			t.Errorf("Unlock failed: %v", err)
+		}
+	}()
+	if _, err := os.Stat(filepath.Dir(configPath)); err != nil {
+		t.Fatalf("config parent was not created: %v", err)
 	}
 }
 

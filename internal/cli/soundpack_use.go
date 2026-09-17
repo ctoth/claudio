@@ -3,12 +3,10 @@ package cli
 import (
 	"fmt"
 	"log/slog"
-	"path/filepath"
 	"sort"
 	"strings"
 
 	"claudio.click/internal/config"
-	"github.com/adrg/xdg"
 	"github.com/spf13/cobra"
 )
 
@@ -64,35 +62,13 @@ func runSoundpackUse(cmd *cobra.Command, name string) error {
 		return fmt.Errorf("soundpack '%s' not found. Available soundpacks: %s", name, strings.Join(available, ", "))
 	}
 
-	// Load existing config
-	cm := config.NewConfigManager()
-	cfg, err := cm.LoadConfig()
-	if err != nil {
-		slog.Warn("could not load existing config, using defaults", "error", err)
-		cfg = cm.GetDefaultConfig()
-	}
-
-	// Check if already active
-	alreadyActive := cfg.DefaultSoundpack == name
-
-	// Update default_soundpack
-	cfg.DefaultSoundpack = name
-
-	// Determine config file path
-	xdgDirs := config.NewXDGDirs()
-	configPaths := xdgDirs.GetConfigPaths("config.json")
-	var configFilePath string
-	if len(configPaths) > 0 {
-		configFilePath = configPaths[0]
-	} else {
-		configFilePath = filepath.Join(xdg.ConfigHome, "claudio", "config.json")
-	}
-	slog.Debug("config file path determined", "path", configFilePath)
-
-	// Save config
-	if err := cm.SaveToFile(cfg, configFilePath); err != nil {
-		slog.Error("failed to save config", "path", configFilePath, "error", err)
-		return fmt.Errorf("failed to save config: %w", err)
+	alreadyActive := false
+	if err := mutateConfigForCommand(cmd, func(cfg *config.Config) error {
+		alreadyActive = cfg.DefaultSoundpack == name
+		cfg.DefaultSoundpack = name
+		return nil
+	}); err != nil {
+		return fmt.Errorf("failed to update config: %w", err)
 	}
 
 	if alreadyActive {

@@ -220,7 +220,9 @@ Flags:
 | `--default` | false | Set the installed soundpack as `default_soundpack`. |
 | `--skip-validate` | false | Skip validation before copying. |
 
-JSON files install to `<XDG_DATA_HOME>/claudio/<name>.json`.
+JSON files and their referenced audio files install under
+`<XDG_DATA_HOME>/claudio/soundpacks/<name>/`, with the installed manifest at
+`soundpack.json`.
 Directories install to `<XDG_DATA_HOME>/claudio/soundpacks/<name>/`.
 
 ### `soundpack use`

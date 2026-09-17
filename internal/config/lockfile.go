@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -26,6 +27,9 @@ import (
 // cross-process collision between a concurrent `claudio install` and
 // `claudio volume 0.5`.
 func LockConfigDir(configPath string) (*flock.Flock, error) {
+	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
+		return nil, fmt.Errorf("failed to create config directory for lock: %w", err)
+	}
 	lockPath := filepath.Join(filepath.Dir(configPath), ".claudio.lock")
 	lock := flock.New(lockPath)
 

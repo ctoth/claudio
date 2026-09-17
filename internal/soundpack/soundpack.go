@@ -46,8 +46,8 @@ type PathObserver func(path string, sequence int, exists bool)
 type ResolveOption func(*resolveConfig)
 
 // WithObserver attaches an observer to a ResolveSoundWithFallback call. The
-// observer fires once per candidate path in order, regardless of whether the
-// resolver found a winner before reaching that candidate or kept walking.
+// observer fires once per candidate path that resolution actually inspects,
+// in order, through and including the winner.
 //
 // Use this to instrument resolution (e.g. tracking telemetry) without
 // duplicating the os.Stat I/O that the resolver already performs.
@@ -117,7 +117,7 @@ func (u *UnifiedSoundpackResolver) ResolveSound(relativePath string) (string, er
 	for i, candidate := range candidates {
 		slog.Debug("checking candidate", "index", i, "candidate", candidate)
 
-		if _, err := os.Stat(candidate); err == nil {
+		if info, err := os.Stat(candidate); err == nil && info.Mode().IsRegular() {
 			slog.Debug("sound path resolved successfully",
 				"relative_path", relativePath,
 				"resolved_path", candidate,
@@ -147,9 +147,8 @@ func (u *UnifiedSoundpackResolver) ResolveSound(relativePath string) (string, er
 // ResolveSoundWithFallback tries multiple sound paths in order until one is
 // found. Optional ResolveOptions configure per-call behavior — most notably
 // WithObserver(...) which fires a PathObserver callback for every candidate
-// the resolver inspects, in input order, regardless of whether resolution
-// short-circuited on an earlier win. The observer is invoked once per input
-// candidate (deduplication and chain composition is the caller's concern).
+// the resolver inspects, in input order, through and including the winner.
+// Deduplication and chain composition are the caller's concern.
 //
 // The observer is invoked with exists=true ONLY when the candidate resolved
 // to a physical file present on disk. A mapping miss (ResolveSound returns
@@ -168,23 +167,9 @@ func (u *UnifiedSoundpackResolver) ResolveSoundWithFallback(paths []string, opts
 		"mapper_type", u.mapper.GetType())
 
 	var lastErr error
-	var winner string
-	winnerFound := false
 	for i, path := range paths {
 		sequence := i + 1
 		slog.Debug("trying fallback path", "index", i, "path", path)
-
-		// Once a winner is found, observer still fires for remaining
-		// candidates with exists=false — the observer's contract is one
-		// call per INPUT candidate, in order. (Today no caller depends
-		// on the post-winner tail; emitting it preserves the "lookups
-		// reflect the full chain shape" telemetry intent of Chunk 12.)
-		if winnerFound {
-			if cfg.observer != nil {
-				cfg.observer(path, sequence, false)
-			}
-			continue
-		}
 
 		resolved, err := u.ResolveSound(path)
 		if err == nil {
@@ -198,9 +183,7 @@ func (u *UnifiedSoundpackResolver) ResolveSoundWithFallback(paths []string, opts
 				"fallback_path", path,
 				"mapper_type", u.mapper.GetType())
 
-			winner = resolved
-			winnerFound = true
-			continue
+			return resolved, nil
 		}
 
 		if cfg.observer != nil {
@@ -209,10 +192,6 @@ func (u *UnifiedSoundpackResolver) ResolveSoundWithFallback(paths []string, opts
 
 		lastErr = err
 		slog.Debug("fallback path failed", "index", i, "path", path, "error", err)
-	}
-
-	if winnerFound {
-		return winner, nil
 	}
 
 	slog.Warn("all fallback paths failed",
@@ -478,13 +457,17 @@ func validateJSONSoundpackBasics(soundpack JSONSoundpackFile) error {
 // cap (validateJSONSoundpackBasics) bounds the number of stat calls.
 func validateMappingFilesExist(soundpack JSONSoundpackFile) error {
 	for relativePath, absolutePath := range soundpack.Mappings {
-		if _, err := os.Stat(absolutePath); err != nil {
+		info, err := os.Stat(absolutePath)
+		if err != nil {
 			slog.Error("sound file not found",
 				"relative_path", relativePath,
 				"absolute_path", absolutePath,
 				"error", err)
 			return fmt.Errorf("sound file not found for mapping '%s' -> '%s': %w",
 				relativePath, absolutePath, err)
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("sound mapping %q does not reference a regular file: %q", relativePath, absolutePath)
 		}
 
 		slog.Debug("sound file validation passed",
@@ -585,8 +568,14 @@ func CreateSoundpackMapper(name, path string) (PathMapper, error) {
 		return LoadJSONSoundpack(path)
 	}
 
-	// Assume directory soundpack for directories or other file types
+	// Installed JSON packs use a self-contained directory with a canonical
+	// soundpack.json manifest. Prefer that manifest over directory conventions.
 	if info.IsDir() {
+		manifestPath := filepath.Join(path, "soundpack.json")
+		if manifestInfo, statErr := os.Stat(manifestPath); statErr == nil && manifestInfo.Mode().IsRegular() {
+			slog.Debug("detected soundpack manifest", "path", manifestPath)
+			return LoadJSONSoundpack(manifestPath)
+		}
 		slog.Debug("detected directory soundpack", "path", path)
 		return NewDirectoryMapper(name, []string{path}), nil
 	}

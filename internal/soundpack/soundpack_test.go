@@ -910,6 +910,76 @@ func TestResolveWithObserver_ObservesExistenceAccurately(t *testing.T) {
 	}
 }
 
+func TestResolveWithObserver_DoesNotReportUninspectedTailAsMissing(t *testing.T) {
+	tempDir := t.TempDir()
+	soundpackDir := filepath.Join(tempDir, "success")
+	if err := os.MkdirAll(soundpackDir, 0755); err != nil {
+		t.Fatalf("mkdir soundpack: %v", err)
+	}
+	for _, name := range []string{"winner.wav", "tail.wav"} {
+		if err := os.WriteFile(filepath.Join(soundpackDir, name), []byte("data"), 0644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+
+	resolver := NewSoundpackResolver(NewDirectoryMapper("test", []string{tempDir}))
+	var calls []observerCall
+	winner, err := resolver.ResolveSoundWithFallback(
+		[]string{"success/winner.wav", "success/tail.wav"},
+		WithObserver(func(path string, sequence int, exists bool) {
+			calls = append(calls, observerCall{path: path, sequence: sequence, exists: exists})
+		}),
+	)
+	if err != nil {
+		t.Fatalf("ResolveSoundWithFallback: %v", err)
+	}
+	if winner != filepath.Join(soundpackDir, "winner.wav") {
+		t.Fatalf("winner = %q", winner)
+	}
+	if len(calls) != 1 {
+		t.Fatalf("observer received %d calls, want only the inspected winner: %+v", len(calls), calls)
+	}
+	if !calls[0].exists || calls[0].sequence != 1 {
+		t.Fatalf("winner observation = %+v, want sequence 1 found", calls[0])
+	}
+}
+
+func TestResolveSound_RejectsDirectoryCandidate(t *testing.T) {
+	tempDir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(tempDir, "directory.wav"), 0755); err != nil {
+		t.Fatalf("mkdir candidate: %v", err)
+	}
+	resolver := NewSoundpackResolver(NewDirectoryMapper("test", []string{tempDir}))
+
+	if _, err := resolver.ResolveSound("directory.wav"); err == nil {
+		t.Fatal("expected a directory candidate to be rejected")
+	}
+}
+
+func TestCreateSoundpackMapper_DirectoryPrefersManifest(t *testing.T) {
+	dir := t.TempDir()
+	soundPath := filepath.Join(dir, "tone.wav")
+	if err := os.WriteFile(soundPath, []byte("data"), 0644); err != nil {
+		t.Fatalf("write sound: %v", err)
+	}
+	manifest := `{"name":"manifest-pack","mappings":{"default.wav":"tone.wav"}}`
+	if err := os.WriteFile(filepath.Join(dir, "soundpack.json"), []byte(manifest), 0644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	mapper, err := CreateSoundpackMapper("configured-name", dir)
+	if err != nil {
+		t.Fatalf("CreateSoundpackMapper: %v", err)
+	}
+	if mapper.GetType() != "json" {
+		t.Fatalf("mapper type = %q, want json", mapper.GetType())
+	}
+	paths, err := mapper.MapPath("default.wav")
+	if err != nil || len(paths) != 1 || paths[0] != soundPath {
+		t.Fatalf("manifest mapping = %v, %v; want %q", paths, err, soundPath)
+	}
+}
+
 // TestResolveWithObserver_NilOptionsBackwardCompat pins that the option is
 // optional — callers that don't pass any options must continue to work
 // exactly as before. Backward compatibility for the existing callers.
