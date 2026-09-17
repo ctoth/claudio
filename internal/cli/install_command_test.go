@@ -258,3 +258,42 @@ func TestRunInstallWorkflowCreatesMissingSettingsDir(t *testing.T) {
 		t.Fatalf("expected settings file to be created: %v", err)
 	}
 }
+
+func TestResolveCommandArtifactsClaudeHonorsClaudeConfigDir(t *testing.T) {
+	altProfile := filepath.Join(t.TempDir(), "alt-claude-profile")
+	t.Setenv("CLAUDE_CONFIG_DIR", altProfile)
+
+	artifacts, err := resolveCommandArtifacts(commandArtifactAgentClaude)
+	if err != nil {
+		t.Fatalf("resolveCommandArtifacts returned error: %v", err)
+	}
+	if len(artifacts) != 1 {
+		t.Fatalf("expected 1 artifact, got %d", len(artifacts))
+	}
+
+	wantDir := filepath.Join(altProfile, "commands")
+	if artifacts[0].Directory != wantDir {
+		t.Errorf("artifact directory = %q, want %q", artifacts[0].Directory, wantDir)
+	}
+	if artifacts[0].Path != filepath.Join(wantDir, "claudio.md") {
+		t.Errorf("artifact path = %q, want %q", artifacts[0].Path, filepath.Join(wantDir, "claudio.md"))
+	}
+}
+
+func TestResolveCommandArtifactsClaudeDefaultsToHomeDotClaude(t *testing.T) {
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+
+	artifacts, err := resolveCommandArtifacts(commandArtifactAgentClaude)
+	if err != nil {
+		t.Fatalf("resolveCommandArtifacts returned error: %v", err)
+	}
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("os.UserHomeDir: %v", err)
+	}
+	wantDir := filepath.Join(homeDir, ".claude", "commands")
+	if artifacts[0].Directory != wantDir {
+		t.Errorf("artifact directory = %q, want %q", artifacts[0].Directory, wantDir)
+	}
+}

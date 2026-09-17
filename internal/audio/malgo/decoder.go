@@ -7,8 +7,29 @@ import (
 	"errors"
 	"io"
 
+	"claudio.click/internal/safeio"
 	"github.com/gen2brain/malgo"
 )
+
+// MaxDecodedPCMBytes applies the existing 100 MiB audio budget after MP3
+// decompression as well. Valid PCM WAV/AIFF output is bounded by encoded size.
+const MaxDecodedPCMBytes = safeio.MaxAudioFileBytes
+
+type pcmContextReader struct {
+	context context.Context
+	reader  io.Reader
+}
+
+func (r pcmContextReader) Read(p []byte) (int, error) {
+	if err := r.context.Err(); err != nil {
+		return 0, err
+	}
+	return r.reader.Read(p)
+}
+
+func readDecodedPCM(ctx context.Context, reader io.Reader, limit int64) ([]byte, error) {
+	return safeio.ReadAllCapped(pcmContextReader{context: ctx, reader: reader}, limit, "decoded PCM audio")
+}
 
 // Common decoder errors
 var (
@@ -28,8 +49,8 @@ type AudioData struct {
 // Decoder interface for audio format decoding.
 //
 // Decode takes a context.Context as its first argument so callers can
-// cancel a long-running or stalled decode (e.g. an MP3 source whose
-// underlying reader has hung). The MP3 decoder polls ctx between read
+// cancel work before decoding or between MP3 reads. Cancellation cannot
+// interrupt an underlying Read that is already blocked. MP3 polls ctx between read
 // chunks; WAV and AIFF check ctx at entry (they already buffer the whole
 // input via safeio.ReadAllCapped before per-sample work begins, so the
 // only meaningful cancellation point is the entry check).
