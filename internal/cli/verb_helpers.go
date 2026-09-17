@@ -31,13 +31,17 @@ func resolveWritableConfigPath(cmd *cobra.Command, _ *CLI) (string, error) {
 	return paths[0], nil
 }
 
-// loadConfigForVerb loads the config from the given path, falling back
-// to GetDefaultConfig() when the file does not exist. A parse/validate
-// error is surfaced to the caller — writing on top of an unreadable
+// loadConfigForVerb loads the config from the given path. When it is missing,
+// implicit targets use XDG discovery; explicit --config targets use defaults.
+// A parse/validate error is surfaced to the caller — writing on top of an unreadable
 // file would silently lose state the user might still want to recover.
-func loadConfigForVerb(cli *CLI, configPath string) (*config.Config, error) {
+func loadConfigForVerb(cmd *cobra.Command, cli *CLI, configPath string) (*config.Config, error) {
 	if _, err := os.Stat(configPath); err != nil {
 		if os.IsNotExist(err) {
+			if explicitPath, _ := cmd.Flags().GetString("config"); explicitPath == "" {
+				slog.Debug("user config missing; loading effective XDG config", "path", configPath)
+				return cli.configManager.LoadConfig()
+			}
 			slog.Debug("config file missing; using defaults for verb load", "path", configPath)
 			return cli.configManager.GetDefaultConfig(), nil
 		}
@@ -73,7 +77,7 @@ func mutateConfigForCommand(cmd *cobra.Command, mutate func(*config.Config) erro
 		}
 	}()
 
-	cfg, err := loadConfigForVerb(cli, configPath)
+	cfg, err := loadConfigForVerb(cmd, cli, configPath)
 	if err != nil {
 		return err
 	}
@@ -109,6 +113,6 @@ func validateConfigMutationTarget(cmd *cobra.Command) error {
 			slog.Warn("failed to release config validation lock", "path", configPath, "error", unlockErr)
 		}
 	}()
-	_, err = loadConfigForVerb(cli, configPath)
+	_, err = loadConfigForVerb(cmd, cli, configPath)
 	return err
 }
