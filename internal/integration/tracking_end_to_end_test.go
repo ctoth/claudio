@@ -12,6 +12,7 @@ import (
 
 	"claudio.click/internal/cli"
 	"claudio.click/internal/hooks"
+	"claudio.click/internal/tracking"
 )
 
 // TDD Cycle 9 RED: End-to-End Integration Tests
@@ -23,6 +24,8 @@ func stringPtr(s string) *string {
 }
 
 func TestEndToEndHookEventProcessing(t *testing.T) {
+	isolateIntegrationXDG(t)
+
 	// Create temporary directory for database
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "end_to_end.db")
@@ -200,6 +203,8 @@ func TestEndToEndHookEventProcessing(t *testing.T) {
 }
 
 func TestEndToEndSoundPathTracking(t *testing.T) {
+	isolateIntegrationXDG(t)
+
 	// Test that different sound categories and hints are properly tracked
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "sound_paths.db")
@@ -317,6 +322,8 @@ func TestEndToEndSoundPathTracking(t *testing.T) {
 }
 
 func TestEndToEndFallbackLevelRecording(t *testing.T) {
+	isolateIntegrationXDG(t)
+
 	// Test that fallback behavior is correctly recorded in the database
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "fallback_levels.db")
@@ -421,6 +428,8 @@ func TestEndToEndFallbackLevelRecording(t *testing.T) {
 }
 
 func TestEndToEndTrackingDisabled(t *testing.T) {
+	isolateIntegrationXDG(t)
+
 	// Test that when tracking is disabled, no database is created
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "should_not_exist.db")
@@ -478,17 +487,24 @@ func TestEndToEndTrackingDisabled(t *testing.T) {
 }
 
 func TestEndToEndEnvironmentVariableConfiguration(t *testing.T) {
+	isolateIntegrationXDG(t)
+
 	// Test complete environment variable configuration workflow
 	tempDir := t.TempDir()
 	customDBPath := filepath.Join(tempDir, "custom_env_path.db")
+	disabledDBPath := filepath.Join(tempDir, "disabled_env_path.db")
+	defaultDBPath, err := tracking.GetDatabasePath()
+	if err != nil {
+		t.Fatalf("GetDatabasePath: %v", err)
+	}
 	
 	// Test multiple environment variable configurations
 	testCases := []struct {
-		name              string
-		trackingEnabled   string
-		dbPath            string
-		expectsDB         bool
-		expectsAtPath     string
+		name            string
+		trackingEnabled string
+		dbPath          string
+		expectsDB       bool
+		expectsAtPath   string
 	}{
 		{
 			name:            "tracking_enabled_custom_path",
@@ -502,30 +518,26 @@ func TestEndToEndEnvironmentVariableConfiguration(t *testing.T) {
 			trackingEnabled: "true",
 			dbPath:          "", // Will use default
 			expectsDB:       true,
-			expectsAtPath:   "", // Will be determined by XDG cache
+			expectsAtPath:   defaultDBPath,
 		},
 		{
 			name:            "tracking_disabled",
 			trackingEnabled: "false",
-			dbPath:          customDBPath,
+			dbPath:          disabledDBPath,
 			expectsDB:       false,
-			expectsAtPath:   "",
+			expectsAtPath:   disabledDBPath,
 		},
 	}
 	
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			// Set environment variables
-			os.Setenv("CLAUDIO_SOUND_TRACKING", testCase.trackingEnabled)
+			t.Setenv("CLAUDIO_SOUND_TRACKING", testCase.trackingEnabled)
 			if testCase.dbPath != "" {
-				os.Setenv("CLAUDIO_SOUND_TRACKING_DB", testCase.dbPath)
+				t.Setenv("CLAUDIO_SOUND_TRACKING_DB", testCase.dbPath)
 			} else {
-				os.Unsetenv("CLAUDIO_SOUND_TRACKING_DB")
+				t.Setenv("CLAUDIO_SOUND_TRACKING_DB", "")
 			}
-			defer func() {
-				os.Unsetenv("CLAUDIO_SOUND_TRACKING")
-				os.Unsetenv("CLAUDIO_SOUND_TRACKING_DB")
-			}()
 			
 			// Process hook event
 			toolResponse := json.RawMessage(`{"stdout":"Test","stderr":"","interrupted":false}`)
@@ -555,30 +567,11 @@ func TestEndToEndEnvironmentVariableConfiguration(t *testing.T) {
 			
 			// Verify database creation expectations
 			if testCase.expectsDB {
-				var dbExists bool
-				var actualDBPath string
-				
-				if testCase.expectsAtPath != "" {
-					// Check specific path
-					if _, err := os.Stat(testCase.expectsAtPath); err == nil {
-						dbExists = true
-						actualDBPath = testCase.expectsAtPath
-					}
-				} else {
-					// Check for any .db files in cache directories (default path case)
-					// This is more complex to verify, so we'll just ensure some database was created
-					// by checking stderr output or other indicators
-					if !strings.Contains(stderr.String(), "tracking disabled") {
-						dbExists = true
-						actualDBPath = "default location"
-					}
-				}
-				
-				if !dbExists {
+				if _, err := os.Stat(testCase.expectsAtPath); err != nil {
 					t.Errorf("Expected database to be created when tracking enabled, but none found")
-				} else if testCase.expectsAtPath != "" {
+				} else {
 					// Verify the database contains our test data
-					db, err := sql.Open("sqlite", actualDBPath)
+					db, err := sql.Open("sqlite", testCase.expectsAtPath)
 					if err != nil {
 						t.Fatalf("Failed to open database: %v", err)
 					}
@@ -597,10 +590,8 @@ func TestEndToEndEnvironmentVariableConfiguration(t *testing.T) {
 				}
 			} else {
 				// Should not create database
-				if testCase.expectsAtPath != "" {
-					if _, err := os.Stat(testCase.expectsAtPath); err == nil {
-						t.Error("Expected database NOT to be created when tracking disabled")
-					}
+				if _, err := os.Stat(testCase.expectsAtPath); err == nil {
+					t.Error("Expected database NOT to be created when tracking disabled")
 				}
 			}
 		})

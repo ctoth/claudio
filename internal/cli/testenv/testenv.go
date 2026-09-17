@@ -14,8 +14,8 @@ import (
 	"github.com/adrg/xdg"
 )
 
-// IsolateXDG sets HOME, USERPROFILE, XDG_CACHE_HOME, XDG_DATA_HOME, and
-// XDG_CONFIG_HOME to subdirectories under t.TempDir() and calls
+// IsolateXDG sets HOME, USERPROFILE, LOCALAPPDATA, XDG_CACHE_HOME,
+// XDG_DATA_HOME, and XDG_CONFIG_HOME to subdirectories under t.TempDir() and calls
 // xdg.Reload() so the adrg/xdg library picks up the new values.
 //
 // It also sets CLAUDIO_FILE_LOGGING=false so the lumberjack file
@@ -41,6 +41,7 @@ func IsolateXDG(t *testing.T) string {
 
 	t.Setenv("HOME", root)
 	t.Setenv("USERPROFILE", root)
+	t.Setenv("LOCALAPPDATA", filepath.Join(root, ".cache"))
 	t.Setenv("XDG_CACHE_HOME", filepath.Join(root, ".cache"))
 	t.Setenv("XDG_DATA_HOME", filepath.Join(root, ".local", "share"))
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, ".config"))
