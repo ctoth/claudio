@@ -514,7 +514,7 @@ func TestGenerateCodexHookSpecs(t *testing.T) {
 		if spec.Command != `"C:/Program Files/Claudio/claudio.exe"` {
 			t.Errorf("%s command = %q", spec.Event, spec.Command)
 		}
-		if spec.CommandWindows != `& "C:/Program Files/Claudio/claudio.exe"` {
+		if spec.CommandWindows != `& 'C:/Program Files/Claudio/claudio.exe'` {
 			t.Errorf("%s commandWindows = %q", spec.Event, spec.CommandWindows)
 		}
 	}

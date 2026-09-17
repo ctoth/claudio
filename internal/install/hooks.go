@@ -44,7 +44,8 @@ func GenerateClaudioHooks(executablePath string) (interface{}, error) {
 func GenerateCodexHookSpecs(executablePath string) []captainhook.HookSpec {
 	executablePath = strings.ReplaceAll(executablePath, `\`, "/")
 	command := quoteCommandArg(executablePath)
-	commandWindows := `& "` + executablePath + `"`
+	// PowerShell double quotes expand dollar signs and backticks in paths.
+	commandWindows := "& '" + strings.ReplaceAll(executablePath, "'", "''") + "'"
 
 	hooks := AgentCodex.EnabledHooks()
 	specs := make([]captainhook.HookSpec, 0, len(hooks))

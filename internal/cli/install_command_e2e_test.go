@@ -182,7 +182,7 @@ func TestRunInstallWorkflowCodexUsesCaptainHookSpecs(t *testing.T) {
 			group := groupRaw.(map[string]interface{})
 			for _, entryRaw := range group["hooks"].([]interface{}) {
 				entry := entryRaw.(map[string]interface{})
-				if command, ok := entry["commandWindows"].(string); ok && strings.HasPrefix(command, `& "`) {
+				if command, ok := entry["commandWindows"].(string); ok && strings.HasPrefix(command, `& '`) {
 					windowsCommandFound = true
 				}
 			}
