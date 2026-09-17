@@ -19,7 +19,8 @@ import (
 type SystemCommandBackend struct {
 	commands         []string
 	volume           float32
-	isPlaying        bool
+	activePlays      map[uint64]struct{}
+	nextPlayID       uint64
 	closed           bool
 	mutex            sync.RWMutex
 	warnNoVolumeOnce sync.Once // one WARN per backend instance for aplay
@@ -32,8 +33,9 @@ type SystemCommandBackend struct {
 func NewSystemCommandBackend(commands ...string) *SystemCommandBackend {
 	slog.Debug("creating new SystemCommandBackend", "commands", commands)
 	return &SystemCommandBackend{
-		commands: append([]string(nil), commands...),
-		volume:   1.0, // Default full volume
+		commands:    append([]string(nil), commands...),
+		volume:      1.0, // Default full volume
+		activePlays: make(map[uint64]struct{}),
 	}
 }
 
@@ -46,7 +48,7 @@ func (scb *SystemCommandBackend) Stop() error {
 		return ErrBackendClosed
 	}
 
-	scb.isPlaying = false
+	clear(scb.activePlays)
 	slog.Debug("SystemCommandBackend stopped")
 	return nil
 }
@@ -57,7 +59,7 @@ func (scb *SystemCommandBackend) Close() error {
 	defer scb.mutex.Unlock()
 
 	scb.closed = true
-	scb.isPlaying = false
+	clear(scb.activePlays)
 	slog.Debug("SystemCommandBackend closed")
 	return nil
 }
@@ -66,7 +68,7 @@ func (scb *SystemCommandBackend) Close() error {
 func (scb *SystemCommandBackend) IsPlaying() bool {
 	scb.mutex.RLock()
 	defer scb.mutex.RUnlock()
-	return scb.isPlaying && !scb.closed
+	return len(scb.activePlays) > 0 && !scb.closed
 }
 
 // SetVolume sets the volume level (0.0 to 1.0)
@@ -114,13 +116,15 @@ func (scb *SystemCommandBackend) Play(ctx context.Context, source AudioSource) e
 		scb.mutex.Unlock()
 		return ErrBackendClosed
 	}
-	scb.isPlaying = true
+	scb.nextPlayID++
+	playID := scb.nextPlayID
+	scb.activePlays[playID] = struct{}{}
 	scb.mutex.Unlock()
 
 	// Ensure we reset playing state when done
 	defer func() {
 		scb.mutex.Lock()
-		scb.isPlaying = false
+		delete(scb.activePlays, playID)
 		scb.mutex.Unlock()
 	}()
 

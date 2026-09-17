@@ -27,14 +27,18 @@ func skipIfWSLMalgoPlayback(t *testing.T) {
 // is available (e.g. CI runners without sound hardware).
 func skipIfNoAudioDevice(t *testing.T, err error) {
 	t.Helper()
-	if err == nil {
-		return
-	}
-	msg := err.Error()
-	if strings.Contains(msg, "Failed to open backend device") ||
-		strings.Contains(msg, "failed to initialize playback device") {
+	if isNoAudioDeviceError(err) {
 		t.Skip("no audio device available")
 	}
+}
+
+func isNoAudioDeviceError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "Failed to open backend device") ||
+		strings.Contains(msg, "failed to initialize playback device")
 }
 
 func TestAudioPlayer(t *testing.T) {
@@ -745,16 +749,18 @@ func TestIsPlaying_ReflectsDeviceCount(t *testing.T) {
 	// Inject a fake entry into the device map. We intentionally use a nil
 	// *malgo.Device — deviceEntry.uninit() handles the nil case so Close's
 	// StopAll teardown remains safe.
+	first := &deviceEntry{device: nil}
 	player.deviceMutex.Lock()
-	player.devices["fake-1"] = &deviceEntry{device: nil}
+	player.devices[first] = struct{}{}
 	player.deviceMutex.Unlock()
 
 	if !player.IsPlaying() {
 		t.Error("IsPlaying should be true when device map is non-empty")
 	}
 
+	second := &deviceEntry{device: nil}
 	player.deviceMutex.Lock()
-	player.devices["fake-2"] = &deviceEntry{device: nil}
+	player.devices[second] = struct{}{}
 	player.deviceMutex.Unlock()
 
 	if !player.IsPlaying() {
@@ -762,8 +768,8 @@ func TestIsPlaying_ReflectsDeviceCount(t *testing.T) {
 	}
 
 	player.deviceMutex.Lock()
-	delete(player.devices, "fake-1")
-	delete(player.devices, "fake-2")
+	delete(player.devices, first)
+	delete(player.devices, second)
 	player.deviceMutex.Unlock()
 
 	if player.IsPlaying() {
