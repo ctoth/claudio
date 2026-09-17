@@ -197,13 +197,10 @@ func TestStopAllStopsConcurrentPlaybackWithSameSoundID(t *testing.T) {
 		if !joined {
 			t.Fatal("playback goroutines did not finish after startup failure")
 		}
-		allNoAudio := len(got) == 2
-		for _, err := range got {
-			allNoAudio = allNoAudio && isNoAudioDeviceError(err)
-		}
-		if allNoAudio {
-			t.Skip("no audio device available")
-		}
+		// Classify the startup failure, not cleanup's results: cancel can
+		// make the other playback return context.Canceled instead of the
+		// same missing-device error. Both goroutines have been joined above.
+		skipIfNoAudioDevice(t, earlyResults[0])
 		t.Fatalf("playback returned before both instances started: started=%d results=%v", started, got)
 	}
 
