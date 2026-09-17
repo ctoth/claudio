@@ -185,11 +185,15 @@ else
 endif
 
 .PHONY: smoke-debug
-smoke-debug: build ## Run the smoke test with debug logging enabled.
+smoke-debug: build ## Print debug logs and retain them in a temporary cache directory.
 ifeq ($(OS),Windows_NT)
-	@$$env:CLAUDIO_LOG_LEVEL = 'debug'; $$env:CLAUDIO_SOUND_TRACKING = 'false'; $$env:CLAUDIO_FILE_LOGGING = 'false'; try { '$(SMOKE_PAYLOAD)' | ./$(BIN) --config $(SMOKE_CONFIG) --soundpack $(SMOKE_SOUNDPACK) --silent; if ($$LASTEXITCODE -ne 0) { throw "smoke test failed with exit code $$LASTEXITCODE" } } finally { Remove-Item Env:CLAUDIO_LOG_LEVEL, Env:CLAUDIO_SOUND_TRACKING, Env:CLAUDIO_FILE_LOGGING -ErrorAction SilentlyContinue }
+	@$$ErrorActionPreference = 'Stop'; $$env:XDG_CACHE_HOME = Join-Path ([System.IO.Path]::GetTempPath()) ('claudio-smoke-' + [guid]::NewGuid()); New-Item -ItemType Directory -Path $$env:XDG_CACHE_HOME | Out-Null; $$logFile = Join-Path $$env:XDG_CACHE_HOME 'claudio/logs/claudio.log'; Write-Output "Debug log: $$logFile"; $$env:CLAUDIO_LOG_LEVEL = 'debug'; $$env:CLAUDIO_SOUND_TRACKING = 'false'; $$env:CLAUDIO_FILE_LOGGING = 'true'; try { '$(SMOKE_PAYLOAD)' | ./$(BIN) --config $(SMOKE_CONFIG) --soundpack $(SMOKE_SOUNDPACK) --silent; if ($$LASTEXITCODE -ne 0) { throw "smoke test failed with exit code $$LASTEXITCODE" } } finally { if (Test-Path -LiteralPath $$logFile) { Get-Content -LiteralPath $$logFile } }
 else
-	@printf '%s\n' '$(SMOKE_PAYLOAD)' | CLAUDIO_LOG_LEVEL=debug CLAUDIO_SOUND_TRACKING=false CLAUDIO_FILE_LOGGING=false ./$(BIN) --config $(SMOKE_CONFIG) --soundpack $(SMOKE_SOUNDPACK) --silent
+	@cache_dir="$$(mktemp -d)" || exit 1; \
+	log_file="$$cache_dir/claudio/logs/claudio.log"; \
+	printf 'Debug log: %s\n' "$$log_file"; \
+	printf '%s\n' '$(SMOKE_PAYLOAD)' | XDG_CACHE_HOME="$$cache_dir" CLAUDIO_LOG_LEVEL=debug CLAUDIO_SOUND_TRACKING=false CLAUDIO_FILE_LOGGING=true ./$(BIN) --config $(SMOKE_CONFIG) --soundpack $(SMOKE_SOUNDPACK) --silent; \
+	status=$$?; if [ -f "$$log_file" ]; then cat "$$log_file"; fi; exit $$status
 endif
 
 .PHONY: version
