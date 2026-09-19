@@ -80,23 +80,14 @@ type CommandInfo struct {
 	HasSubcommand bool   // True if subcommand was found
 }
 
-// HookEventParser parses agent hook JSON into structured events.
-type HookEventParser struct{}
-
-// NewHookEventParser creates a new hook event parser
-func NewHookEventParser() *HookEventParser {
-	slog.Debug("creating new hook event parser")
-	return &HookEventParser{}
+// ParseHookEvent parses hook JSON data into a HookEvent
+func ParseHookEvent(data []byte) (*HookEvent, error) {
+	return ParseHookEventWithDefault(data, "")
 }
 
-// Parse parses hook JSON data into a HookEvent
-func (p *HookEventParser) Parse(data []byte) (*HookEvent, error) {
-	return p.ParseWithDefaultEvent(data, "")
-}
-
-// ParseWithDefaultEvent parses hook JSON and uses defaultEvent when the
+// ParseHookEventWithDefault parses hook JSON and uses defaultEvent when the
 // payload format does not include hook_event_name.
-func (p *HookEventParser) ParseWithDefaultEvent(data []byte, defaultEvent string) (*HookEvent, error) {
+func ParseHookEventWithDefault(data []byte, defaultEvent string) (*HookEvent, error) {
 	if len(data) == 0 {
 		err := fmt.Errorf("empty JSON data")
 		slog.Error("parse failed: empty data", "error", err)

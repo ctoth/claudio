@@ -77,14 +77,6 @@ const (
 	}`
 )
 
-func TestHookEventParser(t *testing.T) {
-	parser := NewHookEventParser()
-
-	if parser == nil {
-		t.Fatal("NewHookEventParser returned nil")
-	}
-}
-
 func TestEventCategory_String_NewCategories(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -132,9 +124,7 @@ func TestGeminiNoSoundEventsAreSilent(t *testing.T) {
 }
 
 func TestParseUserPromptSubmit(t *testing.T) {
-	parser := NewHookEventParser()
-
-	event, err := parser.Parse([]byte(realUserPromptSubmitJSON))
+	event, err := ParseHookEvent([]byte(realUserPromptSubmitJSON))
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}
@@ -176,9 +166,7 @@ func TestParseUserPromptSubmit(t *testing.T) {
 }
 
 func TestParsePreToolUse(t *testing.T) {
-	parser := NewHookEventParser()
-
-	event, err := parser.Parse([]byte(realPreToolUseJSON))
+	event, err := ParseHookEvent([]byte(realPreToolUseJSON))
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}
@@ -223,9 +211,7 @@ func TestParsePreToolUse(t *testing.T) {
 }
 
 func TestParsePostToolUseBash(t *testing.T) {
-	parser := NewHookEventParser()
-
-	event, err := parser.Parse([]byte(realPostToolUseBashJSON))
+	event, err := ParseHookEvent([]byte(realPostToolUseBashJSON))
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}
@@ -267,9 +253,7 @@ func TestParsePostToolUseBash(t *testing.T) {
 }
 
 func TestParsePostToolUseGrep(t *testing.T) {
-	parser := NewHookEventParser()
-
-	event, err := parser.Parse([]byte(realPostToolUseGrepJSON))
+	event, err := ParseHookEvent([]byte(realPostToolUseGrepJSON))
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}
@@ -301,9 +285,7 @@ func TestParsePostToolUseGrep(t *testing.T) {
 }
 
 func TestParseNotification(t *testing.T) {
-	parser := NewHookEventParser()
-
-	event, err := parser.Parse([]byte(realNotificationJSON))
+	event, err := ParseHookEvent([]byte(realNotificationJSON))
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}
@@ -333,8 +315,6 @@ func TestParseNotification(t *testing.T) {
 }
 
 func TestParseInvalidJSON(t *testing.T) {
-	parser := NewHookEventParser()
-
 	testCases := []struct {
 		name string
 		json string
@@ -348,7 +328,7 @@ func TestParseInvalidJSON(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			event, err := parser.Parse([]byte(tc.json))
+			event, err := ParseHookEvent([]byte(tc.json))
 
 			if err == nil {
 				t.Errorf("Expected error for %s, but got none", tc.name)
@@ -362,10 +342,8 @@ func TestParseInvalidJSON(t *testing.T) {
 }
 
 func TestEventContext(t *testing.T) {
-	parser := NewHookEventParser()
-
 	t.Run("UserPromptSubmit context", func(t *testing.T) {
-		event, _ := parser.Parse([]byte(realUserPromptSubmitJSON))
+		event, _ := ParseHookEvent([]byte(realUserPromptSubmitJSON))
 		context := event.GetContext()
 
 		if context.Category != Interactive {
@@ -378,7 +356,7 @@ func TestEventContext(t *testing.T) {
 	})
 
 	t.Run("PreToolUse context", func(t *testing.T) {
-		event, _ := parser.Parse([]byte(realPreToolUseJSON))
+		event, _ := ParseHookEvent([]byte(realPreToolUseJSON))
 		context := event.GetContext()
 
 		if context.Category != Loading {
@@ -400,7 +378,7 @@ func TestEventContext(t *testing.T) {
 	})
 
 	t.Run("PostToolUse success context", func(t *testing.T) {
-		event, _ := parser.Parse([]byte(realPostToolUseBashJSON))
+		event, _ := ParseHookEvent([]byte(realPostToolUseBashJSON))
 		context := event.GetContext()
 
 		if context.Category != Success {
@@ -426,7 +404,7 @@ func TestEventContext(t *testing.T) {
 	})
 
 	t.Run("Notification context", func(t *testing.T) {
-		event, _ := parser.Parse([]byte(realNotificationJSON))
+		event, _ := ParseHookEvent([]byte(realNotificationJSON))
 		context := event.GetContext()
 
 		if context.Category != Interactive {
@@ -450,7 +428,7 @@ func TestEventContext(t *testing.T) {
 			"tool_response": {"stdout": "committed", "stderr": "", "interrupted": false}
 		}`
 
-		event, _ := parser.Parse([]byte(gitCommitJSON))
+		event, _ := ParseHookEvent([]byte(gitCommitJSON))
 		context := event.GetContext()
 
 		if context.ToolName != "git" {
@@ -476,7 +454,7 @@ func TestEventContext(t *testing.T) {
 			"tool_input": {"command": "npm install express"}
 		}`
 
-		event, _ := parser.Parse([]byte(npmJSON))
+		event, _ := ParseHookEvent([]byte(npmJSON))
 		context := event.GetContext()
 
 		if context.ToolName != "npm" {
@@ -503,7 +481,7 @@ func TestEventContext(t *testing.T) {
 			"tool_response": {"stdout": "files", "stderr": "", "interrupted": false}
 		}`
 
-		event, _ := parser.Parse([]byte(lsJSON))
+		event, _ := ParseHookEvent([]byte(lsJSON))
 		context := event.GetContext()
 
 		if context.ToolName != "ls" {
@@ -526,7 +504,7 @@ func TestEventContext(t *testing.T) {
 			"tool_response": {"stdout": "", "stderr": "", "interrupted": false}
 		}`
 
-		event, _ := parser.Parse([]byte(emptyJSON))
+		event, _ := ParseHookEvent([]byte(emptyJSON))
 		context := event.GetContext()
 
 		if context.ToolName != "Bash" {
@@ -540,8 +518,6 @@ func TestEventContext(t *testing.T) {
 }
 
 func TestEventCategorization_All7Events(t *testing.T) {
-	parser := NewHookEventParser()
-
 	tests := []struct {
 		name        string
 		eventName   string
@@ -644,7 +620,7 @@ func TestEventCategorization_All7Events(t *testing.T) {
 				}`
 			}
 
-			event, err := parser.Parse([]byte(testJSON))
+			event, err := ParseHookEvent([]byte(testJSON))
 			if err != nil {
 				t.Fatalf("Parse failed for %s: %v", tt.eventName, err)
 			}
@@ -659,8 +635,6 @@ func TestEventCategorization_All7Events(t *testing.T) {
 }
 
 func TestExtractCommandInfo(t *testing.T) {
-	parser := NewHookEventParser()
-
 	testJSON := `{
 		"session_id": "test",
 		"transcript_path": "/test",
@@ -673,7 +647,7 @@ func TestExtractCommandInfo(t *testing.T) {
 		}
 	}`
 
-	event, err := parser.Parse([]byte(testJSON))
+	event, err := ParseHookEvent([]byte(testJSON))
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}
@@ -694,8 +668,6 @@ func TestExtractCommandInfo(t *testing.T) {
 }
 
 func TestExtractCommandInfoVariants(t *testing.T) {
-	parser := NewHookEventParser()
-
 	testCases := []struct {
 		name        string
 		command     string
@@ -723,7 +695,7 @@ func TestExtractCommandInfoVariants(t *testing.T) {
 				"tool_input": {"command": "%s"}
 			}`, tc.command)
 
-			event, err := parser.Parse([]byte(testJSON))
+			event, err := ParseHookEvent([]byte(testJSON))
 			if err != nil {
 				t.Fatalf("Parse failed: %v", err)
 			}
@@ -744,8 +716,6 @@ func TestExtractCommandInfoVariants(t *testing.T) {
 }
 
 func TestNotificationTypeDetection(t *testing.T) {
-	parser := NewHookEventParser()
-
 	tests := []struct {
 		name         string
 		message      string
@@ -794,7 +764,7 @@ func TestNotificationTypeDetection(t *testing.T) {
 				"message": "%s"
 			}`, tt.message)
 
-			event, err := parser.Parse([]byte(testJSON))
+			event, err := ParseHookEvent([]byte(testJSON))
 			if err != nil {
 				t.Fatalf("Parse failed: %v", err)
 			}
@@ -819,8 +789,6 @@ func TestNotificationTypeDetection(t *testing.T) {
 }
 
 func TestEnhancedEventContextExtraction(t *testing.T) {
-	parser := NewHookEventParser()
-
 	tests := []struct {
 		name             string
 		eventName        string
@@ -880,7 +848,7 @@ func TestEnhancedEventContextExtraction(t *testing.T) {
 				"hook_event_name": "%s"
 			}`, tt.eventName)
 
-			event, err := parser.Parse([]byte(testJSON))
+			event, err := ParseHookEvent([]byte(testJSON))
 			if err != nil {
 				t.Fatalf("Parse failed for %s: %v", tt.eventName, err)
 			}
@@ -906,8 +874,6 @@ func TestEnhancedEventContextExtraction(t *testing.T) {
 }
 
 func TestParseEdgeCases(t *testing.T) {
-	parser := NewHookEventParser()
-
 	t.Run("tool response with error", func(t *testing.T) {
 		errorJSON := `{
 			"session_id": "test",
@@ -924,7 +890,7 @@ func TestParseEdgeCases(t *testing.T) {
 			}
 		}`
 
-		event, err := parser.Parse([]byte(errorJSON))
+		event, err := ParseHookEvent([]byte(errorJSON))
 		if err != nil {
 			t.Fatalf("Parse failed: %v", err)
 		}
@@ -955,7 +921,7 @@ func TestParseEdgeCases(t *testing.T) {
 			}
 		}`
 
-		event, err := parser.Parse([]byte(interruptedJSON))
+		event, err := ParseHookEvent([]byte(interruptedJSON))
 		if err != nil {
 			t.Fatalf("Parse failed: %v", err)
 		}
@@ -973,8 +939,6 @@ func TestParseEdgeCases(t *testing.T) {
 
 // TDD Phase 2.5 RED: Test PreToolUse suffix change from '-thinking' to '-start'
 func TestPreToolUseStartSuffixInsteadOfThinking(t *testing.T) {
-	parser := NewHookEventParser()
-
 	tests := []struct {
 		name         string
 		command      string
@@ -1050,7 +1014,7 @@ func TestPreToolUseStartSuffixInsteadOfThinking(t *testing.T) {
 				}`, tt.command)
 			}
 
-			event, err := parser.Parse([]byte(testJSON))
+			event, err := ParseHookEvent([]byte(testJSON))
 			if err != nil {
 				t.Fatalf("Parse failed: %v", err)
 			}
@@ -1078,8 +1042,6 @@ func TestPreToolUseStartSuffixInsteadOfThinking(t *testing.T) {
 
 // TDD Phase 2.5 RED: Test that existing PostToolUse events still work correctly
 func TestPostToolUseSuffixesUnchanged(t *testing.T) {
-	parser := NewHookEventParser()
-
 	tests := []struct {
 		name         string
 		command      string
@@ -1122,7 +1084,7 @@ func TestPostToolUseSuffixesUnchanged(t *testing.T) {
 				"tool_response": {"stdout": "output", "stderr": "%s", "interrupted": false}
 			}`, tt.command, tt.stderr)
 
-			event, err := parser.Parse([]byte(testJSON))
+			event, err := ParseHookEvent([]byte(testJSON))
 			if err != nil {
 				t.Fatalf("Parse failed: %v", err)
 			}
@@ -1152,8 +1114,6 @@ func TestPostToolUseSuffixesUnchanged(t *testing.T) {
 // for sound mapping, making all MCP servers produce the same generic mcp sounds
 // regardless of which server or tool is called.
 func TestMCPToolNormalization(t *testing.T) {
-	parser := NewHookEventParser()
-
 	t.Run("PreToolUse mcp__context7__query-docs normalizes to mcp", func(t *testing.T) {
 		data := `{
 			"session_id": "test",
@@ -1163,7 +1123,7 @@ func TestMCPToolNormalization(t *testing.T) {
 			"tool_name": "mcp__context7__query-docs",
 			"tool_input": {}
 		}`
-		event, err := parser.Parse([]byte(data))
+		event, err := ParseHookEvent([]byte(data))
 		if err != nil {
 			t.Fatalf("Parse failed: %v", err)
 		}
@@ -1192,7 +1152,7 @@ func TestMCPToolNormalization(t *testing.T) {
 			"tool_name": "mcp__filesystem__read_file",
 			"tool_input": {}
 		}`
-		event, err := parser.Parse([]byte(data))
+		event, err := ParseHookEvent([]byte(data))
 		if err != nil {
 			t.Fatalf("Parse failed: %v", err)
 		}
@@ -1218,7 +1178,7 @@ func TestMCPToolNormalization(t *testing.T) {
 			"tool_name": "mcp_filesystem_read_file",
 			"tool_input": {}
 		}`
-		event, err := parser.Parse([]byte(data))
+		event, err := ParseHookEvent([]byte(data))
 		if err != nil {
 			t.Fatalf("Parse failed: %v", err)
 		}
@@ -1248,7 +1208,7 @@ func TestMCPToolNormalization(t *testing.T) {
 			"tool_input": {},
 			"tool_response": {"content": "issue created", "isError": false}
 		}`
-		event, err := parser.Parse([]byte(data))
+		event, err := ParseHookEvent([]byte(data))
 		if err != nil {
 			t.Fatalf("Parse failed: %v", err)
 		}
@@ -1278,7 +1238,7 @@ func TestMCPToolNormalization(t *testing.T) {
 			"tool_input": {},
 			"tool_response": {"content": "file contents", "isError": false}
 		}`
-		event, err := parser.Parse([]byte(data))
+		event, err := ParseHookEvent([]byte(data))
 		if err != nil {
 			t.Fatalf("Parse failed: %v", err)
 		}
@@ -1308,7 +1268,7 @@ func TestMCPToolNormalization(t *testing.T) {
 			"tool_input": {},
 			"tool_response": {"content": "rate limited", "isError": true}
 		}`
-		event, err := parser.Parse([]byte(data))
+		event, err := ParseHookEvent([]byte(data))
 		if err != nil {
 			t.Fatalf("Parse failed: %v", err)
 		}
@@ -1338,7 +1298,7 @@ func TestMCPToolNormalization(t *testing.T) {
 			"tool_input": {},
 			"tool_response": {"content": "", "interrupted": true, "isError": true}
 		}`
-		event, err := parser.Parse([]byte(data))
+		event, err := ParseHookEvent([]byte(data))
 		if err != nil {
 			t.Fatalf("Parse failed: %v", err)
 		}
@@ -1367,7 +1327,7 @@ func TestMCPToolNormalization(t *testing.T) {
 			"tool_name": "Read",
 			"tool_input": {}
 		}`
-		event, err := parser.Parse([]byte(data))
+		event, err := ParseHookEvent([]byte(data))
 		if err != nil {
 			t.Fatalf("Parse failed: %v", err)
 		}
@@ -1387,9 +1347,8 @@ func TestMCPToolNormalization(t *testing.T) {
 
 // Codex sends transcript_path as null or omits it entirely.
 func TestParseCodexNullTranscriptPathSucceeds(t *testing.T) {
-	parser := NewHookEventParser()
 	data := []byte(`{"session_id":"abc","cwd":"/tmp","hook_event_name":"SessionStart","transcript_path":null}`)
-	event, err := parser.Parse(data)
+	event, err := ParseHookEvent(data)
 	if err != nil {
 		t.Fatalf("expected nil error for null transcript_path, got: %v", err)
 	}
@@ -1399,16 +1358,14 @@ func TestParseCodexNullTranscriptPathSucceeds(t *testing.T) {
 }
 
 func TestParseCodexOmittedTranscriptPathSucceeds(t *testing.T) {
-	parser := NewHookEventParser()
 	data := []byte(`{"session_id":"abc","cwd":"/tmp","hook_event_name":"Stop"}`)
-	_, err := parser.Parse(data)
+	_, err := ParseHookEvent(data)
 	if err != nil {
 		t.Fatalf("expected nil error for omitted transcript_path, got: %v", err)
 	}
 }
 
 func TestParseStillRequiresSessionIDAndEventAndCwd(t *testing.T) {
-	parser := NewHookEventParser()
 	cases := map[string][]byte{
 		"missing session_id": []byte(`{"cwd":"/tmp","hook_event_name":"Stop"}`),
 		"missing event":      []byte(`{"session_id":"a","cwd":"/tmp"}`),
@@ -1416,7 +1373,7 @@ func TestParseStillRequiresSessionIDAndEventAndCwd(t *testing.T) {
 	}
 	for name, data := range cases {
 		t.Run(name, func(t *testing.T) {
-			if _, err := parser.Parse(data); err == nil {
+			if _, err := ParseHookEvent(data); err == nil {
 				t.Errorf("expected error for %s, got nil", name)
 			}
 		})
@@ -1645,7 +1602,7 @@ func TestParseCopilotResultAliases(t *testing.T) {
 		"tool_result": {"success": true}
 	}`)
 
-	event, err := NewHookEventParser().Parse(payload)
+	event, err := ParseHookEvent(payload)
 	if err != nil {
 		t.Fatalf("Parse returned error: %v", err)
 	}
@@ -1670,7 +1627,7 @@ func TestParseCopilotNotificationSessionAlias(t *testing.T) {
 		"message": "Permission needed"
 	}`)
 
-	event, err := NewHookEventParser().Parse(payload)
+	event, err := ParseHookEvent(payload)
 	if err != nil {
 		t.Fatalf("Parse returned error: %v", err)
 	}
@@ -1687,7 +1644,7 @@ func TestParseWithDefaultEventNormalizesCopilotSubagentStart(t *testing.T) {
 		"cwd": "/tmp"
 	}`)
 
-	event, err := NewHookEventParser().ParseWithDefaultEvent(payload, "subagentStart")
+	event, err := ParseHookEventWithDefault(payload, "subagentStart")
 	if err != nil {
 		t.Fatalf("ParseWithDefaultEvent returned error: %v", err)
 	}
