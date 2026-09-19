@@ -32,6 +32,7 @@ func TestExtractFileExtensionCoverage(t *testing.T) {
 		"/a/b/x.orig":      "",
 		"/a/b/noext":       "",
 		"/a/b/trailing.":   "",
+		"/a/b.v2/README":   "", // filepath.Ext only inspects the final element
 	}
 	for path, want := range cases {
 		if got := extractFileExtension(path); got != want {

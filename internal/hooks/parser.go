@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"maps"
+	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -615,7 +618,7 @@ func (e *HookEvent) analyzeToolResponse() (success bool, hasError bool, errorTyp
 		return false, true, ""
 	}
 
-	slog.Debug("analyzing tool response", "response_keys", getMapKeys(response))
+	slog.Debug("analyzing tool response", "response_keys", slices.Collect(maps.Keys(response)))
 
 	// Check for interruption first (more specific than stderr)
 	if interrupted, ok := response["interrupted"].(bool); ok && interrupted {
@@ -841,21 +844,8 @@ func getStringPtr(ptr *string) string {
 	return *ptr
 }
 
-func getMapKeys(m map[string]interface{}) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	return keys
-}
-
 func extractFileExtension(path string) string {
-	lastDot := strings.LastIndex(path, ".")
-	if lastDot == -1 || lastDot == len(path)-1 {
-		return ""
-	}
-
-	ext := strings.ToLower(path[lastDot+1:])
+	ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(path)), ".")
 
 	// Filter out common non-file-type extensions
 	switch ext {
