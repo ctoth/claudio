@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sync"
 
 	"claudio.click/internal/platform"
@@ -15,7 +16,9 @@ var (
 	ErrBackendCreationFailed = errors.New("backend creation failed")
 )
 
-// SupportedBackendTypes lists every backend type accepted by NewBackend.
+// SupportedBackendTypes lists every backend type accepted by NewBackend and
+// is the single source of truth for which types are valid: NewBackend rejects
+// anything not in this list, and IsValidBackendType reports membership.
 // Empty string is a synonym for "auto". "fake" is a test-only backend
 // included unconditionally so cross-package tests (notably internal/cli)
 // can configure cfg.AudioBackend = "fake" without rebuilding under a
@@ -25,15 +28,7 @@ var SupportedBackendTypes = []string{"auto", "system_command", "malgo", "fake"}
 // IsValidBackendType reports whether the given backend type string is
 // accepted by NewBackend. Empty string is treated as "auto".
 func IsValidBackendType(backendType string) bool {
-	if backendType == "" {
-		return true
-	}
-	for _, t := range SupportedBackendTypes {
-		if backendType == t {
-			return true
-		}
-	}
-	return false
+	return backendType == "" || slices.Contains(SupportedBackendTypes, backendType)
 }
 
 // BackendConstructor builds an AudioBackend instance.
@@ -83,6 +78,11 @@ func newBackendWithChecker(backendType string, isWSLFunc func() bool, commandExi
 
 	slog.Debug("creating audio backend", "type", backendType)
 
+	if !IsValidBackendType(backendType) {
+		slog.Error("invalid backend type requested", "type", backendType)
+		return nil, fmt.Errorf("%w: %s", ErrInvalidBackendType, backendType)
+	}
+
 	switch backendType {
 	case "auto":
 		optimal := detectOptimalBackendWithChecker(isWSLFunc(), commandExists)
@@ -98,14 +98,11 @@ func newBackendWithChecker(backendType string, isWSLFunc func() bool, commandExi
 		}
 	case "system_command":
 		return createSystemCommandBackendWithChecker(commandExists)
-	case "malgo":
-		return createRegisteredBackend("malgo")
-	case "fake":
-		return createRegisteredBackend("fake")
-	default:
-		slog.Error("invalid backend type requested", "type", backendType)
-		return nil, fmt.Errorf("%w: %s", ErrInvalidBackendType, backendType)
 	}
+
+	// Every remaining supported type ("malgo", "fake") is built by the
+	// constructor its own package registered via RegisterBackend.
+	return createRegisteredBackend(backendType)
 }
 
 // createSystemCommandBackendWithChecker captures every available system audio
