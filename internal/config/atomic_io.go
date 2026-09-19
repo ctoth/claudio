@@ -2,103 +2,25 @@ package config
 
 import (
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
 
 	"github.com/spf13/afero"
+
+	"claudio.click/internal/safeio"
 )
 
-// WriteConfigFile atomically writes cfg to filePath. Pattern mirrors
-// internal/install/settings_io.go (WriteSettingsFile) byte-for-byte:
-//
-//  1. MkdirAll the parent dir.
-//  2. BackupConfigFile (non-fatal, refuses to overwrite a valid .bak
-//     with a corrupt source).
-//  3. Probe existing mode (default 0644 for new files).
-//  4. Marshal config with indent.
-//  5. Create unique temp file in the same dir, Write, Sync, Close,
-//     Chmod, atomic Rename.
-//  6. Parent-dir fsync on OsFs (no-op on Windows; skipped on non-OsFs
-//     like MemMapFs).
+// WriteConfigFile backs up the existing config (see BackupConfigFile) and
+// then replaces filePath with cfg via safeio.WriteJSONFile, which owns the
+// temp-file + fsync + rename + parent-dir-fsync atomic write.
 //
 // Callers MUST hold LockConfigDir(filePath) for the entire
 // read-mutate-write window.
-//
-// NOTE: This duplicates internal/install/settings_io.go's WriteSettingsFile
-// to avoid a layering inversion (config currently does not depend on
-// install). A future refactor can lift both into a shared
-// internal/safeio/atomicjson package; doing it here would expand this
-// chunk's scope.
 func WriteConfigFile(filesystem afero.Fs, filePath string, cfg *Config) error {
-	// 1. MkdirAll
-	dir := filepath.Dir(filePath)
-	if err := filesystem.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("failed to create config directory %s: %w", dir, err)
-	}
-
-	// 2. Back up existing config before overwrite. Non-fatal: a missing
-	// .bak is better than a blocked write.
+	// Non-fatal: a missing .bak is better than a blocked write.
 	BackupConfigFile(filesystem, filePath)
-
-	// 3. Detect existing file permissions to preserve them.
-	fileMode := os.FileMode(0644)
-	if existingInfo, err := filesystem.Stat(filePath); err == nil {
-		fileMode = existingInfo.Mode() & os.ModePerm
-	}
-
-	// 4. Marshal config to JSON with indentation for human readability.
-	data, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal config to JSON: %w", err)
-	}
-
-	// 5. Write atomically using a unique temp file + rename.
-	tempFile, err := afero.TempFile(filesystem, dir, ".config-*.tmp")
-	if err != nil {
-		return fmt.Errorf("failed to create temp config file: %w", err)
-	}
-	tempName := tempFile.Name()
-
-	if _, err := tempFile.Write(data); err != nil {
-		tempFile.Close()
-		_ = filesystem.Remove(tempName)
-		return fmt.Errorf("failed to write temp config file: %w", err)
-	}
-
-	// Sync temp file to disk before close so a crash between rename and
-	// full durability does not leave the new content unflushed.
-	if err := tempFile.Sync(); err != nil {
-		tempFile.Close()
-		_ = filesystem.Remove(tempName)
-		return fmt.Errorf("failed to sync temp config file: %w", err)
-	}
-
-	if err := tempFile.Close(); err != nil {
-		_ = filesystem.Remove(tempName)
-		return fmt.Errorf("failed to close temp config file: %w", err)
-	}
-
-	if err := filesystem.Chmod(tempName, fileMode); err != nil {
-		_ = filesystem.Remove(tempName)
-		return fmt.Errorf("failed to set temp config file permissions: %w", err)
-	}
-
-	if err := filesystem.Rename(tempName, filePath); err != nil {
-		_ = filesystem.Remove(tempName)
-		return fmt.Errorf("failed to rename temp config file: %w", err)
-	}
-
-	// 6. Parent-dir fsync (OsFs only; skipped on Windows / MemMapFs).
-	if _, isOs := filesystem.(*afero.OsFs); isOs {
-		if err := fsyncDir(dir); err != nil {
-			slog.Warn("config parent dir fsync failed (non-fatal)", "dir", dir, "err", err)
-		}
-	}
-
-	slog.Debug("config written atomically", "path", filePath)
-	return nil
+	return safeio.WriteJSONFile(filesystem, filePath, cfg, ".config-*.tmp")
 }
 
 // BackupConfigFile copies filePath to filePath+".bak" iff it exists and
