@@ -15,25 +15,12 @@ import (
 //
 // The optional PathObserver is the inversion seam for tracking. The mapper
 // itself knows nothing about tracking — observation data flows to whatever
-// closure the caller wires in via WithObserver. The CLI composes a
+// closure the caller passes at construction. The CLI composes a
 // tracking.LookupBuffer.Observer() and harvests its Lookups() for
 // RecordEvent after MapSound returns.
 type SoundMapper struct {
 	resolver soundpack.SoundpackResolver // resolver for path existence checks (may be nil)
 	observer soundpack.PathObserver      // optional per-candidate observer
-}
-
-// MapperOption configures a SoundMapper at construction.
-type MapperOption func(*SoundMapper)
-
-// WithObserver injects a soundpack.PathObserver that fires once per
-// candidate path the resolver walks during MapSound. A nil observer means
-// "no observation". Use with tracking.LookupBuffer to record the resolved
-// chain for later RecordEvent persistence.
-func WithObserver(obs soundpack.PathObserver) MapperOption {
-	return func(m *SoundMapper) {
-		m.observer = obs
-	}
 }
 
 // Chain type constants for sound mapping strategy
@@ -61,17 +48,16 @@ func NewSoundMapper() *SoundMapper {
 }
 
 // NewSoundMapperWithResolver creates a new sound mapper that uses the given
-// soundpack.SoundpackResolver for per-candidate existence checks. Optional
-// MapperOptions (e.g. WithObserver) configure observation.
-func NewSoundMapperWithResolver(resolver soundpack.SoundpackResolver, opts ...MapperOption) *SoundMapper {
+// soundpack.SoundpackResolver for per-candidate existence checks. The
+// observer fires once per candidate path the resolver walks during MapSound;
+// a nil observer means "no observation". Use with tracking.LookupBuffer to
+// record the resolved chain for later RecordEvent persistence.
+func NewSoundMapperWithResolver(resolver soundpack.SoundpackResolver, observer soundpack.PathObserver) *SoundMapper {
 	slog.Debug("creating new sound mapper with resolver")
-	m := &SoundMapper{
+	return &SoundMapper{
 		resolver: resolver,
+		observer: observer,
 	}
-	for _, opt := range opts {
-		opt(m)
-	}
-	return m
 }
 
 // MapSound maps a hook event context to sound file paths using event-specific fallback chains:

@@ -845,7 +845,7 @@ func TestSoundMapper_BugReproduction_AllPathsFallbackToDefault(t *testing.T) {
 		// Note: success/tool-complete.wav and success/success.wav are NOT mapped
 	})
 
-	mapper := NewSoundMapperWithResolver(resolver)
+	mapper := NewSoundMapperWithResolver(resolver, nil)
 
 	eventCtx := &hooks.EventContext{
 		Category:  hooks.Success,
@@ -883,7 +883,7 @@ func TestSoundMapper_BugReproduction_NoSpecificSoundFallsToDefault(t *testing.T)
 		"default.wav": defaultFile,
 	})
 
-	mapper := NewSoundMapperWithResolver(resolver)
+	mapper := NewSoundMapperWithResolver(resolver, nil)
 
 	eventCtx := &hooks.EventContext{
 		Category:  hooks.Success,
@@ -985,10 +985,7 @@ func TestMapSound_ObserverFiresOncePerChainCandidate(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var mu sync.Mutex
 			var calls []observerCall
-			mapper := NewSoundMapperWithResolver(
-				resolver,
-				WithObserver(captureObserver(&mu, &calls)),
-			)
+			mapper := NewSoundMapperWithResolver(resolver, captureObserver(&mu, &calls))
 
 			result := mapper.MapSound(context.Background(), tc.eventCtx)
 			if result == nil {
@@ -1071,8 +1068,8 @@ func TestMapSound_NilObserver_NoPanic(t *testing.T) {
 	}
 	resolver := newTestResolver(map[string]string{"default.wav": defaultFile})
 
-	// No WithObserver option.
-	mapper := NewSoundMapperWithResolver(resolver)
+	// No observer.
+	mapper := NewSoundMapperWithResolver(resolver, nil)
 
 	result := mapper.MapSound(context.Background(), &hooks.EventContext{
 		Category:  hooks.Success,

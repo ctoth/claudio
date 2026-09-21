@@ -150,7 +150,7 @@ func TestEmbeddedLinuxSoundpackSelectsDistinctCuesPerCategory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadEmbeddedPlatformSoundpack(embedded:linux.json) failed: %v", err)
 	}
-	soundMapper := sounds.NewSoundMapperWithResolver(soundpack.NewSoundpackResolver(mapper))
+	soundMapper := sounds.NewSoundMapperWithResolver(soundpack.NewSoundpackResolver(mapper), nil)
 
 	success := json.RawMessage(`{"stdout":"ok","stderr":"","interrupted":false}`)
 	failure := json.RawMessage(`{"stdout":"","stderr":"boom","interrupted":false}`)

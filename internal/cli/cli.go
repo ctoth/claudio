@@ -648,17 +648,17 @@ func (c *CLI) processHookEvent(hookEvent *hooks.HookEvent, cfg *config.Config, s
 
 	var buf *tracking.LookupBuffer
 	var dbHook *tracking.DBHook
-	var mapperOpts []sounds.MapperOption
+	var observer soundpack.PathObserver
 	if c.trackingDB != nil {
 		buf = tracking.NewLookupBuffer()
 		dbHook = tracking.NewDBHook(c.trackingDB, hookEvent.SessionID)
-		mapperOpts = append(mapperOpts, sounds.WithObserver(buf.Observer()))
+		observer = buf.Observer()
 		slog.Debug("created LookupBuffer + DBHook for tracking", "session_id", hookEvent.SessionID)
 	} else {
 		slog.Debug("tracking disabled; mapper resolves without an observer")
 	}
 
-	soundMapper := sounds.NewSoundMapperWithResolver(c.soundpackResolver, mapperOpts...)
+	soundMapper := sounds.NewSoundMapperWithResolver(c.soundpackResolver, observer)
 
 	result := soundMapper.MapSound(ctx, eventCtx)
 	if result == nil {
