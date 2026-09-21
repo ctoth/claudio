@@ -41,7 +41,7 @@ type FilePather interface {
 
 // FileSource represents an audio source backed by a file on disk.
 // FileSource no longer carries a *DecoderRegistry; the decoding seam lives
-// in the malgo subpackage (review finding #5). FileSource derives a naive
+// in the native subpackage. FileSource derives a naive
 // format hint from filepath.Ext so SystemCommandBackend's temp-file
 // fallback can name the temp with the right extension.
 type FileSource struct {

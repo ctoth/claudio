@@ -19,16 +19,15 @@ rename it to `claudio` (`claudio.exe` on Windows), and put it on `PATH`.
 These binaries include the native audio backend; no Go or C compiler is needed.
 On macOS and Linux, make the downloaded binary executable with `chmod +x`.
 
-To build from source, install Go and a C compiler, and enable cgo:
+To build from source, install Go 1.25 or later. No C compiler is required:
 
 ```bash
-CGO_ENABLED=1 go install claudio.click/cmd/claudio@latest
+go install claudio.click/cmd/claudio@latest
 ```
 
-In PowerShell, use `$env:CGO_ENABLED='1'` before running `go install`.
-Without cgo, the native audio backend is unavailable. See
-[installation](docs/installation.md) for details and run `claudio status` to
-check backend availability.
+Native playback uses Oto on Windows, macOS, and Linux, including builds with
+`CGO_ENABLED=0`. See [installation](docs/installation.md) for runtime audio
+requirements and run `claudio status` to check backend availability.
 
 Install hooks for detected agents:
 

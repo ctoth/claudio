@@ -42,13 +42,13 @@ type FileLoggingConfig struct {
 
 // Config represents Claudio configuration
 type Config struct {
-	Volume           *float64             `json:"volume,omitempty"`        // Audio volume (0.0 to 1.0), nil means use default
-	DefaultSoundpack string               `json:"default_soundpack"`       // Default soundpack to use
-	SoundpackPaths   []string             `json:"soundpack_paths"`         // Additional paths to search for soundpacks
-	Enabled          bool                 `json:"enabled"`                 // Whether Claudio is enabled
-	LogLevel         string               `json:"log_level"`               // Log level (debug, info, warn, error)
-	AudioBackend     string               `json:"audio_backend"`           // Audio backend (auto, system_command, malgo)
-	FileLogging      *FileLoggingConfig   `json:"file_logging,omitempty"`  // File logging configuration
+	Volume           *float64             `json:"volume,omitempty"`         // Audio volume (0.0 to 1.0), nil means use default
+	DefaultSoundpack string               `json:"default_soundpack"`        // Default soundpack to use
+	SoundpackPaths   []string             `json:"soundpack_paths"`          // Additional paths to search for soundpacks
+	Enabled          bool                 `json:"enabled"`                  // Whether Claudio is enabled
+	LogLevel         string               `json:"log_level"`                // Log level (debug, info, warn, error)
+	AudioBackend     string               `json:"audio_backend"`            // Audio backend (auto, system_command, oto)
+	FileLogging      *FileLoggingConfig   `json:"file_logging,omitempty"`   // File logging configuration
 	SoundTracking    *SoundTrackingConfig `json:"sound_tracking,omitempty"` // Sound tracking configuration
 }
 
@@ -503,7 +503,7 @@ func (cm *ConfigManager) ApplyLogLevelWithWriter(logLevel string, writer io.Writ
 // it is listed here so cli tests can set cfg.AudioBackend = "fake" without
 // tripping ConfigManager.ValidateConfig.
 func (cm *ConfigManager) GetSupportedAudioBackends() []string {
-	return []string{"auto", "system_command", "malgo", "fake"}
+	return []string{"auto", "system_command", "oto", "fake"}
 }
 
 // IsValidAudioBackend checks if an audio backend type is supported
@@ -581,7 +581,7 @@ func (cm *ConfigManager) GetPlatformSoundpack(executableDir string) string {
 		slog.Debug("platform soundpack found", "platform", runtime.GOOS, "path", platformPath)
 		return platformPath
 	}
-	
+
 	// Check embedded platform files as fallback
 	var embeddedPlatformFile string
 	if platform.IsWSL() {
@@ -589,17 +589,17 @@ func (cm *ConfigManager) GetPlatformSoundpack(executableDir string) string {
 	} else {
 		embeddedPlatformFile = runtime.GOOS + ".json"
 	}
-	
+
 	if hasEmbeddedPlatformFile(embeddedPlatformFile) {
-		slog.Debug("using embedded platform soundpack", 
+		slog.Debug("using embedded platform soundpack",
 			"platform_file", embeddedPlatformFile,
 			"is_wsl", platform.IsWSL(),
 			"runtime_goos", runtime.GOOS)
 		return "embedded:" + embeddedPlatformFile
 	}
-	
-	slog.Debug("no platform soundpack found (file or embedded), using default", 
-		"platform", runtime.GOOS, 
+
+	slog.Debug("no platform soundpack found (file or embedded), using default",
+		"platform", runtime.GOOS,
 		"wsl_detection", platform.IsWSL(),
 		"exec_dir", executableDir,
 		"embedded_file_checked", embeddedPlatformFile)
@@ -665,6 +665,7 @@ func (cm *ConfigManager) getExecutableDirectoryForDefault() string {
 // filepath.Clean so the comparison is portable across slash conventions:
 //   - POSIX go test stages binaries under e.g. /tmp/go-buildNNN/.../pkg.test
 //   - Windows go test stages binaries under e.g. %TEMP%\go-buildNNN\...\pkg.test.exe
+//
 // The "go-build" substring is the actual marker on every platform.
 func isGoTestTempExecutable(executablePath, tmpRoot string) bool {
 	if executablePath == "" || tmpRoot == "" {

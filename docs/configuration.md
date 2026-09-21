@@ -73,11 +73,14 @@ must not be empty if you set it.
 | `soundpack_paths` | `[]` | Extra JSON files or directories to search in addition to XDG soundpack paths. |
 | `enabled` | `true` | When false, Claudio processes hooks but plays no audio. |
 | `log_level` | `warn` | `debug`, `info`, `warn`, or `error`. |
-| `audio_backend` | `auto` | `auto`, `malgo`, or `system_command`. `fake` exists for tests. |
+| `audio_backend` | `auto` | `auto`, `oto`, or `system_command`. `fake` exists for tests. |
 | `file_logging` | enabled | Rotated file logging configuration. |
 | `sound_tracking` | enabled | SQLite tracking for usage and missing-sound analysis. |
 
 ## Environment Variables
+
+If an older config explicitly sets `audio_backend` to `malgo`, change it to
+`oto` or `auto`. The native backend is included in compiler-free builds.
 
 | Variable | Effect |
 | --- | --- |

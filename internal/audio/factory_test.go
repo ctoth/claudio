@@ -6,17 +6,17 @@ import (
 	"testing"
 )
 
-// registerFakeMalgoForTest installs a stub "malgo" constructor for the
+// registerFakeOtoForTest installs a stub "oto" constructor for the
 // duration of the test and restores the previous registration on cleanup.
-// The audio package itself can't import internal/audio/malgo (that would
-// be a cycle: malgo imports audio). The fake lets factory_test exercise
-// the registration seam without dragging the real cgo backend into the
+// The audio package itself can't import internal/audio/native (that would
+// be a cycle: native imports audio). The fake lets factory_test exercise
+// the registration seam without dragging the real output backend into the
 // audio package's test binary.
-func registerFakeMalgoForTest(t *testing.T) {
+func registerFakeOtoForTest(t *testing.T) {
 	t.Helper()
 	backendCtorMu.Lock()
-	prev, hadPrev := backendCtors["malgo"]
-	backendCtors["malgo"] = func() (AudioBackend, error) {
+	prev, hadPrev := backendCtors["oto"]
+	backendCtors["oto"] = func() (AudioBackend, error) {
 		return &mockAudioBackend{}, nil
 	}
 	backendCtorMu.Unlock()
@@ -25,9 +25,9 @@ func registerFakeMalgoForTest(t *testing.T) {
 		backendCtorMu.Lock()
 		defer backendCtorMu.Unlock()
 		if hadPrev {
-			backendCtors["malgo"] = prev
+			backendCtors["oto"] = prev
 		} else {
-			delete(backendCtors, "malgo")
+			delete(backendCtors, "oto")
 		}
 	})
 }
@@ -38,19 +38,19 @@ func TestResolveBackendWithChecker(t *testing.T) {
 		wsl, command, registered  bool
 		wantErr                   error
 	}{
-		{"native missing", "auto", "malgo", false, false, false, ErrBackendNotAvailable},
-		{"explicit missing", "malgo", "malgo", false, false, false, ErrBackendNotAvailable},
-		{"native available", "auto", "malgo", false, false, true, nil},
-		{"empty auto", "", "malgo", false, false, true, nil},
+		{"native missing", "auto", "oto", false, false, false, ErrBackendNotAvailable},
+		{"explicit missing", "oto", "oto", false, false, false, ErrBackendNotAvailable},
+		{"native available", "auto", "oto", false, false, true, nil},
+		{"empty auto", "", "oto", false, false, true, nil},
 		{"WSL without cgo", "auto", "system_command", true, true, false, nil},
-		{"WSL missing both", "auto", "malgo", true, false, false, ErrBackendNotAvailable},
+		{"WSL missing both", "auto", "oto", true, false, false, ErrBackendNotAvailable},
 		{"explicit command", "system_command", "system_command", false, true, false, nil},
 		{"missing command", "system_command", "system_command", false, false, false, ErrBackendNotAvailable},
 		{"invalid", "unknown", "unknown", false, false, false, ErrInvalidBackendType},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.registered {
-				registerFakeMalgoForTest(t)
+				registerFakeOtoForTest(t)
 			}
 			got, err := resolveBackendWithChecker(tc.requested, tc.wsl, func(string) bool { return tc.command })
 			if got != tc.resolved || !errors.Is(err, tc.wantErr) {
@@ -66,7 +66,7 @@ func TestNewBackend_WithChecker(t *testing.T) {
 		backendType       string
 		isWSL             bool
 		availableCommands []string
-		expectedKind      string // "system_command" | "malgo" | ""
+		expectedKind      string // "system_command" | "oto" | ""
 		expectError       bool
 	}{
 		{
@@ -81,14 +81,14 @@ func TestNewBackend_WithChecker(t *testing.T) {
 			backendType:       "auto",
 			isWSL:             true,
 			availableCommands: []string{},
-			expectedKind:      "malgo",
+			expectedKind:      "oto",
 		},
 		{
 			name:              "auto - native Linux",
 			backendType:       "auto",
 			isWSL:             false,
 			availableCommands: []string{"paplay"},
-			expectedKind:      "malgo",
+			expectedKind:      "oto",
 		},
 		{
 			name:              "explicit system_command - paplay available",
@@ -105,11 +105,11 @@ func TestNewBackend_WithChecker(t *testing.T) {
 			expectError:       true,
 		},
 		{
-			name:              "explicit malgo",
-			backendType:       "malgo",
+			name:              "explicit oto",
+			backendType:       "oto",
 			isWSL:             true,
 			availableCommands: []string{"paplay"},
-			expectedKind:      "malgo",
+			expectedKind:      "oto",
 		},
 		{
 			name:              "invalid backend type",
@@ -123,13 +123,13 @@ func TestNewBackend_WithChecker(t *testing.T) {
 			backendType:       "",
 			isWSL:             false,
 			availableCommands: []string{},
-			expectedKind:      "malgo",
+			expectedKind:      "oto",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			registerFakeMalgoForTest(t)
+			registerFakeOtoForTest(t)
 
 			isWSLFunc := func() bool { return tt.isWSL }
 			commandExists := func(cmd string) bool {
@@ -159,9 +159,9 @@ func TestNewBackend_WithChecker(t *testing.T) {
 					if _, ok := backend.(*SystemCommandBackend); !ok {
 						t.Errorf("expected *SystemCommandBackend, got %T", backend)
 					}
-				case "malgo":
+				case "oto":
 					if _, ok := backend.(*mockAudioBackend); !ok {
-						t.Errorf("expected fake malgo (*mockAudioBackend), got %T", backend)
+						t.Errorf("expected fake oto (*mockAudioBackend), got %T", backend)
 					}
 				}
 			}
@@ -170,7 +170,7 @@ func TestNewBackend_WithChecker(t *testing.T) {
 }
 
 func TestSupportedBackendTypes(t *testing.T) {
-	expected := []string{"auto", "system_command", "malgo", "fake"}
+	expected := []string{"auto", "system_command", "oto", "fake"}
 	if len(SupportedBackendTypes) != len(expected) {
 		t.Errorf("expected %d supported backend types, got %d", len(expected), len(SupportedBackendTypes))
 	}
@@ -189,7 +189,7 @@ func TestSupportedBackendTypes(t *testing.T) {
 }
 
 func TestIsValidBackendType(t *testing.T) {
-	validTypes := []string{"auto", "system_command", "malgo", "fake", ""}
+	validTypes := []string{"auto", "system_command", "oto", "fake", ""}
 	for _, backendType := range validTypes {
 		if !IsValidBackendType(backendType) {
 			t.Errorf("backend type %q should be valid", backendType)
@@ -276,30 +276,28 @@ func TestNewBackend_ErrorHandling(t *testing.T) {
 	}
 }
 
-// TestNewBackend_MalgoUnregistered verifies that without registration, the
-// "malgo" case fails with ErrBackendNotAvailable. This is the contract the
-// !cgo build relies on — the malgo subpackage's init() does not run, so
-// the registration is missing and NewBackend("malgo") reports the
-// condition explicitly rather than panicking.
-func TestNewBackend_MalgoUnregistered(t *testing.T) {
-	// Snapshot and clear any pre-existing malgo registration (e.g. from
+// TestNewBackend_OtoUnregistered verifies that without registration, the
+// "oto" case fails with ErrBackendNotAvailable when the application does not
+// import the native implementation, rather than panicking.
+func TestNewBackend_OtoUnregistered(t *testing.T) {
+	// Snapshot and clear any pre-existing oto registration (e.g. from
 	// another test that ran first in the same package binary).
 	backendCtorMu.Lock()
-	prev, hadPrev := backendCtors["malgo"]
-	delete(backendCtors, "malgo")
+	prev, hadPrev := backendCtors["oto"]
+	delete(backendCtors, "oto")
 	backendCtorMu.Unlock()
 
 	t.Cleanup(func() {
 		backendCtorMu.Lock()
 		defer backendCtorMu.Unlock()
 		if hadPrev {
-			backendCtors["malgo"] = prev
+			backendCtors["oto"] = prev
 		}
 	})
 
-	_, err := NewBackend("malgo")
+	_, err := NewBackend("oto")
 	if err == nil {
-		t.Error("expected error when malgo is not registered")
+		t.Error("expected error when oto is not registered")
 	}
 	if !errors.Is(err, ErrBackendNotAvailable) {
 		t.Errorf("expected ErrBackendNotAvailable, got %v", err)

@@ -1,6 +1,4 @@
-//go:build cgo
-
-package malgo
+package native
 
 import (
 	"context"

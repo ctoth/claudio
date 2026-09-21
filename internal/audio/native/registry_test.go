@@ -1,6 +1,4 @@
-//go:build cgo
-
-package malgo
+package native
 
 import (
 	"bytes"
@@ -8,8 +6,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/gen2brain/malgo"
 )
 
 func TestDecoderRegistry(t *testing.T) {
@@ -206,7 +202,7 @@ func TestDecoderRegistryDecodeFile(t *testing.T) {
 		Samples:    []byte{0x01, 0x02, 0x03, 0x04},
 		Channels:   2,
 		SampleRate: 44100,
-		Format:     malgo.FormatS16,
+		Format:     FormatS16,
 	}
 
 	decoder := &MockDecoder{
@@ -510,7 +506,7 @@ func TestAiffDecodeFileIntegration(t *testing.T) {
 			t.Errorf("expected 2 channels, got %d", audioData.Channels)
 		}
 
-		if audioData.Format != malgo.FormatS16 {
+		if audioData.Format != FormatS16 {
 			t.Errorf("expected format S16, got %v", audioData.Format)
 		}
 

@@ -37,16 +37,14 @@ claudio --version
 
 ## Hooks Installed But No Sound
 
-If `claudio status` reports `unavailable` with `malgo backend not registered`,
-the binary has no native audio backend. Go may disable cgo automatically when
-no C compiler is installed, so a successful `go install` alone does not prove
-that native playback is available.
+Native playback uses the `oto` backend and does not require cgo. If your config
+explicitly selects the former `malgo` backend, change it to `oto` or `auto`.
+An `available` backend in `claudio status` means its implementation or executable
+is present; it does not test the audio device or guarantee audible playback.
 
-Install a [prebuilt release binary](https://github.com/ctoth/claudio/releases/latest),
-or rebuild with a C compiler and `CGO_ENABLED=1` as described in
-[Installation](installation.md). Run `claudio status` again after replacing
-the binary. An `available` backend means its implementation or executable is
-present; it does not test the audio device or guarantee audible playback.
+On Linux, check that the PulseAudio server is reachable (set `PULSE_SERVER`
+when needed), or that the ALSA runtime library `libasound.so.2` is installed.
+See [Installation](installation.md) for runtime requirements.
 
 An enabled hook with an unavailable backend now prints a diagnostic and exits
 nonzero before starting a detached worker. Muted hooks remain quiet.

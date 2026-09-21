@@ -83,7 +83,7 @@ func TestWriteConfigWithMemoryFilesystem(t *testing.T) {
 		DefaultSoundpack: "memory-test",
 		Enabled:          false,
 		LogLevel:         "info",
-		AudioBackend:     "malgo",
+		AudioBackend:     "oto",
 	}
 	
 	configPath := "/test/output.json"

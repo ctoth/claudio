@@ -15,7 +15,7 @@ import (
 
 // Exercise the real parent process: in-process tests disable detachment and
 // cannot catch diagnostics lost when the worker's stderr goes to the null device.
-func TestNoCGOBinaryReportsUnavailableAudio(t *testing.T) {
+func TestNoCGOBinaryAudioAvailability(t *testing.T) {
 	binary := filepath.Join(t.TempDir(), "claudio.exe")
 	build := exec.Command("go", "build", "-o", binary, "../../cmd/claudio")
 	build.Env = append(os.Environ(), "CGO_ENABLED=0")
@@ -35,12 +35,11 @@ func TestNoCGOBinaryReportsUnavailableAudio(t *testing.T) {
 		wantError     bool
 		want          string
 	}{
-		{"status", "malgo", []string{"status"}, false, "malgo -> malgo (unavailable"},
-		{"auto status", "auto", []string{"status"}, false, "auto -> malgo (unavailable"},
+		{"status", "oto", []string{"status"}, false, "oto -> oto (available; playback not tested)"},
+		{"auto status", "auto", []string{"status"}, false, "auto -> oto (available; playback not tested)"},
 		{"available status", "fake", []string{"status"}, false, "fake -> fake (available; playback not tested)"},
-		{"hook", "malgo", nil, true, "malgo backend not registered"},
-		{"auto hook", "auto", nil, true, "malgo backend not registered"},
-		{"silent hook", "malgo", []string{"--silent"}, false, ""},
+		{"unavailable hook", "system_command", nil, true, "no system audio commands found"},
+		{"silent hook", "oto", []string{"--silent"}, false, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv("CLAUDIO_AUDIO_BACKEND", tc.backend)
@@ -57,7 +56,7 @@ func TestNoCGOBinaryReportsUnavailableAudio(t *testing.T) {
 			out := stdout.String()
 			if tc.wantError {
 				out = stderr.String()
-				if strings.Count(out, "\n") != 1 || !strings.Contains(out, "CGO_ENABLED=1") {
+				if strings.Count(out, "\n") != 1 {
 					t.Errorf("want one actionable diagnostic, got %q", out)
 				}
 			}

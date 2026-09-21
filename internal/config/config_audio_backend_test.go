@@ -40,8 +40,8 @@ func TestConfigAudioBackendValidation(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name:        "valid malgo backend",
-			backend:     "malgo",
+			name:        "valid oto backend",
+			backend:     "oto",
 			expectError: false,
 		},
 		{
@@ -131,9 +131,9 @@ func TestConfigAudioBackendEnvironmentOverride(t *testing.T) {
 			expectedBackend: "system_command",
 		},
 		{
-			name:            "malgo backend via environment",
-			envValue:        "malgo",
-			expectedBackend: "malgo",
+			name:            "oto backend via environment",
+			envValue:        "oto",
+			expectedBackend: "oto",
 		},
 		{
 			name:            "empty environment keeps original",
@@ -205,7 +205,7 @@ func TestGetSupportedAudioBackends(t *testing.T) {
 
 	supported := mgr.GetSupportedAudioBackends()
 
-	expectedBackends := []string{"auto", "system_command", "malgo", "fake"}
+	expectedBackends := []string{"auto", "system_command", "oto", "fake"}
 	if len(supported) != len(expectedBackends) {
 		t.Errorf("expected %d supported backends, got %d", len(expectedBackends), len(supported))
 	}
@@ -227,7 +227,7 @@ func TestGetSupportedAudioBackends(t *testing.T) {
 func TestIsValidAudioBackend(t *testing.T) {
 	mgr := NewConfigManager()
 
-	validBackends := []string{"auto", "system_command", "malgo", "fake", ""}
+	validBackends := []string{"auto", "system_command", "oto", "fake", ""}
 	for _, backend := range validBackends {
 		if !mgr.IsValidAudioBackend(backend) {
 			t.Errorf("backend '%s' should be valid", backend)

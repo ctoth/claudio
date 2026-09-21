@@ -32,18 +32,10 @@ Claudio requires Go 1.25.13 or newer. With Go's default automatic toolchain
 selection, commands run from this repository use the recommended Go 1.26.6
 toolchain declared in `go.mod`.
 
-Native audio requires cgo and a C compiler on `PATH`. Set `CGO_ENABLED=1`
-explicitly so a missing compiler fails the build instead of producing a binary
-without native audio support.
+Native audio uses Oto and requires no C compiler on Windows, macOS, or Linux,
+even when `CGO_ENABLED=0`.
 
 ```bash
-CGO_ENABLED=1 go install claudio.click/cmd/claudio@latest
-```
-
-PowerShell:
-
-```powershell
-$env:CGO_ENABLED = '1'
 go install claudio.click/cmd/claudio@latest
 ```
 
@@ -57,8 +49,10 @@ The binary normally lands in `$(go env GOPATH)/bin`.
 
 Run `claudio status` to check the selected backend's availability. This checks
 the implementation or player executable, not the audio device or speakers.
-Compiler-free builds remain supported for system-command playback where a
-supported player is installed, but cannot use the native `malgo` backend.
+On Linux, Oto connects to PulseAudio (including compatible audio servers).
+Its ALSA fallback needs `libasound.so.2` at runtime, but no development headers
+are needed to build. `system_command` remains available for external players,
+and `auto` continues to prefer those players under WSL when installed.
 
 ## Auto Install
 

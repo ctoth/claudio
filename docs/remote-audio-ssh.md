@@ -92,8 +92,8 @@ mkdir -p ~/.config/pulse
 echo "enable-shm = no" >> ~/.config/pulse/client.conf
 ```
 
-This applies to every libpulse client on the box, which includes `paplay` and
-Claudio's `malgo` backend.
+This applies to libpulse clients such as `paplay`. Oto uses a Go PulseAudio
+client instead; these libpulse client settings do not configure it.
 
 ### 4. Point Audio At The Forwarded Socket
 
@@ -109,11 +109,10 @@ fi
 The socket test keeps console logins and non-forwarded sessions from breaking.
 
 `PULSE_SERVER` is what makes `paplay` reach your speakers.
-`CLAUDIO_AUDIO_BACKEND` matters because Claudio auto-detects `malgo` on native
-Linux and only prefers `system_command` under WSL. Over a tunnel, the
-subprocess player is the more predictable path: it is a fresh short-lived
-process per sound, and a failed connection is a non-zero exit rather than a
-libpulse abort inside the Claudio process.
+`CLAUDIO_AUDIO_BACKEND` selects the `paplay` path configured in this guide.
+Claudio otherwise selects `oto` on native Linux and only prefers
+`system_command` under WSL. Oto can also use `PULSE_SERVER`, but the libpulse
+configuration and `paplay` options in this guide apply to `system_command`.
 
 You can make this permanent instead of environment-driven:
 
@@ -236,9 +235,8 @@ For non-Claudio programs routed through the ALSA Pulse plugin, exporting
 
 ## Troubleshooting
 
-**No sound, `claudio status` shows the `malgo` backend.** The remote box is not
-WSL, so auto-detection chose `malgo`. Set
-`CLAUDIO_AUDIO_BACKEND=system_command`.
+**Following this guide, but `claudio status` shows `oto`.** Set
+`CLAUDIO_AUDIO_BACKEND=system_command` to use the configured `paplay` path.
 
 **`Expected 1 memfd fd` plus `Protocol error`.** Step 3 was skipped. Add
 `enable-shm = no` to `~/.config/pulse/client.conf`.

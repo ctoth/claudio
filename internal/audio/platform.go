@@ -29,8 +29,8 @@ func detectOptimalBackendWithChecker(isWSL bool, commandChecker func(string) boo
 	slog.Debug("detecting optimal audio backend", "is_wsl", isWSL)
 
 	if isWSL {
-		// In WSL, prefer system commands to avoid malgo crackling issues
-		slog.Debug("WSL detected, preferring system commands over malgo")
+		// Preserve WSL's system-command routing to the host audio server.
+		slog.Debug("WSL detected, preferring system commands over oto")
 
 		preferredCmd := getPreferredSystemCommandWithChecker(commandChecker)
 		if preferredCmd != "" {
@@ -38,13 +38,13 @@ func detectOptimalBackendWithChecker(isWSL bool, commandChecker func(string) boo
 			return "system_command"
 		}
 
-		slog.Warn("no system audio commands found in WSL, falling back to malgo (may have crackling)")
-		return "malgo"
+		slog.Debug("no system audio commands found in WSL, using oto")
+		return "oto"
 	}
 
-	// On native Linux/macOS, prefer malgo for better performance and control
-	slog.Debug("native system detected, preferring malgo backend")
-	return "malgo"
+	// On native Linux/macOS, prefer oto for better performance and control
+	slog.Debug("native system detected, preferring oto backend")
+	return "oto"
 }
 
 // getPreferredSystemCommandWithChecker allows dependency injection for testing

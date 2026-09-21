@@ -145,7 +145,7 @@ func TestStatusCommand_VolumeFromEnv_AnnotatesSource(t *testing.T) {
 
 func TestStatusCommand_PrintsAllExpectedFields(t *testing.T) {
 	testenv.IsolateXDG(t)
-	// This test asserts the configured AudioBackend ("malgo") appears
+	// This test asserts the configured AudioBackend ("oto") appears
 	// in status output. testenv.IsolateXDG sets CLAUDIO_AUDIO_BACKEND=fake
 	// to keep cgo-less test runs green; clear it here so the seeded
 	// config value is the one we read back.
@@ -160,7 +160,7 @@ func TestStatusCommand_PrintsAllExpectedFields(t *testing.T) {
 		DefaultSoundpack: "test-pack",
 		Enabled:          true,
 		LogLevel:         "info",
-		AudioBackend:     "malgo",
+		AudioBackend:     "oto",
 	})
 
 	cli := NewCLI()
@@ -189,7 +189,7 @@ func TestStatusCommand_PrintsAllExpectedFields(t *testing.T) {
 	if !strings.Contains(out, "test-pack") {
 		t.Errorf("expected soundpack name in output, got: %q", out)
 	}
-	if !strings.Contains(out, "malgo") {
+	if !strings.Contains(out, "oto") {
 		t.Errorf("expected audio backend in output, got: %q", out)
 	}
 }

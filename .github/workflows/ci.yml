@@ -5,6 +5,9 @@ on:
     branches: [master]
   pull_request:
 
+env:
+  CGO_ENABLED: "0"
+
 jobs:
   test:
     strategy:
@@ -18,10 +21,6 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-
-      - name: Install ALSA headers
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
 
       - name: Vet
         run: go vet ./...
@@ -40,9 +39,6 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-
-      - name: Install ALSA headers
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
 
       - uses: golangci/golangci-lint-action@v9
         with:
@@ -75,7 +71,6 @@ jobs:
         with:
           go-version-file: go.mod
 
-      # These packages have no cgo dependency, so no ALSA headers are needed.
       - name: Enforce coverage floor
         run: go run ./internal/devtools/coveragefloor -floor 97.9 ./internal/hooks ./internal/install
 
