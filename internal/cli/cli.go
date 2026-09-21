@@ -482,6 +482,17 @@ func runStdinModeE(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Structural failures must reach the caller before detachment redirects the
+	// worker's stderr. This does not open a device or test playback.
+	if cfg.Enabled && len(inputData) > 0 {
+		if _, err := audio.ResolveBackend(cfg.AudioBackend); err != nil {
+			// Run logs the error once; Cobra usage would bury the remedy.
+			cmd.SilenceErrors = true
+			cmd.SilenceUsage = true
+			return err
+		}
+	}
+
 	// Default behavior: detach hook processing so the invoking hook returns immediately.
 	if shouldDetachHookProcessing(cmd, cfg, inputData) {
 		if err := spawnDetachedHookWorker(cmd, inputData); err != nil {

@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"claudio.click/internal/audio"
 	"claudio.click/internal/config"
 )
 
@@ -77,7 +78,12 @@ func runStatusE(cmd *cobra.Command, _ []string) error {
 
 	fmt.Fprintf(out, "  soundpack:      %s\n", cfg.DefaultSoundpack)
 	fmt.Fprintf(out, "  log level:      %s\n", cfg.LogLevel)
-	fmt.Fprintf(out, "  audio backend:  %s\n", cfg.AudioBackend)
+	backend, backendErr := audio.ResolveBackend(cfg.AudioBackend)
+	if backendErr != nil {
+		fmt.Fprintf(out, "  audio backend:  %s -> %s (unavailable: %v)\n", cfg.AudioBackend, backend, backendErr)
+	} else {
+		fmt.Fprintf(out, "  audio backend:  %s -> %s (available; playback not tested)\n", cfg.AudioBackend, backend)
+	}
 
 	if cfg.FileLogging != nil && cfg.FileLogging.Enabled {
 		path := cli.configManager.ResolveLogFilePath(cfg.FileLogging.Filename)

@@ -44,7 +44,7 @@ var (
 // the top-level audio package does not need to import the backend's
 // implementation. Concretely: the malgo subpackage registers itself
 // under "malgo" via an init(), guarded by //go:build cgo. Under !cgo no
-// registration happens and NewBackend("malgo") returns errCGORequired.
+// registration happens and NewBackend("malgo") returns ErrBackendNotAvailable.
 func RegisterBackend(name string, ctor BackendConstructor) {
 	backendCtorMu.Lock()
 	defer backendCtorMu.Unlock()
@@ -66,6 +66,32 @@ func lookupBackendConstructor(name string) (BackendConstructor, bool) {
 // what is now a switch statement.
 func NewBackend(backendType string) (AudioBackend, error) {
 	return newBackendWithChecker(backendType, platform.IsWSL, CommandExists)
+}
+
+// ResolveBackend reports the selected backend and whether its implementation
+// is available. It checks registrations and executables without opening an
+// audio device; availability does not guarantee successful playback.
+func ResolveBackend(backendType string) (string, error) {
+	return resolveBackendWithChecker(backendType, platform.IsWSL(), CommandExists)
+}
+
+func resolveBackendWithChecker(backendType string, isWSL bool, commandExists func(string) bool) (string, error) {
+	if backendType == "" || backendType == "auto" {
+		backendType = detectOptimalBackendWithChecker(isWSL, commandExists)
+	}
+	switch backendType {
+	case "system_command":
+		if len(getAvailableSystemCommandsWithChecker(commandExists)) == 0 {
+			return backendType, fmt.Errorf("%w: no system audio commands found", ErrBackendNotAvailable)
+		}
+	case "malgo", "fake":
+		if _, ok := lookupBackendConstructor(backendType); !ok {
+			return backendType, missingBackendError(backendType)
+		}
+	default:
+		return backendType, fmt.Errorf("%w: %s", ErrInvalidBackendType, backendType)
+	}
+	return backendType, nil
 }
 
 // newBackendWithChecker is the seam used by tests to inject platform detection
@@ -126,7 +152,14 @@ func createSystemCommandBackendWithChecker(commandExists func(string) bool) (Aud
 func createRegisteredBackend(name string) (AudioBackend, error) {
 	ctor, ok := lookupBackendConstructor(name)
 	if !ok {
-		return nil, fmt.Errorf("%w: %s backend not registered (build with cgo?)", ErrBackendNotAvailable, name)
+		return nil, missingBackendError(name)
 	}
 	return ctor()
+}
+
+func missingBackendError(name string) error {
+	if name == "malgo" {
+		return fmt.Errorf("%w: malgo backend not registered; download an audio-enabled binary from https://github.com/ctoth/claudio/releases or rebuild with CGO_ENABLED=1 and a C compiler", ErrBackendNotAvailable)
+	}
+	return fmt.Errorf("%w: %s backend not registered", ErrBackendNotAvailable, name)
 }

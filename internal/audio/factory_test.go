@@ -32,6 +32,34 @@ func registerFakeMalgoForTest(t *testing.T) {
 	})
 }
 
+func TestResolveBackendWithChecker(t *testing.T) {
+	for _, tc := range []struct {
+		name, requested, resolved string
+		wsl, command, registered  bool
+		wantErr                   error
+	}{
+		{"native missing", "auto", "malgo", false, false, false, ErrBackendNotAvailable},
+		{"explicit missing", "malgo", "malgo", false, false, false, ErrBackendNotAvailable},
+		{"native available", "auto", "malgo", false, false, true, nil},
+		{"empty auto", "", "malgo", false, false, true, nil},
+		{"WSL without cgo", "auto", "system_command", true, true, false, nil},
+		{"WSL missing both", "auto", "malgo", true, false, false, ErrBackendNotAvailable},
+		{"explicit command", "system_command", "system_command", false, true, false, nil},
+		{"missing command", "system_command", "system_command", false, false, false, ErrBackendNotAvailable},
+		{"invalid", "unknown", "unknown", false, false, false, ErrInvalidBackendType},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.registered {
+				registerFakeMalgoForTest(t)
+			}
+			got, err := resolveBackendWithChecker(tc.requested, tc.wsl, func(string) bool { return tc.command })
+			if got != tc.resolved || !errors.Is(err, tc.wantErr) {
+				t.Fatalf("got (%q, %v), want (%q, %v)", got, err, tc.resolved, tc.wantErr)
+			}
+		})
+	}
+}
+
 func TestNewBackend_WithChecker(t *testing.T) {
 	tests := []struct {
 		name              string
