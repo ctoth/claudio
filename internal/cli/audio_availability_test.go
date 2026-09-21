@@ -22,7 +22,10 @@ func TestNoCGOBinaryAudioAvailability(t *testing.T) {
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build: %v\n%s", err, out)
 	}
-	testenv.IsolateXDG(t)
+	root := testenv.IsolateXDG(t)
+	// Subprocesses must not discover a host's system-wide Claudio installation.
+	t.Setenv("XDG_CONFIG_DIRS", filepath.Join(root, "config-dirs"))
+	t.Setenv("XDG_DATA_DIRS", filepath.Join(root, "data-dirs"))
 	t.Setenv("PATH", "") // Keep auto deterministic even on WSL hosts with players.
 	t.Setenv("CLAUDIO_ENABLED", "true")
 	t.Setenv("CLAUDIO_SOUND_TRACKING", "false")
