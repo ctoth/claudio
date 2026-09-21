@@ -82,29 +82,6 @@ would need to move with it.
 
 ---
 
-## Atomic-write duplication between install and config
-
-**Location:** `internal/install/settings_io.go` and
-`internal/config/atomic_io.go`. Both implement the same temp-file +
-fsync + rename + parent-dir-fsync atomic write pattern, separately.
-
-**Severity:** Medium-low. The two implementations are aligned today
-but drift is inevitable — Chunk 4's `.bak` discipline only lives in
-settings_io; Chunk 7's NaN/range guards only live in atomic_io. A bug
-fix on one side that should land on both will be forgotten.
-
-**Blast radius if fixed:** Lift the shared core into
-`internal/safeio/atomicjson` (the existing `safeio` package already
-owns the size-capped read primitive, so this is a natural fit).
-Settings_io keeps its lock and backup discipline on top; atomic_io
-becomes a thin wrapper. Both call sites continue to pass through their
-own pre-write validation.
-
-**Original finding:** Chunk 4 analyst H2 (atomic .bak write) plus
-Chunk 7 coder report ("near-duplicate copies … suggested follow-up").
-
----
-
 ## Two-Stat-per-resolved-sound pattern
 
 **Location:** The resolver in `internal/soundpack` and the playback
