@@ -216,3 +216,57 @@ func TestBackendPrecancelledDoesNotInitializeOutput(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// drainingOutput behaves like Oto: a player stops playing only after it has
+// read its source to EOF, while the device still holds the last bytes read.
+type drainingOutput struct{ read chan []byte }
+
+type drainingPlayer struct {
+	testPlayer
+	r    io.Reader
+	read chan []byte
+}
+
+func (o *drainingOutput) NewPlayer(r io.Reader) outputPlayer {
+	return &drainingPlayer{testPlayer: testPlayer{started: make(chan struct{})}, r: r, read: o.read}
+}
+func (o *drainingOutput) Err() error { return nil }
+
+func (p *drainingPlayer) Play() {
+	p.testPlayer.Play()
+	go func() {
+		data, err := io.ReadAll(p.r)
+		p.read <- data
+		p.finish(err)
+	}()
+}
+
+func TestBackendFlushesDeviceBufferWithSilenceBeforeReturning(t *testing.T) {
+	b := NewBackend()
+	defer b.Close()
+	o := &drainingOutput{read: make(chan []byte, 1)}
+	b.openOutput = func(context.Context) (outputContext, error) { return o, nil }
+	if err := b.Play(context.Background(), testSource()); err != nil {
+		t.Fatal(err)
+	}
+	data := <-o.read
+
+	const bytesPerSecond = outputSampleRate * 2 * 4
+	buffered := int(outputBufferSize.Seconds() * bytesPerSecond)
+	if outputBufferSize <= 0 {
+		t.Fatal("device buffer size must be explicit so the drain can cover it")
+	}
+	// The process exits after Play returns, discarding whatever the device
+	// still buffers. Trailing silence must push all real audio out first;
+	// PulseAudio may hold up to twice its target length.
+	if len(data) <= 2*buffered || len(data)%8 != 0 {
+		t.Fatalf("read %d bytes, want frame-aligned audio plus at least %d bytes of drain", len(data), 2*buffered)
+	}
+	tail := data[len(data)-2*buffered:]
+	if !bytes.Equal(tail, make([]byte, len(tail))) {
+		t.Fatalf("last %v of output is not silence; the end of the sound would be cut off", 2*outputBufferSize)
+	}
+	if bytes.Equal(data[:len(data)-len(tail)], make([]byte, len(data)-len(tail))) {
+		t.Fatal("no audio before the drain")
+	}
+}

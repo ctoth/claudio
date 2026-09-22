@@ -3,6 +3,7 @@ package native
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"math"
 	"sync"
@@ -164,7 +165,7 @@ func (b *Backend) Play(ctx context.Context, source audio.AudioSource) (err error
 		b.mu.Unlock()
 		return err
 	}
-	p.player = output.NewPlayer(pcm)
+	p.player = output.NewPlayer(io.MultiReader(pcm, &silenceReader{ctx: playCtx, n: drainSize}))
 	p.player.SetVolume(float64(b.volume))
 	p.player.Play()
 	b.mu.Unlock()

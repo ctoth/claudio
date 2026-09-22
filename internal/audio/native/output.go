@@ -4,9 +4,39 @@ import (
 	"context"
 	"io"
 	"sync"
+	"time"
 
 	"github.com/ebitengine/oto/v3"
 )
+
+// outputBufferSize is set explicitly because Oto's per-driver defaults differ
+// (100ms PulseAudio, 50ms WASAPI) and Play must know how much to drain.
+const outputBufferSize = 100 * time.Millisecond
+
+// drainSize is trailing silence played after each sound. A player stops once
+// its source is exhausted, but the device still holds up to twice its target
+// buffer (PulseAudio maxlength); the hook process exits right after Play, so
+// without the drain the end of every sound is cut off with an audible pop.
+const drainSize = int(2*outputBufferSize/time.Millisecond) * outputSampleRate / 1000 * 2 * 4
+
+// silenceReader supplies n bytes of Float32 silence, stopping on cancellation.
+type silenceReader struct {
+	ctx context.Context
+	n   int
+}
+
+func (s *silenceReader) Read(dst []byte) (int, error) {
+	if err := s.ctx.Err(); err != nil {
+		return 0, err
+	}
+	if s.n == 0 {
+		return 0, io.EOF
+	}
+	n := min(len(dst), s.n)
+	clear(dst[:n])
+	s.n -= n
+	return n, nil
+}
 
 type outputPlayer interface {
 	Play()
@@ -45,7 +75,7 @@ func openOutput(ctx context.Context) (outputContext, error) {
 			defer close(device.done)
 			c, ready, err := oto.NewContext(&oto.NewContextOptions{
 				SampleRate: outputSampleRate, ChannelCount: 2, Format: oto.FormatFloat32LE,
-				ApplicationName: "Claudio",
+				BufferSize: outputBufferSize, ApplicationName: "Claudio",
 			})
 			if err != nil {
 				device.err = err
