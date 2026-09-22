@@ -2,6 +2,7 @@ package native
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -16,6 +17,16 @@ func init() {
 	audio.RegisterBackend("oto", func() (audio.AudioBackend, error) { return NewBackend(), nil })
 }
 
+// ErrPlaybackStalled reports a device that stopped consuming audio, or never
+// started, without reporting an error. Oto keeps such a player "playing"
+// forever, and the hook caller has no deadline of its own.
+var ErrPlaybackStalled = errors.New("audio device stalled")
+
+const (
+	defaultStartTimeout = 5 * time.Second
+	defaultStallGrace   = 2 * time.Second
+)
+
 // Backend owns each admitted playback from decode through player shutdown.
 // Stop cancels the current set; Close also rejects future admissions. Neither
 // owns the process-wide Oto context, so closing one backend cannot stop another.
@@ -26,6 +37,10 @@ type Backend struct {
 	plays      map[*playback]struct{}
 	registry   *DecoderRegistry
 	openOutput func(context.Context) (outputContext, error)
+
+	// startTimeout bounds device initialization; stallGrace is how long
+	// playback may overrun the sound plus its drain before it is abandoned.
+	startTimeout, stallGrace time.Duration
 }
 
 type playback struct {
@@ -35,7 +50,10 @@ type playback struct {
 }
 
 func NewBackend() *Backend {
-	return &Backend{volume: 1, plays: make(map[*playback]struct{}), registry: NewDefaultRegistry(), openOutput: openOutput}
+	return &Backend{
+		volume: 1, plays: make(map[*playback]struct{}), registry: NewDefaultRegistry(), openOutput: openOutput,
+		startTimeout: defaultStartTimeout, stallGrace: defaultStallGrace,
+	}
 }
 
 func (b *Backend) Stop() error  { return b.stop(false) }
@@ -150,8 +168,14 @@ func (b *Backend) Play(ctx context.Context, source audio.AudioSource) (err error
 	if err != nil {
 		return err
 	}
-	output, err := b.openOutput(playCtx)
+	startCtx, cancelStart := context.WithTimeout(playCtx, b.startTimeout)
+	output, err := b.openOutput(startCtx)
+	cancelStart()
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) && playCtx.Err() == nil {
+			slog.Warn("Oto output did not start", "timeout", b.startTimeout)
+			return fmt.Errorf("initialize Oto output: %w after %v", ErrPlaybackStalled, b.startTimeout)
+		}
 		return fmt.Errorf("initialize Oto output: %w", err)
 	}
 	if err = output.Err(); err != nil {
@@ -171,6 +195,9 @@ func (b *Backend) Play(ctx context.Context, source audio.AudioSource) (err error
 	b.mu.Unlock()
 	slog.Debug("Oto playback started", "sample_rate", data.SampleRate, "channels", data.Channels)
 
+	limit := b.playbackDeadline(data)
+	deadline := time.NewTimer(limit)
+	defer deadline.Stop()
 	ticker := time.NewTicker(5 * time.Millisecond)
 	defer ticker.Stop()
 	for {
@@ -189,7 +216,20 @@ func (b *Backend) Play(ctx context.Context, source audio.AudioSource) (err error
 		select {
 		case <-playCtx.Done():
 			return playCtx.Err()
+		case <-deadline.C:
+			slog.Warn("Oto playback stalled; abandoning player", "limit", limit)
+			return fmt.Errorf("oto playback: %w after %v", ErrPlaybackStalled, limit)
 		case <-ticker.C:
 		}
 	}
+}
+
+// playbackDeadline is the longest a healthy device needs: the sound, the
+// trailing silence drain, and a grace period for scheduling jitter.
+// data has already been validated by newPCMReader.
+func (b *Backend) playbackDeadline(data *AudioData) time.Duration {
+	width, _ := getBytesPerSample(data.Format)
+	frames := len(data.Samples) / (width * int(data.Channels))
+	sound := time.Duration(frames) * time.Second / time.Duration(data.SampleRate)
+	return sound + 2*outputBufferSize + b.stallGrace
 }

@@ -50,6 +50,11 @@ See [Installation](installation.md) for runtime requirements.
 An enabled hook with an unavailable backend now prints a diagnostic and exits
 nonzero before starting a detached worker. Muted hooks remain quiet.
 
+If the device stops accepting audio without reporting an error (a suspended
+PulseAudio sink, a disconnected Bluetooth or USB output), playback is abandoned
+once it overruns the sound by about two seconds, and device startup gives up
+after five seconds. The log file then records `audio device stalled`.
+
 Check that Claudio is not muted:
 
 ```bash
