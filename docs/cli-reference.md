@@ -23,6 +23,9 @@ Global flags:
 | `--version`, `-v` | Print version. |
 | `--help`, `-h` | Print help. |
 
+`--volume`, `--soundpack`, and `--silent` affect hook processing only. They are
+never written to `config.json`.
+
 ## `claudio`
 
 With no subcommand, Claudio reads a hook JSON payload from stdin and processes
@@ -39,6 +42,7 @@ Required payload fields are:
 - `hook_event_name`
 
 Tool events can also include `tool_name`, `tool_input`, and `tool_response`.
+A payload that is not valid JSON or lacks a required field exits with code `1`.
 
 ## `claudio install`
 
@@ -56,8 +60,17 @@ Flags:
 | `--agent`, `-a` | `auto` | `auto`, `all`, `claude`, `codex`, `gemini`, `qwen`, or `copilot`. |
 | `--scope`, `-s` | `global` | `global` or `project`. |
 | `--dry-run`, `-d` | false | Show what would happen without writing. |
-| `--print`, `-p` | false | Print target configuration details. |
-| `--quiet`, `-q` | false | Reduce output. |
+| `--print`, `-p` | false | Print the mode, scope, target agent, and settings path. |
+| `--quiet`, `-q` | false | Suppress progress messages. |
+
+`--agent auto` installs for every agent that shows evidence of being present:
+its executable is on `PATH`, its settings file or settings directory exists, or
+Claudio hooks are already installed there. It fails if no agent is found.
+`--agent all` targets all five agents whether or not they are installed.
+
+Settings file locations for each agent and scope are listed on the
+[home page](./#what-claudio-installs). Claude Code honors `CLAUDE_CONFIG_DIR`,
+Codex honors `CODEX_HOME`, and GitHub Copilot CLI honors `COPILOT_HOME`.
 
 Examples:
 
@@ -90,8 +103,11 @@ Flags match `install`:
 | `--agent`, `-a` | `auto` | `auto`, `all`, `claude`, `codex`, `gemini`, `qwen`, or `copilot`. |
 | `--scope`, `-s` | `global` | `global` or `project`. |
 | `--dry-run`, `-d` | false | Show what would be removed. |
-| `--print`, `-p` | false | Print removal details. |
-| `--quiet`, `-q` | false | Reduce output. |
+| `--print`, `-p` | false | Print the mode, scope, target agent, and settings path. |
+| `--quiet`, `-q` | false | Suppress progress messages. |
+
+Only Claudio's own hook entries are removed. Other hooks in the same settings
+file are preserved.
 
 ## `claudio install-commands`
 
@@ -103,15 +119,27 @@ claudio install-commands --agent codex
 claudio install-commands --agent antigravity
 ```
 
+| Flag | Default | Meaning |
+| --- | --- | --- |
+| `--agent`, `-a` | `claude` | `claude`, `codex`, or `antigravity`. |
+
 | Agent | Artifact |
 | --- | --- |
 | `claude` | `~/.claude/commands/claudio.md` |
 | `codex` | `$HOME/.agents/skills/claudio/SKILL.md` |
 | `antigravity` | `~/.gemini/config/skills/claudio/SKILL.md` and `~/.gemini/antigravity-cli/skills/claudio.md` |
 
+When `CLAUDE_CONFIG_DIR` is set, the Claude Code command goes to
+`$CLAUDE_CONFIG_DIR/commands/claudio.md` instead.
+
+If an artifact already exists and its content is not something Claudio wrote,
+the command refuses to touch it and exits with an error. Move or delete your
+customized file first.
+
 ## `claudio uninstall-commands`
 
-Removes artifacts created by `install-commands`.
+Removes artifacts created by `install-commands`. Takes the same `--agent` flag,
+also defaulting to `claude`.
 
 ```bash
 claudio uninstall-commands --agent claude
@@ -127,7 +155,29 @@ Prints the effective configuration after file and environment overrides.
 claudio status
 ```
 
+Example output:
+
+```text
+claudio status
+
+  config file:    /home/me/.config/claudio/config.json
+  enabled:        true
+  volume:         0.50 (from config.json)
+  soundpack:      embedded:linux.json
+  log level:      warn
+  audio backend:  auto -> oto (available; playback not tested)
+  file logging:   enabled (/home/me/.cache/claudio/logs/claudio.log)
+  tracking:       enabled ((default XDG path))
+  version:        1.14.0
+```
+
+The `audio backend` line shows what `auto` resolves to and whether that backend
+is available. It does not play a sound.
+
 When audio is disabled, the `enabled` line includes the literal word `MUTED`.
+
+`--config` selects the file to report on. The transient `--volume`,
+`--soundpack`, and `--silent` flags are not applied.
 
 ## `claudio volume`
 
@@ -137,6 +187,15 @@ Gets or sets the persisted volume in `config.json`.
 claudio volume
 claudio volume 0.25
 ```
+
+With no argument it prints the volume hooks will use, including a
+`CLAUDIO_VOLUME` override if one is set. With an argument it writes the value
+to the config file.
+
+`claudio volume`, `mute`, `unmute`, and `soundpack use` write to the file named
+by `--config`, or else to the user config path (see
+[Configuration](configuration#config-file)). If that file does not exist yet,
+they create it from the effective configuration, so the new file is complete.
 
 Environment variable `CLAUDIO_VOLUME` and global flag `--volume` still override
 the persisted value at runtime.
@@ -186,11 +245,14 @@ claudio soundpack init my-pack --from-platform
 
 ### `soundpack list`
 
-Lists embedded, XDG, and config-discovered soundpacks.
+Lists embedded, XDG, and config-discovered soundpacks with their type, sound
+count, and path.
 
 ```bash
 claudio soundpack list
 ```
+
+The embedded packs are `windows`, `wsl`, `darwin`, and `linux`.
 
 ### `soundpack validate`
 
@@ -231,13 +293,17 @@ Switches the active soundpack by name.
 
 ```bash
 claudio soundpack use <name>
+claudio soundpack use windows
 ```
 
-The name must appear in `claudio soundpack list`.
+This sets `default_soundpack`. The name must appear in
+`claudio soundpack list`.
 
 ### `soundpack add`
 
-Clones a git-backed soundpack into Claudio-managed storage.
+Clones a git-backed soundpack into
+`<XDG data home>/claudio/soundpack-repos/<name>/` and adds it to
+`soundpack_paths`. Requires `git` on `PATH`.
 
 ```bash
 claudio soundpack add <git-url> [flags]
@@ -302,21 +368,24 @@ claudio soundpack status <name>
 
 ## `claudio analyze`
 
-Reads the tracking database.
+Reads the tracking database. Both subcommands fail if tracking is disabled.
 
 ```bash
 claudio analyze usage [flags]
 claudio analyze missing [flags]
 ```
 
+`missing` lists fallback-chain candidates that were requested but not found,
+most requested first. `usage` lists the sounds that actually played.
+
 Shared flags:
 
 | Flag | Default | Meaning |
 | --- | --- | --- |
 | `--days int` | `7` | Number of days to analyze. `0` means all time. |
-| `--preset string` | empty | `today`, `yesterday`, `last-week`, `this-month`, or `all-time`. |
+| `--preset string` | empty | `today`, `yesterday`, `this-week`, `last-week`, `this-month`, `last-month`, or `all-time`. Overrides `--days`. |
 | `--tool string` | empty | Filter by tool name. |
-| `--category string` | empty | Filter by stored category. Common values are `success`, `error`, `loading`, and `interactive`. |
+| `--category string` | empty | `loading`, `success`, `error`, `interactive`, `completion`, or `system`. Other values are rejected. |
 | `--limit int` | `20` | Maximum rows. |
 
 `usage` also supports:
@@ -348,9 +417,14 @@ claudio completion zsh
 
 ## Exit Codes
 
-Most subcommand failures return exit code `1`. During hook processing, a
-missing or invalid config is logged and Claudio continues with defaults so an
-agent hook is not blocked.
+Subcommand failures return exit code `1`.
+
+In hook mode, Claudio exits `1` before playback for an unparseable payload, a
+config file that fails validation, an out-of-range `CLAUDIO_VOLUME` or
+`--volume`, and an audio backend that cannot be resolved. A `--config` path
+that is missing or invalid is the exception: Claudio logs a warning and
+continues with defaults. Once the payload is accepted, missing sounds and
+playback errors are only logged.
 
 ## See Also
 

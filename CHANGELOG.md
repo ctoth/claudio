@@ -5,6 +5,51 @@ release tags and current checkout history.
 
 ## Unreleased
 
+### Changed
+- Replaced the malgo (miniaudio) backend with Oto. Native playback no longer
+  needs cgo or a C compiler on any platform, and release binaries are built
+  with `CGO_ENABLED=0`.
+- Configs and `CLAUDIO_AUDIO_BACKEND` values that still say `malgo` load as
+  `oto` and log a deprecation warning instead of failing validation.
+- Codex hooks are installed and removed through Captain Hook. Unrelated hook
+  commands in mixed groups are preserved, and both portable and
+  PowerShell-native commands are written.
+- Claude Code settings and command paths honor `CLAUDE_CONFIG_DIR`.
+
+### Fixed
+- Report an unavailable audio backend in `claudio status` and before a hook
+  worker detaches, instead of failing silently in the background.
+- Stop waiting on playback when the output device stalls (suspended sink,
+  unplugged output), so detached workers no longer pile up.
+- Drain the device buffer before playback returns, so the end of each sound
+  is no longer clipped with a pop.
+- Downmix AIFF files with more than two channels instead of rejecting them.
+- Bound the hook stdin read so an agent that holds the pipe open cannot hang
+  Claude Code at "running stop hooks".
+- Replay startup warnings (such as config deprecation notices) into the log
+  file.
+- Skip `.git` and entries that vanish mid-scan when validating directory
+  soundpacks, which made `soundpack update` fail intermittently.
+- Allow directory soundpack installs across Windows volumes.
+- Preserve soundpacks and config when an installation step fails, and
+  preserve the effective system config when creating a user override.
+- Preserve customized `/claudio` command and skill files, and recognize
+  command artifacts written by earlier releases.
+- Quote Codex PowerShell executable paths literally, including paths with
+  typographic apostrophes.
+- Validate WAV frames and cap decoded MP3 output size.
+- Serialize SQLite schema initialization and migrations, and report tracking
+  metadata from the matching event.
+- Discover configuration through the injected filesystem.
+- Bound hook-logger input and write its cache files with private permissions.
+
+### Documentation
+- Added a guide for remote audio over SSH.
+- Rewrote the soundpacks guide.
+- Made the docs site's mobile navigation keyboard accessible.
+
+## v1.14.0 - 2026-06-29
+
 ### Added
 - Added command artifact installation for additional agents, including Antigravity.
 - Added native Linux embedded default sounds.

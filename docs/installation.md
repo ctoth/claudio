@@ -24,35 +24,51 @@ Download the matching asset from [GitHub Releases](https://github.com/ctoth/clau
 
 Rename it to `claudio` (`claudio.exe` on Windows) and place it in a directory
 on `PATH`. On Linux and macOS, run `chmod +x` on the downloaded binary.
-The release binaries include the native audio backend and require no Go or C compiler.
+Release binaries are built with `CGO_ENABLED=0` and include the native audio
+backend.
+
+Put the binary where it will stay before you install hooks. Hooks record the
+absolute path of the `claudio` that installed them, so if you move the binary
+later, run `claudio install` again from the new location.
 
 ### Build From Source
 
 Claudio requires Go 1.25.13 or newer. With Go's default automatic toolchain
-selection, commands run from this repository use the recommended Go 1.26.6
-toolchain declared in `go.mod`.
-
-Native audio uses Oto and requires no C compiler on Windows, macOS, or Linux,
-even when `CGO_ENABLED=0`.
+selection, commands run from this repository use the Go 1.26.6 toolchain
+declared in `go.mod`. No C compiler is needed; native audio builds with
+`CGO_ENABLED=0`.
 
 ```bash
 go install claudio.click/cmd/claudio@latest
 ```
 
-Make sure Go's binary directory is on `PATH`:
+The binary lands in `$(go env GOBIN)`, or `$(go env GOPATH)/bin` when `GOBIN`
+is unset. Make sure that directory is on `PATH`:
 
 ```bash
-go env GOPATH
+go env GOBIN GOPATH
 ```
 
-The binary normally lands in `$(go env GOPATH)/bin`.
+### Audio Runtime
 
-Run `claudio status` to check the selected backend's availability. This checks
-the implementation or player executable, not the audio device or speakers.
-On Linux, Oto connects to PulseAudio (including compatible audio servers).
-Its ALSA fallback needs `libasound.so.2` at runtime, but no development headers
-are needed to build. `system_command` remains available for external players,
-and `auto` continues to prefer those players under WSL when installed.
+The default `auto` backend picks `oto`, Claudio's built-in player, on Windows,
+macOS, and Linux. Under WSL it picks `system_command` instead when one of
+`paplay`, `ffplay`, `aplay`, or `afplay` is on `PATH`, and falls back to `oto`
+otherwise.
+
+On Linux, Oto first connects to a PulseAudio-compatible server (PulseAudio or
+PipeWire's Pulse layer), honoring `PULSE_SERVER`. If none is reachable it falls
+back to ALSA, which needs `libasound.so.2` at runtime. Neither path needs
+development headers to build.
+
+`claudio status` shows which backend `auto` resolved to:
+
+```text
+  audio backend:  auto -> oto (available; playback not tested)
+```
+
+"Available" means the backend is compiled in, or for `system_command` that a
+player is on `PATH`. It does not open the audio device.
 
 ## Auto Install
 
@@ -62,10 +78,11 @@ Install global hooks for every detected supported agent:
 claudio install
 ```
 
-This is the default: `--agent auto --scope global`. Claudio detects Claude
-Code, Codex CLI, Gemini CLI, Qwen Code, and GitHub Copilot CLI from installed
-commands, settings directories, or existing Claudio hook files. If more than one
-supported agent is detected, each matching hook set is installed.
+This is the default: `--agent auto --scope global`. An agent counts as
+detected when its command (`claude`, `codex`, `gemini`, `qwen`, or `copilot`)
+is on `PATH`, its settings directory exists, or its settings file already
+contains Claudio hooks. Every detected agent gets its hook set. If nothing is
+detected, the command fails and asks you to pick an agent with `--agent`.
 
 To force every supported hook target:
 
@@ -93,8 +110,9 @@ Install hooks only for the current project:
 claudio install --agent claude --scope project
 ```
 
-Global scope writes `~/.claude/settings.json` on every platform. On Windows that
-resolves through the native user profile path.
+Global scope writes `~/.claude/settings.json`, or
+`$CLAUDE_CONFIG_DIR/settings.json` when `CLAUDE_CONFIG_DIR` is set, matching
+where Claude Code reads its settings. On Windows `~` is `%USERPROFILE%`.
 
 Project scope writes `./.claude/settings.json`.
 
@@ -117,7 +135,11 @@ Global scope uses `$CODEX_HOME/hooks.json` when `CODEX_HOME` is set, otherwise
 
 Project scope writes `./.codex/hooks.json`.
 
+Each Codex hook entry carries both a POSIX command and a PowerShell command,
+so the same `hooks.json` works on Windows and Unix.
+
 After installing Codex hooks, run `/hooks` in Codex and trust the Claudio hook.
+Codex does not run untrusted hooks.
 
 ## Gemini Hooks
 
@@ -172,11 +194,14 @@ claudio install --agent copilot --scope project
 Global scope writes `~/.copilot/settings.json`, or `$COPILOT_HOME/settings.json`
 when `COPILOT_HOME` is set.
 
-Project scope writes `./.github/copilot/settings.local.json`.
+Project scope writes `./.github/copilot/settings.local.json`. If that file
+does not exist but `./.github/copilot/settings.json` does, Claudio writes to the
+existing file instead.
 
 ## Inspect Before Writing
 
-Dry run:
+Dry run, which prints the target settings path and the hooks that would be
+installed:
 
 ```bash
 claudio install --dry-run
@@ -187,7 +212,7 @@ claudio install --agent qwen --scope global --dry-run
 claudio install --agent copilot --scope global --dry-run
 ```
 
-Print the target path and mode:
+Print only the target agent and settings path:
 
 ```bash
 claudio install --print
@@ -199,9 +224,9 @@ Quiet mode:
 claudio install --quiet
 ```
 
-The installer takes an advisory lock around the read, merge, write, and verify
-cycle. It preserves non-Claudio hooks and replaces prior Claudio hook entries
-with the current generated form.
+The installer holds an advisory lock while it reads, merges, writes, and
+verifies the settings file. Hooks from other tools are left alone; earlier
+Claudio entries are replaced with the current form, so reinstalling is safe.
 
 ## Installed Hook Sets
 
@@ -238,9 +263,9 @@ Claude Code defaults:
 | `ElicitationResult` | interactive |
 | `SessionEnd` | interactive |
 
-`MessageDisplay` and `FileChanged` are registered but disabled by default.
-Enable them manually only if you want audio for streamed text or broad file
-change events.
+`MessageDisplay` and `FileChanged` are known to Claudio but not installed.
+Add them to your settings by hand only if you want audio for streamed text or
+broad file change events.
 
 Codex defaults:
 
@@ -327,9 +352,13 @@ Artifacts:
 
 | Agent | Installed artifact |
 | --- | --- |
-| Claude Code | `~/.claude/commands/claudio.md` |
+| Claude Code | `~/.claude/commands/claudio.md` (`$CLAUDE_CONFIG_DIR/commands/claudio.md` when set) |
 | Codex | `$HOME/.agents/skills/claudio/SKILL.md` |
 | Antigravity | `~/.gemini/config/skills/claudio/SKILL.md` and `~/.gemini/antigravity-cli/skills/claudio.md` |
+
+If an artifact already exists and you have edited it, `install-commands`
+refuses to overwrite it and `uninstall-commands` refuses to delete it. Move
+your copy aside first if you want the stock version back.
 
 Remove them with:
 
@@ -370,7 +399,8 @@ claudio uninstall --agent qwen --scope global
 claudio uninstall --agent copilot --scope global
 ```
 
-Use `--dry-run`, `--print`, or `--quiet` the same way as `install`.
+Like `install`, `uninstall` defaults to `--agent auto --scope global` and
+accepts `--dry-run`, `--print`, and `--quiet`.
 
 ## Next
 

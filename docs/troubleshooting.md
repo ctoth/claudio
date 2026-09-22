@@ -11,8 +11,10 @@ Start with:
 claudio status
 ```
 
-That shows the config file in use, whether audio is enabled, the effective
-volume, active soundpack, backend, logging, tracking, and Claudio version.
+That shows the config file in use, whether audio is enabled (`MUTED` when it
+is not), the effective volume, active soundpack, log level, which backend
+`auto` resolved to and whether it is available, the log file path, tracking,
+and Claudio version. It includes `CLAUDIO_*` environment overrides.
 
 ## `claudio: command not found`
 
@@ -29,6 +31,8 @@ Add the relevant bin directory to `PATH`, usually:
 export PATH="$PATH:$(go env GOPATH)/bin"
 ```
 
+If `GOBIN` is set, add that directory instead.
+
 Then verify:
 
 ```bash
@@ -37,23 +41,26 @@ claudio --version
 
 ## Hooks Installed But No Sound
 
-Native playback uses the `oto` backend and does not require cgo. A config that
-still selects the former `malgo` backend is treated as `oto`, with a warning in
-the log file; change it to `oto` or `auto`.
-An `available` backend in `claudio status` means its implementation or executable
-is present; it does not test the audio device or guarantee audible playback.
+Check the `audio backend` line in `claudio status`. `available` means the
+backend is compiled in, or for `system_command` that a player is on `PATH`. It
+does not open the audio device, so it does not prove you will hear anything.
+If the backend is unavailable, an enabled hook prints the error and exits
+nonzero instead of starting its background worker, so the agent's hook output
+shows the reason. Muted hooks stay quiet either way.
 
-On Linux, check that the PulseAudio server is reachable (set `PULSE_SERVER`
-when needed), or that the ALSA runtime library `libasound.so.2` is installed.
-See [Installation](installation.md) for runtime requirements.
+On Linux, check that a PulseAudio-compatible server is reachable (set
+`PULSE_SERVER` when needed), or that the ALSA runtime library
+`libasound.so.2` is installed. See [Installation](installation#audio-runtime).
 
-An enabled hook with an unavailable backend now prints a diagnostic and exits
-nonzero before starting a detached worker. Muted hooks remain quiet.
+If the output device stops taking audio without reporting an error (a
+suspended PulseAudio sink, a disconnected Bluetooth or USB output), Claudio
+abandons the sound about two seconds after it should have finished, and gives
+up opening the device after five seconds. The log file records
+`Oto playback stalled`. Reconnect or wake the device; the next hook opens it
+fresh.
 
-If the device stops accepting audio without reporting an error (a suspended
-PulseAudio sink, a disconnected Bluetooth or USB output), playback is abandoned
-once it overruns the sound by about two seconds, and device startup gives up
-after five seconds. The log file then records `audio device stalled`.
+A config from an older release that sets `audio_backend` to `malgo` loads as
+`oto` and logs a warning. Change it to `oto` or `auto` to silence the warning.
 
 Check that Claudio is not muted:
 
@@ -70,6 +77,8 @@ env | grep CLAUDIO
 ```
 
 `CLAUDIO_ENABLED=false` or `CLAUDIO_VOLUME=0` can override the config file.
+An invalid `CLAUDIO_AUDIO_BACKEND` value is ignored with only a warning in the
+log file, so check its spelling against `auto`, `oto`, and `system_command`.
 
 Run a manual payload:
 
@@ -78,7 +87,10 @@ echo '{"session_id":"debug","cwd":".","hook_event_name":"PostToolUse","tool_name
 ```
 
 If that works, the issue is likely hook registration or agent trust. If it
-does not, inspect logging and audio backend configuration.
+does not, inspect the [debug log](#debug-logs) and the audio backend.
+
+If you moved or replaced the `claudio` binary after installing hooks, the hooks
+still point at the old path. Run `claudio install` again with the new binary.
 
 ## No Supported Agents Detected
 
@@ -94,6 +106,9 @@ ls -la ~/.gemini/settings.json
 ls -la ~/.qwen/settings.json
 ls -la ~/.copilot/settings.json
 ```
+
+`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, and `COPILOT_HOME` move these files when
+set. Detection also succeeds when the agent's command is on `PATH`.
 
 Run the target agent once if its settings directory does not exist yet, or
 install explicitly:
@@ -130,6 +145,11 @@ claudio install --agent codex --scope project --dry-run
 ```
 
 ## Claude Code Hooks Do Nothing
+
+If you use `CLAUDE_CONFIG_DIR`, make sure it has the same value when you run
+`claudio install` as when you run Claude Code. Claudio writes to
+`$CLAUDE_CONFIG_DIR/settings.json` when it is set and `~/.claude/settings.json`
+when it is not.
 
 Inspect the target settings file:
 
@@ -190,6 +210,22 @@ Reinstalling is idempotent for Claudio hooks:
 
 ```bash
 claudio install --agent qwen --scope global
+```
+
+## GitHub Copilot CLI Hooks Do Nothing
+
+Inspect the target settings file:
+
+```bash
+claudio install --agent copilot --scope global --dry-run
+claudio install --agent copilot --scope global --print
+```
+
+Project scope writes `./.github/copilot/settings.local.json`, or an existing
+`./.github/copilot/settings.json`. Run it from the repository root:
+
+```bash
+claudio install --agent copilot --scope project --dry-run
 ```
 
 ## Wrong Sound Plays
@@ -270,10 +306,12 @@ claudio soundpack validate ./my-pack
 
 Check:
 
-- Audio files are regular files, not symlinks.
-- Extensions are `.wav`, `.mp3`, or `.aiff`.
+- Audio files are regular files. A symlinked audio file fails validation.
+- Extensions are `.wav`, `.mp3`, or `.aiff`. Other files are ignored.
 - Paths match Claudio keys, such as `success/git-success.wav`.
-- `default.wav` exists for final fallback.
+
+Missing keys only lower the coverage numbers. Adding `default.wav` at the pack
+root is still a good idea, since it is the last step of every fallback chain.
 
 ## Audio Backend Errors
 
@@ -289,9 +327,10 @@ Try the system-command backend:
 echo '{"session_id":"debug","cwd":".","hook_event_name":"Stop"}' | CLAUDIO_AUDIO_BACKEND=system_command claudio
 ```
 
-`system_command` uses platform audio commands where available. On Linux, make
-sure tools such as `paplay`, `ffplay`, `afplay`, or `aplay` are installed as
-appropriate for your environment.
+`system_command` runs the first player it finds on `PATH`, in this order:
+`paplay`, `ffplay`, `aplay`, `afplay`. `afplay` ships with macOS; on Linux
+install `pulseaudio-utils` (`paplay`) or FFmpeg (`ffplay`). On Windows only
+`ffplay` applies. `aplay` plays WAV only and ignores the volume setting.
 
 The `fake` backend is for tests. It accepts playback calls but produces no
 audio.
@@ -308,11 +347,16 @@ Enable debug file logging:
 export CLAUDIO_LOG_LEVEL=debug
 ```
 
-Default log path:
+The level applies to the log file only. Claudio writes nothing below ERROR to
+stderr, so read the file. `claudio status` prints its exact path. Defaults:
 
-```text
-<XDG_CACHE_HOME>/claudio/logs/claudio.log
-```
+| Platform | Log file |
+| --- | --- |
+| Linux, WSL | `$XDG_CACHE_HOME/claudio/logs/claudio.log`, normally under `~/.cache` |
+| macOS | `~/Library/Caches/claudio/logs/claudio.log` |
+| Windows | `%LOCALAPPDATA%\cache\claudio\logs\claudio.log` |
+
+Setting `XDG_CACHE_HOME` overrides the default on every platform.
 
 If you do not want a log file for a one-off run:
 
@@ -357,10 +401,11 @@ Remove hooks:
 
 ```bash
 claudio uninstall --agent all --scope global
-claudio uninstall --agent claude --scope global
-claudio uninstall --agent codex --scope global
-claudio uninstall --agent gemini --scope global
 ```
+
+To remove one agent, pass `--agent claude`, `codex`, `gemini`, `qwen`, or
+`copilot`. Repeat with `--scope project` in each repository where you installed
+project hooks.
 
 Remove optional command artifacts:
 

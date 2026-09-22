@@ -5,66 +5,81 @@ title: "Soundpacks"
 
 # Soundpacks
 
-A soundpack maps Claudio sound keys to audio files. Soundpacks can be
-directories, JSON files, or git repositories managed by Claudio.
+A soundpack maps Claudio sound keys (such as `success/git-success.wav`) to
+audio files. A pack can be a directory, a JSON manifest, or a git repository
+that Claudio manages for you.
 
-Supported audio formats are:
+The first half of this page covers using and installing packs. The second
+covers building one. The last section explains how Claudio picks a sound,
+which you only need when debugging or naming files precisely.
 
-- WAV
-- MP3
-- AIFF
+## Audio Formats
 
-Playback reads at most 100 MiB from any referenced audio file. MP3 decoding
-also stops when the decoded stereo PCM exceeds 100 MiB, so a compressed MP3
-smaller than 100 MiB can still exceed the playback limit after decoding.
+Claudio's native player decodes:
 
-This page has three parts: using a pack someone else made (or one that's
-already built in), building your own, and — for anyone extending Claudio
-itself — how sound selection actually works under the hood.
+- **WAV**: mono or stereo; 16-, 24-, or 32-bit PCM, or 32-bit float. Files
+  with more than two channels are rejected.
+- **MP3**
+- **AIFF**: 16-, 24-, or 32-bit. Files with more than two channels are
+  downmixed to stereo.
+
+Playback reads at most 100 MiB from any audio file. MP3 decoding also stops
+once the decoded PCM passes 100 MiB, so an MP3 well under that size on disk
+can still hit the limit after decoding.
 
 ## Categories
 
-Claudio currently maps events into these categories:
+Every event maps to one category, and each category is a directory in the
+pack:
 
 | Category | Typical events | Directory |
 | --- | --- | --- |
 | Loading | `PreToolUse`, `SubagentStart` | `loading/` |
 | Success | successful `PostToolUse` | `success/` |
-| Error | failed `PostToolUse` | `error/` |
+| Error | failed `PostToolUse`, `PostToolUseFailure` | `error/` |
 | Interactive | prompts, notifications, permission requests | `interactive/` |
 | Completion | `Stop`, `SubagentStop` | `completion/` |
-| System | session start and compaction | `system/` |
+| System | session start, compaction | `system/` |
 
-`default.wav` is the final fallback for every chain.
+`default.wav` at the pack root is the last fallback for every event.
 
 ## Where Soundpacks Live
 
-Claudio resolves soundpack storage through XDG base directories. On Linux and
-WSL that means `~/.local/share`; on macOS, `~/Library/Application Support`; on
-Windows, `%LOCALAPPDATA%` (both data and config home default to the same
-folder there).
+Claudio uses XDG base directories. On Linux and WSL the data directory is
+`~/.local/share`; on macOS it is `~/Library/Application Support`; on Windows
+it is `%LOCALAPPDATA%`. On macOS and Windows the config directory is the same
+folder as the data directory.
 
-| Item | Linux | macOS | Windows | WSL |
-| --- | --- | --- | --- | --- |
-| Directory packs | `~/.local/share/claudio/soundpacks/<name>/` | `~/Library/Application Support/claudio/soundpacks/<name>/` | `%LOCALAPPDATA%\claudio\soundpacks\<name>\` | `~/.local/share/claudio/soundpacks/<name>/` |
-| JSON packs | `~/.local/share/claudio/soundpacks/<name>/soundpack.json` | `~/Library/Application Support/claudio/soundpacks/<name>/soundpack.json` | `%LOCALAPPDATA%\claudio\soundpacks\<name>\soundpack.json` | `~/.local/share/claudio/soundpacks/<name>/soundpack.json` |
-| Managed git clones | `~/.local/share/claudio/soundpack-repos/<name>/` | `~/Library/Application Support/claudio/soundpack-repos/<name>/` | `%LOCALAPPDATA%\claudio\soundpack-repos\<name>\` | `~/.local/share/claudio/soundpack-repos/<name>/` |
-| Managed git registry | `~/.config/claudio/soundpacks.json` | `~/Library/Application Support/claudio/soundpacks.json` | `%LOCALAPPDATA%\claudio\soundpacks.json` | `~/.config/claudio/soundpacks.json` |
-| `config.json` | `~/.config/claudio/config.json` | `~/Library/Application Support/claudio/config.json` | `%LOCALAPPDATA%\claudio\config.json` | `~/.config/claudio/config.json` |
+| Item | Linux / WSL | macOS | Windows |
+| --- | --- | --- | --- |
+| Installed packs | `~/.local/share/claudio/soundpacks/<name>/` | `~/Library/Application Support/claudio/soundpacks/<name>/` | `%LOCALAPPDATA%\claudio\soundpacks\<name>\` |
+| Managed git clones | `~/.local/share/claudio/soundpack-repos/<name>/` | `~/Library/Application Support/claudio/soundpack-repos/<name>/` | `%LOCALAPPDATA%\claudio\soundpack-repos\<name>\` |
+| Managed git registry | `~/.config/claudio/soundpacks.json` | `~/Library/Application Support/claudio/soundpacks.json` | `%LOCALAPPDATA%\claudio\soundpacks.json` |
+| `config.json` | `~/.config/claudio/config.json` | `~/Library/Application Support/claudio/config.json` | `%LOCALAPPDATA%\claudio\config.json` |
 
-`XDG_DATA_HOME` and `XDG_CONFIG_HOME` override these on every platform,
-including Windows.
+An installed JSON pack is a directory like any other, with its manifest at
+`soundpacks/<name>/soundpack.json`.
 
-Embedded platform packs (`windows`, `wsl`, `darwin`, `linux`) ship baked into
-the `claudio` binary. They need no install step; `claudio soundpack list`
-shows them with an `embedded` type. WSL gets its own `wsl.json` pack instead
-of `linux.json` even though it runs the Linux binary, because WSL sessions
-typically play audio through a Windows-side player.
+`XDG_DATA_HOME` and `XDG_CONFIG_HOME` override these locations on every
+platform, including Windows.
+
+### Built-In Packs
+
+Four platform packs are compiled into the binary and need no install step.
+`claudio soundpack list` shows them with the type `embedded`.
+
+| Pack | What it plays |
+| --- | --- |
+| `windows` | Sounds from `C:\Windows\Media` |
+| `wsl` | The same Windows sounds, reached through `/mnt/c/Windows/Media` |
+| `darwin` | macOS system sounds from `/System/Library/Sounds` |
+| `linux` | Seven synthesized tones shipped inside the binary, one per category plus `default.wav` |
+
+The `windows`, `wsl`, and `darwin` packs only map to files that already ship
+with the operating system. WSL gets its own pack, even though it runs the
+Linux binary, because the Windows sound files are available there.
 
 ## Using A Pack
-
-Nothing here requires writing a soundpack yourself — this is for picking
-between built-in packs or installing one someone else made.
 
 ### Switching The Active Soundpack
 
@@ -73,53 +88,59 @@ claudio soundpack list
 claudio soundpack use <name>
 ```
 
-`soundpack use` writes `default_soundpack` in `config.json`. `<name>` must
-already appear in `claudio soundpack list` — embedded, directory, JSON, and
-managed git packs are all valid targets.
+`soundpack use` sets `default_soundpack` in `config.json`. The name has to
+be one that `soundpack list` shows: an embedded pack, a pack in the XDG
+`soundpacks/` directory, a pack listed in `soundpack_paths`, or a managed git
+pack.
 
-`soundpack use` accepts packs found in the embedded set, canonical XDG
-soundpack directories, configured `soundpack_paths`, or the managed git
-registry.
-
-A one-off override without touching config:
+To override the pack for one run without changing the config:
 
 ```bash
 claudio --soundpack <name>
 CLAUDIO_SOUNDPACK=<name> claudio
 ```
 
-### Installing Someone Else's Pack
+If the configured pack cannot be found, Claudio logs an error and falls back
+to the platform pack.
 
-Managed git soundpacks are cloned into Claudio's data directory and recorded in
-the managed soundpack registry. Claudio adds the playable subpath to
-`soundpack_paths`, so runtime resolution uses the same loader as local packs.
+### Installing A Pack From Git
 
-There is no central marketplace or public index of soundpacks. "Registry"
-here means the local `soundpacks.json` bookkeeping file that tracks packs
-*you* installed (name, source URL, ref, commit) so `update`/`remove`/`status`
-have something to act on. Sharing a pack with someone else just means giving
-them a git URL — any public or private repo containing a directory or JSON
-soundpack works, and installing one doesn't require understanding the pack
-formats below at all:
+There is no central soundpack index. To share a pack, put it in a git
+repository and hand out the URL. Any public or private repository that
+contains a directory pack or a JSON pack works.
 
 ```bash
 claudio soundpack add https://github.com/owner/repo --name my-pack --default
 claudio soundpack add gh:owner/repo --subdir packs/minimal --name minimal
 ```
 
-Update:
+`add` clones the repository into `soundpack-repos/<name>/`, validates it,
+records it in the local `soundpacks.json` registry (name, source URL, ref,
+commit), and adds the playable path to `soundpack_paths`. `gh:owner/repo` is
+shorthand for `https://github.com/owner/repo.git`.
+
+| Flag | Effect |
+| --- | --- |
+| `--name` | Name for the installed pack |
+| `--subdir` | Directory or JSON file inside the repository to use as the pack |
+| `--ref` | Branch, tag, or commit to check out |
+| `--default` | Make it the active pack |
+| `--replace` | Replace an existing managed pack with the same name |
+| `--skip-validate` | Skip validation before adding |
+
+Update one pack or all of them:
 
 ```bash
 claudio soundpack update my-pack
 claudio soundpack update --all
+claudio soundpack update my-pack --force   # discard local changes in the clone first
 ```
 
-Updates are pull-on-demand only. Claudio never fetches in the background or
-during normal hook processing — a managed pack stays pinned at whatever
-commit it was cloned or last updated to until you run `soundpack update`
-again yourself (e.g. from your own cron job, if you want that).
+Claudio never fetches in the background or while handling hooks. A managed
+pack stays at the commit it was cloned or last updated to until you run
+`soundpack update`. Schedule that yourself if you want it automatic.
 
-Inspect:
+Check what is installed:
 
 ```bash
 claudio soundpack status
@@ -128,38 +149,33 @@ claudio soundpack status my-pack
 
 ### Removing A Pack
 
-How you remove a pack depends on how it was installed:
+Managed git packs:
 
-- **Managed git packs** — use the CLI. It deletes the clone and the registry
-  entry together:
+```bash
+claudio soundpack remove my-pack                # delete the clone and registry entry
+claudio soundpack remove my-pack --keep-files   # drop the registry entry, keep the clone
+claudio soundpack remove my-pack --force        # drop registry and config entries even if deleting the clone fails
+```
 
-  ```bash
-  claudio soundpack remove my-pack
-  claudio soundpack remove my-pack --keep-files   # drop registry entry, keep the clone
-  claudio soundpack remove my-pack --force        # drop registry/config entries even if clone deletion fails
-  ```
+`remove` also takes the pack out of `soundpack_paths`, and if it was the
+active pack, resets `default_soundpack` to the platform default.
 
-- **Directory and JSON packs installed with `soundpack install`** — there is
-  no dedicated remove command. Delete the installed path by hand and drop the
-  matching entry from `soundpack_paths` in `config.json`:
+Packs installed with `soundpack install` have no remove command. Delete the
+directory and remove its entry from `soundpack_paths` in `config.json`:
 
-  ```bash
-  # directory pack
-  rm -rf <XDG_DATA_HOME>/claudio/soundpacks/my-pack
+```bash
+rm -rf "$XDG_DATA_HOME/claudio/soundpacks/my-pack"   # adjust for your platform
+```
 
-  # JSON pack
-  rm -rf <XDG_DATA_HOME>/claudio/soundpacks/my-pack
-  ```
-
-If the removed pack was `default_soundpack`, set a new one with
-`claudio soundpack use <name>` or edit `config.json` directly — otherwise
-Claudio falls back to the platform default the next time a sound is resolved.
+If it was the active pack, pick another with `claudio soundpack use <name>`.
+Until you do, Claudio logs an error on each event and uses the platform pack.
 
 ## Building A Pack
 
 ### Directory Soundpacks
 
-Directory soundpacks use the sound key as a relative file path.
+In a directory pack, each sound key is a file path relative to the pack
+root:
 
 ```text
 my-pack/
@@ -195,43 +211,34 @@ my-pack/
     system.wav
 ```
 
-Not sure exactly what to name a file? See
-[Fallback Chains](#fallback-chains) below — the categorized folders plus
-descriptive names above are enough to get started, but the chains explain
-precisely which name wins when several could apply.
+Sound keys always end in `.wav`, but the file does not have to. When the
+exact `.wav` file is missing, Claudio looks for the same name with `.mp3`,
+`.aiff`, `.aif`, or `.mpeg`, so `success/success.mp3` answers for
+`success/success.wav`.
 
-Install a directory pack:
+One file per category plus `default.wav` is enough to cover every event.
+Add more specific names as you go; [Fallback Chains](#fallback-chains)
+lists which names Claudio tries for each event.
+
+Validate and install:
 
 ```bash
 claudio soundpack validate ./my-pack
 claudio soundpack install ./my-pack --default
 ```
 
-`soundpack validate` (details in [Validation](#validation) below) checks
-JSON shape, missing files, and coverage before you install.
+`install` validates the pack, copies it to `<XDG_DATA_HOME>/claudio/soundpacks/<name>/`,
+and adds that path to `soundpack_paths`. `--skip-validate` skips the coverage
+check; the copied pack is still checked for safety.
 
-Directory packs are copied to:
-
-```text
-<XDG_DATA_HOME>/claudio/soundpacks/<name>/
-```
-
-`claudio soundpack install` validates the source, copies it, and records its
-installed path in `soundpack_paths`. Canonical XDG soundpack directories are
-also resolved directly by name.
-
-#### Discovery And Runtime Resolution
-
-`claudio soundpack list`, `soundpack use`, and hook processing all recognize
-packs under the canonical XDG `soundpacks/<name>/` directories. A directory
-containing `soundpack.json` loads that manifest; other directories use the
-category layout described above. Arbitrary locations still need an entry in
-`soundpack_paths` or an explicit full path.
+Claudio finds packs in the XDG `soundpacks/` directory by name. If a
+directory there contains `soundpack.json`, Claudio loads it as a JSON pack;
+otherwise it reads the category layout above. A pack anywhere else needs an
+entry in `soundpack_paths` or a full path. Scans skip `.git` directories.
 
 ### JSON Soundpacks
 
-JSON soundpacks map sound keys to files under the manifest directory. Mapping
-paths must be relative to the JSON file and cannot escape that directory.
+A JSON pack maps sound keys to files stored next to the manifest:
 
 ```json
 {
@@ -248,35 +255,41 @@ paths must be relative to the JSON file and cannot escape that directory.
 }
 ```
 
+Rules:
+
+- `name` and at least one entry in `mappings` are required. `description`
+  and `version` are optional.
+- Each value must be a relative path inside the manifest's directory.
+  Absolute paths and `..` are rejected, and a symlink that points outside
+  the directory is rejected too.
+- Every referenced file must exist, and no value may be empty. One bad
+  entry stops the whole pack from loading.
+- A pack can have at most 10,000 mappings.
+
 Create a template:
 
 ```bash
-claudio soundpack init my-pack
+claudio soundpack init my-pack                  # writes ./my-pack.json
+claudio soundpack init my-pack --dir ./packs    # writes ./packs/my-pack.json
+claudio soundpack init my-pack --from-platform  # pre-fills the current platform pack's mappings
 ```
 
-Pre-fill the template with the current platform defaults:
+A plain `init` template lists every known key with an empty value. Fill in
+the keys you want and delete the rest before installing. `validate` lists
+empty entries without failing, but `install` and hook playback reject them.
 
-```bash
-claudio soundpack init my-pack --from-platform
-```
-
-Install a JSON pack:
+Validate and install:
 
 ```bash
 claudio soundpack validate ./my-pack.json
 claudio soundpack install ./my-pack.json --default
 ```
 
-JSON packs and their referenced audio files are copied into a self-contained
-directory. Relative subdirectories are preserved:
-
-```text
-<XDG_DATA_HOME>/claudio/soundpacks/<name>/soundpack.json
-```
-
-`claudio soundpack install` records the exact installed manifest in
-`soundpack_paths`; bare-name resolution also recognizes the containing
-directory and the manifest's `name` field.
+`install` copies the manifest and every file it references into
+`<XDG_DATA_HOME>/claudio/soundpacks/<name>/`, keeping relative
+subdirectories, writes the manifest there as `soundpack.json`, and adds it
+to `soundpack_paths`. You can then refer to the pack by its directory name or
+its `name` field.
 
 ### Validation
 
@@ -285,41 +298,38 @@ claudio soundpack validate ./my-pack.json
 claudio soundpack validate ./my-pack
 ```
 
-Validation reports:
+The report shows:
 
-- Total known-key coverage
-- Coverage by category
-- Broken JSON references
+- Coverage of known sound keys, overall and per category
+- Broken references (mapped files that do not exist)
 - Unsupported file extensions
 - Empty mappings
 
-Broken references fail validation. Empty mappings do not.
+Broken references fail validation. Empty mappings are reported but do not
+fail it (see the note under [JSON Soundpacks](#json-soundpacks)).
 
-### Use Tracking To Improve A Pack
+### Using Tracking To Improve A Pack
 
-Enable tracking, use Claudio normally, then inspect missing sounds:
+Sound tracking is on by default. Use Claudio for a while, then list the keys
+it looked for and did not find:
 
 ```bash
 claudio analyze missing --preset all-time --limit 50
 ```
 
-The most frequent missing keys are usually the best next sounds to add.
+The most frequent missing keys are usually the best sounds to add next.
 
 ## How Sound Selection Works
 
-This part is for understanding or debugging Claudio's internals — why a
-specific sound played, or how to extend the matching logic. Not required
-reading for using or building a pack.
-
 ### Fallback Chains
 
-Fallback chains are ordered from most specific to least specific. The first
-existing sound wins. This is the mechanism behind the sound key names used in
-the examples above (`git-commit-start.wav`, `bash-success.wav`, and so on).
+For each event Claudio builds a list of candidate keys, from most specific to
+least specific, and plays the first one the pack has. Duplicate candidates
+are dropped.
 
 #### PreToolUse
 
-For `git commit` started through the Bash tool:
+`git commit` run through the Bash tool:
 
 ```text
 loading/git-commit-start.wav
@@ -335,7 +345,7 @@ default.wav
 
 #### PostToolUse
 
-For a successful `git commit`:
+A successful `git commit`:
 
 ```text
 success/git-commit-success.wav
@@ -346,7 +356,7 @@ success/success.wav
 default.wav
 ```
 
-For a failed `git commit`, the category changes:
+A failed one uses the `error/` category:
 
 ```text
 error/git-commit-error.wav
@@ -357,39 +367,33 @@ error/error.wav
 default.wav
 ```
 
-#### Simple Events
+The post-tool chain skips the bare command key (`success/git.wav`), so a
+generic command sound cannot stand in for a specific result.
 
-For `UserPromptSubmit`:
+#### Other Events
 
-```text
-interactive/message-sent.wav
-interactive/prompt-submit.wav
-interactive/interactive.wav
-default.wav
-```
+Events without a tool use a short chain: a specific key, an event key, the
+category sound, and `default.wav`.
 
-For `Stop`:
+| Event | Keys tried before the category sound |
+| --- | --- |
+| `UserPromptSubmit` | `interactive/message-sent.wav`, `interactive/prompt-submit.wav` |
+| `Notification` | `interactive/notification.wav` |
+| `PermissionRequest` | `interactive/permission-request.wav` |
+| `Stop` | `completion/agent-complete.wav`, `completion/stop.wav` |
+| `SubagentStop` | `completion/subagent-complete.wav`, `completion/subagent-stop.wav` |
+| `SubagentStart` | `loading/subagent-start.wav` |
+| `SessionStart` | `system/session-start.wav` |
+| `PreCompact` | `system/compacting.wav`, `system/pre-compact.wav` |
+| `PostCompact` | `system/post-compact.wav` |
 
-```text
-completion/agent-complete.wav
-completion/stop.wav
-completion/completion.wav
-default.wav
-```
-
-For `PreCompact`:
-
-```text
-system/compacting.wav
-system/pre-compact.wav
-system/system.wav
-default.wav
-```
+For example, `Stop` tries `completion/agent-complete.wav`,
+`completion/stop.wav`, `completion/completion.wav`, then `default.wav`.
 
 ### Command Parsing
 
-For Bash tool events, Claudio parses the command string and recognizes common
-subcommands for tools such as:
+For Bash tool events, Claudio parses the command string and recognizes the
+subcommands of:
 
 - `git`
 - `npm`
@@ -400,11 +404,26 @@ subcommands for tools such as:
 - `yarn`
 - `kubectl`
 
-Unknown commands are handled conservatively. Claudio still tries command-level
-sounds such as `loading/systemctl-start.wav` when the words look like a command
-and subcommand rather than file paths or URLs.
+For other commands, Claudio still tries command-level keys such as
+`loading/systemctl-start.wav`, and treats the second word as a subcommand
+(`loading/systemctl-restart-start.wav`) when it looks like one rather than a
+file path, flag, or URL.
 
-MCP tool names beginning with `mcp__` are normalized to `mcp` for sound lookup.
+### MCP Tools
+
+MCP tools (names beginning with `mcp__`) first try the shared `mcp` keys,
+then the full normalized tool name. For `mcp__github__create_issue` at
+`PreToolUse`:
+
+```text
+loading/mcp-start.wav
+loading/mcp.wav
+loading/mcp-github-create-issue-start.wav
+loading/mcp-github-create-issue.wav
+loading/tool-start.wav
+loading/loading.wav
+default.wav
+```
 
 ## See Also
 
