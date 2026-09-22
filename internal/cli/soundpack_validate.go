@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -167,39 +169,11 @@ func validateDirectorySoundpack(dirPath string) (validateResult, error) {
 	}
 
 	// Walk directory to find audio files
-	walkErr := filepath.Walk(dirPath, func(path string, info os.FileInfo, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if info.IsDir() {
-			return nil
-		}
-
-		ext := strings.ToLower(filepath.Ext(path))
-		if ext != ".wav" && ext != ".mp3" && ext != ".aiff" {
-			return nil
-		}
-		if info.Mode()&os.ModeSymlink != 0 {
-			return fmt.Errorf("directory soundpack contains symlinked audio file: %s", path)
-		}
-
-		// Build the key from relative path components
-		rel, err := filepath.Rel(dirPath, path)
-		if err != nil {
-			return nil
-		}
-		// Normalize to forward slashes for key matching
-		key := filepath.ToSlash(rel)
-
-		slog.Debug("found audio file in directory", "key", key, "path", path)
-
+	if err := filepath.Walk(dirPath, newDirectorySoundpackWalkFunc(dirPath, mappedKeys)); err != nil {
+		return validateResult{}, fmt.Errorf("failed to scan directory soundpack: %w", err)
+	}
+	for key, path := range mappedKeys {
 		allMappings[key] = path
-		mappedKeys[key] = path
-
-		return nil
-	})
-	if walkErr != nil {
-		return validateResult{}, fmt.Errorf("failed to scan directory soundpack: %w", walkErr)
 	}
 
 	name := filepath.Base(dirPath)
@@ -321,5 +295,50 @@ func printValidateReport(cmd *cobra.Command, result validateResult) {
 		for _, key := range emptyKeys {
 			cmd.Printf("  %s\n", key)
 		}
+	}
+}
+
+// newDirectorySoundpackWalkFunc returns a filepath.WalkFunc that records every
+// audio file under dirPath in found, keyed by its slash-separated relative path.
+// VCS metadata directories are skipped, and entries that vanish mid-walk (e.g.
+// git's transient maintenance.lock in a managed clone) are ignored.
+func newDirectorySoundpackWalkFunc(dirPath string, found map[string]string) filepath.WalkFunc {
+	return func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			if path != dirPath && errors.Is(walkErr, fs.ErrNotExist) {
+				slog.Debug("skipping entry that vanished during soundpack scan", "path", path, "error", walkErr)
+				return nil
+			}
+			return walkErr
+		}
+		if info.IsDir() {
+			if path != dirPath && info.Name() == ".git" {
+				slog.Debug("skipping VCS metadata directory in soundpack scan", "path", path)
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		ext := strings.ToLower(filepath.Ext(path))
+		if ext != ".wav" && ext != ".mp3" && ext != ".aiff" {
+			return nil
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("directory soundpack contains symlinked audio file: %s", path)
+		}
+
+		// Build the key from relative path components
+		rel, err := filepath.Rel(dirPath, path)
+		if err != nil {
+			return nil
+		}
+		// Normalize to forward slashes for key matching
+		key := filepath.ToSlash(rel)
+
+		slog.Debug("found audio file in directory", "key", key, "path", path)
+
+		found[key] = path
+
+		return nil
 	}
 }
