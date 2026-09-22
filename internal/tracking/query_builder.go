@@ -127,6 +127,11 @@ func (q *QueryFilter) BuildWhereClause() (string, []interface{}) {
 	return whereClause, args
 }
 
+// DatePresets lists the canonical preset names ParseDatePreset accepts, for
+// help text and validation messages. ParseDatePreset also accepts the short
+// aliases week, month, and all.
+var DatePresets = []string{"today", "yesterday", "this-week", "last-week", "this-month", "last-month", "all-time"}
+
 // ParseDatePreset converts date preset strings to time ranges
 func ParseDatePreset(preset string, now time.Time) (start, end time.Time, err error) {
 	slog.Debug("parsing date preset", "preset", preset)
