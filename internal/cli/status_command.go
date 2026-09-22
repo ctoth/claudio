@@ -9,6 +9,7 @@ import (
 
 	"claudio.click/internal/audio"
 	"claudio.click/internal/config"
+	"claudio.click/internal/tracking"
 )
 
 // newStatusCommand returns the `claudio status` read-only subcommand.
@@ -95,7 +96,7 @@ func runStatusE(cmd *cobra.Command, _ []string) error {
 	if cfg.SoundTracking != nil && cfg.SoundTracking.Enabled {
 		trkPath := cfg.SoundTracking.DatabasePath
 		if trkPath == "" {
-			trkPath = "(default XDG path)"
+			trkPath = tracking.DefaultDatabasePath()
 		}
 		fmt.Fprintf(out, "  tracking:       enabled (%s)\n", trkPath)
 	} else {

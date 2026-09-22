@@ -167,7 +167,7 @@ claudio status
   log level:      warn
   audio backend:  auto -> oto (available; playback not tested)
   file logging:   enabled (/home/me/.cache/claudio/logs/claudio.log)
-  tracking:       enabled ((default XDG path))
+  tracking:       enabled (/home/me/.cache/claudio/sounds.db)
   version:        1.14.0
 ```
 
