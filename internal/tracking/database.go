@@ -307,11 +307,10 @@ func buildDSN(dbPath string) string {
 // resolved; if the move fails the legacy path keeps being used so history
 // is never lost.
 func GetDatabasePath() (string, error) {
-	dbDir := filepath.Join(xdg.CacheHome, "claudio")
-	if err := os.MkdirAll(dbDir, 0755); err != nil {
+	dbPath := DefaultDatabasePath()
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
 		return "", fmt.Errorf("failed to create database directory: %w", err)
 	}
-	dbPath := filepath.Join(dbDir, "sounds.db")
 
 	if legacyPath, ok := legacyDatabasePath(dbPath); ok {
 		if err := migrateLegacyDatabase(legacyPath, dbPath); err != nil {
@@ -323,6 +322,12 @@ func GetDatabasePath() (string, error) {
 	}
 
 	return dbPath, nil
+}
+
+// DefaultDatabasePath returns the default database path without creating
+// directories or migrating a legacy database, for display (claudio status).
+func DefaultDatabasePath() string {
+	return filepath.Join(xdg.CacheHome, "claudio", "sounds.db")
 }
 
 // legacyDatabasePath reports the pre-XDG database location when it holds a
