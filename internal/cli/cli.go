@@ -603,9 +603,9 @@ func (c *CLI) Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 }
 
 func setupDefaultCommandLogging(stderr io.Writer) {
-	slog.SetDefault(slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{
+	slog.SetDefault(slog.New(newStartupHandler(slog.NewTextHandler(stderr, &slog.HandlerOptions{
 		Level: slog.LevelError,
-	})))
+	}))))
 }
 
 // initializeConfigManager initializes only the config manager early for log level configuration
@@ -759,6 +759,7 @@ func setupLogging(cfg *config.Config, stderrWriter io.Writer) {
 	// installed a DEBUG-level default handler, violating the chunk-1
 	// "Dual Output" contract.
 	currentHandler := slog.Default().Handler()
+	startup, _ := currentHandler.(*startupHandler)
 	if textHandler, ok := currentHandler.(*slog.TextHandler); ok {
 		if textHandler.Enabled(context.Background(), slog.LevelDebug) && fileLevel > slog.LevelDebug {
 			slog.Debug("preserving existing verbose logger as additional handler", "config_level", fileLevel.String(), "current_allows", "DEBUG")
@@ -799,6 +800,10 @@ func setupLogging(cfg *config.Config, stderrWriter io.Writer) {
 				Level: fileLevel,
 			})
 			handlers = append(handlers, fileHandler)
+			// stderr already printed the startup ERRORs; only the file lacks them.
+			if startup != nil {
+				startup.replay(context.Background(), fileHandler)
+			}
 
 			// Use the stderr handler we already created to log this
 			// (won't show to user since it's DEBUG level and stderr is ERROR only)
