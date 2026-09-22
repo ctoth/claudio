@@ -210,8 +210,8 @@ Config is loaded from XDG-compliant locations (see `internal/config/`). On
 Linux the first hit is `$XDG_CONFIG_HOME/claudio/config.json` (typically
 `~/.config/claudio/config.json`), then `/etc/xdg/claudio/config.json`. macOS
 uses `~/Library/Application Support/claudio/config.json` and Windows uses
-`%LOCALAPPDATA%\claudio\config.json`. Config files are not merged over
-defaults, so write complete files (see `docs/configuration.md`).
+`%LOCALAPPDATA%\claudio\config.json`. Config files are read on top of the
+defaults, so omitted fields keep their default values.
 
 Default values (these are baked into `GetDefaultConfig`, not a literal file
 shipped to users):
