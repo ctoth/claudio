@@ -39,25 +39,24 @@ or to the `--config` file if given. When the user file does not exist yet, they
 seed it from the effective configuration (a system-wide file if one exists,
 otherwise the defaults).
 
-### Write Complete Files
+### Partial Files
 
-A config file is not merged over the defaults. A field you leave out takes
-its zero value, not the default:
+Every field is optional. A config file is read on top of the defaults, so a
+file that sets only what you want to change works:
 
-- Omitting `default_soundpack` fails validation, and every hook exits with an
-  error.
-- Omitting `enabled` means `false`, so Claudio is muted.
-- Omitting `file_logging` disables file logging.
-- Omitting `volume` or `sound_tracking` is safe; their defaults apply.
+```json
+{ "volume": 0.3 }
+```
 
-The easiest way to get a complete file is to let Claudio write one:
+Fields you leave out keep their defaults, including fields inside
+`file_logging` and `sound_tracking`. Explicit values always win: `"enabled":
+false` mutes Claudio, and `"file_logging": null` turns file logging off.
+
+To start from a file with every field filled in, let Claudio write one:
 
 ```bash
 claudio volume 0.5
 ```
-
-That creates the user config with every field filled in, which you can then
-edit.
 
 ## Full Example
 

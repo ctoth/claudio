@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"math"
 	"os"
+	"runtime"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -518,6 +519,12 @@ func TestConfigErrorHandling(t *testing.T) {
 		err := os.WriteFile(configFile, []byte("{}"), 0000)
 		if err != nil {
 			t.Fatalf("Failed to create no-permission file: %v", err)
+		}
+		// Windows ignores Unix mode bits, and root ignores them everywhere;
+		// "{}" is a valid config, so only a real read failure can error here.
+		if f, openErr := os.Open(configFile); openErr == nil {
+			f.Close()
+			t.Skipf("file mode 0000 does not block reads on %s as this user", runtime.GOOS)
 		}
 
 		_, err = mgr.LoadFromFile(configFile)

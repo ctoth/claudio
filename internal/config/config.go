@@ -136,7 +136,13 @@ func (cm *ConfigManager) LoadFromFile(filePath string) (*Config, error) {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	var config Config
+	// Decode on top of the defaults so keys the file omits keep their default
+	// values instead of Go zero values (a missing "enabled" would otherwise
+	// mute Claudio). Explicit values, including false and null, still win.
+	// Volume stays nil when omitted: nil already means "use the default" and
+	// lets `claudio volume` report that no volume is persisted.
+	config := *cm.GetDefaultConfig()
+	config.Volume = nil
 	err = json.Unmarshal(data, &config)
 	if err != nil {
 		slog.Error("failed to parse config JSON", "file_path", filePath, "error", err)

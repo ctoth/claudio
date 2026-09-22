@@ -17,6 +17,9 @@ release tags and current checkout history.
 - Claude Code settings and command paths honor `CLAUDE_CONFIG_DIR`.
 
 ### Fixed
+- Read config files on top of the defaults. A partial `config.json` that
+  left out `enabled` muted Claudio, one without `default_soundpack` made
+  every hook fail, and one without `file_logging` disabled file logging.
 - Report an unavailable audio backend in `claudio status` and before a hook
   worker detaches, instead of failing silently in the background.
 - Stop waiting on playback when the output device stalls (suspended sink,
