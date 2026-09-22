@@ -79,8 +79,10 @@ must not be empty if you set it.
 
 ## Environment Variables
 
-If an older config explicitly sets `audio_backend` to `malgo`, change it to
-`oto` or `auto`. The native backend is included in compiler-free builds.
+An older config that sets `audio_backend` to `malgo` still loads: the removed
+backend is treated as `oto` and a deprecation warning is logged. Change it to
+`oto` or `auto` to silence the warning. The native backend is included in
+compiler-free builds.
 
 | Variable | Effect |
 | --- | --- |

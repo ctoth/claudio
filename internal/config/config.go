@@ -143,6 +143,8 @@ func (cm *ConfigManager) LoadFromFile(filePath string) (*Config, error) {
 		return nil, fmt.Errorf("failed to parse config JSON: %w", err)
 	}
 
+	config.AudioBackend = migrateLegacyAudioBackend(config.AudioBackend, filePath)
+
 	err = cm.ValidateConfig(&config)
 	if err != nil {
 		slog.Error("config validation failed", "file_path", filePath, "error", err)
@@ -377,6 +379,7 @@ func (cm *ConfigManager) ApplyEnvironmentOverrides(config *Config) *Config {
 
 	// CLAUDIO_AUDIO_BACKEND
 	if audioBackend := os.Getenv("CLAUDIO_AUDIO_BACKEND"); audioBackend != "" {
+		audioBackend = migrateLegacyAudioBackend(audioBackend, "CLAUDIO_AUDIO_BACKEND")
 		// Validate the backend before applying
 		if cm.IsValidAudioBackend(audioBackend) {
 			result.AudioBackend = audioBackend
@@ -504,6 +507,21 @@ func (cm *ConfigManager) ApplyLogLevelWithWriter(logLevel string, writer io.Writ
 // tripping ConfigManager.ValidateConfig.
 func (cm *ConfigManager) GetSupportedAudioBackends() []string {
 	return []string{"auto", "system_command", "oto", "fake"}
+}
+
+// legacyAudioBackends maps removed backend names to their replacements so a
+// config written before an upgrade keeps working instead of failing every
+// hook. Aliases are accepted on input only and never advertised as supported.
+var legacyAudioBackends = map[string]string{"malgo": "oto"}
+
+func migrateLegacyAudioBackend(backend, source string) string {
+	replacement, ok := legacyAudioBackends[backend]
+	if !ok {
+		return backend
+	}
+	slog.Warn("deprecated audio backend in config; using its replacement",
+		"configured", backend, "using", replacement, "source", source)
+	return replacement
 }
 
 // IsValidAudioBackend checks if an audio backend type is supported

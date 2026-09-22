@@ -37,8 +37,9 @@ claudio --version
 
 ## Hooks Installed But No Sound
 
-Native playback uses the `oto` backend and does not require cgo. If your config
-explicitly selects the former `malgo` backend, change it to `oto` or `auto`.
+Native playback uses the `oto` backend and does not require cgo. A config that
+still selects the former `malgo` backend is treated as `oto`, with a warning in
+the log file; change it to `oto` or `auto`.
 An `available` backend in `claudio status` means its implementation or executable
 is present; it does not test the audio device or guarantee audible playback.
 
