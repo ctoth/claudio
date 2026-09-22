@@ -38,7 +38,7 @@ go test ./internal/cli -v
 
 # Test file logging (Windows config null is "NUL")
 '...' | .\claudio.exe --config NUL --silent
-Get-Content $env:LOCALAPPDATA\claudio\logs\claudio.log
+Get-Content $env:LOCALAPPDATA\cache\claudio\logs\claudio.log
 
 # Test with debug logging
 $env:CLAUDIO_LOG_LEVEL='debug'; '...' | .\claudio.exe --config NUL --silent
@@ -168,17 +168,20 @@ rm -f claudio
 3. **Audio System** (`internal/audio/`)
    - Uses Oto for compiler-free native audio on Windows, macOS, and Linux
    - One process-wide 48 kHz stereo output; decoder PCM is streamed through Beep's resampler
-   - Memory-based playback with pre-loaded sounds
+   - Each play decodes the whole file into memory (size-capped), then streams the PCM to the shared output
    - Supports WAV, MP3, and AIFF decoding with comprehensive format detection
-   - AIFF support includes 16/24/32-bit depths, mono/stereo, and magic byte detection
-   - Volume control with pre-processing to prevent crackling
+   - AIFF support includes 16/24/32-bit depths and magic byte detection; more than two channels are downmixed to stereo
+   - Volume is applied per player through Oto
+   - Playback has a stall deadline (sound length + drain + grace) so a device that stops pulling data cannot hang a detached worker
+   - `system_command` backend shells out to platform players (`paplay`, `ffplay`, `afplay`, `aplay`, ...) as an alternative
 
 4. **Configuration** (`internal/config/`)
    - XDG Base Directory compliant
    - Config search order: `$XDG_CONFIG_HOME/claudio/config.json` first, then each
      directory in `$XDG_CONFIG_DIRS` (typically `/etc/xdg/claudio/config.json` on
-     Linux/macOS). Windows uses the Windows-native XDG mapping; `/etc/xdg` is
-     not checked there.
+     Linux). macOS and Windows use adrg/xdg's native mappings
+     (`~/Library/Application Support`, `%LOCALAPPDATA%`); see
+     `docs/configuration.md` for the full per-platform search list.
    - Environment variable precedence: CLI flag > env var > config file > default.
    - Production env vars (full reference in `docs/cli-reference.md`): `CLAUDIO_VOLUME`,
      `CLAUDIO_ENABLED`, `CLAUDIO_SOUNDPACK`, `CLAUDIO_LOG_LEVEL`,
@@ -199,14 +202,16 @@ rm -f claudio
 
 1. **TDD Approach**: All components have comprehensive tests written first
 2. **slog Logging**: Extensive structured logging throughout for debugging
-3. **Memory-based Audio**: Pre-loads entire sound files to avoid streaming complexity
+3. **Decode-then-stream Audio**: Decodes each sound fully into memory, then streams it through one shared Oto output
 
 ## Configuration
 
 Config is loaded from XDG-compliant locations (see `internal/config/`). On
-Linux/macOS the first hit is `$XDG_CONFIG_HOME/claudio/config.json` (typically
-`~/.config/claudio/config.json`), then `/etc/xdg/claudio/config.json`. On
-Windows it uses the Windows-native XDG mapping; `/etc/xdg` is never checked.
+Linux the first hit is `$XDG_CONFIG_HOME/claudio/config.json` (typically
+`~/.config/claudio/config.json`), then `/etc/xdg/claudio/config.json`. macOS
+uses `~/Library/Application Support/claudio/config.json` and Windows uses
+`%LOCALAPPDATA%\claudio\config.json`. Config files are not merged over
+defaults, so write complete files (see `docs/configuration.md`).
 
 Default values (these are baked into `GetDefaultConfig`, not a literal file
 shipped to users):
@@ -233,7 +238,7 @@ shipped to users):
 `soundpack_paths` defaults to `[]` — XDG data dirs (with the hardcoded
 `claudio/soundpacks/` subpath) are searched automatically.
 `default_soundpack` is computed at runtime by platform detection (windows /
-wsl / darwin embedded packs).
+wsl / darwin / linux embedded packs).
 
 ### File Logging Configuration
 
@@ -255,19 +260,16 @@ Directory soundpacks use a category-based structure (e.g. `loading/`,
 holds tool-specific or generic sounds resolved through the three fallback
 chains documented under "Sound Mapping" above. Installed soundpacks live under
 `~/.local/share/claudio/soundpacks/<id>/` (or the equivalent XDG data dir);
-embedded platform packs (windows / wsl / darwin) are baked into the binary and
+embedded platform packs (windows / wsl / darwin / linux) are baked into the binary and
 can be inspected via `claudio soundpack list`.
-
-## Current Issues and Workarounds
-
-1. **Audio Crackling**: The current memory-based implementation has some crackling.
 
 ## Shipped Subcommands
 
 Beyond the default stdin-mode hook executor, claudio ships these subcommands
 (registered in `internal/cli/cli.go`):
 
-- `claudio install` / `claudio uninstall` — manage Claude/Codex/Antigravity hooks
+- `claudio install` / `claudio uninstall` — manage Claude Code, Codex, Gemini CLI, Qwen Code, and
+  GitHub Copilot CLI hooks
 - `claudio install-commands` / `claudio uninstall-commands` — manage the
   Claude Code `/claudio` slash command, Codex `$claudio` skill, or Antigravity
   skill/CLI command artifacts
@@ -327,7 +329,7 @@ TDD: Short description of what was implemented
 ## Important File Locations
 
 - Hook Logger: `cmd/hook-logger/` — captures real Claude Code hook JSON for debugging
-- Embedded Soundpacks: `internal/config/embedded_soundpacks/` (windows.json, wsl.json, darwin.json)
+- Embedded Soundpacks: `internal/config/` (windows.json, wsl.json, darwin.json, linux.json, plus `embedded_sounds/*.wav`)
 - User-installed soundpacks: `~/.local/share/claudio/soundpacks/<id>/` (XDG data dir; Windows uses Windows-native XDG mapping)
 - Log Files: `~/.cache/claudio/logs/claudio.log` — default file logging location
 
@@ -346,8 +348,7 @@ The file logging system follows Go best practices using standard library compone
 
 1. **Asymmetric Dual Output**: Logs are written to BOTH stderr and the rotated log
    file, but at different levels. The stderr handler is **hardcoded to
-   `slog.LevelError`** (see `setupLogging` in `internal/cli/cli.go` around line
-   725) — only ERROR records ever reach stderr regardless of `log_level`. The
+   `slog.LevelError`** (see `setupLogging` in `internal/cli/cli.go`) — only ERROR records ever reach stderr regardless of `log_level`. The
    file handler honors the configured `log_level`. To see debug/info/warn
    output, tail the log file (e.g. `tail -F ~/.cache/claudio/logs/claudio.log`);
    `CLAUDIO_LOG_LEVEL=debug` on its own will not produce extra stderr output.

@@ -20,28 +20,51 @@ overrides.
 
 ## Config File
 
-Claudio searches XDG config paths for `claudio/config.json`. The first existing
-file wins.
+Claudio searches the XDG config directories for `claudio/config.json`. The
+first file found wins; files are not merged with each other. `--config` skips
+the search and loads the named file.
 
-Typical user path:
+| Platform | User config (searched first) | Then |
+| --- | --- | --- |
+| Linux, WSL | `~/.config/claudio/config.json` | `/etc/xdg/claudio/config.json` |
+| macOS | `~/Library/Application Support/claudio/config.json` | `~/Library/Preferences`, `/Library/Application Support`, `/Library/Preferences`, `~/.config` |
+| Windows | `%LOCALAPPDATA%\claudio\config.json` | `%ProgramData%\claudio\config.json`, `%APPDATA%\claudio\config.json` |
 
-```text
-~/.config/claudio/config.json
-```
-
-On Windows, Claudio uses the Windows-native XDG location supplied by the XDG
-library, not a hardcoded Unix path.
+`XDG_CONFIG_HOME` and `XDG_CONFIG_DIRS` override these locations on every
+platform.
 
 Commands that persist settings, such as `claudio volume`, `claudio mute`,
-`claudio unmute`, and `claudio soundpack use`, write to the first user config
-path.
+`claudio unmute`, and `claudio soundpack use`, write to the user config path,
+or to the `--config` file if given. When the user file does not exist yet, they
+seed it from the effective configuration (a system-wide file if one exists,
+otherwise the defaults).
+
+### Write Complete Files
+
+A config file is not merged over the defaults. A field you leave out takes
+its zero value, not the default:
+
+- Omitting `default_soundpack` fails validation, and every hook exits with an
+  error.
+- Omitting `enabled` means `false`, so Claudio is muted.
+- Omitting `file_logging` disables file logging.
+- Omitting `volume` or `sound_tracking` is safe; their defaults apply.
+
+The easiest way to get a complete file is to let Claudio write one:
+
+```bash
+claudio volume 0.5
+```
+
+That creates the user config with every field filled in, which you can then
+edit.
 
 ## Full Example
 
 ```json
 {
   "volume": 0.5,
-  "default_soundpack": "default",
+  "default_soundpack": "linux",
   "soundpack_paths": [],
   "enabled": true,
   "log_level": "warn",
@@ -61,42 +84,57 @@ path.
 }
 ```
 
-Every field is optional when defaults are acceptable, but `default_soundpack`
-must not be empty if you set it.
+This matches the Linux defaults. Embedded packs can be named either way:
+`linux` or `embedded:linux.json`, and likewise `windows`, `wsl`, and `darwin`.
+Files that Claudio writes use the `embedded:` form.
 
 ## Fields
 
 | Field | Default | Meaning |
 | --- | --- | --- |
-| `volume` | `0.5` | Playback volume from `0.0` to `1.0`. Invalid file values fail validation. |
-| `default_soundpack` | platform-specific | Soundpack name, path, managed git name, or embedded platform id. |
+| `volume` | `0.5` | Playback volume from `0.0` to `1.0`. NaN, infinities, and out-of-range values fail validation. |
+| `default_soundpack` | platform-specific | Soundpack name, path, managed git name, or embedded platform id. Required. |
 | `soundpack_paths` | `[]` | Extra JSON files or directories to search in addition to XDG soundpack paths. |
 | `enabled` | `true` | When false, Claudio processes hooks but plays no audio. |
-| `log_level` | `warn` | `debug`, `info`, `warn`, or `error`. |
+| `log_level` | `warn` | `debug`, `info`, `warn`, or `error`. Controls the log file only. |
 | `audio_backend` | `auto` | `auto`, `oto`, or `system_command`. `fake` exists for tests. |
-| `file_logging` | enabled | Rotated file logging configuration. |
-| `sound_tracking` | enabled | SQLite tracking for usage and missing-sound analysis. |
+| `file_logging` | enabled | Rotated file logging. See [Logging](#logging). |
+| `sound_tracking` | enabled | SQLite tracking for usage and missing-sound analysis. See [Tracking](#tracking). |
 
-## Environment Variables
+The platform default for `default_soundpack` is a platform JSON file
+(`windows.json`, `wsl.json`, `darwin.json`, or `linux.json`) placed next to the
+`claudio` executable if one exists, otherwise the matching embedded pack. WSL
+is detected separately from Linux.
+
+`auto` selects `oto`, Claudio's built-in native backend, on Windows, macOS, and
+Linux. Under WSL it selects `system_command`, which runs an external player
+such as `paplay`, when one is installed, and falls back to `oto` otherwise.
 
 An older config that sets `audio_backend` to `malgo` still loads: the removed
 backend is treated as `oto` and a deprecation warning is logged. Change it to
-`oto` or `auto` to silence the warning. The native backend is included in
-compiler-free builds.
+`oto` or `auto` to silence the warning.
+
+## Environment Variables
 
 | Variable | Effect |
 | --- | --- |
-| `CLAUDIO_VOLUME` | Overrides `volume`. |
+| `CLAUDIO_VOLUME` | Overrides `volume`. An out-of-range value makes hooks fail validation. |
 | `CLAUDIO_ENABLED` | Overrides `enabled`. Accepts Go boolean forms such as `true`, `false`, `1`, and `0`. |
 | `CLAUDIO_SOUNDPACK` | Overrides `default_soundpack`. |
-| `CLAUDIO_LOG_LEVEL` | Overrides `log_level`. |
-| `CLAUDIO_AUDIO_BACKEND` | Overrides `audio_backend` when the value is valid. |
-| `CLAUDIO_FILE_LOGGING` | Enables or disables file logging for the process. |
-| `CLAUDIO_SOUND_TRACKING` | Enables or disables tracking for the process. |
-| `CLAUDIO_SOUND_TRACKING_DB` | Sets the tracking database path. |
-| `XDG_CONFIG_HOME` | Changes user config discovery. |
-| `XDG_DATA_HOME` | Changes user soundpack and managed soundpack storage. |
-| `XDG_CACHE_HOME` | Changes log, tracking, and extracted embedded-sound cache storage. |
+| `CLAUDIO_LOG_LEVEL` | Overrides `log_level`. An unknown level makes hooks fail validation. |
+| `CLAUDIO_AUDIO_BACKEND` | Overrides `audio_backend`. Invalid values are logged and ignored; `malgo` maps to `oto`. |
+| `CLAUDIO_FILE_LOGGING` | Overrides `file_logging.enabled`. Accepts Go boolean forms. |
+| `CLAUDIO_SOUND_TRACKING` | Overrides `sound_tracking.enabled`. Accepts Go boolean forms. |
+| `CLAUDIO_SOUND_TRACKING_DB` | Overrides `sound_tracking.database_path`. |
+| `XDG_CONFIG_HOME` | Changes the user config path and the managed soundpack registry location. |
+| `XDG_CONFIG_DIRS` | Changes the system config paths searched after the user path. |
+| `XDG_DATA_HOME` | Changes where installed and managed soundpacks are stored. |
+| `XDG_DATA_DIRS` | Changes the system directories searched for directory soundpacks. |
+| `XDG_CACHE_HOME` | Changes the log and extracted embedded-sound cache locations, and on Linux the tracking database location. |
+
+Agent settings locations used by `claudio install` also honor
+`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, and `COPILOT_HOME`. See the
+[CLI reference](cli-reference#claudio-install).
 
 ## CLI Flags
 
@@ -109,12 +147,13 @@ claudio --soundpack my-pack
 claudio --silent
 ```
 
-They are transient. They do not rewrite `config.json`.
+They are transient. They do not rewrite `config.json`, and `claudio status`
+does not apply them (except `--config`).
 
 ## Persistent Controls
 
 ```bash
-claudio volume          # print persisted volume
+claudio volume          # print effective volume
 claudio volume 0.35     # persist new volume
 claudio mute            # set enabled=false
 claudio unmute          # set enabled=true
@@ -133,27 +172,49 @@ Directory soundpacks are searched under:
 <XDG data dir>/claudio/soundpacks/<name>
 ```
 
+`<XDG data home>` is `~/.local/share` on Linux, `~/Library/Application Support`
+on macOS, and `%LOCALAPPDATA%` on Windows.
+
 JSON soundpacks and arbitrary soundpack directories can also be added directly
 to `soundpack_paths`. The soundpack install commands update this list for you.
 
+Git soundpacks added with `claudio soundpack add` are cloned under
+`<XDG data home>/claudio/soundpack-repos/<name>/` and recorded in
+`<XDG config home>/claudio/soundpacks.json`.
+
 ## Logging
 
-Stderr logging is intentionally quiet. Debug and info logs are written to the
-rotated file logger when file logging is enabled.
+Only `ERROR` records reach stderr, whatever `log_level` says. `log_level`
+controls what goes to the rotated log file, so debug output is only visible
+there.
 
 Default log path:
 
-```text
-<XDG cache home>/claudio/logs/claudio.log
-```
+| Platform | Path |
+| --- | --- |
+| Linux, WSL | `~/.cache/claudio/logs/claudio.log` |
+| macOS | `~/Library/Caches/claudio/logs/claudio.log` |
+| Windows | `%LOCALAPPDATA%\cache\claudio\logs\claudio.log` |
 
-To debug one session:
+`claudio status` prints the path in use.
+
+`file_logging` fields:
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `enabled` | `true` | Write the log file. |
+| `filename` | `""` | Custom log file path. Empty means the default path above. |
+| `max_size_mb` | `10` | Rotate when the file reaches this size. |
+| `max_backups` | `5` | Rotated files to keep. |
+| `max_age_days` | `30` | Delete rotated files older than this. |
+| `compress` | `true` | Gzip rotated files. |
+
+To debug hook playback, raise the level for the agent's environment (or set
+`log_level` in the config), trigger the hook, and read the log file:
 
 ```bash
-CLAUDIO_LOG_LEVEL=debug claudio status
+export CLAUDIO_LOG_LEVEL=debug
 ```
-
-For hook playback debugging, inspect the log file after the hook fires.
 
 ## Tracking
 
@@ -161,9 +222,14 @@ Tracking records sound lookup chains in SQLite. It is on by default.
 
 Default database path:
 
-```text
-<XDG cache home>/claudio/sounds.db
-```
+| Platform | Path |
+| --- | --- |
+| Linux, WSL | `~/.cache/claudio/sounds.db` (honors `XDG_CACHE_HOME`) |
+| macOS | `~/Library/Caches/claudio/sounds.db` |
+| Windows | `%LOCALAPPDATA%\claudio\sounds.db` |
+
+Set `sound_tracking.database_path` or `CLAUDIO_SOUND_TRACKING_DB` to use a
+different file.
 
 Useful reports:
 

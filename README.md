@@ -19,7 +19,7 @@ rename it to `claudio` (`claudio.exe` on Windows), and put it on `PATH`.
 These binaries include the native audio backend; no Go or C compiler is needed.
 On macOS and Linux, make the downloaded binary executable with `chmod +x`.
 
-To build from source, install Go 1.25 or later. No C compiler is required:
+To build from source, install Go 1.25.13 or later. No C compiler is required:
 
 ```bash
 go install claudio.click/cmd/claudio@latest
@@ -49,7 +49,9 @@ claudio install --agent copilot --scope global
 
 After Codex hook installation, run `/hooks` in Codex and trust the Claudio
 hook. Use `--scope project` instead of `--scope global` when you want hooks only
-for the current repository.
+for the current repository. For Claude Code, a global install writes to
+`$CLAUDE_CONFIG_DIR/settings.json` when that variable is set, and to
+`~/.claude/settings.json` otherwise.
 
 ## Daily Commands
 
@@ -119,3 +121,7 @@ See [docs/remote-audio-ssh.md](docs/remote-audio-ssh.md).
 go build ./cmd/claudio
 go test ./...
 ```
+
+The `Makefile` wraps the common workflows; run `make help` to list targets
+such as `make ci`, `make smoke`, and `make release-check`. Release notes live
+in [CHANGELOG.md](CHANGELOG.md).

@@ -8,19 +8,29 @@ description: "Run Claudio on a remote Linux box and hear it on your local Window
 
 Claudio plays sound on the machine where the coding agent runs. When the agent
 runs on a remote box over SSH, that machine usually has no sound card, so
-Claudio finds no working backend and stays silent.
+playback fails and Claudio stays silent. The failure is recorded in the log
+file, not shown in the agent.
 
-The fix is to forward a PulseAudio socket over the SSH connection. The remote
-box needs only the Pulse client library; the audio is rendered on your local
-machine. This page uses the PulseAudio server that WSLg already runs on
-Windows, which is the common case for this project. The same forwarding works
-from any host that exposes a Pulse socket.
+The fix is to forward a PulseAudio socket over the SSH connection so the audio
+is rendered on your local machine. This page uses the PulseAudio server that
+WSLg already runs on Windows, which is the common case for this project. The
+same forwarding works from any host that exposes a Pulse socket.
+
+The remote box can play through the socket in two ways:
+
+- **Oto, the default backend.** Oto has its own PulseAudio client written in
+  Go. It honors `PULSE_SERVER`, sends audio over the socket without shared
+  memory, and asks for a small buffer. It needs no packages on the remote box:
+  do Part 1 and Part 2 steps 2 and 4, and skip the rest.
+- **`paplay` through the `system_command` backend.** This is the path the rest
+  of this page walks through, and the one to use if Oto cannot connect or you
+  want `paplay`'s own options. It needs the libpulse client setup below.
 
 Rough shape:
 
 ```text
 remote box                          local machine (WSL)
-  claudio -> paplay -> libpulse ->  /tmp/pulse-fwd.sock
+  claudio -> Oto, or paplay ->      /tmp/pulse-fwd.sock
                                       | SSH RemoteForward
                                       v
                                     /mnt/wslg/PulseServer -> Windows speakers
@@ -108,13 +118,12 @@ fi
 
 The socket test keeps console logins and non-forwarded sessions from breaking.
 
-`PULSE_SERVER` is what makes `paplay` reach your speakers.
-`CLAUDIO_AUDIO_BACKEND` selects the `paplay` path configured in this guide.
-Claudio otherwise selects `oto` on native Linux and only prefers
-`system_command` under WSL. Oto can also use `PULSE_SERVER`, but the libpulse
-configuration and `paplay` options in this guide apply to `system_command`.
+`PULSE_SERVER` is what makes both Oto and `paplay` reach your speakers.
+`CLAUDIO_AUDIO_BACKEND=system_command` selects `paplay`; leave that line out to
+use Oto. On native Linux, `auto` picks Oto, and it prefers `system_command`
+only under WSL.
 
-You can make this permanent instead of environment-driven:
+To pin `paplay` in config instead of the environment:
 
 ```json
 {
@@ -152,8 +161,8 @@ ls -l /tmp/pulse-fwd.sock
 echo $PULSE_SERVER
 ```
 
-The socket should exist and the variable should be set. Test the plumbing
-before testing Claudio:
+The socket should exist and the variable should be set. If you installed
+`pulseaudio-utils`, test the plumbing before testing Claudio:
 
 ```bash
 paplay /usr/share/sounds/alsa/Front_Center.wav
@@ -166,8 +175,8 @@ claudio status
 echo '{"session_id":"test","transcript_path":"/test","cwd":"/test","hook_event_name":"PostToolUse","tool_name":"Bash","tool_response":{"stdout":"success","stderr":"","interrupted":false}}' | claudio
 ```
 
-`claudio status` should report the `system_command` backend. The hook payload
-should produce a sound on your local speakers.
+`claudio status` should report `system_command` (or `oto` if you skipped the
+override). The hook payload should produce a sound on your local speakers.
 
 ## Environment Inheritance
 
@@ -199,6 +208,9 @@ Claudio's stderr handler is fixed at ERROR level, so `CLAUDIO_LOG_LEVEL=debug`
 changes the log file only.
 
 ## Playback Latency
+
+This section applies to `paplay`. Oto requests a buffer of about 100 ms, so it
+does not have this problem.
 
 When a Pulse client does not request a buffer size, the server picks a default
 of roughly two seconds. Over a tunnel that shows up as a long silent gap before
@@ -235,8 +247,9 @@ For non-Claudio programs routed through the ALSA Pulse plugin, exporting
 
 ## Troubleshooting
 
-**Following this guide, but `claudio status` shows `oto`.** Set
-`CLAUDIO_AUDIO_BACKEND=system_command` to use the configured `paplay` path.
+**`claudio status` shows `oto` but you set up `paplay`.** The
+`CLAUDIO_AUDIO_BACKEND=system_command` export did not reach this shell. Check
+that the socket existed when the rc file ran.
 
 **`Expected 1 memfd fd` plus `Protocol error`.** Step 3 was skipped. Add
 `enable-shm = no` to `~/.config/pulse/client.conf`.
@@ -255,6 +268,7 @@ Do not use `sudo` for playback.
 **`Access denied` from the Pulse server.** The server wants cookie
 authentication. WSLg normally does not, but if yours does, copy
 `~/.config/pulse/cookie` from the WSL side to the same path on the remote box.
+Both libpulse and Oto read that file; Oto also honors `PULSE_COOKIE`.
 
 **`open(): No such file or directory` from `paplay`.** The WAV file is missing
 on that box. That is a soundpack problem, not a connection problem; see
@@ -263,8 +277,9 @@ on that box. That is a soundpack problem, not a connection problem; see
 **Long silent delay proportional to file length.** The client got the two
 second server default buffer. See [Playback Latency](#playback-latency).
 
-**Command returns to the prompt well after audio ends.** Normal drain
-confirmation delayed by the tunnel. Harmless.
+**`paplay` returns to the prompt well after audio ends.** Normal drain
+confirmation delayed by the tunnel. Harmless. Claudio's hook returns
+immediately and plays in a background process, so the agent does not wait.
 
 **Claudio is silent but `paplay` works.** Confirm Claudio is not muted and the
 volume is not zero:

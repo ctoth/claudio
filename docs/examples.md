@@ -8,10 +8,12 @@ title: "Examples"
 These examples are meant to be copied into a terminal and adjusted for your
 paths.
 
+Each example assumes `claudio` is already on `PATH`. See
+[Installation](installation) for release binaries and `go install`.
+
 ## Install For Claude Code
 
 ```bash
-go install claudio.click/cmd/claudio@latest
 claudio install --agent claude --scope global
 claudio status
 ```
@@ -26,7 +28,6 @@ claudio install --agent claude --scope project
 ## Install For Codex
 
 ```bash
-go install claudio.click/cmd/claudio@latest
 claudio install --agent codex --scope global
 ```
 
@@ -64,6 +65,12 @@ claudio install-commands --agent codex
 
 Then ask Codex to use `$claudio`.
 
+Preview an install without writing anything:
+
+```bash
+claudio install --agent all --dry-run
+```
+
 ## Manually Test A Hook Payload
 
 Prompt event:
@@ -84,6 +91,10 @@ Failed Bash event:
 echo '{"session_id":"manual","cwd":".","hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"npm test"},"tool_response":{"stdout":"","stderr":"tests failed","interrupted":false}}' | claudio
 ```
 
+The first sound should resolve through `success/git-status-success.wav`; the
+second through `error/npm-test-error.wav`. A non-empty `stderr` marks a Bash
+result as a failure.
+
 Run without audio:
 
 ```bash
@@ -98,10 +109,12 @@ Persist a quieter default:
 claudio volume 0.25
 ```
 
-Temporarily override one invocation:
+Override the volume for one shell session. Hooks started by an agent launched
+from this shell inherit it:
 
 ```bash
-CLAUDIO_VOLUME=0.8 claudio status
+export CLAUDIO_VOLUME=0.8
+claudio status
 ```
 
 Disable and re-enable:
@@ -211,23 +224,21 @@ claudio soundpack add gh:owner/repo --subdir packs/retro --name retro --default
 
 ## Debug Logging
 
-Enable debug logs:
+Debug output goes only to the log file; stderr shows errors only. Run a
+payload with debug logging, then read the file:
 
 ```bash
-export CLAUDIO_LOG_LEVEL=debug
+echo '{"session_id":"manual","cwd":".","hook_event_name":"Stop"}' | CLAUDIO_LOG_LEVEL=debug claudio --silent
+claudio status   # the "file logging" line shows the log path
+tail -n 50 ~/.cache/claudio/logs/claudio.log
 ```
 
-Run a hook payload, then inspect:
+The path above is the Linux default. On macOS it is
+`~/Library/Caches/claudio/logs/claudio.log`; on Windows,
+`%LOCALAPPDATA%\cache\claudio\logs\claudio.log`.
 
-```text
-<XDG cache home>/claudio/logs/claudio.log
-```
-
-For a one-off run without editing config:
-
-```bash
-CLAUDIO_LOG_LEVEL=debug claudio status
-```
+To keep debug logging on for agent-run hooks, set `"log_level": "debug"` in
+`config.json`.
 
 ## See Also
 

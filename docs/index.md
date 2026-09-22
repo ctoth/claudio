@@ -20,6 +20,10 @@ sound different.
 
 ## Quick Start
 
+Download a prebuilt binary from
+[GitHub Releases](https://github.com/ctoth/claudio/releases/latest), or build
+it with Go 1.25.13 or later (no C compiler needed):
+
 ```bash
 go install claudio.click/cmd/claudio@latest
 claudio install
@@ -43,7 +47,7 @@ and preserves non-Claudio hooks.
 
 | Agent | Command | Global settings | Project settings |
 | --- | --- | --- | --- |
-| Claude Code | `claudio install --agent claude` | `~/.claude/settings.json` | `./.claude/settings.json` |
+| Claude Code | `claudio install --agent claude` | `$CLAUDE_CONFIG_DIR/settings.json` or `~/.claude/settings.json` | `./.claude/settings.json` |
 | Codex | `claudio install --agent codex` | `$CODEX_HOME/hooks.json` or `~/.codex/hooks.json` | `./.codex/hooks.json` |
 | Gemini | `claudio install --agent gemini` | `~/.gemini/settings.json` | `./.gemini/settings.json` |
 | Qwen Code | `claudio install --agent qwen` | `~/.qwen/settings.json` | `./.qwen/settings.json` |
@@ -214,9 +218,9 @@ Claudio works without a config file. Defaults are platform-aware: Windows,
 macOS, WSL, and Linux get embedded or system-backed sound mappings when
 available.
 
-Persistent configuration lives at the first XDG config path, normally
-`~/.config/claudio/config.json` on Unix-like systems and the platform XDG
-equivalent on Windows.
+Persistent configuration lives at `~/.config/claudio/config.json` on Linux,
+`~/Library/Application Support/claudio/config.json` on macOS, and
+`%LOCALAPPDATA%\claudio\config.json` on Windows.
 
 The fastest way to inspect the active result is:
 

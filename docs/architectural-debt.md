@@ -1,59 +1,56 @@
 # Architectural Debt Log
 
-This file records architectural items that the post-review-fixes campaign
-identified but deliberately did NOT address. They are not bugs in the
-"would-crash-or-corrupt" sense — every one of them is shipping safely
-today. They are debt: known shape problems that future work should pick
-up with proper scoping rather than as an afterthought in a different
-chunk.
+Architectural items the post-review-fixes campaign found but deliberately
+left alone. None of them crash or corrupt anything; they are shape problems
+that deserve their own scoped change rather than a drive-by fix inside
+unrelated work.
 
-Each entry names the finding, the location, the severity (impact if
-left unfixed), the blast radius (what changes when you do fix it), and
-the original analyst report so the trail can be picked up cleanly.
+Each entry gives the location, the severity (cost of leaving it), the blast
+radius (what a fix touches), and the report the finding came from.
 
 ---
 
-## #51 — CLI struct DI container is half-applied
+## #51 — CLI struct DI container is not applied everywhere
 
-**Location:** `internal/cli/cli.go` (the `CLI` struct + its
-`configManager` field) versus every direct call to
-`config.NewConfigManager()` scattered across the verbs.
+**Location:** `internal/cli/cli.go` (the `CLI` struct and its
+`configManager` field) versus the remaining direct
+`config.NewConfigManager()` calls.
 
-**Severity:** Medium. The CLI struct exists to be a DI container for
-config-, fs-, and backend-injection, but at least seven verb / helper
-sites side-step it with their own `config.NewConfigManager()` call.
-Tests cannot inject a fake config manager into those sites, so the
-verbs end up reading the developer's real `~/.config/claudio/config.json`
-unless `testenv.IsolateXDG(t)` has already been called — which is now
-the norm but is enforced by convention, not by the type system.
+**Severity:** Low. The verbs now go through `loadConfigForVerb` and
+`mutateConfigForCommand` (`internal/cli/verb_helpers.go`), which use the
+injected `cli.configManager`. Four sites still build their own manager:
 
-**Blast radius if fixed:** Touches every soundpack subcommand verb,
-the volume / mute / unmute / status verbs, and the analyze verb. Either
-commit to a context-DI pattern (`ctx`-borne `*CLI`) or pass deps as
-function arguments. The "half-applied DI container" state is the worst
-of both worlds.
+- `initializeAudioSystem` platform-pack fallback (`cli.go`)
+- `setupLogging` log-path resolution (`cli.go`)
+- `removeConfigSoundpackPath` default-soundpack reset (`soundpack_git.go`)
+- `discoverConfigSoundpacks` (`soundpack_helpers.go`)
+
+Tests cannot inject a fake manager into those paths, so they depend on
+`testenv.IsolateXDG(t)` to keep the developer's real config out. That is
+enforced by convention, not by the type system.
+
+**Blast radius if fixed:** Small. Pass the `*CLI` (or its config manager)
+into the four functions above.
 
 **Original finding:** Chunk 19 scout (`reports/chunk-19a-scout-cli-hygiene-report.md`).
 
 ---
 
-## #52 — `initializeAudioSystem` is 128 lines of soundpack resolution
+## #52 — `initializeAudioSystem` is mostly soundpack resolution
 
 **Location:** `internal/cli/cli.go` `initializeAudioSystem` (search by
-name; line number drifts).
+name; line numbers drift). It is about 140 lines.
 
-**Severity:** Medium. The function is named for audio backend init but
-most of its body is soundpack-path resolution: walking the active
-soundpack name through XDG data dirs, soundpack_paths config entries,
-embedded platform JSONs, and managed git packs. That's
-soundpack-package business logic in CLI plumbing.
+**Severity:** Medium. The function is named for audio backend setup, but
+most of its body resolves the active soundpack: XDG data dirs,
+`soundpack_paths` entries, embedded platform JSONs, and managed git packs.
+That is soundpack-package logic sitting in CLI plumbing.
 
-**Blast radius if fixed:** Extract a new function (or type) in
-`internal/soundpack/resolve` that takes a name and returns a resolved
-`soundpack.Source`. CLI then composes audio backend init separately
-from soundpack resolution. The split is mechanical but the function is
-long, well-tested, and currently green; risk is in subtly changing
-resolution precedence during the move.
+**Blast radius if fixed:** Extract a function (or type) in
+`internal/soundpack` that takes a name and returns a resolved mapper, then
+have the CLI compose backend setup separately. The move is mechanical, but
+the function is long and well tested; the risk is quietly changing
+resolution precedence along the way.
 
 **Original finding:** Chunk 19 scout (#52, deferred as architectural).
 
@@ -61,63 +58,66 @@ resolution precedence during the move.
 
 ## #54 — Soundpack discovery lives in `internal/cli`
 
-**Location:** `internal/cli/soundpack_helpers.go` (after the Chunk 20
-split) — `discoverSoundpacks`, `discoverEmbeddedSoundpacks`,
-`discoverXDGSoundpacks`, `discoverConfigSoundpacks`, `countAudioFiles`,
-`countNonEmptyMappings`.
+**Location:** `internal/cli/soundpack_helpers.go` — `discoverSoundpacks`,
+`discoverEmbeddedSoundpacks`, `discoverXDGSoundpacks`,
+`discoverConfigSoundpacks`, `countAudioFiles`, `countNonEmptyMappings`, and
+the `soundpackInfo` type — plus `discoverManagedGitSoundpacks` in
+`internal/cli/soundpack_git.go`.
 
-**Severity:** Medium. Soundpack discovery (which packs exist, where,
-how many sounds each has) is conceptually `internal/soundpack` territory.
-It is in `internal/cli` because the CLI was the only consumer when the
-code was first written. Today the `analyze`, `soundpack list`, and
-`soundpack use` verbs all reach into it, plus `soundpack_git.go` for
-the managed-git registry. Moving to `internal/soundpack` would let
-non-CLI consumers (e.g. a future TUI) reuse the discovery.
+**Severity:** Medium. Knowing which packs exist, where they are, and how
+many sounds each has is `internal/soundpack` territory. It lives in the CLI
+because the CLI was the first consumer. `soundpack list`, `soundpack use`,
+and the managed-git code all reach into it now; moving it would let a
+non-CLI consumer reuse it.
 
-**Blast radius if fixed:** Most call sites are in-package today, so the
-move is `git mv` + import updates. The shared `soundpackInfo` type
-would need to move with it.
+**Blast radius if fixed:** All callers are in `internal/cli`, so the move is
+mostly `git mv` plus import updates. `soundpackInfo` moves with it.
 
 **Original finding:** Chunk 19 scout (#54, deferred as architectural).
 
 ---
 
-## Two-Stat-per-resolved-sound pattern
+## Redundant file checks on the hook hot path
 
-**Location:** The resolver in `internal/soundpack` and the playback
-layer in `internal/audio` both `os.Stat` the same file on the hot
-path — once to confirm existence during chain resolution, then again
-when the source is opened for playback.
+**Location:** `internal/soundpack/soundpack.go` and
+`internal/audio/source.go`.
 
-**Severity:** Low. Two stats per sound is invisibly cheap on a modern
-filesystem cache. It is on the hook hot path though, so if the cache
-is cold (first sound after boot, or after the file changed) the cost
-doubles. Worth a single-stat refactor eventually.
+**Severity:** Low. Every hook run is a fresh process, so the active pack is
+loaded each time:
 
-**Blast radius if fixed:** Resolver returns an opened `*os.File` (or
-an `audio.AudioSource`) instead of a path. Tracking observer gets the
-same file object. Eliminates the second stat at the cost of moving
-file-handle ownership up to the resolver. Test surface is moderate:
-every test that constructs a fake resolver would change shape.
+- Loading a JSON soundpack runs `os.Stat` on every mapped file
+  (`validateMappingFilesExist`), even though only one sound will play. The
+  shipped platform packs have 90–107 mappings.
+- Chain resolution then stats each candidate path until one exists
+  (`UnifiedSoundpackResolver.ResolveSound`), and playback opens the winning
+  file again (`FileSource.Reader` in `internal/audio/source.go`).
 
-**Original finding:** Chunk 14 analyst F7 (pre-existing, flagged for
-later).
+With a warm filesystem cache this is invisible. With a cold cache (first
+sound after boot, or a pack on a slow or network drive) it adds up.
+
+**Blast radius if fixed:** Check mapped files lazily during resolution
+instead of at load time, and have the resolver hand back an opened source
+rather than a path. The second change moves file-handle ownership up to the
+resolver and changes the shape of every fake resolver in the tests.
+
+**Original finding:** Chunk 14 analyst F7 (pre-existing, flagged for later).
 
 ---
 
-## Codex and Gemini install e2e variants not yet written
+## Install workflow tests cover only Claude and Codex
 
-**Location:** `internal/cli/install_command_e2e_test.go` — covers
-Claude install end-to-end; Codex and Gemini variants have no equivalent
-test.
+**Location:** `internal/cli/install_command_e2e_test.go` — has
+`TestRunInstallWorkflow_EndToEnd_NoDryRun` (Claude) and
+`TestRunInstallWorkflowCodexUsesCaptainHookSpecs` (Codex). Gemini, Qwen
+Code, and GitHub Copilot CLI have no equivalent.
 
-**Severity:** Low. The Codex and Gemini install paths are unit-tested via
-the agent registry and settings merge tests. The missing piece is a full
-install workflow test against `.codex/hooks.json` and `.gemini/settings.json`
-under `CLAUDIO_TEST_RECOGNIZE_GO_TEST`. If a schema drifts, unit tests should
-catch most of it, but the full install path is still covered only for Claude.
+**Severity:** Low. Those agents' install paths are unit-tested through the
+agent registry and settings-merge tests. What is missing is a full
+`runInstallWorkflow` run against `.gemini/settings.json`,
+`.qwen/settings.json`, and `.copilot/settings.json`. A schema drift would
+probably still be caught by the unit tests, but not certainly.
 
-**Blast radius if fixed:** One new test file paralleling the existing
-Claude e2e test, using Codex and Gemini targets. The plumbing exists.
+**Blast radius if fixed:** One table-driven test alongside the existing two,
+using the Gemini, Qwen, and Copilot agent targets. The plumbing exists.
 
 **Original finding:** Chunk 18 analyst F6.
