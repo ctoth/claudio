@@ -1638,7 +1638,7 @@ func TestParseCopilotNotificationSessionAlias(t *testing.T) {
 	}
 }
 
-func TestParseWithDefaultEventNormalizesCopilotSubagentStart(t *testing.T) {
+func TestParseHookEventWithDefaultNormalizesCopilotSubagentStart(t *testing.T) {
 	payload := []byte(`{
 		"sessionId": "copilot-session",
 		"cwd": "/tmp"
@@ -1646,7 +1646,7 @@ func TestParseWithDefaultEventNormalizesCopilotSubagentStart(t *testing.T) {
 
 	event, err := ParseHookEventWithDefault(payload, "subagentStart")
 	if err != nil {
-		t.Fatalf("ParseWithDefaultEvent returned error: %v", err)
+		t.Fatalf("ParseHookEventWithDefault returned error: %v", err)
 	}
 	if event.EventName != "SubagentStart" {
 		t.Errorf("event name = %q, want SubagentStart", event.EventName)
