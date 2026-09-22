@@ -441,6 +441,8 @@ func processHookInput(cmd *cobra.Command, cli *CLI, cfg *config.Config, inputDat
 	if err != nil {
 		cmd.PrintErrf("Error: %v\n", err)
 		slog.Error("hook JSON parsing failed", "error", err)
+		// Already reported above; keep Cobra from printing it a second time.
+		cmd.SilenceErrors = true
 		return fmt.Errorf("error parsing hook JSON: %w", err)
 	}
 
@@ -457,6 +459,11 @@ func processHookInput(cmd *cobra.Command, cli *CLI, cfg *config.Config, inputDat
 
 // runStdinModeE handles the default behavior of reading hook JSON from stdin
 func runStdinModeE(cmd *cobra.Command, args []string) error {
+	// Flags are parsed by now, so any error from here on is a runtime error,
+	// not a usage error. Cobra prints usage to the command's stdout, which
+	// agents read as hook output.
+	cmd.SilenceUsage = true
+
 	// Extract CLI instance from context
 	cli := cliFromContext(cmd.Context())
 	if cli == nil {
