@@ -42,6 +42,16 @@ Commands:
 - ` + "`claudio status`" + `: Show current settings
 `
 
+// Shipped content is never edited in place. When claudioCommandContent or
+// claudioSkillContent changes, append the previous text to its retired list so
+// files written by older releases are still recognized as claudio-owned and can
+// be upgraded or uninstalled. TestCommandArtifactShippedContentIsPinned
+// enforces this.
+var (
+	retiredClaudioCommandContents []string
+	retiredClaudioSkillContents   []string
+)
+
 type commandArtifactAgent string
 
 const (
@@ -56,6 +66,7 @@ type commandArtifact struct {
 	Directory       string
 	Path            string
 	Content         string
+	Retired         []string
 	RemoveDirectory bool
 }
 
@@ -208,6 +219,7 @@ func resolveCommandArtifacts(agent commandArtifactAgent) ([]commandArtifact, err
 			Directory: commandsDir,
 			Path:      filepath.Join(commandsDir, "claudio.md"),
 			Content:   claudioCommandContent,
+			Retired:   retiredClaudioCommandContents,
 		}}, nil
 	case commandArtifactAgentCodex:
 		skillDir := filepath.Join(homeDir, ".agents", "skills", "claudio")
@@ -217,6 +229,7 @@ func resolveCommandArtifacts(agent commandArtifactAgent) ([]commandArtifact, err
 			Directory:       skillDir,
 			Path:            filepath.Join(skillDir, "SKILL.md"),
 			Content:         claudioSkillContent,
+			Retired:         retiredClaudioSkillContents,
 			RemoveDirectory: true,
 		}}, nil
 	case commandArtifactAgentAntigravity:
@@ -229,6 +242,7 @@ func resolveCommandArtifacts(agent commandArtifactAgent) ([]commandArtifact, err
 				Directory:       agentSkillDir,
 				Path:            filepath.Join(agentSkillDir, "SKILL.md"),
 				Content:         claudioSkillContent,
+				Retired:         retiredClaudioSkillContents,
 				RemoveDirectory: true,
 			},
 			{
@@ -237,6 +251,7 @@ func resolveCommandArtifacts(agent commandArtifactAgent) ([]commandArtifact, err
 				Directory: cliSkillDir,
 				Path:      filepath.Join(cliSkillDir, "claudio.md"),
 				Content:   claudioSkillContent,
+				Retired:   retiredClaudioSkillContents,
 			},
 		}, nil
 	default:
@@ -252,6 +267,7 @@ func installCommandsToPath(commandsDir, claudioMdPath string) error {
 		Directory: commandsDir,
 		Path:      claudioMdPath,
 		Content:   claudioCommandContent,
+		Retired:   retiredClaudioCommandContents,
 	})
 }
 
@@ -266,11 +282,36 @@ func preflightCommandArtifacts(artifacts []commandArtifact) error {
 		if err != nil {
 			return fmt.Errorf("cannot inspect command artifact %s: %w", artifact.Path, err)
 		}
-		if !bytes.Equal(data, []byte(artifact.Content)) {
+		if !artifact.ownsContent(data) {
 			return fmt.Errorf("refusing to change existing customized command artifact: %s", artifact.Path)
 		}
 	}
 	return nil
+}
+
+// ownsContent reports whether data is content claudio itself wrote: the
+// current content or a retired release's, ignoring CRLF line-ending rewrites.
+func (a commandArtifact) ownsContent(data []byte) bool {
+	normalized := normalizeLineEndings(data)
+	if bytes.Equal(normalized, []byte(a.Content)) {
+		return true
+	}
+	for _, retired := range a.Retired {
+		if bytes.Equal(normalized, []byte(retired)) {
+			return true
+		}
+	}
+	return false
+}
+
+// isCurrentContent reports whether data already matches the current content,
+// ignoring CRLF line-ending rewrites.
+func (a commandArtifact) isCurrentContent(data []byte) bool {
+	return bytes.Equal(normalizeLineEndings(data), []byte(a.Content))
+}
+
+func normalizeLineEndings(data []byte) []byte {
+	return bytes.ReplaceAll(data, []byte("\r\n"), []byte("\n"))
 }
 
 func installCommandArtifact(artifact commandArtifact) error {
@@ -286,8 +327,12 @@ func installCommandArtifact(artifact commandArtifact) error {
 
 	existing, err := os.ReadFile(artifact.Path)
 	if err == nil {
-		if bytes.Equal(existing, []byte(artifact.Content)) {
+		if artifact.isCurrentContent(existing) {
 			return nil
+		}
+		if artifact.ownsContent(existing) {
+			slog.Info("upgrading command artifact written by an earlier release", "path", artifact.Path)
+			return replaceCommandArtifact(artifact)
 		}
 		return fmt.Errorf("refusing to overwrite existing or customized command artifact %s", artifact.Path)
 	}
@@ -313,6 +358,37 @@ func installCommandArtifact(artifact commandArtifact) error {
 	return nil
 }
 
+// replaceCommandArtifact swaps in the current content via a temp file and
+// rename, so an interrupted upgrade never leaves a truncated artifact behind.
+func replaceCommandArtifact(artifact commandArtifact) error {
+	tmp, err := os.CreateTemp(artifact.Directory, filepath.Base(artifact.Path)+".*.tmp")
+	if err != nil {
+		return fmt.Errorf("failed to create temporary command artifact: %w", err)
+	}
+	tmpPath := tmp.Name()
+	_, writeErr := tmp.WriteString(artifact.Content)
+	closeErr := tmp.Close()
+	if writeErr != nil || closeErr != nil {
+		_ = os.Remove(tmpPath)
+		if writeErr != nil {
+			return fmt.Errorf("failed to write command artifact: %w", writeErr)
+		}
+		return fmt.Errorf("failed to close command artifact: %w", closeErr)
+	}
+	if err := os.Chmod(tmpPath, 0644); err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("failed to set command artifact permissions: %w", err)
+	}
+	if err := os.Rename(tmpPath, artifact.Path); err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("failed to replace command artifact: %w", err)
+	}
+
+	slog.Debug("command artifact replaced successfully", "path", artifact.Path)
+
+	return nil
+}
+
 func uninstallCommandArtifact(artifact commandArtifact) (bool, error) {
 	slog.Debug("uninstalling command artifact", "agent", artifact.Agent, "file", artifact.Path)
 
@@ -323,7 +399,7 @@ func uninstallCommandArtifact(artifact commandArtifact) (bool, error) {
 		}
 		return false, fmt.Errorf("failed to inspect command artifact: %w", err)
 	}
-	if !bytes.Equal(existing, []byte(artifact.Content)) {
+	if !artifact.ownsContent(existing) {
 		return false, fmt.Errorf("refusing to remove customized command artifact %s", artifact.Path)
 	}
 	err = os.Remove(artifact.Path)
