@@ -39,12 +39,23 @@ func GenerateClaudioHooks(executablePath string) (interface{}, error) {
 	return GenerateClaudioHooksForAgent(executablePath, AgentClaude)
 }
 
+// powerShellSingleQuoteEscaper doubles every character PowerShell treats as a
+// single quote: the ASCII apostrophe and U+2018 through U+201B.
+var powerShellSingleQuoteEscaper = strings.NewReplacer(
+	"'", "''",
+	"\u2018", "\u2018\u2018",
+	"\u2019", "\u2019\u2019",
+	"\u201a", "\u201a\u201a",
+	"\u201b", "\u201b\u201b",
+)
+
 // GenerateCodexHookSpecs returns Claudio's desired Codex hooks in the shared
 // Captain Hook representation.
 func GenerateCodexHookSpecs(executablePath string) []captainhook.HookSpec {
 	executablePath = strings.ReplaceAll(executablePath, `\`, "/")
 	command := quoteCommandArg(executablePath)
-	commandWindows := `& "` + executablePath + `"`
+	// PowerShell double quotes expand dollar signs and backticks in paths.
+	commandWindows := "& '" + powerShellSingleQuoteEscaper.Replace(executablePath) + "'"
 
 	hooks := AgentCodex.EnabledHooks()
 	specs := make([]captainhook.HookSpec, 0, len(hooks))
