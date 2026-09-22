@@ -47,7 +47,7 @@ func TestGetDatabasePathUsesXDGCacheHome(t *testing.T) {
 // WAL sidecars, the first time the new path is resolved.
 func TestGetDatabasePathMigratesLegacyDatabase(t *testing.T) {
 	if runtime.GOOS != "windows" {
-		t.Skip("legacy and XDG cache roots only differ on Windows")
+		t.Skip("isolateCache models the Windows legacy layout")
 	}
 	xdgCache, legacyCache := isolateCache(t)
 
@@ -82,7 +82,7 @@ func TestGetDatabasePathMigratesLegacyDatabase(t *testing.T) {
 // An existing database at the new location is never overwritten.
 func TestGetDatabasePathKeepsExistingDatabase(t *testing.T) {
 	if runtime.GOOS != "windows" {
-		t.Skip("legacy and XDG cache roots only differ on Windows")
+		t.Skip("isolateCache models the Windows legacy layout")
 	}
 	xdgCache, legacyCache := isolateCache(t)
 	for dir, body := range map[string]string{
@@ -110,7 +110,7 @@ func TestGetDatabasePathKeepsExistingDatabase(t *testing.T) {
 // empty database), so it must not block migrating real legacy history.
 func TestGetDatabasePathMigratesOverEmptyPlaceholder(t *testing.T) {
 	if runtime.GOOS != "windows" {
-		t.Skip("legacy and XDG cache roots only differ on Windows")
+		t.Skip("isolateCache models the Windows legacy layout")
 	}
 	xdgCache, legacyCache := isolateCache(t)
 	legacyDir := filepath.Join(legacyCache, "claudio")

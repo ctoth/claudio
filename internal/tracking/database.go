@@ -301,7 +301,8 @@ func buildDSN(dbPath string) string {
 // <xdg.CacheHome>/claudio/sounds.db, the same cache root as the log file.
 //
 // Earlier releases used os.UserCacheDir, which differs from
-// xdg.CacheHome on Windows (%LOCALAPPDATA% vs %LOCALAPPDATA%\cache). A
+// xdg.CacheHome on Windows (%LOCALAPPDATA% vs %LOCALAPPDATA%\cache) and on
+// macOS when XDG_CACHE_HOME is set. A
 // database left there is moved to the new path the first time it is
 // resolved; if the move fails the legacy path keeps being used so history
 // is never lost.
