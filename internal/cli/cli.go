@@ -436,9 +436,8 @@ func processHookInput(cmd *cobra.Command, cli *CLI, cfg *config.Config, inputDat
 		return nil
 	}
 
-	parser := hooks.NewHookEventParser()
 	defaultEvent, _ := cmd.Flags().GetString("hook-event")
-	hookEvent, err := parser.ParseWithDefaultEvent(inputData, defaultEvent)
+	hookEvent, err := hooks.ParseHookEventWithDefault(inputData, defaultEvent)
 	if err != nil {
 		cmd.PrintErrf("Error: %v\n", err)
 		slog.Error("hook JSON parsing failed", "error", err)

@@ -126,9 +126,7 @@ func TestDetectNotificationTypeCoverage(t *testing.T) {
 }
 
 func TestParseCompatibilityAliasBranches(t *testing.T) {
-	parser := NewHookEventParser()
-
-	_, err := parser.Parse([]byte(`{
+	_, err := ParseHookEvent([]byte(`{
 		"session_id": "snake-session",
 		"cwd": "/tmp",
 		"hook_event_name": "Stop",
@@ -138,7 +136,7 @@ func TestParseCompatibilityAliasBranches(t *testing.T) {
 		t.Fatal("expected alias parse error for non-string sessionId")
 	}
 
-	event, err := parser.Parse([]byte(`{
+	event, err := ParseHookEvent([]byte(`{
 		"sessionId": "alias-session",
 		"transcriptPath": "/tmp/transcript.jsonl",
 		"cwd": "/tmp",
