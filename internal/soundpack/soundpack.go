@@ -331,8 +331,14 @@ func loadJSONSoundpackUntrusted(data []byte, baseDir string) (PathMapper, error)
 	}
 
 	// Resolve and validate each mapping value through the trust boundary.
+	// Empty values mean "not mapped yet" (soundpack init scaffolds them), so
+	// they are skipped rather than validated.
 	resolved := make(map[string]string, len(soundpack.Mappings))
 	for key, value := range soundpack.Mappings {
+		if value == "" {
+			slog.Debug("skipping empty mapping value", "key", key)
+			continue
+		}
 		abs, err := validateMappingValue(value, baseDir)
 		if err != nil {
 			slog.Error("mapping value rejected",
@@ -344,11 +350,7 @@ func loadJSONSoundpackUntrusted(data []byte, baseDir string) (PathMapper, error)
 		}
 		resolved[key] = abs
 	}
-	soundpack.Mappings = resolved
-
-	if err := validateMappingFilesExist(soundpack); err != nil {
-		return nil, err
-	}
+	soundpack.Mappings = pruneMissingMappingFiles(resolved)
 
 	slog.Debug("untrusted JSON soundpack parsed",
 		"name", soundpack.Name,
@@ -373,10 +375,7 @@ func loadJSONSoundpackTrusted(data []byte, basePaths []string) (PathMapper, erro
 	}
 
 	resolveTrustedRelativeMappings(&soundpack, basePaths)
-
-	if err := validateMappingFilesExist(soundpack); err != nil {
-		return nil, err
-	}
+	soundpack.Mappings = pruneMissingMappingFiles(soundpack.Mappings)
 
 	slog.Debug("trusted JSON soundpack parsed",
 		"name", soundpack.Name,
@@ -452,29 +451,36 @@ func validateJSONSoundpackBasics(soundpack JSONSoundpackFile) error {
 	return nil
 }
 
-// validateMappingFilesExist runs os.Stat on each mapping value and
-// returns an error if any referenced file is missing. The mappings-count
-// cap (validateJSONSoundpackBasics) bounds the number of stat calls.
-func validateMappingFilesExist(soundpack JSONSoundpackFile) error {
-	for relativePath, absolutePath := range soundpack.Mappings {
+// pruneMissingMappingFiles returns the mappings whose values reference an
+// existing regular file. Empty values and entries whose file is missing or
+// not a regular file are dropped with a warning, so one bad entry leaves its
+// key unmapped (its fallback chain continues) instead of failing the whole
+// pack. `soundpack validate` and `soundpack install` still reject broken
+// references. The mappings-count cap (validateJSONSoundpackBasics) bounds
+// the number of stat calls.
+func pruneMissingMappingFiles(mappings map[string]string) map[string]string {
+	kept := make(map[string]string, len(mappings))
+	for relativePath, absolutePath := range mappings {
+		if absolutePath == "" {
+			continue
+		}
 		info, err := os.Stat(absolutePath)
 		if err != nil {
-			slog.Error("sound file not found",
+			slog.Warn("dropping soundpack mapping: sound file not found",
 				"relative_path", relativePath,
 				"absolute_path", absolutePath,
 				"error", err)
-			return fmt.Errorf("sound file not found for mapping '%s' -> '%s': %w",
-				relativePath, absolutePath, err)
+			continue
 		}
 		if !info.Mode().IsRegular() {
-			return fmt.Errorf("sound mapping %q does not reference a regular file: %q", relativePath, absolutePath)
+			slog.Warn("dropping soundpack mapping: not a regular file",
+				"relative_path", relativePath,
+				"absolute_path", absolutePath)
+			continue
 		}
-
-		slog.Debug("sound file validation passed",
-			"relative_path", relativePath,
-			"absolute_path", absolutePath)
+		kept[relativePath] = absolutePath
 	}
-	return nil
+	return kept
 }
 
 // PeekJSONSoundpackFromBytes parses a JSON soundpack from byte data and
