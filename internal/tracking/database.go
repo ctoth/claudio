@@ -5,10 +5,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/adrg/xdg"
 	"modernc.org/sqlite"
 )
 
@@ -295,18 +297,89 @@ func buildDSN(dbPath string) string {
 	return "file:" + dbPath + "?" + pragmas
 }
 
-// GetDatabasePath returns the XDG-compliant path for the sounds database
+// GetDatabasePath returns the XDG-compliant path for the sounds database:
+// <xdg.CacheHome>/claudio/sounds.db, the same cache root as the log file.
+//
+// Earlier releases used os.UserCacheDir, which differs from
+// xdg.CacheHome on Windows (%LOCALAPPDATA% vs %LOCALAPPDATA%\cache). A
+// database left there is moved to the new path the first time it is
+// resolved; if the move fails the legacy path keeps being used so history
+// is never lost.
 func GetDatabasePath() (string, error) {
-	cacheDir, err := os.UserCacheDir()
-	if err != nil {
-		// Fallback to current directory if XDG cache dir is not available
-		cacheDir = "."
-	}
-
-	dbDir := filepath.Join(cacheDir, "claudio")
+	dbDir := filepath.Join(xdg.CacheHome, "claudio")
 	if err := os.MkdirAll(dbDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create database directory: %w", err)
 	}
+	dbPath := filepath.Join(dbDir, "sounds.db")
 
-	return filepath.Join(dbDir, "sounds.db"), nil
+	if legacyPath, ok := legacyDatabasePath(dbPath); ok {
+		if err := migrateLegacyDatabase(legacyPath, dbPath); err != nil {
+			slog.Warn("could not move sound tracking database to the XDG cache; using legacy path",
+				"legacy_path", legacyPath, "path", dbPath, "error", err)
+			return legacyPath, nil
+		}
+		slog.Info("moved sound tracking database to the XDG cache", "from", legacyPath, "to", dbPath)
+	}
+
+	return dbPath, nil
+}
+
+// legacyDatabasePath reports the pre-XDG database location when it holds a
+// database and dbPath does not. A zero-length dbPath with no WAL holds no
+// data and counts as absent.
+func legacyDatabasePath(dbPath string) (string, bool) {
+	cacheDir, err := os.UserCacheDir()
+	if err != nil {
+		return "", false
+	}
+	legacyPath := filepath.Join(cacheDir, "claudio", "sounds.db")
+	if filepath.Clean(legacyPath) == filepath.Clean(dbPath) {
+		return "", false
+	}
+	if !databaseAbsentOrEmpty(dbPath) {
+		return "", false
+	}
+	if info, err := os.Stat(legacyPath); err != nil || !info.Mode().IsRegular() {
+		return "", false
+	}
+	return legacyPath, true
+}
+
+func databaseAbsentOrEmpty(dbPath string) bool {
+	info, err := os.Stat(dbPath)
+	if os.IsNotExist(err) {
+		return true
+	}
+	if err != nil || !info.Mode().IsRegular() || info.Size() != 0 {
+		return false
+	}
+	_, walErr := os.Stat(dbPath + "-wal")
+	return os.IsNotExist(walErr)
+}
+
+// migrateLegacyDatabase moves the database and any SQLite WAL sidecars. On
+// failure, sidecars already moved are moved back so the legacy database
+// stays complete and is selected again on the next run.
+func migrateLegacyDatabase(legacyPath, dbPath string) error {
+	var moved []string
+	rollback := func() {
+		for _, suffix := range moved {
+			_ = os.Rename(dbPath+suffix, legacyPath+suffix)
+		}
+	}
+	for _, suffix := range []string{"-wal", "-shm"} {
+		if _, err := os.Stat(legacyPath + suffix); err != nil {
+			continue
+		}
+		if err := os.Rename(legacyPath+suffix, dbPath+suffix); err != nil {
+			rollback()
+			return err
+		}
+		moved = append(moved, suffix)
+	}
+	if err := os.Rename(legacyPath, dbPath); err != nil {
+		rollback()
+		return err
+	}
+	return nil
 }

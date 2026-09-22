@@ -225,7 +225,11 @@ Default database path:
 | --- | --- |
 | Linux, WSL | `~/.cache/claudio/sounds.db` (honors `XDG_CACHE_HOME`) |
 | macOS | `~/Library/Caches/claudio/sounds.db` |
-| Windows | `%LOCALAPPDATA%\claudio\sounds.db` |
+| Windows | `%LOCALAPPDATA%\cache\claudio\sounds.db` |
+
+The database sits next to the `logs` directory. Earlier releases kept it
+at `%LOCALAPPDATA%\claudio\sounds.db` on Windows; Claudio moves an existing
+database from there the first time it runs.
 
 Set `sound_tracking.database_path` or `CLAUDIO_SOUND_TRACKING_DB` to use a
 different file.
