@@ -24,6 +24,7 @@ release tags and current checkout history.
   whole pack. A `soundpack init` template now installs, and a missing
   system sound no longer disables the rest of a platform pack.
 - Treat `CODEX_HOME` as the only Codex global hooks path when it is set.
+- List every accepted value in `analyze --category` and `--preset` help.
 - Report an unavailable audio backend in `claudio status` and before a hook
   worker detaches, instead of failing silently in the background.
 - Stop waiting on playback when the output device stalls (suspended sink,
