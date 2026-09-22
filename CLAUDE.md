@@ -329,6 +329,7 @@ TDD: Short description of what was implemented
 ## Important File Locations
 
 - Hook Logger: `cmd/hook-logger/` — captures real Claude Code hook JSON for debugging
+- Architectural Debt Log: `docs/architectural-debt.md` — known shape problems left for scoped fixes (excluded from the docs site)
 - Embedded Soundpacks: `internal/config/` (windows.json, wsl.json, darwin.json, linux.json, plus `embedded_sounds/*.wav`)
 - User-installed soundpacks: `~/.local/share/claudio/soundpacks/<id>/` (XDG data dir; Windows uses Windows-native XDG mapping)
 - Log Files: `~/.cache/claudio/logs/claudio.log` — default file logging location
