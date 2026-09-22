@@ -20,6 +20,9 @@ release tags and current checkout history.
 - Read config files on top of the defaults. A partial `config.json` that
   left out `enabled` muted Claudio, one without `default_soundpack` made
   every hook fail, and one without `file_logging` disabled file logging.
+- Skip empty and missing entries in JSON soundpacks instead of failing the
+  whole pack. A `soundpack init` template now installs, and a missing
+  system sound no longer disables the rest of a platform pack.
 - Report an unavailable audio backend in `claudio status` and before a hook
   worker detaches, instead of failing silently in the background.
 - Stop waiting on playback when the output device stalls (suspended sink,
