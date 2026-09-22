@@ -41,10 +41,11 @@ func getBytesPerSample(format PCMFormat) (int, error) {
 }
 
 // newPCMReader converts bounded decoded PCM to Oto's process-wide format.
-// Resampling is streamed through fixed buffers rather than allocating another
+// Mono is duplicated and more than two channels are averaged, since the
+// device is stereo and channel layouts differ by container. Resampling is streamed through fixed buffers rather than allocating another
 // full sound. Beep supplies only sample-rate conversion, not device ownership.
 func newPCMReader(ctx context.Context, data *AudioData) (io.Reader, error) {
-	if data == nil || data.SampleRate == 0 || data.Channels < 1 || data.Channels > 2 {
+	if data == nil || data.SampleRate == 0 || data.Channels < 1 {
 		return nil, ErrInvalidData
 	}
 	width, err := getBytesPerSample(data.Format)
@@ -74,17 +75,28 @@ func (s *pcmStream) Stream(dst [][2]float64) (int, bool) {
 	}
 	frames := min(len(dst), (len(s.data.Samples)-s.offset)/(s.width*int(s.data.Channels)))
 	for i := 0; i < frames; i++ {
-		left := s.sample()
-		right := left
-		if s.data.Channels == 2 {
-			right = s.sample()
-		}
-		dst[i] = [2]float64{left, right}
+		dst[i] = s.frame()
 	}
 	return frames, frames > 0
 }
 
 func (s *pcmStream) Err() error { return s.err }
+
+func (s *pcmStream) frame() [2]float64 {
+	switch s.data.Channels {
+	case 1:
+		x := s.sample()
+		return [2]float64{x, x}
+	case 2:
+		return [2]float64{s.sample(), s.sample()}
+	}
+	var sum float64
+	for range s.data.Channels {
+		sum += s.sample()
+	}
+	x := sum / float64(s.data.Channels)
+	return [2]float64{x, x}
+}
 
 func (s *pcmStream) sample() float64 {
 	b := s.data.Samples[s.offset : s.offset+s.width]
