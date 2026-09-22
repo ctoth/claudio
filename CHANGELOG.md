@@ -23,6 +23,8 @@ release tags and current checkout history.
 - Skip empty and missing entries in JSON soundpacks instead of failing the
   whole pack. A `soundpack init` template now installs, and a missing
   system sound no longer disables the rest of a platform pack.
+||||||| parent of 7d4f1b2 (TDD: Treat CODEX_HOME as the only Codex global hooks path)
+- Treat `CODEX_HOME` as the only Codex global hooks path when it is set.
 - Report an unavailable audio backend in `claudio status` and before a hook
   worker detaches, instead of failing silently in the background.
 - Stop waiting on playback when the output device stalls (suspended sink,

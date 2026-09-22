@@ -3,6 +3,7 @@ package install
 import (
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // FindCodexHooksPaths returns candidate ~/.codex/hooks.json paths for the scope, in priority order.
@@ -21,12 +22,14 @@ func FindCodexHooksPaths(scope string) ([]string, error) {
 }
 
 func findCodexUserScopePaths() []string {
-	var paths []string
-
-	codexHome := os.Getenv("CODEX_HOME")
-	if codexHome != "" {
-		paths = append(paths, filepath.Join(codexHome, "hooks.json"))
+	// Codex reads its configuration only from CODEX_HOME when it is set, so
+	// that is the only candidate: falling back to ~/.codex would write hooks
+	// Codex never loads (mirrors CLAUDE_CONFIG_DIR handling for Claude).
+	if codexHome := strings.TrimSpace(os.Getenv("CODEX_HOME")); codexHome != "" {
+		return []string{filepath.Join(codexHome, "hooks.json")}
 	}
+
+	var paths []string
 
 	homeDir := getHomeDirectory()
 	if homeDir != "" {
