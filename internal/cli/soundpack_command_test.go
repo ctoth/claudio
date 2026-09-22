@@ -3,7 +3,9 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -637,6 +639,54 @@ func TestSoundpackValidate_DirectorySoundpackRejectsSymlinkedAudio(t *testing.T)
 	}
 	if !strings.Contains(err.Error(), "symlinked audio file") {
 		t.Errorf("expected symlink rejection error, got: %v", err)
+	}
+}
+
+func TestSoundpackValidate_DirectorySoundpackSkipsGitMetadata(t *testing.T) {
+	packDir := filepath.Join(t.TempDir(), "git-pack")
+	gitObjects := filepath.Join(packDir, ".git", "objects")
+	if err := os.MkdirAll(gitObjects, 0755); err != nil {
+		t.Fatalf("failed to create .git dir: %v", err)
+	}
+	createDummyWAV(t, filepath.Join(packDir, "default.wav"))
+	createDummyWAV(t, filepath.Join(gitObjects, "stray.wav"))
+
+	result, err := validateDirectorySoundpack(packDir)
+	if err != nil {
+		t.Fatalf("validateDirectorySoundpack returned error: %v", err)
+	}
+	if _, ok := result.MappedKeys["default.wav"]; !ok {
+		t.Errorf("expected default.wav to be mapped, got %v", result.MappedKeys)
+	}
+	for key := range result.MappedKeys {
+		if strings.HasPrefix(key, ".git/") {
+			t.Errorf("expected .git contents to be skipped, got mapped key %q", key)
+		}
+	}
+}
+
+func TestDirectorySoundpackWalkFuncSkipsVanishedEntries(t *testing.T) {
+	packDir := t.TempDir()
+	found := make(map[string]string)
+	walkFn := newDirectorySoundpackWalkFunc(packDir, found)
+
+	vanished := filepath.Join(packDir, "maintenance.lock")
+	notExist := &fs.PathError{Op: "lstat", Path: vanished, Err: fs.ErrNotExist}
+	if err := walkFn(vanished, nil, notExist); err != nil {
+		t.Fatalf("expected vanished entry to be skipped, got error: %v", err)
+	}
+	if len(found) != 0 {
+		t.Errorf("expected no mapped files, got %v", found)
+	}
+
+	missingRoot := &fs.PathError{Op: "lstat", Path: packDir, Err: fs.ErrNotExist}
+	if err := walkFn(packDir, nil, missingRoot); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("expected missing soundpack root to be an error, got: %v", err)
+	}
+
+	permission := &fs.PathError{Op: "open", Path: packDir, Err: fs.ErrPermission}
+	if err := walkFn(packDir, nil, permission); !errors.Is(err, fs.ErrPermission) {
+		t.Errorf("expected other walk errors to propagate, got: %v", err)
 	}
 }
 
