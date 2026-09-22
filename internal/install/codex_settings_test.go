@@ -138,3 +138,31 @@ func TestFindBestCodexPathInvalidScope(t *testing.T) {
 		t.Error("expected error for invalid scope")
 	}
 }
+
+// Codex reads its config only from CODEX_HOME when that is set, so an
+// existing ~/.codex/hooks.json must not win over a not-yet-created
+// $CODEX_HOME/hooks.json.
+func TestFindBestCodexPathPrefersCodexHomeOverExistingDefault(t *testing.T) {
+	home := t.TempDir()
+	codexHome := filepath.Join(t.TempDir(), "codex-home")
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("CODEX_HOME", codexHome)
+
+	legacy := filepath.Join(home, ".codex", "hooks.json")
+	if err := os.MkdirAll(filepath.Dir(legacy), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(legacy, []byte(`{}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := FindBestCodexPath("global")
+	if err != nil {
+		t.Fatalf("FindBestCodexPath: %v", err)
+	}
+	want := filepath.Join(codexHome, "hooks.json")
+	if got != want {
+		t.Errorf("FindBestCodexPath = %q, want %q (CODEX_HOME must be authoritative)", got, want)
+	}
+}
