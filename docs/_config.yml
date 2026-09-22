@@ -41,3 +41,5 @@ exclude:
   - Gemfile
   - Gemfile.lock
   - vendor/
+  # Contributor notes, not a user-facing page
+  - architectural-debt.md
