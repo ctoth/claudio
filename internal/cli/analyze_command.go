@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"slices"
+	"strings"
 	"time"
 
 	"claudio.click/internal/tracking"
@@ -86,9 +88,9 @@ Examples:
 	// Add flags - now consistent with analyze usage
 	missingCmd.Flags().IntVar(&days, "days", 7, "Number of days to analyze (0 = all time)")
 	missingCmd.Flags().StringVar(&tool, "tool", "", "Filter by specific tool name")
-	missingCmd.Flags().StringVar(&category, "category", "", "Filter by category (success, error, loading, interactive)")
+	missingCmd.Flags().StringVar(&category, "category", "", "Filter by category ("+strings.Join(analyzeCategories, ", ")+")")
 	missingCmd.Flags().IntVar(&limit, "limit", 20, "Maximum number of results to show")
-	missingCmd.Flags().StringVar(&preset, "preset", "", "Date preset (today, yesterday, last-week, this-month, all-time)")
+	missingCmd.Flags().StringVar(&preset, "preset", "", "Date preset ("+strings.Join(tracking.DatePresets, ", ")+")")
 
 	return missingCmd
 }
@@ -468,9 +470,9 @@ Examples:
 	// Add flags
 	usageCmd.Flags().IntVar(&days, "days", 7, "Number of days to analyze (0 = all time)")
 	usageCmd.Flags().StringVar(&tool, "tool", "", "Filter by specific tool name")
-	usageCmd.Flags().StringVar(&category, "category", "", "Filter by category (success, error, loading, interactive)")
+	usageCmd.Flags().StringVar(&category, "category", "", "Filter by category ("+strings.Join(analyzeCategories, ", ")+")")
 	usageCmd.Flags().IntVar(&limit, "limit", 20, "Maximum number of results to show")
-	usageCmd.Flags().StringVar(&preset, "preset", "", "Date preset (today, yesterday, last-week, this-month, all-time)")
+	usageCmd.Flags().StringVar(&preset, "preset", "", "Date preset ("+strings.Join(tracking.DatePresets, ", ")+")")
 	usageCmd.Flags().BoolVar(&showChains, "show-chains", false, "Show per-chain-type statistics")
 	usageCmd.Flags().BoolVar(&showSummary, "show-summary", false, "Show usage summary statistics")
 
@@ -646,13 +648,12 @@ func outputUsageStatistics(w io.Writer, usage []tracking.SoundUsage, filter trac
 
 	return nil
 }
+// analyzeCategories lists the sound categories --category accepts.
+var analyzeCategories = []string{"loading", "success", "error", "interactive", "completion", "system"}
+
 func validateAnalyzeFilterValues(category, preset string) error {
-	if category != "" {
-		switch category {
-		case "loading", "success", "error", "interactive", "completion", "system":
-		default:
-			return fmt.Errorf("invalid category %q: must be loading, success, error, interactive, completion, or system", category)
-		}
+	if category != "" && !slices.Contains(analyzeCategories, category) {
+		return fmt.Errorf("invalid category %q: must be one of %s", category, strings.Join(analyzeCategories, ", "))
 	}
 	if preset != "" {
 		if _, _, err := tracking.ParseDatePreset(preset, time.Now()); err != nil {
