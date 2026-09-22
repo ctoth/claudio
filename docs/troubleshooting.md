@@ -37,6 +37,24 @@ claudio --version
 
 ## Hooks Installed But No Sound
 
+Native playback uses the `oto` backend and does not require cgo. A config that
+still selects the former `malgo` backend is treated as `oto`, with a warning in
+the log file; change it to `oto` or `auto`.
+An `available` backend in `claudio status` means its implementation or executable
+is present; it does not test the audio device or guarantee audible playback.
+
+On Linux, check that the PulseAudio server is reachable (set `PULSE_SERVER`
+when needed), or that the ALSA runtime library `libasound.so.2` is installed.
+See [Installation](installation.md) for runtime requirements.
+
+An enabled hook with an unavailable backend now prints a diagnostic and exits
+nonzero before starting a detached worker. Muted hooks remain quiet.
+
+If the device stops accepting audio without reporting an error (a suspended
+PulseAudio sink, a disconnected Bluetooth or USB output), playback is abandoned
+once it overruns the sound by about two seconds, and device startup gives up
+after five seconds. The log file then records `audio device stalled`.
+
 Check that Claudio is not muted:
 
 ```bash

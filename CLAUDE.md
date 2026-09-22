@@ -166,7 +166,8 @@ rm -f claudio
        category, default.
 
 3. **Audio System** (`internal/audio/`)
-   - Uses malgo (miniaudio Go wrapper) for cross-platform audio
+   - Uses Oto for compiler-free native audio on Windows, macOS, and Linux
+   - One process-wide 48 kHz stereo output; decoder PCM is streamed through Beep's resampler
    - Memory-based playback with pre-loaded sounds
    - Supports WAV, MP3, and AIFF decoding with comprehensive format detection
    - AIFF support includes 16/24/32-bit depths, mono/stereo, and magic byte detection

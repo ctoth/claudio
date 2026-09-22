@@ -81,25 +81,25 @@ func TestDetectOptimalBackend(t *testing.T) {
 			name:              "WSL with no audio commands available",
 			isWSL:             true,
 			availableCommands: []string{},
-			expectedBackend:   "malgo", // Fallback to malgo even in WSL
+			expectedBackend:   "oto", // Fallback to oto even in WSL
 		},
 		{
 			name:              "Native Linux with paplay",
 			isWSL:             false,
 			availableCommands: []string{"paplay"},
-			expectedBackend:   "malgo", // Prefer malgo on native Linux
+			expectedBackend:   "oto", // Prefer oto on native Linux
 		},
 		{
 			name:              "Native Linux without audio commands",
 			isWSL:             false,
 			availableCommands: []string{},
-			expectedBackend:   "malgo", // Default to malgo
+			expectedBackend:   "oto", // Default to oto
 		},
 		{
 			name:              "macOS-like environment",
 			isWSL:             false,
 			availableCommands: []string{"afplay"},
-			expectedBackend:   "malgo", // Still prefer malgo on native systems
+			expectedBackend:   "oto", // Still prefer oto on native systems
 		},
 	}
 
@@ -256,7 +256,7 @@ func TestRealSystemIntegration(t *testing.T) {
 
 		// Should return one of our known backend types
 		validBackends := map[string]bool{
-			"malgo":          true,
+			"oto":            true,
 			"system_command": true,
 		}
 

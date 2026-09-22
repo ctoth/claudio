@@ -1,14 +1,10 @@
-//go:build cgo
-
-package malgo
+package native
 
 import (
 	"bytes"
 	"context"
 	"fmt"
 	"testing"
-
-	"github.com/gen2brain/malgo"
 )
 
 func TestAiffDecoderInterface(t *testing.T) {
@@ -110,7 +106,7 @@ func TestAiffDecoderDecodeValidData(t *testing.T) {
 		t.Errorf("expected 2 channels, got %d", audioData.Channels)
 	}
 
-	if audioData.Format != malgo.FormatS16 {
+	if audioData.Format != FormatS16 {
 		t.Errorf("expected format S16, got %v", audioData.Format)
 	}
 
@@ -130,12 +126,12 @@ func TestAiffDecoderDifferentBitDepths(t *testing.T) {
 
 	testCases := []struct {
 		bitDepth       int
-		expectedFormat malgo.FormatType
+		expectedFormat PCMFormat
 		bytesPerSample int
 	}{
-		{16, malgo.FormatS16, 2},
-		{24, malgo.FormatS24, 3},
-		{32, malgo.FormatS32, 4},
+		{16, FormatS16, 2},
+		{24, FormatS24, 3},
+		{32, FormatS32, 4},
 	}
 
 	for _, tc := range testCases {

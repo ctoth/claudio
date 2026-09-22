@@ -1,5 +1,3 @@
-//go:build cgo
-
 package cli
 
 import (
@@ -8,7 +6,7 @@ import (
 	"testing"
 
 	"claudio.click/internal/audio"
-	malgobackend "claudio.click/internal/audio/malgo"
+	nativebackend "claudio.click/internal/audio/native"
 )
 
 // TestCLIBackendIntegration tests that CLI properly integrates with audio backend system
@@ -35,10 +33,10 @@ func TestCLIInitializeAudioSystemWithBackend(t *testing.T) {
 			expectedBackendType: "", // Will depend on system
 		},
 		{
-			name:                "explicit malgo backend",
-			audioBackend:        "malgo",
+			name:                "explicit oto backend",
+			audioBackend:        "oto",
 			expectError:         false,
-			expectedBackendType: "*malgo.Backend",
+			expectedBackendType: "*native.Backend",
 		},
 		{
 			name:                "explicit system_command backend",
@@ -102,9 +100,9 @@ func TestCLIPlaySoundWithBackend(t *testing.T) {
 	cli := NewCLI()
 	cli.initializeSystems()
 
-	// Initialize with malgo backend for testing
+	// Initialize with oto backend for testing
 	cfg := cli.configManager.GetDefaultConfig()
-	cfg.AudioBackend = "malgo"
+	cfg.AudioBackend = "oto"
 
 	// Need to initialize soundpack resolver for playSoundWithBackend to work
 	err := initializeAudioSystem(nil, cli, cfg)
@@ -132,9 +130,9 @@ func TestCLIBackendFactoryIntegration(t *testing.T) {
 	}
 
 	// Test backend creation via package-level NewBackend
-	backend, err := audio.NewBackend("malgo")
+	backend, err := audio.NewBackend("oto")
 	if err != nil {
-		t.Errorf("failed to create malgo backend: %v", err)
+		t.Errorf("failed to create oto backend: %v", err)
 	}
 	if backend == nil {
 		t.Error("created backend should not be nil")
@@ -151,7 +149,7 @@ func TestCLIBackendLifecycleManagement(t *testing.T) {
 	cli.initializeSystems()
 
 	cfg := cli.configManager.GetDefaultConfig()
-	cfg.AudioBackend = "malgo"
+	cfg.AudioBackend = "oto"
 
 	// Initialize backend
 	err := cli.initializeAudioSystemWithBackend(cfg)
@@ -181,7 +179,7 @@ func TestCLIVolumeControlWithBackend(t *testing.T) {
 	cli.initializeSystems()
 
 	cfg := cli.configManager.GetDefaultConfig()
-	cfg.AudioBackend = "malgo"
+	cfg.AudioBackend = "oto"
 	testVolume := 0.7
 	cfg.Volume = &testVolume
 
@@ -224,7 +222,7 @@ func TestCLIConfigBackendValidation(t *testing.T) {
 	}
 
 	// Test valid backends pass validation
-	validBackends := []string{"auto", "system_command", "malgo"}
+	validBackends := []string{"auto", "system_command", "oto"}
 	for _, backend := range validBackends {
 		cfg.AudioBackend = backend
 		err = cli.configManager.ValidateConfig(cfg)
@@ -245,8 +243,8 @@ func getTypeName(v interface{}) string {
 func getType(v interface{}) string {
 	// This is a simple type name extractor for testing
 	switch v.(type) {
-	case *malgobackend.Backend:
-		return "*malgo.Backend"
+	case *nativebackend.Backend:
+		return "*native.Backend"
 	case *audio.SystemCommandBackend:
 		return "*audio.SystemCommandBackend"
 	default:
@@ -254,15 +252,14 @@ func getType(v interface{}) string {
 	}
 }
 
-
 // TestCLIAIFFSupportViaUnifiedSystem verifies AIFF support works through CLI
 func TestCLIAIFFSupportViaUnifiedSystem(t *testing.T) {
 	cli := NewCLI()
 	cli.initializeSystems()
 
-	// Initialize with malgo backend for testing
+	// Initialize with oto backend for testing
 	cfg := cli.configManager.GetDefaultConfig()
-	cfg.AudioBackend = "malgo"
+	cfg.AudioBackend = "oto"
 
 	err := cli.initializeAudioSystemWithBackend(cfg)
 	if err != nil {
@@ -271,9 +268,9 @@ func TestCLIAIFFSupportViaUnifiedSystem(t *testing.T) {
 	defer cli.audioBackend.Close()
 
 	// Verify that the CLI's audio backend supports AIFF
-	malgoBackend, ok := cli.audioBackend.(*malgobackend.Backend)
+	nativeBackend, ok := cli.audioBackend.(*nativebackend.Backend)
 	if !ok {
-		t.Fatalf("expected *malgo.Backend, got %T", cli.audioBackend)
+		t.Fatalf("expected *native.Backend, got %T", cli.audioBackend)
 	}
 
 	// Access the registry through the backend (this tests our unified system)
@@ -285,7 +282,7 @@ func TestCLIAIFFSupportViaUnifiedSystem(t *testing.T) {
 	ctx := context.Background()
 	source := audio.NewFileSource("/test/nonexistent.aiff")
 	
-	err = malgoBackend.Play(ctx, source)
+	err = nativeBackend.Play(ctx, source)
 	if err != nil {
 		// We expect file not found error, NOT unsupported format error
 		errorMsg := strings.ToLower(err.Error())

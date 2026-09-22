@@ -152,8 +152,7 @@ func (scb *SystemCommandBackend) Play(ctx context.Context, source AudioSource) e
 
 // loadVolume returns the current volume under RLock. The subprocess fork-exec
 // dominates the wall-clock cost of playFile, so a mutex here is a rounding
-// error; we don't need atomic loads on this code path. (The malgo realtime
-// callback in playback.go is a separate site with separate constraints.)
+// error; we don't need atomic loads on this code path.
 func (scb *SystemCommandBackend) loadVolume() float32 {
 	scb.mutex.RLock()
 	defer scb.mutex.RUnlock()

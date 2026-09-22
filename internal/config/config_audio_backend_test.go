@@ -1,10 +1,14 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
+	"log/slog"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/spf13/afero"
 )
 
 // TestConfigAudioBackendField tests that AudioBackend field is properly handled
@@ -40,8 +44,8 @@ func TestConfigAudioBackendValidation(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name:        "valid malgo backend",
-			backend:     "malgo",
+			name:        "valid oto backend",
+			backend:     "oto",
 			expectError: false,
 		},
 		{
@@ -131,9 +135,9 @@ func TestConfigAudioBackendEnvironmentOverride(t *testing.T) {
 			expectedBackend: "system_command",
 		},
 		{
-			name:            "malgo backend via environment",
-			envValue:        "malgo",
-			expectedBackend: "malgo",
+			name:            "oto backend via environment",
+			envValue:        "oto",
+			expectedBackend: "oto",
 		},
 		{
 			name:            "empty environment keeps original",
@@ -205,7 +209,7 @@ func TestGetSupportedAudioBackends(t *testing.T) {
 
 	supported := mgr.GetSupportedAudioBackends()
 
-	expectedBackends := []string{"auto", "system_command", "malgo", "fake"}
+	expectedBackends := []string{"auto", "system_command", "oto", "fake"}
 	if len(supported) != len(expectedBackends) {
 		t.Errorf("expected %d supported backends, got %d", len(expectedBackends), len(supported))
 	}
@@ -227,7 +231,7 @@ func TestGetSupportedAudioBackends(t *testing.T) {
 func TestIsValidAudioBackend(t *testing.T) {
 	mgr := NewConfigManager()
 
-	validBackends := []string{"auto", "system_command", "malgo", "fake", ""}
+	validBackends := []string{"auto", "system_command", "oto", "fake", ""}
 	for _, backend := range validBackends {
 		if !mgr.IsValidAudioBackend(backend) {
 			t.Errorf("backend '%s' should be valid", backend)
@@ -249,4 +253,59 @@ func containsJSONField(jsonStr, field string) bool {
 
 func containsJSONValue(jsonStr, value string) bool {
 	return strings.Contains(jsonStr, `"`+value+`"`)
+}
+
+// captureWarnings routes the default slog logger into a buffer for one test.
+func captureWarnings(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn})))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+	return &buf
+}
+
+// Configs written before the Oto migration name the removed malgo backend.
+// Rejecting them would fail every hook after an upgrade, so load them as oto.
+func TestLoadFromFileMigratesLegacyMalgoBackend(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	if err := afero.WriteFile(fs, "/cfg/config.json", []byte(`{"enabled":true,"default_soundpack":"default","audio_backend":"malgo"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	logs := captureWarnings(t)
+
+	cfg, err := NewConfigManagerWithFilesystem(fs).LoadFromFile("/cfg/config.json")
+	if err != nil {
+		t.Fatalf("legacy malgo config rejected: %v", err)
+	}
+	if cfg.AudioBackend != "oto" {
+		t.Fatalf("audio backend = %q, want oto", cfg.AudioBackend)
+	}
+	if !strings.Contains(logs.String(), "malgo") || !strings.Contains(logs.String(), "/cfg/config.json") {
+		t.Fatalf("no deprecation warning naming the value and file: %q", logs.String())
+	}
+}
+
+func TestEnvironmentOverrideMigratesLegacyMalgoBackend(t *testing.T) {
+	t.Setenv("CLAUDIO_AUDIO_BACKEND", "malgo")
+	logs := captureWarnings(t)
+	mgr := NewConfigManager()
+
+	result := mgr.ApplyEnvironmentOverrides(mgr.GetDefaultConfig())
+	if result.AudioBackend != "oto" {
+		t.Fatalf("audio backend = %q, want oto", result.AudioBackend)
+	}
+	if !strings.Contains(logs.String(), "malgo") {
+		t.Fatalf("no deprecation warning: %q", logs.String())
+	}
+}
+
+// The alias is read-only: nothing new should be written with the old name.
+func TestLegacyMalgoBackendIsNotAdvertised(t *testing.T) {
+	mgr := NewConfigManager()
+	for _, b := range mgr.GetSupportedAudioBackends() {
+		if b == "malgo" {
+			t.Fatal("malgo listed as a supported backend")
+		}
+	}
 }

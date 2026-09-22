@@ -7,6 +7,9 @@ on:
 permissions:
   contents: write
 
+env:
+  CGO_ENABLED: "0"
+
 jobs:
   version-check:
     runs-on: ubuntu-latest
@@ -16,9 +19,6 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-
-      - name: Install ALSA headers
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
 
       - name: Verify tag matches binary version
         shell: bash
@@ -55,10 +55,6 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Install ALSA headers
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
-
       - name: Vet
         run: go vet ./...
 
@@ -69,7 +65,6 @@ jobs:
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: "1"
         run: go build -ldflags "-s -w" -o claudio-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }} ./cmd/claudio
 
       - name: Upload artifact

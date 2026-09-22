@@ -1,13 +1,9 @@
-//go:build cgo
-
-package malgo
+package native
 
 import (
 	"bytes"
 	"context"
 	"testing"
-
-	"github.com/gen2brain/malgo"
 )
 
 func TestMp3DecoderInterface(t *testing.T) {
@@ -127,7 +123,7 @@ func TestMp3DecoderDecodeValidData(t *testing.T) {
 				t.Error("expected non-zero sample rate")
 			}
 
-			if data.Format != malgo.FormatS16 {
+			if data.Format != FormatS16 {
 				t.Errorf("expected FormatS16, got %v", data.Format)
 			}
 		}

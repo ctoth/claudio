@@ -1,5 +1,3 @@
-//go:build cgo
-
 package integration
 
 import (
@@ -9,6 +7,7 @@ import (
 	"time"
 
 	"claudio.click/internal/audio"
+	_ "claudio.click/internal/audio/native"
 )
 
 // TestEndToEndAIFFSupport validates the complete user journey for AIFF support
@@ -16,12 +15,12 @@ func TestEndToEndAIFFSupport(t *testing.T) {
 	// This test validates the complete unified audio system from user perspective
 	
 	// Step 1: Verify NewBackend supports AIFF through all backends
-	// Test MalgoBackend (primary backend for AIFF support)
-	malgoBackend, err := audio.NewBackend("malgo")
+	// Test OtoBackend (primary backend for AIFF support)
+	nativeBackend, err := audio.NewBackend("oto")
 	if err != nil {
-		t.Fatalf("Failed to create malgo backend: %v", err)
+		t.Fatalf("Failed to create oto backend: %v", err)
 	}
-	defer malgoBackend.Close()
+	defer nativeBackend.Close()
 	
 	// Step 2: Verify direct backend usage (CLI integration tested elsewhere)
 	// The CLI layer is tested in internal/cli package tests
@@ -42,7 +41,7 @@ func TestEndToEndAIFFSupport(t *testing.T) {
 		t.Run("aiff_path_"+path, func(t *testing.T) {
 			source := audio.NewFileSource(path)
 			
-			err := malgoBackend.Play(ctx, source)
+			err := nativeBackend.Play(ctx, source)
 			if err != nil {
 				// Verify we get file not found errors, NOT format unsupported errors
 				errorMsg := strings.ToLower(err.Error())
@@ -64,7 +63,7 @@ func TestEndToEndAIFFSupport(t *testing.T) {
 
 // TestEndToEndUnifiedSystemPerformance validates performance characteristics
 func TestEndToEndUnifiedSystemPerformance(t *testing.T) {
-	backend, err := audio.NewBackend("malgo")
+	backend, err := audio.NewBackend("oto")
 	if err != nil {
 		t.Fatalf("Failed to create backend: %v", err)
 	}
@@ -72,7 +71,7 @@ func TestEndToEndUnifiedSystemPerformance(t *testing.T) {
 
 	// Measure backend creation time (should be fast)
 	start := time.Now()
-	testBackend, err := audio.NewBackend("malgo")
+	testBackend, err := audio.NewBackend("oto")
 	if err != nil {
 		t.Fatalf("Failed to create test backend: %v", err)
 	}
@@ -91,7 +90,7 @@ func TestEndToEndUnifiedSystemPerformance(t *testing.T) {
 func TestEndToEndSystemResourceCleanup(t *testing.T) {
 	// Create and destroy multiple backends to test resource cleanup
 	for i := 0; i < 10; i++ {
-		backend, err := audio.NewBackend("malgo")
+		backend, err := audio.NewBackend("oto")
 		if err != nil {
 			t.Fatalf("Failed to create backend %d: %v", i, err)
 		}

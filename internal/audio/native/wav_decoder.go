@@ -1,6 +1,4 @@
-//go:build cgo
-
-package malgo
+package native
 
 import (
 	"bytes"
@@ -10,7 +8,6 @@ import (
 	"strings"
 
 	"claudio.click/internal/safeio"
-	"github.com/gen2brain/malgo"
 	"github.com/youpy/go-wav"
 )
 
@@ -84,17 +81,17 @@ func (d *WavDecoder) Decode(ctx context.Context, reader io.Reader) (*AudioData, 
 		return nil, ErrInvalidData
 	}
 
-	// Convert bit depth to malgo format
-	var malgoFormat malgo.FormatType
+	// Convert bit depth to PCM format
+	var pcmFormat PCMFormat
 	switch format.BitsPerSample {
 	case 16:
-		malgoFormat = malgo.FormatS16
+		pcmFormat = FormatS16
 		slog.Debug("using 16-bit signed format")
 	case 24:
-		malgoFormat = malgo.FormatS24
+		pcmFormat = FormatS24
 		slog.Debug("using 24-bit signed format")
 	case 32:
-		malgoFormat = malgo.FormatS32
+		pcmFormat = FormatS32
 		slog.Debug("using 32-bit signed format")
 	default:
 		slog.Error("unsupported bit depth", "bits", format.BitsPerSample)
@@ -164,7 +161,7 @@ func (d *WavDecoder) Decode(ctx context.Context, reader io.Reader) (*AudioData, 
 		Samples:    rawBytes,
 		Channels:   uint32(format.NumChannels),
 		SampleRate: uint32(format.SampleRate),
-		Format:     malgoFormat,
+		Format:     pcmFormat,
 	}
 
 	slog.Debug("WAV decode completed successfully",
@@ -172,7 +169,7 @@ func (d *WavDecoder) Decode(ctx context.Context, reader io.Reader) (*AudioData, 
 		"total_samples", totalSamples,
 		"channels", audioData.Channels,
 		"sample_rate", audioData.SampleRate,
-		"format", malgoFormat,
+		"format", pcmFormat,
 		"duration_estimate_ms", (totalSamples*1000)/int(audioData.SampleRate))
 
 	return audioData, nil

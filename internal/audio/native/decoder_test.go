@@ -1,6 +1,4 @@
-//go:build cgo
-
-package malgo
+package native
 
 import (
 	"bytes"
@@ -8,8 +6,6 @@ import (
 	"io"
 	"strings"
 	"testing"
-
-	"github.com/gen2brain/malgo"
 )
 
 // MockDecoder for testing
@@ -38,7 +34,7 @@ func (m *MockDecoder) Decode(ctx context.Context, reader io.Reader) (*AudioData,
 		Samples:    []byte{0x00, 0x01, 0x02, 0x03}, // Test PCM data
 		Channels:   2,                              // Stereo
 		SampleRate: 44100,                          // Standard rate
-		Format:     malgo.FormatS16,                // 16-bit signed
+		Format:     FormatS16,                      // 16-bit signed
 	}, nil
 }
 
@@ -75,7 +71,7 @@ func TestAudioDataStructure(t *testing.T) {
 		Samples:    []byte{0x01, 0x02, 0x03, 0x04},
 		Channels:   2,
 		SampleRate: 44100,
-		Format:     malgo.FormatS16,
+		Format:     FormatS16,
 	}
 
 	// Test basic properties
@@ -91,7 +87,7 @@ func TestAudioDataStructure(t *testing.T) {
 		t.Errorf("expected 44100 sample rate, got %d", data.SampleRate)
 	}
 
-	if data.Format != malgo.FormatS16 {
+	if data.Format != FormatS16 {
 		t.Errorf("expected FormatS16, got %v", data.Format)
 	}
 }
@@ -159,7 +155,7 @@ func TestMockDecoderDecoding(t *testing.T) {
 			t.Errorf("expected 44100 sample rate, got %d", data.SampleRate)
 		}
 
-		if data.Format != malgo.FormatS16 {
+		if data.Format != FormatS16 {
 			t.Errorf("expected FormatS16, got %v", data.Format)
 		}
 	})
@@ -193,7 +189,7 @@ func TestMockDecoderCustomData(t *testing.T) {
 		Samples:    []byte{0xFF, 0xFE, 0xFD, 0xFC},
 		Channels:   1, // Mono
 		SampleRate: 22050,
-		Format:     malgo.FormatF32,
+		Format:     FormatF32,
 	}
 
 	decoder := &MockDecoder{
@@ -222,7 +218,7 @@ func TestMockDecoderCustomData(t *testing.T) {
 		t.Errorf("expected 22050 sample rate, got %d", data.SampleRate)
 	}
 
-	if data.Format != malgo.FormatF32 {
+	if data.Format != FormatF32 {
 		t.Errorf("expected FormatF32, got %v", data.Format)
 	}
 }

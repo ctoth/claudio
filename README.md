@@ -14,9 +14,20 @@ Full documentation starts at [docs/index.md](docs/index.md).
 
 ## Install
 
+Download the binary for your platform from [GitHub Releases](https://github.com/ctoth/claudio/releases/latest),
+rename it to `claudio` (`claudio.exe` on Windows), and put it on `PATH`.
+These binaries include the native audio backend; no Go or C compiler is needed.
+On macOS and Linux, make the downloaded binary executable with `chmod +x`.
+
+To build from source, install Go 1.25 or later. No C compiler is required:
+
 ```bash
 go install claudio.click/cmd/claudio@latest
 ```
+
+Native playback uses Oto on Windows, macOS, and Linux, including builds with
+`CGO_ENABLED=0`. See [installation](docs/installation.md) for runtime audio
+requirements and run `claudio status` to check backend availability.
 
 Install hooks for detected agents:
 

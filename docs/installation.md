@@ -12,9 +12,28 @@ Installation has two parts:
 
 ## Install The Binary
 
+### Prebuilt Binary
+
+Download the matching asset from [GitHub Releases](https://github.com/ctoth/claudio/releases/latest):
+
+| Platform | Asset |
+| --- | --- |
+| Windows x64 | `claudio-windows-amd64.exe` |
+| Linux x64 | `claudio-linux-amd64` |
+| macOS Apple Silicon | `claudio-darwin-arm64` |
+
+Rename it to `claudio` (`claudio.exe` on Windows) and place it in a directory
+on `PATH`. On Linux and macOS, run `chmod +x` on the downloaded binary.
+The release binaries include the native audio backend and require no Go or C compiler.
+
+### Build From Source
+
 Claudio requires Go 1.25.13 or newer. With Go's default automatic toolchain
 selection, commands run from this repository use the recommended Go 1.26.6
 toolchain declared in `go.mod`.
+
+Native audio uses Oto and requires no C compiler on Windows, macOS, or Linux,
+even when `CGO_ENABLED=0`.
 
 ```bash
 go install claudio.click/cmd/claudio@latest
@@ -27,6 +46,13 @@ go env GOPATH
 ```
 
 The binary normally lands in `$(go env GOPATH)/bin`.
+
+Run `claudio status` to check the selected backend's availability. This checks
+the implementation or player executable, not the audio device or speakers.
+On Linux, Oto connects to PulseAudio (including compatible audio servers).
+Its ALSA fallback needs `libasound.so.2` at runtime, but no development headers
+are needed to build. `system_command` remains available for external players,
+and `auto` continues to prefer those players under WSL when installed.
 
 ## Auto Install
 

@@ -12,7 +12,7 @@ var (
 )
 
 // AudioBackend represents a system for playing audio from various sources
-// Implementations handle the actual audio playback mechanism (malgo, system commands, etc.)
+// Implementations handle the actual audio playback mechanism (oto, system commands, etc.)
 type AudioBackend interface {
 	// Lifecycle management. Both Stop and Close cease playback; Stop is
 	// best-effort on backends without process control (e.g. SystemCommandBackend

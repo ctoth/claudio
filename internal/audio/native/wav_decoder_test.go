@@ -1,14 +1,10 @@
-//go:build cgo
-
-package malgo
+package native
 
 import (
 	"bytes"
 	"context"
 	"encoding/binary"
 	"testing"
-
-	"github.com/gen2brain/malgo"
 )
 
 func TestWavDecoderInterface(t *testing.T) {
@@ -145,7 +141,7 @@ func TestWavDecoderDecodeValidData(t *testing.T) {
 			t.Errorf("expected 44100 sample rate, got %d", data.SampleRate)
 		}
 
-		if data.Format != malgo.FormatS16 {
+		if data.Format != FormatS16 {
 			t.Errorf("expected FormatS16, got %v", data.Format)
 		}
 

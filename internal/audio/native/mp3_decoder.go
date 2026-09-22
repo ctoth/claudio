@@ -1,6 +1,4 @@
-//go:build cgo
-
-package malgo
+package native
 
 import (
 	"context"
@@ -8,7 +6,6 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/gen2brain/malgo"
 	"github.com/hajimehoshi/go-mp3"
 )
 
@@ -48,7 +45,7 @@ func (d *Mp3Decoder) Decode(ctx context.Context, reader io.Reader) (*AudioData, 
 		"sample_rate", sampleRate,
 		"channels", 2) // MP3 is always decoded as stereo by go-mp3
 
-	// Read all audio data into memory (better than malgo's streaming approach for hooks)
+	// Read all audio data into memory (better than streaming for hooks)
 	slog.Debug("reading MP3 audio samples")
 	samples, err := readDecodedPCM(ctx, decoder, MaxDecodedPCMBytes)
 	if err != nil {
@@ -65,7 +62,7 @@ func (d *Mp3Decoder) Decode(ctx context.Context, reader io.Reader) (*AudioData, 
 		Samples:    samples,
 		Channels:   2, // go-mp3 always outputs stereo
 		SampleRate: uint32(sampleRate),
-		Format:     malgo.FormatS16, // go-mp3 outputs 16-bit signed
+		Format:     FormatS16, // go-mp3 outputs 16-bit signed
 	}
 
 	// Calculate duration estimate
@@ -79,7 +76,7 @@ func (d *Mp3Decoder) Decode(ctx context.Context, reader io.Reader) (*AudioData, 
 		"total_bytes", len(samples),
 		"channels", audioData.Channels,
 		"sample_rate", audioData.SampleRate,
-		"format", malgo.FormatS16,
+		"format", FormatS16,
 		"duration_estimate_ms", durationMs)
 
 	return audioData, nil

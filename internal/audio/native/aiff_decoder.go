@@ -1,6 +1,4 @@
-//go:build cgo
-
-package malgo
+package native
 
 import (
 	"bytes"
@@ -12,7 +10,6 @@ import (
 	"strings"
 
 	"claudio.click/internal/safeio"
-	"github.com/gen2brain/malgo"
 	"github.com/go-audio/aiff"
 	"github.com/go-audio/audio"
 )
@@ -110,17 +107,17 @@ func (d *AiffDecoder) Decode(ctx context.Context, reader io.Reader) (*AudioData,
 		return nil, ErrInvalidData
 	}
 
-	// Convert bit depth to malgo format
-	var malgoFormat malgo.FormatType
+	// Convert bit depth to PCM format
+	var pcmFormat PCMFormat
 	switch bitDepth {
 	case 16:
-		malgoFormat = malgo.FormatS16
+		pcmFormat = FormatS16
 		slog.Debug("using 16-bit signed format")
 	case 24:
-		malgoFormat = malgo.FormatS24
+		pcmFormat = FormatS24
 		slog.Debug("using 24-bit signed format")
 	case 32:
-		malgoFormat = malgo.FormatS32
+		pcmFormat = FormatS32
 		slog.Debug("using 32-bit signed format")
 	default:
 		slog.Error("unsupported bit depth", "bits", bitDepth)
@@ -158,7 +155,7 @@ func (d *AiffDecoder) Decode(ctx context.Context, reader io.Reader) (*AudioData,
 		Samples:    rawBytes,
 		Channels:   channels,
 		SampleRate: sampleRate,
-		Format:     malgoFormat,
+		Format:     pcmFormat,
 	}
 
 	slog.Debug("AIFF decode completed successfully",
@@ -166,7 +163,7 @@ func (d *AiffDecoder) Decode(ctx context.Context, reader io.Reader) (*AudioData,
 		"total_samples", len(pcmBuffer.Data),
 		"channels", audioData.Channels,
 		"sample_rate", audioData.SampleRate,
-		"format", malgoFormat,
+		"format", pcmFormat,
 		"duration_estimate_ms", (len(pcmBuffer.Data)*1000)/(int(audioData.SampleRate)*int(audioData.Channels)))
 
 	return audioData, nil

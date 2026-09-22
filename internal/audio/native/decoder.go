@@ -1,6 +1,4 @@
-//go:build cgo
-
-package malgo
+package native
 
 import (
 	"context"
@@ -8,7 +6,6 @@ import (
 	"io"
 
 	"claudio.click/internal/safeio"
-	"github.com/gen2brain/malgo"
 )
 
 // MaxDecodedPCMBytes applies the existing 100 MiB audio budget after MP3
@@ -40,10 +37,10 @@ var (
 
 // AudioData represents decoded audio ready for playback
 type AudioData struct {
-	Samples    []byte           // Raw PCM data
-	Channels   uint32           // Number of audio channels
-	SampleRate uint32           // Sample rate in Hz
-	Format     malgo.FormatType // Audio format (e.g., malgo.FormatS16)
+	Samples    []byte    // Raw PCM data
+	Channels   uint32    // Number of audio channels
+	SampleRate uint32    // Sample rate in Hz
+	Format     PCMFormat // Audio format (e.g., FormatS16)
 }
 
 // Decoder interface for audio format decoding.
