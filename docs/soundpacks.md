@@ -262,8 +262,10 @@ Rules:
 - Each value must be a relative path inside the manifest's directory.
   Absolute paths and `..` are rejected, and a symlink that points outside
   the directory is rejected too.
-- Every referenced file must exist, and no value may be empty. One bad
-  entry stops the whole pack from loading.
+- An empty value means the key is not mapped yet; it is skipped.
+- `validate` and `install` reject a value whose file does not exist. If a
+  file goes missing after install, Claudio logs a warning, skips that entry,
+  and keeps using the rest of the pack.
 - A pack can have at most 10,000 mappings.
 
 Create a template:
@@ -275,8 +277,8 @@ claudio soundpack init my-pack --from-platform  # pre-fills the current platform
 ```
 
 A plain `init` template lists every known key with an empty value. Fill in
-the keys you want and delete the rest before installing. `validate` lists
-empty entries without failing, but `install` and hook playback reject them.
+the keys you want; the empty ones are skipped, so you can leave them in or
+delete them. `validate` lists them as unmapped.
 
 Validate and install:
 
@@ -305,8 +307,8 @@ The report shows:
 - Unsupported file extensions
 - Empty mappings
 
-Broken references fail validation. Empty mappings are reported but do not
-fail it (see the note under [JSON Soundpacks](#json-soundpacks)).
+Broken references fail validation. Empty mappings are reported as unmapped
+but do not fail it.
 
 ### Using Tracking To Improve A Pack
 

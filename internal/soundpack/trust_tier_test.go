@@ -116,15 +116,19 @@ func TestLoadJSONSoundpack_AcceptsRelativeUnderBase(t *testing.T) {
 	}
 }
 
-func TestLoadJSONSoundpack_RejectsDirectoryMapping(t *testing.T) {
+func TestLoadJSONSoundpack_DropsDirectoryMapping(t *testing.T) {
 	baseDir := t.TempDir()
 	if err := os.Mkdir(filepath.Join(baseDir, "not-a-sound.wav"), 0755); err != nil {
 		t.Fatalf("mkdir mapped directory: %v", err)
 	}
 	data := []byte(`{"name":"bad","mappings":{"default.wav":"not-a-sound.wav"}}`)
 
-	if _, err := LoadJSONSoundpackFromBytes(data, baseDir); err == nil {
-		t.Fatal("expected a directory mapping to be rejected")
+	mapper, err := LoadJSONSoundpackFromBytes(data, baseDir)
+	if err != nil {
+		t.Fatalf("LoadJSONSoundpackFromBytes: %v", err)
+	}
+	if got, _ := mapper.MapPath("default.wav"); len(got) != 0 {
+		t.Fatalf("directory mapping must never be offered as a sound, got %v", got)
 	}
 }
 

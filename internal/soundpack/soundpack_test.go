@@ -324,7 +324,7 @@ func TestJSONSoundpackLoading(t *testing.T) {
 		}
 	})
 
-	t.Run("validates sound file existence during load", func(t *testing.T) {
+	t.Run("drops mappings whose sound file is missing", func(t *testing.T) {
 		tempDir := t.TempDir()
 		jsonFile := filepath.Join(tempDir, "invalid-soundpack.json")
 
@@ -343,10 +343,14 @@ func TestJSONSoundpackLoading(t *testing.T) {
 			t.Fatalf("Failed to create JSON file: %v", err)
 		}
 
-		// Loading should fail due to missing sound file
-		_, err = LoadJSONSoundpack(jsonFile)
-		if err == nil {
-			t.Error("Expected error when loading soundpack with missing sound files")
+		// The missing entry is dropped so its fallback chain continues; the
+		// pack itself still loads.
+		mapper, err := LoadJSONSoundpack(jsonFile)
+		if err != nil {
+			t.Fatalf("Expected pack with a missing file to load, got: %v", err)
+		}
+		if paths, _ := mapper.MapPath("success/bash.wav"); len(paths) != 0 {
+			t.Errorf("Expected missing-file mapping to be dropped, got %v", paths)
 		}
 	})
 
@@ -773,7 +777,7 @@ func TestLoadJSONSoundpackFromBytes(t *testing.T) {
 		}
 	})
 
-	t.Run("rejects soundpack with missing sound files", func(t *testing.T) {
+	t.Run("drops mappings whose sound file is missing", func(t *testing.T) {
 		// Relative path that resolves under baseDir but the file does not
 		// exist — exercises the post-validator existence check.
 		jsonContent := `{
@@ -783,13 +787,13 @@ func TestLoadJSONSoundpackFromBytes(t *testing.T) {
 			}
 		}`
 
-		_, err := LoadJSONSoundpackFromBytes([]byte(jsonContent), t.TempDir())
-		if err == nil {
-			t.Error("Expected error for missing sound files, got nil")
+		mapper, err := LoadJSONSoundpackFromBytes([]byte(jsonContent), t.TempDir())
+		if err != nil {
+			t.Fatalf("Expected pack with a missing file to load, got: %v", err)
 		}
 
-		if !strings.Contains(err.Error(), "sound file not found") {
-			t.Errorf("Expected missing file error message, got: %v", err)
+		if paths, _ := mapper.MapPath("success/test.wav"); len(paths) != 0 {
+			t.Errorf("Expected missing-file mapping to be dropped, got %v", paths)
 		}
 	})
 
