@@ -34,7 +34,7 @@ func TestFindClaudeSettings(t *testing.T) {
 		name          string
 		scope         string
 		expectedPaths []string
-		setupFunc     func() (tempDir string, cleanup func())
+		setupFunc     func(t *testing.T) (tempDir string, cleanup func())
 	}{
 		{
 			name:  "user scope default paths",
@@ -43,7 +43,7 @@ func TestFindClaudeSettings(t *testing.T) {
 				"~/.claude/settings.json",
 				"%USERPROFILE%/.claude/settings.json", // Windows
 			},
-			setupFunc: func() (string, func()) {
+			setupFunc: func(t *testing.T) (string, func()) {
 				// Create temporary home directory structure
 				tempDir := t.TempDir()
 				claudeDir := filepath.Join(tempDir, ".claude")
@@ -64,7 +64,7 @@ func TestFindClaudeSettings(t *testing.T) {
 				"./.claude/settings.json",
 				".claude/settings.json",
 			},
-			setupFunc: func() (string, func()) {
+			setupFunc: func(t *testing.T) (string, func()) {
 				// Create temporary project directory structure
 				tempDir := t.TempDir()
 				claudeDir := filepath.Join(tempDir, ".claude")
@@ -74,19 +74,16 @@ func TestFindClaudeSettings(t *testing.T) {
 				}
 
 				// Change to temp directory for testing
-				originalDir, _ := os.Getwd()
-				_ = os.Chdir(tempDir)
+				t.Chdir(tempDir)
 
-				return tempDir, func() {
-					_ = os.Chdir(originalDir)
-				}
+				return tempDir, func() {}
 			},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			tempDir, cleanup := tc.setupFunc()
+			tempDir, cleanup := tc.setupFunc(t)
 			defer cleanup()
 
 			// Test the FindClaudeSettingsPaths function
@@ -213,9 +210,8 @@ func TestFindClaudeSettingsExistingFiles(t *testing.T) {
 
 				cleanup = func() {}
 			} else {
-				originalDir, _ := os.Getwd()
-				_ = os.Chdir(tempDir)
-				cleanup = func() { _ = os.Chdir(originalDir) }
+				t.Chdir(tempDir)
+				cleanup = func() {}
 			}
 			defer cleanup()
 

@@ -3,6 +3,7 @@ version: "2"
 linters:
   enable:
     - modernize
+    - usetesting
   settings:
     staticcheck:
       checks:

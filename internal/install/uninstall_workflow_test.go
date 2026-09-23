@@ -36,11 +36,7 @@ func TestInstallUninstallWithExecutablePath(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Create temporary directory for test settings
-			tempDir, err := os.MkdirTemp("", "claudio-test-*")
-			if err != nil {
-				t.Fatalf("Failed to create temp dir: %v", err)
-			}
-			defer os.RemoveAll(tempDir)
+			tempDir := t.TempDir()
 
 			// Set up test environment
 			var settingsPath string
@@ -52,7 +48,7 @@ func TestInstallUninstallWithExecutablePath(t *testing.T) {
 
 			// Create settings directory
 			settingsDir := filepath.Dir(settingsPath)
-			err = os.MkdirAll(settingsDir, 0755)
+			err := os.MkdirAll(settingsDir, 0755)
 			if err != nil {
 				t.Fatalf("Failed to create settings dir: %v", err)
 			}

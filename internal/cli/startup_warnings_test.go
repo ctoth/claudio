@@ -17,7 +17,7 @@ import (
 func tempLogDir(t *testing.T) string {
 	t.Helper()
 	prev := slog.Default()
-	dir, err := os.MkdirTemp("", "claudio-startup-warnings-")
+	dir, err := os.MkdirTemp("", "claudio-startup-warnings-") //nolint:usetesting // t.TempDir fails the test if lumberjack still holds the log open on Windows
 	if err != nil {
 		t.Fatal(err)
 	}

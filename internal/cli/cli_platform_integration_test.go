@@ -48,16 +48,7 @@ func TestCLIUnconfiguredUsePlatformSoundpack(t *testing.T) {
 		testInput := `{"session_id":"test","transcript_path":"/test","cwd":"/test","hook_event_name":"PostToolUse","tool_name":"Bash","tool_response":{"stdout":"success","stderr":"","interrupted":false}}`
 
 		// Change to temp directory so current working directory check finds wsl.json
-		originalDir, err := os.Getwd()
-		if err != nil {
-			t.Fatalf("Failed to get current directory: %v", err)
-		}
-		defer func() { _ = os.Chdir(originalDir) }()
-
-		err = os.Chdir(tempDir)
-		if err != nil {
-			t.Fatalf("Failed to change to temp directory: %v", err)
-		}
+		t.Chdir(tempDir)
 
 		// Create CLI with no config file - should fall back to platform detection
 		cli := NewCLI()
@@ -158,16 +149,7 @@ func TestCLIConfiguredWithPlatformFallback(t *testing.T) {
 		}
 
 		// Change to execDir so current working directory check finds wsl.json
-		originalDir, err := os.Getwd()
-		if err != nil {
-			t.Fatalf("Failed to get current directory: %v", err)
-		}
-		defer func() { _ = os.Chdir(originalDir) }()
-
-		err = os.Chdir(execDir)
-		if err != nil {
-			t.Fatalf("Failed to change to exec directory: %v", err)
-		}
+		t.Chdir(execDir)
 
 		// Test with the config that points to nonexistent soundpack
 		testInput := `{"session_id":"test","transcript_path":"/test","cwd":"/test","hook_event_name":"PostToolUse","tool_name":"Bash","tool_response":{"stdout":"success","stderr":"","interrupted":false}}`

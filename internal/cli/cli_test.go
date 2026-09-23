@@ -952,7 +952,7 @@ func TestSetupLogging_DualOutputWithExistingVerboseHandler(t *testing.T) {
 
 	// Use a manually-managed tempdir so we can guarantee slog is reset
 	// before the directory is removed.
-	logDir, err := os.MkdirTemp("", "claudio-setuplogging-")
+	logDir, err := os.MkdirTemp("", "claudio-setuplogging-") //nolint:usetesting // t.TempDir fails the test if lumberjack still holds the log open on Windows
 	if err != nil {
 		t.Fatalf("mkdir temp: %v", err)
 	}
