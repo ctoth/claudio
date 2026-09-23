@@ -104,16 +104,14 @@ func runSoundpackInstall(cmd *cobra.Command, srcPath string, setDefault, skipVal
 	if err := validateManagedSoundpackName(name); err != nil {
 		return fmt.Errorf("invalid soundpack name: %w", err)
 	}
-	nameLock, err := lockSoundpackName(name)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err := nameLock.Unlock(); err != nil {
-			slog.Warn("failed to release soundpack name lock", "name", name, "error", err)
-		}
-	}()
+	return withNameLock(name, func() error {
+		return installSoundpackFiles(cmd, srcPath, name, isDir, setDefault)
+	})
+}
 
+// installSoundpackFiles copies a validated soundpack into the XDG data
+// directory and updates config. The caller holds the per-name lock.
+func installSoundpackFiles(cmd *cobra.Command, srcPath, name string, isDir, setDefault bool) error {
 	// Determine install target
 	installDir := filepath.Join(xdg.DataHome, "claudio", "soundpacks", name)
 	installPath := installDir
@@ -231,7 +229,9 @@ func stageAndInstallSoundpack(srcPath, installDir string, isDir bool) error {
 			return fmt.Errorf("failed to preserve previous soundpack: %w", err)
 		}
 		if err := os.Rename(stageDir, installDir); err != nil {
-			_ = os.Rename(backupDir, installDir)
+			if restoreErr := os.Rename(backupDir, installDir); restoreErr != nil {
+				return fmt.Errorf("failed to activate staged soundpack: %w; previous soundpack remains at %s because restoration failed: %w", err, backupDir, restoreErr)
+			}
 			return fmt.Errorf("failed to activate staged soundpack: %w", err)
 		}
 		if err := os.RemoveAll(backupDir); err != nil {
