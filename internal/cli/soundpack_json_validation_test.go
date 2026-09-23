@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"claudio.click/internal/soundpack"
+	"claudio.click/internal/soundpack/gitpack"
 )
 
 func writeJSONPack(t *testing.T, dir string, mappings map[string]string) string {
@@ -47,7 +48,7 @@ func TestSoundpackAddRejectsJSONPackWithMissingFile(t *testing.T) {
 	if code := NewCLI().Run([]string{"claudio", "soundpack", "add", repo, "--name", "broken-json"}, nil, stdout, stderr); code == 0 {
 		t.Fatalf("expected add of JSON pack with a missing file to fail, stdout=%q", stdout)
 	}
-	registry, err := loadSoundpackRegistry()
+	registry, err := gitpack.LoadRegistry()
 	if err != nil {
 		t.Fatal(err)
 	}

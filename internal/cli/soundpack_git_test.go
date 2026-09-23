@@ -3,34 +3,18 @@ package cli
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 
 	"claudio.click/internal/config"
+	"claudio.click/internal/soundpack/gitpack"
 	"github.com/spf13/afero"
 )
-
-func TestExpandGitSoundpackSource_GitHubAlias(t *testing.T) {
-	got, err := expandGitSoundpackSource("gh:ctoth/whatever")
-	if err != nil {
-		t.Fatalf("expandGitSoundpackSource returned error: %v", err)
-	}
-
-	want := "https://github.com/ctoth/whatever.git"
-	if got != want {
-		t.Fatalf("expected %q, got %q", want, got)
-	}
-}
-
-func TestExpandGitSoundpackSource_RejectsInvalidGitHubAlias(t *testing.T) {
-	_, err := expandGitSoundpackSource("gh:ctoth")
-	if err == nil {
-		t.Fatal("expected invalid gh alias to fail")
-	}
-}
 
 func TestSoundpackAdd_ClonesGitRepositoryAndUpdatesConfig(t *testing.T) {
 	dataDir, configDir, cleanup := setupInstallTestEnv(t)
@@ -52,7 +36,7 @@ func TestSoundpackAdd_ClonesGitRepositoryAndUpdatesConfig(t *testing.T) {
 		t.Fatalf("expected cloned sound file, got error: %v", err)
 	}
 
-	registry, err := loadSoundpackRegistry()
+	registry, err := gitpack.LoadRegistry()
 	if err != nil {
 		t.Fatalf("failed to load registry: %v", err)
 	}
@@ -111,7 +95,7 @@ func TestSoundpackAddValidatesConfigBeforeCloning(t *testing.T) {
 	if _, err := os.Stat(clone); !os.IsNotExist(err) {
 		t.Fatalf("repo was cloned before config validation: %v", err)
 	}
-	registry, err := loadSoundpackRegistry()
+	registry, err := gitpack.LoadRegistry()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +118,7 @@ func TestSoundpackAddRetryRepairsConfigForMatchingManagedRecord(t *testing.T) {
 		t.Fatalf("initial add exited %d", code)
 	}
 	configPath := filepath.Join(configDir, "claudio", "config.json")
-	registry, err := loadSoundpackRegistry()
+	registry, err := gitpack.LoadRegistry()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +148,7 @@ func TestSoundpackReplaceFailurePreservesExistingManagedPack(t *testing.T) {
 		t.Fatalf("initial add exited %d", code)
 	}
 	clone := filepath.Join(dataDir, "claudio", "soundpack-repos", "replace-safe")
-	before, err := currentGitCommit(context.Background(), clone)
+	before, err := testGitCommit(context.Background(), clone)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,14 +156,14 @@ func TestSoundpackReplaceFailurePreservesExistingManagedPack(t *testing.T) {
 	if code := cli.Run([]string{"claudio", "soundpack", "add", repo, "--name", "replace-safe", "--replace", "--ref", "missing-ref"}, nil, &bytes.Buffer{}, &bytes.Buffer{}); code == 0 {
 		t.Fatal("expected invalid replacement ref to fail")
 	}
-	after, err := currentGitCommit(context.Background(), clone)
+	after, err := testGitCommit(context.Background(), clone)
 	if err != nil {
 		t.Fatalf("existing clone was lost: %v", err)
 	}
 	if after != before {
 		t.Fatalf("existing clone changed after failed replacement: before=%s after=%s", before, after)
 	}
-	registry, err := loadSoundpackRegistry()
+	registry, err := gitpack.LoadRegistry()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,7 +199,7 @@ func TestConcurrentSoundpackAddsPreserveBothRegistryEntries(t *testing.T) {
 			t.Fatalf("concurrent add exited %d", code)
 		}
 	}
-	registry, err := loadSoundpackRegistry()
+	registry, err := gitpack.LoadRegistry()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -260,7 +244,7 @@ func TestConcurrentSameNameAddsConvergeOnOneValidInstall(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(clone, "success", "success.wav")); err != nil {
 		t.Fatalf("winning clone is incomplete: %v", err)
 	}
-	registry, err := loadSoundpackRegistry()
+	registry, err := gitpack.LoadRegistry()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -325,7 +309,7 @@ func TestSoundpackRemove_DeletesManagedCloneAndConfigEntries(t *testing.T) {
 		t.Fatalf("expected clone path to be removed, stat error: %v", err)
 	}
 
-	registry, err := loadSoundpackRegistry()
+	registry, err := gitpack.LoadRegistry()
 	if err != nil {
 		t.Fatalf("failed to load registry: %v", err)
 	}
@@ -370,7 +354,7 @@ func TestSoundpackRemovePreservesMalformedExplicitConfigAndManagedClone(t *testi
 	if _, err := os.Stat(clonePath); err != nil {
 		t.Fatalf("clone was removed before config validation: %v", err)
 	}
-	registry, err := loadSoundpackRegistry()
+	registry, err := gitpack.LoadRegistry()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -387,7 +371,7 @@ func TestSoundpackRemoveHonorsPerNameOperationLock(t *testing.T) {
 	if code := cli.Run([]string{"claudio", "soundpack", "add", repo, "--name", "locked-pack"}, nil, &bytes.Buffer{}, &bytes.Buffer{}); code != 0 {
 		t.Fatalf("initial add exited %d", code)
 	}
-	lock, err := lockSoundpackName("locked-pack")
+	lock, err := gitpack.LockName("locked-pack")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -400,7 +384,7 @@ func TestSoundpackRemoveHonorsPerNameOperationLock(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(clone, "success", "success.wav")); err != nil {
 		t.Fatalf("remove mutated clone while name lock was held: %v", err)
 	}
-	registry, err := loadSoundpackRegistry()
+	registry, err := gitpack.LoadRegistry()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -417,16 +401,16 @@ func TestSoundpackRemoveRetryRepairsConfigAfterRegistryRemoval(t *testing.T) {
 	if code := cli.Run([]string{"claudio", "soundpack", "add", repo, "--name", "retry-remove", "--default"}, nil, &bytes.Buffer{}, &bytes.Buffer{}); code != 0 {
 		t.Fatalf("initial add exited %d", code)
 	}
-	registry, err := loadSoundpackRegistry()
+	registry, err := gitpack.LoadRegistry()
 	if err != nil {
 		t.Fatal(err)
 	}
 	delete(registry.Packs, "retry-remove")
-	if err := saveSoundpackRegistry(registry); err != nil {
+	if err := gitpack.SaveRegistry(registry); err != nil {
 		t.Fatal(err)
 	}
 	clone := filepath.Join(dataDir, "claudio", "soundpack-repos", "retry-remove")
-	if err := removeManagedGitClone(clone); err != nil {
+	if err := gitpack.RemoveClone(clone); err != nil {
 		t.Fatal(err)
 	}
 
@@ -469,20 +453,20 @@ func TestSoundpackStatus_ShowsManagedGitPack(t *testing.T) {
 
 func createTestGitSoundpackRepo(t *testing.T) string {
 	t.Helper()
-	if err := requireGit(); err != nil {
+	if err := gitpack.RequireGit(); err != nil {
 		t.Skipf("git is required for git soundpack tests: %v", err)
 	}
 
 	repoPath := filepath.Join(t.TempDir(), "repo")
 	createDummyWAV(t, filepath.Join(repoPath, "success", "success.wav"))
 
-	if _, err := runGit(context.Background(), repoPath, "init"); err != nil {
+	if _, err := testGit(context.Background(), repoPath, "init"); err != nil {
 		t.Fatalf("git init failed: %v", err)
 	}
-	if _, err := runGit(context.Background(), repoPath, "config", "user.email", "test@example.com"); err != nil {
+	if _, err := testGit(context.Background(), repoPath, "config", "user.email", "test@example.com"); err != nil {
 		t.Fatalf("git config user.email failed: %v", err)
 	}
-	if _, err := runGit(context.Background(), repoPath, "config", "user.name", "Test User"); err != nil {
+	if _, err := testGit(context.Background(), repoPath, "config", "user.name", "Test User"); err != nil {
 		t.Fatalf("git config user.name failed: %v", err)
 	}
 	commitTestGitRepo(t, repoPath, "initial soundpack")
@@ -491,10 +475,10 @@ func createTestGitSoundpackRepo(t *testing.T) string {
 
 func commitTestGitRepo(t *testing.T, repoPath, message string) {
 	t.Helper()
-	if _, err := runGit(context.Background(), repoPath, "add", "."); err != nil {
+	if _, err := testGit(context.Background(), repoPath, "add", "."); err != nil {
 		t.Fatalf("git add failed: %v", err)
 	}
-	if _, err := runGit(context.Background(), repoPath, "commit", "-m", message); err != nil {
+	if _, err := testGit(context.Background(), repoPath, "commit", "-m", message); err != nil {
 		t.Fatalf("git commit failed: %v", err)
 	}
 }
@@ -517,4 +501,27 @@ func containsPath(paths []string, want string) bool {
 		}
 	}
 	return false
+}
+
+// testGit runs git for test fixtures, returning trimmed combined output.
+func testGit(ctx context.Context, dir string, args ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, "git", args...)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	out, err := cmd.CombinedOutput()
+	text := strings.TrimSpace(string(out))
+	if err != nil {
+		return text, fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, text)
+	}
+	return text, nil
+}
+
+// testGitBranch returns the checked-out branch ("HEAD" when detached).
+func testGitBranch(ctx context.Context, dir string) (string, error) {
+	return testGit(ctx, dir, "rev-parse", "--abbrev-ref", "HEAD")
+}
+
+// testGitCommit returns the commit HEAD points at.
+func testGitCommit(ctx context.Context, dir string) (string, error) {
+	return testGit(ctx, dir, "rev-parse", "HEAD")
 }
