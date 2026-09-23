@@ -6,13 +6,15 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"claudio.click/internal/testutil/wavfixture"
 )
 
 func TestSoundpackInstallDirectoryAcrossWindowsVolumes(t *testing.T) {
 	dataDir, _, cleanup := setupInstallTestEnv(t)
 	defer cleanup()
 	sourceRoot := t.TempDir()
-	createDummyWAV(t, filepath.Join(sourceRoot, "cross-volume", "default.wav"))
+	wavfixture.Write(t, filepath.Join(sourceRoot, "cross-volume", "default.wav"))
 
 	// SUBST exercises Windows volume semantics without requiring a second disk.
 	var drive string

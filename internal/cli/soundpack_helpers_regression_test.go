@@ -9,6 +9,7 @@ import (
 
 	"claudio.click/internal/config"
 	"claudio.click/internal/soundpack"
+	"claudio.click/internal/testutil/wavfixture"
 	"github.com/spf13/afero"
 )
 
@@ -17,7 +18,7 @@ func TestCanonicalInstalledManifestUsesMetadataNameWithoutPhantomAlias(t *testin
 	defer cleanup()
 
 	packDir := filepath.Join(dataDir, "claudio", "soundpacks", "portable-pack")
-	createDummyWAV(t, filepath.Join(packDir, "tone.wav"))
+	wavfixture.Write(t, filepath.Join(packDir, "tone.wav"))
 	manifestPath := filepath.Join(packDir, "soundpack.json")
 	manifest, err := json.Marshal(soundpack.JSONSoundpackFile{
 		Name:     "portable-pack",

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"claudio.click/internal/config"
+	"claudio.click/internal/testutil/wavfixture"
 	"github.com/adrg/xdg"
 	"github.com/spf13/afero"
 )
@@ -57,7 +58,7 @@ func TestSoundpackMutationPreservesEffectiveConfig(t *testing.T) {
 				}
 				if command == "install" {
 					source := filepath.Join(t.TempDir(), "new-pack")
-					createDummyWAV(t, filepath.Join(source, "default.wav"))
+					wavfixture.Write(t, filepath.Join(source, "default.wav"))
 					args = append(args, "soundpack", "install", source)
 					want.SoundpackPaths = append(want.SoundpackPaths, filepath.Join(dataDir, "claudio", "soundpacks", "new-pack"))
 				} else {

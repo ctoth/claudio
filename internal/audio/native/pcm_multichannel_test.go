@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"claudio.click/internal/audio"
+	"claudio.click/internal/testutil/wavfixture"
 )
 
 // The output device is stereo. Sounds with more channels are folded into it
@@ -14,7 +15,7 @@ import (
 func TestBackendPlaysSixChannelAIFF(t *testing.T) {
 	b, o := testBackend()
 	defer b.Close()
-	data := buildAIFF("AIFF", 16, 44100, sineFrames(100, 6, 0.1))
+	data := wavfixture.AIFF("AIFF", 16, 44100, wavfixture.SineFrames(100, 6, 0.1))
 	src := audio.NewReaderSource(io.NopCloser(bytes.NewReader(data)), "aiff")
 	done := make(chan error, 1)
 	go func() { done <- b.Play(context.Background(), src) }()

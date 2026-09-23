@@ -13,6 +13,7 @@ import (
 
 	"claudio.click/internal/config"
 	"claudio.click/internal/soundpack/gitpack"
+	"claudio.click/internal/testutil/wavfixture"
 	"github.com/spf13/afero"
 )
 
@@ -267,7 +268,7 @@ func TestSoundpackUpdate_PullsLatestCommit(t *testing.T) {
 		t.Fatalf("add: expected exit code 0, got %d, stdout: %s, stderr: %s", exitCode, stdout.String(), stderr.String())
 	}
 
-	createDummyWAV(t, filepath.Join(repoPath, "error", "error.wav"))
+	wavfixture.Write(t, filepath.Join(repoPath, "error", "error.wav"))
 	commitTestGitRepo(t, repoPath, "add error sound")
 
 	stdout.Reset()
@@ -461,7 +462,7 @@ func createTestGitSoundpackRepo(t *testing.T) string {
 	}
 
 	repoPath := filepath.Join(t.TempDir(), "repo")
-	createDummyWAV(t, filepath.Join(repoPath, "success", "success.wav"))
+	wavfixture.Write(t, filepath.Join(repoPath, "success", "success.wav"))
 
 	if _, err := testGit(context.Background(), repoPath, "init"); err != nil {
 		t.Fatalf("git init failed: %v", err)

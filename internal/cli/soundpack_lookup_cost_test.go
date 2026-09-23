@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"claudio.click/internal/testutil/wavfixture"
 )
 
 // TestLookupSoundpackDoesNotWalkPackDirectories pins that resolving a
@@ -15,9 +17,9 @@ func TestLookupSoundpackDoesNotWalkPackDirectories(t *testing.T) {
 	defer cleanup()
 
 	xdgPack := filepath.Join(dataDir, "claudio", "soundpacks", "xdg-dir-pack")
-	createDummyWAV(t, filepath.Join(xdgPack, "success", "nested", "tone.wav"))
+	wavfixture.Write(t, filepath.Join(xdgPack, "success", "nested", "tone.wav"))
 	configPack := filepath.Join(t.TempDir(), "config-dir-pack")
-	createDummyWAV(t, filepath.Join(configPack, "error", "deep", "tone.wav"))
+	wavfixture.Write(t, filepath.Join(configPack, "error", "deep", "tone.wav"))
 
 	orig := countAudioFilesInDir
 	countAudioFilesInDir = func(dir string) int {
@@ -45,8 +47,8 @@ func TestSoundpackListStillCountsDirectoryPackSounds(t *testing.T) {
 	defer cleanup()
 
 	xdgPack := filepath.Join(dataDir, "claudio", "soundpacks", "xdg-dir-pack")
-	createDummyWAV(t, filepath.Join(xdgPack, "success", "a.wav"))
-	createDummyWAV(t, filepath.Join(xdgPack, "error", "nested", "b.wav"))
+	wavfixture.Write(t, filepath.Join(xdgPack, "success", "a.wav"))
+	wavfixture.Write(t, filepath.Join(xdgPack, "error", "nested", "b.wav"))
 
 	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
 	if code := NewCLI().Run([]string{"claudio", "soundpack", "list"}, nil, stdout, stderr); code != 0 {

@@ -10,6 +10,7 @@ import (
 
 	"claudio.click/internal/soundpack"
 	"claudio.click/internal/soundpack/gitpack"
+	"claudio.click/internal/testutil/wavfixture"
 )
 
 func writeJSONPack(t *testing.T, dir string, mappings map[string]string) string {
@@ -63,7 +64,7 @@ func TestSoundpackAddRejectsJSONPackWithTraversal(t *testing.T) {
 	repo := createTestGitJSONSoundpackRepo(t, map[string]string{
 		"default.wav": "../outside.wav",
 	})
-	createDummyWAV(t, filepath.Join(filepath.Dir(repo), "outside.wav"))
+	wavfixture.Write(t, filepath.Join(filepath.Dir(repo), "outside.wav"))
 
 	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
 	if code := NewCLI().Run([]string{"claudio", "soundpack", "add", repo, "--name", "escape-json"}, nil, stdout, stderr); code == 0 {
@@ -75,7 +76,7 @@ func TestSoundpackInstallRejectsJSONPackWithMissingFile(t *testing.T) {
 	dataDir, _, cleanup := setupInstallTestEnv(t)
 	defer cleanup()
 	src := filepath.Join(t.TempDir(), "src")
-	createDummyWAV(t, filepath.Join(src, "ok.wav"))
+	wavfixture.Write(t, filepath.Join(src, "ok.wav"))
 	path := writeJSONPack(t, src, map[string]string{"default.wav": "ok.wav", "loading/x.wav": "gone.wav"})
 
 	for _, args := range [][]string{
@@ -94,7 +95,7 @@ func TestSoundpackInstallRejectsJSONPackWithMissingFile(t *testing.T) {
 func TestSoundpackValidateRejectsTraversalAndAbsoluteMappings(t *testing.T) {
 	root := t.TempDir()
 	outside := filepath.Join(root, "outside.wav")
-	createDummyWAV(t, outside)
+	wavfixture.Write(t, outside)
 	for name, value := range map[string]string{"dotdot": "../outside.wav", "absolute": outside} {
 		t.Run(name, func(t *testing.T) {
 			path := writeJSONPack(t, filepath.Join(root, name), map[string]string{"default.wav": value})

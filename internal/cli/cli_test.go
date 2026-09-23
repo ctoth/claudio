@@ -16,6 +16,7 @@ import (
 	"claudio.click/internal/config"
 	"claudio.click/internal/hooks"
 	"claudio.click/internal/soundpack"
+	"claudio.click/internal/testutil/wavfixture"
 )
 
 // TestMain ensures hook processing stays in-process during tests. The
@@ -880,7 +881,7 @@ func TestCLIUnifiedSoundpackIntegration(t *testing.T) {
 
 		// Create test sound file
 		soundFile := filepath.Join(successDir, "bash.wav")
-		wavData := createMinimalWAV()
+		wavData := wavfixture.Minimal()
 		err = os.WriteFile(soundFile, wavData, 0644)
 		if err != nil {
 			t.Fatalf("Failed to create test WAV file: %v", err)
@@ -929,7 +930,7 @@ func TestCLIUnifiedSoundpackIntegration(t *testing.T) {
 
 		// Create test sound file
 		soundFile := filepath.Join(tempDir, "test-sound.wav")
-		wavData := createMinimalWAV()
+		wavData := wavfixture.Minimal()
 		err := os.WriteFile(soundFile, wavData, 0644)
 		if err != nil {
 			t.Fatalf("Failed to create test WAV file: %v", err)
@@ -1090,33 +1091,6 @@ func TestCLILoggingLevels(t *testing.T) {
 	if !strings.Contains(logOutput, "level=DEBUG") {
 		t.Error("Expected some DEBUG level logs but found none")
 		t.Logf("Full log output: %s", logOutput)
-	}
-}
-
-// createMinimalWAV produces a minimal valid WAV file for tests that need a
-// real on-disk sound file to feed the loader.
-func createMinimalWAV() []byte {
-	// Minimal valid WAV: 44-byte header + 8 bytes audio data
-	return []byte{
-		// RIFF header
-		'R', 'I', 'F', 'F',
-		44, 0, 0, 0, // File size - 8 (44 - 8 = 36 + 8 data = 44)
-		'W', 'A', 'V', 'E',
-
-		// fmt chunk
-		'f', 'm', 't', ' ',
-		16, 0, 0, 0, // fmt chunk size
-		1, 0, // PCM format
-		1, 0, // mono
-		0x44, 0xAC, 0, 0, // 44100 Hz sample rate
-		0x88, 0x58, 0x01, 0, // byte rate
-		2, 0, // block align
-		16, 0, // 16 bits per sample
-
-		// data chunk
-		'd', 'a', 't', 'a',
-		8, 0, 0, 0, // data size
-		0, 0, 0x7F, 0x7F, 0, 0, 0x7F, 0x7F, // 4 samples of audio data
 	}
 }
 
