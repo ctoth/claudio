@@ -5,11 +5,10 @@ import (
 	"testing"
 )
 
-// Every backend rejects what volume.Validate rejects; the fake used to let
-// NaN through because NaN fails both range comparisons.
+// Every backend rejects what volume.Validate rejects; NaN fails both range
+// comparisons, so it needs the explicit check.
 func TestBackendsRejectNonFiniteVolume(t *testing.T) {
 	backends := map[string]AudioBackend{
-		"fake":           NewFakeBackend(),
 		"system_command": NewSystemCommandBackend("true"),
 	}
 	for name, b := range backends {

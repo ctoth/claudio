@@ -20,7 +20,7 @@ func TestHookModeMalformedPayloadPrintsErrorWithoutUsage(t *testing.T) {
 		DefaultSoundpack: "x",
 		Enabled:          true,
 		LogLevel:         "warn",
-		AudioBackend:     "fake",
+		AudioBackend:     "oto",
 	})
 
 	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}

@@ -1,23 +1,17 @@
-package audio
+package audiotest
 
 import (
 	"context"
 	"sync"
+	"testing"
 
+	"claudio.click/internal/audio"
 	"claudio.click/internal/volume"
 )
 
 // FakeBackend is a test fake that records Play invocations and never
-// touches real audio hardware. It is registered under the name "fake"
-// via init() so any caller of NewBackend("fake") (typically tests
-// configuring cfg.AudioBackend = "fake") gets one. Construction is
-// cheap and observation is via the public helper methods.
-//
-// The fake is intentionally included in the production binary (not
-// under a build tag) so cross-package tests in internal/cli can reach
-// it through the audio package's import graph. Its ~120 LOC cost is
-// the price of avoiding a separate test-support subpackage and a
-// manual RegisterBackend call from every cli test.
+// touches real audio hardware. It is not part of the production binary:
+// Install puts it in place of the "oto" backend for one test.
 type FakeBackend struct {
 	mu        sync.Mutex
 	plays     []FakePlay
@@ -39,14 +33,14 @@ func NewFakeBackend() *FakeBackend {
 
 // Play records the invocation. If the source implements FilePather, the
 // resolved file path is captured. Otherwise SourcePath remains empty.
-func (f *FakeBackend) Play(ctx context.Context, source AudioSource) error {
+func (f *FakeBackend) Play(ctx context.Context, source audio.AudioSource) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.closed {
-		return ErrBackendClosed
+		return audio.ErrBackendClosed
 	}
 	var path string
-	if fp, ok := source.(FilePather); ok {
+	if fp, ok := source.(audio.FilePather); ok {
 		if p, err := fp.FilePath(); err == nil {
 			path = p
 		}
@@ -120,7 +114,7 @@ var (
 )
 
 // LastFakeBackend returns the most recently constructed FakeBackend
-// (via NewBackend("fake")), or nil if no fake backend has been
+// (via an Install-ed constructor), or nil if no fake backend has been
 // created yet. Test-only accessor for asserting on recorded Play
 // invocations across the audio→cli package boundary.
 func LastFakeBackend() *FakeBackend {
@@ -139,12 +133,18 @@ func ResetLastFakeBackend() {
 	lastFakeBackend = nil
 }
 
-func init() {
-	RegisterBackend("fake", func() (AudioBackend, error) {
+// Install makes the fake the "oto" backend until the test ends, then
+// restores whatever was registered before. Select it with backend "oto"
+// (testenv.IsolateXDG sets CLAUDIO_AUDIO_BACKEND=oto). Install mutates
+// process-wide registration, so tests using it must not run in parallel.
+func Install(t testing.TB) {
+	t.Helper()
+	previous := audio.RegisterBackend("oto", func() (audio.AudioBackend, error) {
 		fb := NewFakeBackend()
 		lastFakeBackendMu.Lock()
 		lastFakeBackend = fb
 		lastFakeBackendMu.Unlock()
 		return fb, nil
 	})
+	t.Cleanup(func() { audio.RegisterBackend("oto", previous) })
 }

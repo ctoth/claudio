@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"claudio.click/internal/audio/audiotest"
 	"github.com/adrg/xdg"
 )
 
@@ -53,12 +54,12 @@ func IsolateXDG(t *testing.T) string {
 	// ApplyEnvironmentOverrides after every load path.
 	t.Setenv("CLAUDIO_FILE_LOGGING", "false")
 
-	// Route every cli.Run call through the fake audio backend so the
-	// test binary never blocks waiting for a real audio device. Tests that want to assert
-	// on Play invocations read audio.LastFakeBackend().Plays(); tests
-	// that don't care simply benefit from the fake's no-op
-	// implementation.
-	t.Setenv("CLAUDIO_AUDIO_BACKEND", "fake")
+	// Route every in-process cli.Run call through the fake audio backend so
+	// the test binary never blocks waiting for a real audio device. The fake
+	// stands in for "oto"; tests that assert on Play invocations read
+	// audiotest.LastFakeBackend().Plays().
+	audiotest.Install(t)
+	t.Setenv("CLAUDIO_AUDIO_BACKEND", "oto")
 
 	xdg.Reload()
 	t.Cleanup(func() { xdg.Reload() })

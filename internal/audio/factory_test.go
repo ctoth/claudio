@@ -285,3 +285,11 @@ func TestNewBackend_OtoUnregistered(t *testing.T) {
 		t.Errorf("expected ErrBackendNotAvailable, got %v", err)
 	}
 }
+
+// The fake backend is test-only (internal/audio/audiotest); the factory does
+// not know the name.
+func TestNewBackend_FakeIsNotABackendName(t *testing.T) {
+	if _, err := NewBackend("fake"); !errors.Is(err, ErrInvalidBackendType) {
+		t.Fatalf(`NewBackend("fake") = %v, want ErrInvalidBackendType`, err)
+	}
+}

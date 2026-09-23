@@ -40,7 +40,6 @@ func TestNoCGOBinaryAudioAvailability(t *testing.T) {
 	}{
 		{"status", "oto", []string{"status"}, false, "oto -> oto (available; playback not tested)"},
 		{"auto status", "auto", []string{"status"}, false, "auto -> oto (available; playback not tested)"},
-		{"available status", "fake", []string{"status"}, false, "fake -> fake (available; playback not tested)"},
 		{"unavailable hook", "system_command", nil, true, "no system audio commands found"},
 		{"silent hook", "oto", []string{"--silent"}, false, ""},
 	} {

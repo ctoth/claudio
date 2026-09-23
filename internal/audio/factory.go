@@ -20,14 +20,22 @@ var (
 	backendCtors  = map[string]BackendConstructor{}
 )
 
-// RegisterBackend registers a constructor for the given backend type. It
-// is intended to be called from an init() in a backend's subpackage so
-// the top-level audio package does not need to import the backend's
-// implementation. The native subpackage registers "oto" in every build.
-func RegisterBackend(name string, ctor BackendConstructor) {
+// RegisterBackend registers a constructor for the given backend type and
+// returns the one it replaced (nil if none); registering nil removes the
+// entry. It is called from an init() in a backend's subpackage so the
+// top-level audio package does not need to import the implementation: the
+// native subpackage registers "oto" in every build. Tests swap in a fake
+// the same way (internal/audio/audiotest).
+func RegisterBackend(name string, ctor BackendConstructor) (previous BackendConstructor) {
 	backendCtorMu.Lock()
 	defer backendCtorMu.Unlock()
-	backendCtors[name] = ctor
+	previous = backendCtors[name]
+	if ctor == nil {
+		delete(backendCtors, name)
+	} else {
+		backendCtors[name] = ctor
+	}
+	return previous
 }
 
 func lookupBackendConstructor(name string) (BackendConstructor, bool) {
@@ -81,7 +89,7 @@ func planBackend(backendType string, isWSL bool, commandExists func(string) bool
 			return backendType, nil, fmt.Errorf("%w: no system audio commands found", ErrBackendNotAvailable)
 		}
 		return backendType, func() (AudioBackend, error) { return NewSystemCommandBackend(commands...), nil }, nil
-	case "oto", "fake":
+	case "oto":
 		ctor, ok := lookupBackendConstructor(backendType)
 		if !ok {
 			return backendType, nil, fmt.Errorf("%w: %s backend not registered", ErrBackendNotAvailable, backendType)
