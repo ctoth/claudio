@@ -301,8 +301,7 @@ func countAudioFiles(dir string) int {
 		if info.IsDir() {
 			return nil
 		}
-		ext := strings.ToLower(filepath.Ext(path))
-		if ext == ".wav" || ext == ".mp3" || ext == ".aiff" {
+		if soundpack.IsAudioExt(filepath.Ext(path)) {
 			count++
 		}
 		return nil

@@ -4,10 +4,19 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
-var directoryAudioExtensions = []string{".wav", ".mp3", ".aiff", ".aif", ".mpeg"}
+// audioExtensions lists the file extensions the audio decoders play, in the
+// order directory packs try them as alternates for a sound key.
+var audioExtensions = []string{".wav", ".mp3", ".aiff", ".aif", ".mpeg"}
+
+// IsAudioExt reports whether ext (with its leading dot, any case) is a
+// playable audio file extension.
+func IsAudioExt(ext string) bool {
+	return slices.Contains(audioExtensions, strings.ToLower(ext))
+}
 
 // DirectoryMapper maps relative paths to directory-based candidates
 type DirectoryMapper struct {
@@ -70,19 +79,7 @@ func (d *DirectoryMapper) MapPath(relativePath string) ([]string, error) {
 }
 
 func existingAlternateAudioPaths(basePath, relativePath string) []string {
-	ext := strings.ToLower(filepath.Ext(relativePath))
-	if ext == "" {
-		return nil
-	}
-
-	isAudioPath := false
-	for _, audioExt := range directoryAudioExtensions {
-		if ext == audioExt {
-			isAudioPath = true
-			break
-		}
-	}
-	if !isAudioPath {
+	if !IsAudioExt(filepath.Ext(relativePath)) {
 		return nil
 	}
 
@@ -92,7 +89,7 @@ func existingAlternateAudioPaths(basePath, relativePath string) []string {
 	}
 	var alternates []string
 
-	for _, audioExt := range directoryAudioExtensions {
+	for _, audioExt := range audioExtensions {
 		alternate := filepath.Join(basePath, stem+audioExt)
 		key := strings.ToLower(alternate)
 		if _, exists := seen[key]; exists {

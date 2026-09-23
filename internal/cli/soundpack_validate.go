@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 
 	"claudio.click/internal/soundpack"
 	"github.com/spf13/cobra"
@@ -26,7 +25,7 @@ Checks:
   2. Referenced files exist: non-empty mappings point to real files, given as
      relative paths inside the soundpack (no absolute paths or "..")
   3. Coverage gaps: compare mappings against all known sound keys
-  4. Format check: referenced files should be .wav, .mp3, or .aiff
+  4. Format check: referenced files should be .wav, .mp3, .mpeg, .aiff, or .aif
 
 Exit code 0 if no broken or unsafe references, non-zero otherwise.
 Empty mappings are informational, not errors.
@@ -105,9 +104,8 @@ func validateJSONSoundpackFile(path string) (validateResult, error) {
 	}
 	formatWarnings := make(map[string]string)
 	for key, resolved := range v.Resolved {
-		ext := strings.ToLower(filepath.Ext(resolved))
-		if ext != ".wav" && ext != ".mp3" && ext != ".aiff" {
-			slog.Warn("non-audio format", "key", key, "path", resolved, "ext", ext)
+		if !soundpack.IsAudioExt(filepath.Ext(resolved)) {
+			slog.Warn("non-audio format", "key", key, "path", resolved)
 			formatWarnings[key] = resolved
 		}
 	}
@@ -140,6 +138,21 @@ func validateSoundpackPath(path string) (validateResult, error) {
 	return validateJSONSoundpackFile(path)
 }
 
+// resolveDirectoryKey returns the first existing regular file mapper
+// offers for key, or "" when none exists.
+func resolveDirectoryKey(mapper soundpack.PathMapper, key string) string {
+	candidates, err := mapper.MapPath(key)
+	if err != nil {
+		return ""
+	}
+	for _, candidate := range candidates {
+		if info, err := os.Stat(candidate); err == nil && info.Mode().IsRegular() {
+			return candidate
+		}
+	}
+	return ""
+}
+
 // Err reports broken or unsafe mappings as an error.
 func (r validateResult) Err() error {
 	return r.problems
@@ -156,26 +169,29 @@ func validateDirectorySoundpack(dirPath string) (validateResult, error) {
 		return validateResult{}, fmt.Errorf("failed to extract sound keys: %w", err)
 	}
 
-	// Scan directory for audio files and map them to known keys
-	// Key pattern: <category>/<filename> (e.g., loading/bash-start.wav)
-	mappedKeys := make(map[string]string)
-	allMappings := make(map[string]string)
-
-	// Initialize all known keys as empty
-	for _, key := range allKeys {
-		allMappings[key] = ""
-	}
-
-	// Walk directory to find audio files
-	if err := filepath.Walk(dirPath, newDirectorySoundpackWalkFunc(dirPath, mappedKeys)); err != nil {
+	// Walk the directory first: it rejects symlinked audio files.
+	audioFiles := make(map[string]string)
+	if err := filepath.Walk(dirPath, newDirectorySoundpackWalkFunc(dirPath, audioFiles)); err != nil {
 		return validateResult{}, fmt.Errorf("failed to scan directory soundpack: %w", err)
 	}
-	for key, path := range mappedKeys {
-		allMappings[key] = path
+
+	// Coverage counts a known key only when the runtime's directory mapper
+	// resolves it (including alternate extensions such as .mp3 for a .wav
+	// key). Stray files that match no key do not count, so coverage cannot
+	// exceed 100%.
+	name := filepath.Base(dirPath)
+	mapper := soundpack.NewDirectoryMapper(name, []string{dirPath})
+	mappedKeys := make(map[string]string)
+	allMappings := make(map[string]string, len(allKeys))
+	for _, key := range allKeys {
+		allMappings[key] = ""
+		if path := resolveDirectoryKey(mapper, key); path != "" {
+			mappedKeys[key] = path
+			allMappings[key] = path
+		}
 	}
 
-	name := filepath.Base(dirPath)
-	slog.Info("scanned directory soundpack", "name", name, "found_files", len(mappedKeys))
+	slog.Info("scanned directory soundpack", "name", name, "audio_files", len(audioFiles), "covered_keys", len(mappedKeys))
 
 	return validateResult{
 		Name:           name,
@@ -203,9 +219,20 @@ func printValidateReport(cmd *cobra.Command, result validateResult) {
 	}
 	cmd.Println()
 
-	// Coverage Summary
+	// Coverage Summary. Only known keys count, so coverage never exceeds
+	// 100% (a JSON pack may map extra, unknown keys).
 	totalKeys := len(result.AllKeys)
-	totalMapped := len(result.MappedKeys)
+	totalMapped := 0
+	categoryKeys := make(map[string]int)   // category -> total keys
+	categoryMapped := make(map[string]int) // category -> mapped keys
+	for _, key := range result.AllKeys {
+		cat := categoryFromKey(key)
+		categoryKeys[cat]++
+		if _, mapped := result.MappedKeys[key]; mapped {
+			totalMapped++
+			categoryMapped[cat]++
+		}
+	}
 	pct := float64(0)
 	if totalKeys > 0 {
 		pct = float64(totalMapped) / float64(totalKeys) * 100
@@ -214,21 +241,7 @@ func printValidateReport(cmd *cobra.Command, result validateResult) {
 	cmd.Println("Coverage Summary:")
 	cmd.Printf("  Total:       %d/%d (%.1f%%)\n", totalMapped, totalKeys, pct)
 
-	// Per-category breakdown
-	categoryKeys := make(map[string]int)   // category -> total keys
-	categoryMapped := make(map[string]int) // category -> mapped keys
-
-	for _, key := range result.AllKeys {
-		cat := categoryFromKey(key)
-		categoryKeys[cat]++
-	}
-
-	for key := range result.MappedKeys {
-		cat := categoryFromKey(key)
-		categoryMapped[cat]++
-	}
-
-	// Sort categories for consistent output
+	// Per-category breakdown, sorted for consistent output
 	categories := make([]string, 0, len(categoryKeys))
 	for cat := range categoryKeys {
 		categories = append(categories, cat)
@@ -331,8 +344,7 @@ func newDirectorySoundpackWalkFunc(dirPath string, found map[string]string) file
 			return nil
 		}
 
-		ext := strings.ToLower(filepath.Ext(path))
-		if ext != ".wav" && ext != ".mp3" && ext != ".aiff" {
+		if !soundpack.IsAudioExt(filepath.Ext(path)) {
 			return nil
 		}
 		if info.Mode()&os.ModeSymlink != 0 {
