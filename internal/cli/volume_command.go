@@ -22,7 +22,7 @@ import (
 // Note: the persistent `--volume` flag is for transient overrides on
 // the hook/stdin path; this subcommand persists the value.
 // CLAUDIO_VOLUME env var still takes precedence at runtime.
-func newVolumeCommand() *cobra.Command {
+func newVolumeCommand(c *CLI) *cobra.Command {
 	return &cobra.Command{
 		Use:   "volume [LEVEL]",
 		Short: "Get or set the persistent volume preference",
@@ -36,20 +36,14 @@ precedence at runtime over the persisted value. The transient
 "--volume" flag also overrides the persisted value for a single hook
 invocation.`,
 		Args: cobra.MaximumNArgs(1),
-		RunE: runVolumeE,
+		RunE: c.runVolume,
 	}
 }
 
-func runVolumeE(cmd *cobra.Command, args []string) error {
-	cli := cliFromContext(cmd.Context())
-	if cli == nil {
-		return fmt.Errorf("CLI instance not found in context")
-	}
-	cli.initializeConfigManager()
-
+func (c *CLI) runVolume(cmd *cobra.Command, args []string) error {
 	// Read-only path: print and return.
 	if len(args) == 0 {
-		cfg, err := loadConfigForVerb(cmd, cli)
+		cfg, err := c.loadConfigForVerb(cmd)
 		if err != nil {
 			return err
 		}
@@ -57,7 +51,7 @@ func runVolumeE(cmd *cobra.Command, args []string) error {
 		// invocations actually use, and what `claudio status` reports.
 		// WRITE path below intentionally does NOT do this — persistence
 		// must be deterministic regardless of env state.
-		cfg = cli.configManager.ApplyEnvironmentOverrides(cfg)
+		cfg = c.configManager.ApplyEnvironmentOverrides(cfg)
 		if cfg.Volume == nil {
 			fmt.Fprintln(cmd.OutOrStdout(), "volume: default (no persisted setting)")
 		} else if os.Getenv("CLAUDIO_VOLUME") != "" {
@@ -81,7 +75,7 @@ func runVolumeE(cmd *cobra.Command, args []string) error {
 	}
 
 	previous := "default"
-	if err := mutateConfigForCommand(cmd, func(cfg *config.Config) error {
+	if err := c.mutateConfigForCommand(cmd, func(cfg *config.Config) error {
 		if cfg.Volume != nil {
 			previous = fmt.Sprintf("%.2f", *cfg.Volume)
 		}

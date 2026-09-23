@@ -32,25 +32,25 @@ type configLoad struct {
 
 // loadConfig resolves --config or, without it, the first existing XDG
 // config file, and reads it with the shared missing/broken policy.
-func loadConfig(cmd *cobra.Command, cli *CLI) configLoad {
+func (c *CLI) loadConfig(cmd *cobra.Command) configLoad {
 	path, _ := cmd.Flags().GetString("config")
 	if path == "" {
-		path = cli.configManager.FindConfigFile()
+		path = c.configManager.FindConfigFile()
 	}
 	if path == "" {
 		slog.Debug("no config file found; using defaults")
-		return configLoad{Config: cli.configManager.GetDefaultConfig()}
+		return configLoad{Config: c.configManager.GetDefaultConfig()}
 	}
 
-	cfg, err := cli.configManager.LoadFromFile(path)
+	cfg, err := c.configManager.LoadFromFile(path)
 	switch {
 	case err == nil:
 		return configLoad{Path: path, Config: cfg}
 	case errors.Is(err, fs.ErrNotExist):
 		slog.Debug("config file does not exist; using defaults", "path", path)
-		return configLoad{Path: path, Missing: true, Config: cli.configManager.GetDefaultConfig()}
+		return configLoad{Path: path, Missing: true, Config: c.configManager.GetDefaultConfig()}
 	default:
-		return configLoad{Path: path, Config: cli.configManager.GetDefaultConfig(), Err: fmt.Errorf("config %s: %w", path, err)}
+		return configLoad{Path: path, Config: c.configManager.GetDefaultConfig(), Err: fmt.Errorf("config %s: %w", path, err)}
 	}
 }
 

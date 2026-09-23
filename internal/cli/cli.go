@@ -34,16 +34,20 @@ type CLI struct {
 	trackingDB        *sql.DB // Optional tracking database
 }
 
-// NewCLI creates a new CLI instance
+// NewCLI creates a new CLI instance. Command handlers are closures over
+// the returned *CLI, so they share its config manager and lazily opened
+// resources (resolver, audio backend, tracking DB) without a context lookup.
 func NewCLI() *CLI {
 	slog.Debug("creating new CLI instance")
+
+	c := &CLI{configManager: config.NewConfigManager()}
 
 	rootCmd := &cobra.Command{
 		Use:     "claudio",
 		Short:   "Coding-agent audio plugin",
 		Long:    "Claudio is a hook-based audio plugin for coding agents that plays contextual sounds based on tool usage and events.",
 		Version: Version,
-		RunE:    runStdinModeE, // Default behavior when no subcommand is provided
+		RunE:    c.runStdinMode, // Default behavior when no subcommand is provided
 		// Run prints a failed command's error once. Usage text is for
 		// --help only: on stdout an agent would read it as hook output.
 		SilenceErrors: true,
@@ -53,37 +57,20 @@ func NewCLI() *CLI {
 	// that downstream tooling and tests check against.
 	rootCmd.SetVersionTemplate("claudio version " + Version + " (Version " + Version + ")\nCoding-agent audio plugin - Hook-based sound system\n")
 
-	// Add install subcommand
-	installCmd := newInstallCommand()
-	rootCmd.AddCommand(installCmd)
-
-	// Add uninstall subcommand
-	uninstallCmd := newUninstallCommand()
-	rootCmd.AddCommand(uninstallCmd)
-
-	// Add analyze subcommand
-	analyzeCmd := newAnalyzeCommand()
-	rootCmd.AddCommand(analyzeCmd)
-
-	// Add soundpack subcommand
-	soundpackCmd := newSoundpackCommand()
-	rootCmd.AddCommand(soundpackCmd)
-
-	// Add volume subcommand
-	rootCmd.AddCommand(newVolumeCommand())
-
-	// Add mute / unmute subcommands
-	rootCmd.AddCommand(newMuteCommand())
-	rootCmd.AddCommand(newUnmuteCommand())
-
-	// Add status subcommand
-	rootCmd.AddCommand(newStatusCommand())
-
-	// Add install-commands subcommand (writes the /claudio slash command markdown)
-	rootCmd.AddCommand(newInstallCommandsCommand())
-
-	// Add uninstall-commands subcommand (removes the command artifact installed above)
-	rootCmd.AddCommand(newUninstallCommandsCommand())
+	rootCmd.AddCommand(
+		newInstallCommand(),
+		newUninstallCommand(),
+		newAnalyzeCommand(c),
+		newSoundpackCommand(c),
+		newVolumeCommand(c),
+		newMuteCommand(c),
+		newUnmuteCommand(c),
+		newStatusCommand(c),
+		// install-commands writes the /claudio slash command markdown;
+		// uninstall-commands removes it.
+		newInstallCommandsCommand(),
+		newUninstallCommandsCommand(),
+	)
 
 	// Add persistent flags to root command for backward compatibility
 	rootCmd.PersistentFlags().String("config", "", "Path to config file")
@@ -100,59 +87,14 @@ func NewCLI() *CLI {
 	_ = rootCmd.PersistentFlags().MarkHidden("hook-event")
 
 	// Note: cobra automatically registers a `--version` boolean flag (and
-	// short `-v`) once rootCmd.Version is set. We do not register a manual
-	// one, which previously required an args[1] short-circuit in Run().
+	// short `-v`) once rootCmd.Version is set.
 
-	return &CLI{
-		rootCmd:           rootCmd,
-		configManager:     nil, // Lazy initialization - only create when needed
-		soundpackResolver: nil, // Lazy initialization - only create when needed
-		audioBackend:      nil, // Lazy initialization - only create when needed
-		trackingDB:        nil, // Lazy initialization - only create when needed
-	}
-}
-
-// contextKey is a private type for context keys to avoid collisions (SA1029).
-type contextKey string
-
-const cliContextKey contextKey = "cli"
-
-// contextWithCLI stores CLI instance in context for command handlers
-func contextWithCLI(cli *CLI) context.Context {
-	return context.WithValue(context.Background(), cliContextKey, cli)
-}
-
-// cliFromContext extracts CLI instance from context
-func cliFromContext(ctx context.Context) *CLI {
-	if cli, ok := ctx.Value(cliContextKey).(*CLI); ok {
-		return cli
-	}
-	return nil
-}
-
-// hasVersionFlag reports whether --version or the short -v form appears
-// anywhere in argv. Used in Run() to gate initializeSystems so that
-// `claudio --silent --version` (and any other ordering) is as cheap as
-// `claudio --version` was previously when the flag was args[1].
-func hasVersionFlag(args []string) bool {
-	// Skip args[0] (program name).
-	for i := 1; i < len(args); i++ {
-		a := args[i]
-		if a == "--version" || a == "-v" {
-			return true
-		}
-		// Support `--version=...` and `-v=...` forms even though cobra
-		// treats them as boolean flags — defensive against future
-		// shape changes.
-		if strings.HasPrefix(a, "--version=") || strings.HasPrefix(a, "-v=") {
-			return true
-		}
-	}
-	return false
+	c.rootCmd = rootCmd
+	return c
 }
 
 // loadAndValidateConfig loads configuration from flags and files, applies overrides, and validates
-func loadAndValidateConfig(cmd *cobra.Command, cli *CLI) (*config.Config, error) {
+func (c *CLI) loadAndValidateConfig(cmd *cobra.Command) (*config.Config, error) {
 	// Get flag values
 	volumeStr, _ := cmd.Flags().GetString("volume")
 	soundpackFlag, _ := cmd.Flags().GetString("soundpack")
@@ -170,12 +112,12 @@ func loadAndValidateConfig(cmd *cobra.Command, cli *CLI) (*config.Config, error)
 	}
 
 	// Load configuration. An unusable file is a warning, never a failed hook.
-	loaded := loadConfig(cmd, cli)
+	loaded := c.loadConfig(cmd)
 	loaded.warnIgnored(cmd)
 	cfg := loaded.Config
 
 	// Apply environment overrides
-	cfg = cli.configManager.ApplyEnvironmentOverrides(cfg)
+	cfg = c.configManager.ApplyEnvironmentOverrides(cfg)
 
 	// Apply command line overrides
 	if volumeStr != "" {
@@ -196,7 +138,7 @@ func loadAndValidateConfig(cmd *cobra.Command, cli *CLI) (*config.Config, error)
 	}
 
 	// Validate final configuration
-	if err := cli.configManager.ValidateConfig(cfg); err != nil {
+	if err := c.configManager.ValidateConfig(cfg); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
 
@@ -417,18 +359,11 @@ func processHookInput(cmd *cobra.Command, cli *CLI, cfg *config.Config, inputDat
 	return nil
 }
 
-// runStdinModeE handles the default behavior of reading hook JSON from stdin
-func runStdinModeE(cmd *cobra.Command, args []string) error {
-	// Extract CLI instance from context
-	cli := cliFromContext(cmd.Context())
-	if cli == nil {
-		slog.Error("CLI instance not found in context")
-		return fmt.Errorf("CLI instance not found in context")
-	}
-
+// runStdinMode handles the default behavior of reading hook JSON from stdin
+func (c *CLI) runStdinMode(cmd *cobra.Command, _ []string) error {
 	// Load and validate configuration. (Note: --version is handled by
 	// cobra itself before RunE is invoked because rootCmd.Version is set.)
-	cfg, err := loadAndValidateConfig(cmd, cli)
+	cfg, err := c.loadAndValidateConfig(cmd)
 	if err != nil {
 		return err
 	}
@@ -462,16 +397,16 @@ func runStdinModeE(cmd *cobra.Command, args []string) error {
 	// already-loaded cfg so a user-supplied --config is honored
 	// (initializeTracking previously called LoadConfig itself, dropping
 	// the override).
-	cli.initializeTracking(cfg)
+	c.initializeTracking(cfg)
 
 	// Initialize audio and soundpack systems
-	err = initializeAudioSystem(cmd, cli, cfg)
+	err = initializeAudioSystem(cmd, c, cfg)
 	if err != nil {
 		return err
 	}
 
 	// Process hook input payload.
-	if err := processHookInput(cmd, cli, cfg, inputData); err != nil {
+	if err := processHookInput(cmd, c, cfg, inputData); err != nil {
 		return err
 	}
 	return writeJSONHookSuccessResponse(cmd, inputData)
@@ -494,24 +429,6 @@ func writeJSONHookSuccessResponse(cmd *cobra.Command, inputData []byte) error {
 // Run executes the CLI with the given arguments and I/O streams
 func (c *CLI) Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	slog.Debug("CLI run started", "args", args)
-
-	// --version (and -v) is now handled by cobra natively because
-	// rootCmd.Version is set in NewCLI. Cobra exits before RunE runs, but
-	// we still skip initializeSystems() (which constructs a configManager
-	// and XDG resolver) when the version flag is present anywhere on the
-	// command line — the previous args[1] short-circuit only fired when
-	// --version was literally args[1], so e.g. `claudio --silent --version`
-	// still spun up the config manager. Detecting the flag here keeps the
-	// observable "fast path" invariant covered by TestVersionFlagEarlyExit
-	// while letting cobra produce the actual output.
-	if hasVersionFlag(args) {
-		return c.execute(args, stdin, stdout, stderr)
-	}
-
-	// Initialize systems only when actually needed (not for version flag)
-	slog.Debug("about to call initializeSystems()")
-	c.initializeSystems()
-	slog.Debug("initializeSystems() completed")
 	setupDefaultCommandLogging(stderr)
 
 	// Ensure resources are cleaned up on exit
@@ -530,20 +447,14 @@ func (c *CLI) Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 		}
 	}()
 
-	return c.execute(args, stdin, stdout, stderr)
-}
-
-// execute runs cobra on args (program name first) and reports a failure
-// exactly once. Cobra's own error and usage printing is silenced on the
-// root, so this is the only place a command error reaches stderr; the log
-// record is WARN so the ERROR-only stderr handler does not repeat it.
-func (c *CLI) execute(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	c.rootCmd.SetArgs(args[1:])
 	c.rootCmd.SetIn(stdin)
 	c.rootCmd.SetOut(stdout)
 	c.rootCmd.SetErr(stderr)
-	c.rootCmd.SetContext(contextWithCLI(c))
 
+	// Cobra's own error and usage printing is silenced on the root, so this
+	// is the only place a command error reaches stderr; the log record is
+	// WARN so the ERROR-only stderr handler does not repeat it.
 	if err := c.rootCmd.Execute(); err != nil {
 		fmt.Fprintf(stderr, "Error: %v\n", err)
 		slog.Warn("command failed", "error", err)
@@ -556,31 +467,6 @@ func setupDefaultCommandLogging(stderr io.Writer) {
 	slog.SetDefault(slog.New(newStartupHandler(slog.NewTextHandler(stderr, &slog.HandlerOptions{
 		Level: slog.LevelError,
 	}))))
-}
-
-// initializeConfigManager initializes only the config manager early for log level configuration
-func (c *CLI) initializeConfigManager() {
-	if c.configManager == nil {
-		c.configManager = config.NewConfigManager()
-	}
-}
-
-// initializeSystems lazily initializes remaining CLI components when actually needed
-func (c *CLI) initializeSystems() {
-	slog.Debug("initializeSystems() called")
-	// Config manager should already be initialized
-	c.initializeConfigManager()
-
-	// Note: Tracking initialization is done later in runStdinModeE after logging is configured
-	// to avoid log messages appearing before the dual-level handler is set up
-
-	// Don't create a global SoundMapper here — it is built per-request in
-	// processHookEvent so each request gets its own session-scoped
-	// EventRecorder threaded through the soundpack PathObserver. (Chunk 14
-	// inverted the old SoundChecker hook ecosystem; this comment used to
-	// say "session-specific SoundChecker" — that type no longer exists.)
-	// soundpackResolver and audioBackend are initialized in
-	// initializeAudioSystem when needed.
 }
 
 // processHookEvent processes the parsed hook event

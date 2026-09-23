@@ -15,7 +15,7 @@ import (
 const installedSoundpackMarker = ".claudio-installed"
 
 // newSoundpackInstallCommand creates the soundpack install subcommand
-func newSoundpackInstallCommand() *cobra.Command {
+func newSoundpackInstallCommand(c *CLI) *cobra.Command {
 	var setDefault bool
 	var skipValidate bool
 
@@ -38,7 +38,7 @@ Examples:
   claudio soundpack install my-pack.json --skip-validate`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runSoundpackInstall(cmd, args[0], setDefault, skipValidate)
+			return c.runSoundpackInstall(cmd, args[0], setDefault, skipValidate)
 		},
 	}
 
@@ -49,7 +49,7 @@ Examples:
 }
 
 // runSoundpackInstall executes the soundpack install command
-func runSoundpackInstall(cmd *cobra.Command, srcPath string, setDefault, skipValidate bool) error {
+func (c *CLI) runSoundpackInstall(cmd *cobra.Command, srcPath string, setDefault, skipValidate bool) error {
 	slog.Debug("running soundpack install", "path", srcPath, "set_default", setDefault, "skip_validate", skipValidate)
 
 	// Check that the source path exists
@@ -101,13 +101,13 @@ func runSoundpackInstall(cmd *cobra.Command, srcPath string, setDefault, skipVal
 		return fmt.Errorf("invalid soundpack name: %w", err)
 	}
 	return withNameLock(name, func() error {
-		return installSoundpackFiles(cmd, srcPath, name, isDir, setDefault)
+		return c.installSoundpackFiles(cmd, srcPath, name, isDir, setDefault)
 	})
 }
 
 // installSoundpackFiles copies a validated soundpack into the XDG data
 // directory and updates config. The caller holds the per-name lock.
-func installSoundpackFiles(cmd *cobra.Command, srcPath, name string, isDir, setDefault bool) error {
+func (c *CLI) installSoundpackFiles(cmd *cobra.Command, srcPath, name string, isDir, setDefault bool) error {
 	// Determine install target
 	installDir := config.UserDataPath("soundpacks", name)
 	installPath := installDir
@@ -116,7 +116,7 @@ func installSoundpackFiles(cmd *cobra.Command, srcPath, name string, isDir, setD
 	}
 	slog.Info("install target determined", "install_path", installPath)
 
-	if err := validateConfigMutationTarget(cmd); err != nil {
+	if err := c.validateConfigMutationTarget(cmd); err != nil {
 		return fmt.Errorf("failed to load config before installing soundpack: %w", err)
 	}
 	if err := stageAndInstallSoundpack(srcPath, installDir, isDir); err != nil {
@@ -125,7 +125,7 @@ func installSoundpackFiles(cmd *cobra.Command, srcPath, name string, isDir, setD
 	slog.Info("soundpack copied successfully", "install_path", installPath)
 
 	// Update config
-	if err := updateConfigForInstall(cmd, installPath, name, setDefault); err != nil {
+	if err := c.updateConfigForInstall(cmd, installPath, name, setDefault); err != nil {
 		return fmt.Errorf("failed to update config: %w", err)
 	}
 
@@ -134,9 +134,9 @@ func installSoundpackFiles(cmd *cobra.Command, srcPath, name string, isDir, setD
 }
 
 // updateConfigForInstall loads the config, adds the install path, optionally sets default, and saves.
-func updateConfigForInstall(cmd *cobra.Command, installPath, name string, setDefault bool) error {
+func (c *CLI) updateConfigForInstall(cmd *cobra.Command, installPath, name string, setDefault bool) error {
 	slog.Debug("updating config for install", "install_path", installPath, "name", name, "set_default", setDefault)
-	return mutateConfigForCommand(cmd, func(cfg *config.Config) error {
+	return c.mutateConfigForCommand(cmd, func(cfg *config.Config) error {
 		pathExists := false
 		for _, p := range cfg.SoundpackPaths {
 			if p == installPath {

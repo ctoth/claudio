@@ -11,7 +11,7 @@ import (
 )
 
 // newSoundpackUseCommand creates the soundpack use subcommand
-func newSoundpackUseCommand() *cobra.Command {
+func newSoundpackUseCommand(c *CLI) *cobra.Command {
 	useCmd := &cobra.Command{
 		Use:   "use <name>",
 		Short: "Switch the active soundpack",
@@ -25,19 +25,19 @@ Examples:
   claudio soundpack use my-custom-pack`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runSoundpackUse(cmd, args[0])
+			return c.runSoundpackUse(cmd, args[0])
 		},
 	}
 	return useCmd
 }
 
 // runSoundpackUse executes the soundpack use command
-func runSoundpackUse(cmd *cobra.Command, name string) error {
+func (c *CLI) runSoundpackUse(cmd *cobra.Command, name string) error {
 	slog.Debug("running soundpack use", "name", name)
 
 	alreadyActive := false
 	var notFound error
-	if err := mutateConfigForCommand(cmd, func(cfg *config.Config) error {
+	if err := c.mutateConfigForCommand(cmd, func(cfg *config.Config) error {
 		// Validate against the same soundpack_paths the runtime will read,
 		// using the runtime's own lookup.
 		if _, ok := lookupSoundpack(name, cfg.SoundpackPaths); !ok {

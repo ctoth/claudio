@@ -44,7 +44,7 @@ type gitSoundpackRecord struct {
 	UpdatedAt      string `json:"updated_at"`
 }
 
-func newSoundpackAddCommand() *cobra.Command {
+func newSoundpackAddCommand(c *CLI) *cobra.Command {
 	var name string
 	var ref string
 	var subdir string
@@ -61,7 +61,7 @@ The cloned soundpack remains updateable with 'claudio soundpack update'. The
 playable soundpack path is added to config soundpack_paths.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runSoundpackAdd(cmd, args[0], name, ref, subdir, setDefault, skipValidate, replace)
+			return c.runSoundpackAdd(cmd, args[0], name, ref, subdir, setDefault, skipValidate, replace)
 		},
 	}
 
@@ -109,7 +109,7 @@ func newSoundpackUpdateCommand() *cobra.Command {
 	return updateCmd
 }
 
-func newSoundpackRemoveCommand() *cobra.Command {
+func newSoundpackRemoveCommand(c *CLI) *cobra.Command {
 	var keepFiles bool
 	var force bool
 
@@ -118,7 +118,7 @@ func newSoundpackRemoveCommand() *cobra.Command {
 		Short: "Remove a managed git soundpack",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runSoundpackRemove(cmd, args[0], keepFiles, force)
+			return c.runSoundpackRemove(cmd, args[0], keepFiles, force)
 		},
 	}
 
@@ -156,7 +156,7 @@ type gitAddRequest struct {
 	replace      bool
 }
 
-func runSoundpackAdd(cmd *cobra.Command, source, requestedName, ref, subdir string, setDefault, skipValidate, replace bool) error {
+func (c *CLI) runSoundpackAdd(cmd *cobra.Command, source, requestedName, ref, subdir string, setDefault, skipValidate, replace bool) error {
 	if err := requireGit(); err != nil {
 		return err
 	}
@@ -179,7 +179,7 @@ func runSoundpackAdd(cmd *cobra.Command, source, requestedName, ref, subdir stri
 	if err := validateGitRef(ref); err != nil {
 		return err
 	}
-	if err := validateConfigMutationTarget(cmd); err != nil {
+	if err := c.validateConfigMutationTarget(cmd); err != nil {
 		return fmt.Errorf("failed to load config before adding soundpack: %w", err)
 	}
 	req := gitAddRequest{
@@ -193,13 +193,13 @@ func runSoundpackAdd(cmd *cobra.Command, source, requestedName, ref, subdir stri
 		replace:      replace,
 	}
 	return withNameLock(name, func() error {
-		return addGitSoundpack(cmd, req)
+		return c.addGitSoundpack(cmd, req)
 	})
 }
 
 // addGitSoundpack clones, validates and activates a managed git soundpack.
 // The caller holds the per-name lock.
-func addGitSoundpack(cmd *cobra.Command, req gitAddRequest) error {
+func (c *CLI) addGitSoundpack(cmd *cobra.Command, req gitAddRequest) error {
 	name := req.name
 	cleanedSubdir := ""
 	if req.subdir != "" {
@@ -215,7 +215,7 @@ func addGitSoundpack(cmd *cobra.Command, req gitAddRequest) error {
 		return err
 	}
 	if exists && !req.replace {
-		return repairExistingGitSoundpack(cmd, req, existing, cleanedSubdir, clonePath)
+		return c.repairExistingGitSoundpack(cmd, req, existing, cleanedSubdir, clonePath)
 	}
 
 	if info, statErr := os.Stat(clonePath); statErr == nil {
@@ -320,7 +320,7 @@ func addGitSoundpack(cmd *cobra.Command, req gitAddRequest) error {
 			slog.Warn("failed to remove previous managed clone backup", "path", backupPath, "error", err)
 		}
 	}
-	if err := updateConfigForManagedGitInstall(cmd, playablePath, clonePath, name, req.setDefault); err != nil {
+	if err := c.updateConfigForManagedGitInstall(cmd, playablePath, clonePath, name, req.setDefault); err != nil {
 		return err
 	}
 
@@ -332,7 +332,7 @@ func addGitSoundpack(cmd *cobra.Command, req gitAddRequest) error {
 // repairExistingGitSoundpack handles `add` for a name that is already
 // registered with the same source: it re-checks the clone and repairs the
 // config entry instead of cloning again.
-func repairExistingGitSoundpack(cmd *cobra.Command, req gitAddRequest, existing gitSoundpackRecord, cleanedSubdir, clonePath string) error {
+func (c *CLI) repairExistingGitSoundpack(cmd *cobra.Command, req gitAddRequest, existing gitSoundpackRecord, cleanedSubdir, clonePath string) error {
 	name := req.name
 	if existing.SourceType != gitSoundpackSourceType || existing.URL != req.url || existing.Ref != req.ref || existing.Subdir != cleanedSubdir || filepath.Clean(existing.Path) != filepath.Clean(clonePath) {
 		return fmt.Errorf("managed git soundpack %q already exists; use --replace to replace it", name)
@@ -346,7 +346,7 @@ func repairExistingGitSoundpack(cmd *cobra.Command, req gitAddRequest, existing 
 			return fmt.Errorf("managed git soundpack %q exists but is not usable; use --replace to repair it: %w", name, err)
 		}
 	}
-	if err := updateConfigForManagedGitInstall(cmd, playablePath, clonePath, name, req.setDefault); err != nil {
+	if err := c.updateConfigForManagedGitInstall(cmd, playablePath, clonePath, name, req.setDefault); err != nil {
 		return err
 	}
 	cmd.Printf("Managed git soundpack '%s' already exists; repaired config\n", name)
@@ -449,25 +449,25 @@ func updateRegisteredGitSoundpack(ctx context.Context, name string, force bool) 
 	return updated, nil
 }
 
-func runSoundpackRemove(cmd *cobra.Command, name string, keepFiles, force bool) error {
-	if err := validateConfigMutationTarget(cmd); err != nil {
+func (c *CLI) runSoundpackRemove(cmd *cobra.Command, name string, keepFiles, force bool) error {
+	if err := c.validateConfigMutationTarget(cmd); err != nil {
 		return fmt.Errorf("failed to load config before removing soundpack: %w", err)
 	}
 	return withNameLock(name, func() error {
-		return removeGitSoundpack(cmd, name, keepFiles, force)
+		return c.removeGitSoundpack(cmd, name, keepFiles, force)
 	})
 }
 
 // removeGitSoundpack deletes a managed git soundpack's clone, registry
 // record and config entries. The caller holds the per-name lock.
-func removeGitSoundpack(cmd *cobra.Command, name string, keepFiles, force bool) error {
+func (c *CLI) removeGitSoundpack(cmd *cobra.Command, name string, keepFiles, force bool) error {
 	record, exists, err := readRecord(name)
 	if err != nil {
 		return err
 	}
 	if !exists {
 		clonePath := filepath.Join(gitSoundpackBaseDir(), name)
-		changed, err := removeConfigSoundpackPath(cmd, clonePath, clonePath, name)
+		changed, err := c.removeConfigSoundpackPath(cmd, clonePath, clonePath, name)
 		if err != nil {
 			return err
 		}
@@ -494,7 +494,7 @@ func removeGitSoundpack(cmd *cobra.Command, name string, keepFiles, force bool) 
 	}); err != nil {
 		return err
 	}
-	if _, err := removeConfigSoundpackPath(cmd, playablePath, record.Path, name); err != nil {
+	if _, err := c.removeConfigSoundpackPath(cmd, playablePath, record.Path, name); err != nil {
 		return err
 	}
 
@@ -840,8 +840,8 @@ func validateSoundpackInstallPath(playablePath string) error {
 
 var errNoSoundpackConfigChange = errors.New("soundpack config has no matching entry")
 
-func updateConfigForManagedGitInstall(cmd *cobra.Command, playablePath, clonePath, name string, setDefault bool) error {
-	return mutateConfigForCommand(cmd, func(cfg *config.Config) error {
+func (c *CLI) updateConfigForManagedGitInstall(cmd *cobra.Command, playablePath, clonePath, name string, setDefault bool) error {
+	return c.mutateConfigForCommand(cmd, func(cfg *config.Config) error {
 		filtered := make([]string, 0, len(cfg.SoundpackPaths)+1)
 		for _, existingPath := range cfg.SoundpackPaths {
 			if samePathOrWithin(existingPath, clonePath) {
@@ -858,9 +858,9 @@ func updateConfigForManagedGitInstall(cmd *cobra.Command, playablePath, clonePat
 	})
 }
 
-func removeConfigSoundpackPath(cmd *cobra.Command, playablePath, clonePath, removedName string) (bool, error) {
+func (c *CLI) removeConfigSoundpackPath(cmd *cobra.Command, playablePath, clonePath, removedName string) (bool, error) {
 	changed := false
-	err := mutateConfigForCommand(cmd, func(cfg *config.Config) error {
+	err := c.mutateConfigForCommand(cmd, func(cfg *config.Config) error {
 		filtered := make([]string, 0, len(cfg.SoundpackPaths))
 		for _, existingPath := range cfg.SoundpackPaths {
 			if samePathOrWithin(existingPath, playablePath) || samePathOrWithin(existingPath, clonePath) {
