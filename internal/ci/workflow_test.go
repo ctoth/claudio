@@ -89,8 +89,8 @@ func repoRoot(t *testing.T) string {
 	}
 }
 
-// The embedded default WAVs are generator output: config.go carries the
-// go:generate line, and CI regenerates them and fails on any drift.
+// The embedded default WAVs are generator output: config.go carries a
+// generate directive, and CI regenerates them and fails on any drift.
 func TestEmbeddedSoundsAreRegeneratedInCI(t *testing.T) {
 	root := repoRoot(t)
 	config := readRepoFile(t, root, "internal/config/config.go")
