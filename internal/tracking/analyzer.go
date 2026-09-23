@@ -95,7 +95,7 @@ func GetMissingSounds(db *sql.DB, filter QueryFilter) ([]MissingSound, error) {
 }
 
 // GetMissingSoundsSummary returns summary statistics about missing sounds
-func GetMissingSoundsSummary(db *sql.DB, filter QueryFilter) (map[string]interface{}, error) {
+func GetMissingSoundsSummary(db *sql.DB, filter QueryFilter) (map[string]any, error) {
 	if db == nil {
 		return nil, fmt.Errorf("database connection is nil")
 	}
@@ -125,7 +125,7 @@ func GetMissingSoundsSummary(db *sql.DB, filter QueryFilter) (map[string]interfa
 		return nil, fmt.Errorf("failed to query missing sounds summary: %w", err)
 	}
 
-	summary := map[string]interface{}{
+	summary := map[string]any{
 		"unique_missing_sounds":     uniqueSounds,
 		"total_missing_requests":    totalRequests,
 		"tools_with_missing_sounds": toolsWithMissing,

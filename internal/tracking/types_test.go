@@ -115,13 +115,13 @@ func TestLookupBuffer_ConcurrentObserverCallsRaceClean(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		for i := 0; i < n; i++ {
+		for i := range n {
 			obs(fmt.Sprintf("path-a-%d", i), i+1, i%2 == 0)
 		}
 	}()
 	go func() {
 		defer wg.Done()
-		for i := 0; i < n; i++ {
+		for i := range n {
 			obs(fmt.Sprintf("path-b-%d", i), i+1, true)
 		}
 	}()

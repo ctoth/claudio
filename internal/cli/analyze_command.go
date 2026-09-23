@@ -212,7 +212,7 @@ func categoryGroups(byCategory map[string][]tracking.MissingSound) []CategoryGro
 }
 
 // outputMissingSoundsHierarchical displays missing sounds grouped by tool
-func outputMissingSoundsHierarchical(w io.Writer, sounds []tracking.MissingSound, summary map[string]interface{}, filter tracking.QueryFilter) error {
+func outputMissingSoundsHierarchical(w io.Writer, sounds []tracking.MissingSound, summary map[string]any, filter tracking.QueryFilter) error {
 	if len(sounds) == 0 {
 		// No missing sounds found
 		if filter.Days > 0 {

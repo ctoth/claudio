@@ -17,7 +17,7 @@ func TestInstallAgentHooksEveryAgentAddsClaudioWithoutMutatingInput(t *testing.T
 			if !reflect.DeepEqual(settings, before) {
 				t.Errorf("input settings mutated: %v", settings)
 			}
-			hooks, ok := (*got)["hooks"].(map[string]interface{})
+			hooks, ok := (*got)["hooks"].(map[string]any)
 			if !ok || len(hooks) != len(agent.EnabledHooks()) {
 				t.Fatalf("installed hooks = %v, want %d events", (*got)["hooks"], len(agent.EnabledHooks()))
 			}

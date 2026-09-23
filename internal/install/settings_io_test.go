@@ -358,7 +358,7 @@ func TestReadSettingsLargeFile(t *testing.T) {
 	settingsFile := filepath.Join(tempDir, "large-settings.json")
 
 	// Create a large JSON object
-	largeSettings := make(map[string]interface{})
+	largeSettings := make(map[string]any)
 	largeSettings["hooks"] = map[string]string{
 		"PreToolUse":       "echo 'before'",
 		"PostToolUse":      "echo 'after'",
@@ -367,7 +367,7 @@ func TestReadSettingsLargeFile(t *testing.T) {
 
 	// Add many dummy entries to make it large
 	dummyData := make(map[string]string)
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		dummyData[fmt.Sprintf("key_%d", i)] = fmt.Sprintf("value_%d", i)
 	}
 	largeSettings["large_data"] = dummyData
@@ -411,7 +411,7 @@ func TestReadSettingsLargeFile(t *testing.T) {
 }
 
 // Helper function to get keys from a map
-func getKeys(m map[string]interface{}) []string {
+func getKeys(m map[string]any) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
 		keys = append(keys, k)
@@ -481,7 +481,7 @@ func TestReadSettingsFileBranches(t *testing.T) {
 func TestWriteSettingsFileRoundTrip(t *testing.T) {
 	fsys := afero.NewMemMapFs()
 	path := "/deep/nested/dir/settings.json"
-	in := &SettingsMap{"version": "1.0", "hooks": map[string]interface{}{}}
+	in := &SettingsMap{"version": "1.0", "hooks": map[string]any{}}
 	if err := WriteSettingsFile(fsys, path, in); err != nil {
 		t.Fatalf("write failed: %v", err)
 	}

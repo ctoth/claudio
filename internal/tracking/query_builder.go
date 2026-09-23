@@ -68,9 +68,9 @@ func (q *QueryFilter) ApplyTimeFilter(now time.Time) (startUnix, endUnix int64) 
 // BuildWhereClause constructs SQL WHERE clause and arguments from QueryFilter
 // Using simple string building for reliability and predictability
 // An unknown Category is an error rather than a filter that matches nothing.
-func (q *QueryFilter) BuildWhereClause() (string, []interface{}, error) {
+func (q *QueryFilter) BuildWhereClause() (string, []any, error) {
 	var clauses []string
-	var args []interface{}
+	var args []any
 
 	// Apply time filters
 	if q.StartTime != nil || q.EndTime != nil || q.Days > 0 || q.DatePreset != "" {

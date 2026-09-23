@@ -1,6 +1,7 @@
 package install
 
 import (
+	"slices"
 	"testing"
 )
 
@@ -14,7 +15,7 @@ func TestClaudioHookNamesWithFullPaths(t *testing.T) {
 		{
 			name: "simple string hook - full system path",
 			settings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"PreToolUse": "/usr/local/bin/claudio",
 				},
 			},
@@ -23,7 +24,7 @@ func TestClaudioHookNamesWithFullPaths(t *testing.T) {
 		{
 			name: "simple string hook - dev directory path",
 			settings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"PostToolUse": "/home/user/dev/claudio/claudio",
 				},
 			},
@@ -32,7 +33,7 @@ func TestClaudioHookNamesWithFullPaths(t *testing.T) {
 		{
 			name: "simple string hook - relative path",
 			settings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"UserPromptSubmit": "./claudio",
 				},
 			},
@@ -41,12 +42,12 @@ func TestClaudioHookNamesWithFullPaths(t *testing.T) {
 		{
 			name: "complex array hook - full system path",
 			settings: &SettingsMap{
-				"hooks": map[string]interface{}{
-					"Notification": []interface{}{
-						map[string]interface{}{
+				"hooks": map[string]any{
+					"Notification": []any{
+						map[string]any{
 							"matcher": ".*",
-							"hooks": []interface{}{
-								map[string]interface{}{
+							"hooks": []any{
+								map[string]any{
 									"command": "/usr/local/bin/claudio",
 									"type":    "command",
 								},
@@ -60,9 +61,9 @@ func TestClaudioHookNamesWithFullPaths(t *testing.T) {
 		{
 			name: "direct Copilot command hook",
 			settings: &SettingsMap{
-				"hooks": map[string]interface{}{
-					"PreToolUse": []interface{}{
-						map[string]interface{}{
+				"hooks": map[string]any{
+					"PreToolUse": []any{
+						map[string]any{
 							"command": "/usr/local/bin/claudio --hook-agent copilot",
 							"type":    "command",
 						},
@@ -74,12 +75,12 @@ func TestClaudioHookNamesWithFullPaths(t *testing.T) {
 		{
 			name: "complex array hook - dev directory path",
 			settings: &SettingsMap{
-				"hooks": map[string]interface{}{
-					"SessionStart": []interface{}{
-						map[string]interface{}{
+				"hooks": map[string]any{
+					"SessionStart": []any{
+						map[string]any{
 							"matcher": ".*",
-							"hooks": []interface{}{
-								map[string]interface{}{
+							"hooks": []any{
+								map[string]any{
 									"command": "/root/code/claudio/claudio",
 									"type":    "command",
 								},
@@ -93,7 +94,7 @@ func TestClaudioHookNamesWithFullPaths(t *testing.T) {
 		{
 			name: "mixed full paths and backward compatibility",
 			settings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"PreToolUse":  "claudio",                    // Old format
 					"PostToolUse": "/usr/local/bin/claudio",     // Full path
 					"Stop":        "./claudio",                  // Relative path
@@ -105,7 +106,7 @@ func TestClaudioHookNamesWithFullPaths(t *testing.T) {
 		{
 			name: "no claudio paths - different executables",
 			settings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"PreToolUse":  "/usr/bin/git",
 					"PostToolUse": "/bin/echo",
 				},
@@ -115,7 +116,7 @@ func TestClaudioHookNamesWithFullPaths(t *testing.T) {
 		{
 			name: "user binary ending in .test is NOT a Claudio command",
 			settings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"PreToolUse": "/usr/local/bin/lint.test",
 				},
 			},
@@ -136,13 +137,7 @@ func TestClaudioHookNamesWithFullPaths(t *testing.T) {
 
 			// Check each expected hook is present
 			for _, expectedHook := range tc.expected {
-				found := false
-				for _, actualHook := range result {
-					if actualHook == expectedHook {
-						found = true
-						break
-					}
-				}
+				found := slices.Contains(result, expectedHook)
 				if !found {
 					t.Errorf("Expected hook '%s' not found in result: %v",
 						expectedHook, result)
@@ -169,7 +164,7 @@ func TestClaudioHookNames(t *testing.T) {
 		{
 			name: "simple string hook - claudio",
 			settings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"PreToolUse": "claudio",
 				},
 			},
@@ -178,11 +173,11 @@ func TestClaudioHookNames(t *testing.T) {
 		{
 			name: "complex array hook - claudio command",
 			settings: &SettingsMap{
-				"hooks": map[string]interface{}{
-					"Notification": []interface{}{
-						map[string]interface{}{
-							"hooks": []interface{}{
-								map[string]interface{}{
+				"hooks": map[string]any{
+					"Notification": []any{
+						map[string]any{
+							"hooks": []any{
+								map[string]any{
 									"command": "claudio",
 									"type":    "command",
 								},
@@ -196,7 +191,7 @@ func TestClaudioHookNames(t *testing.T) {
 		{
 			name: "mixed hooks - claudio and non-claudio",
 			settings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"PreToolUse":  "claudio",
 					"PostToolUse": "other-command",
 				},
@@ -206,7 +201,7 @@ func TestClaudioHookNames(t *testing.T) {
 		{
 			name: "no claudio hooks",
 			settings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"Other": "something",
 				},
 			},
@@ -222,7 +217,7 @@ func TestClaudioHookNames(t *testing.T) {
 		{
 			name: "multiple claudio hooks",
 			settings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"PreToolUse":       "claudio",
 					"PostToolUse":      "claudio",
 					"UserPromptSubmit": "claudio",
@@ -246,13 +241,7 @@ func TestClaudioHookNames(t *testing.T) {
 
 			// Check each expected hook is present
 			for _, expectedHook := range tc.expected {
-				found := false
-				for _, actualHook := range result {
-					if actualHook == expectedHook {
-						found = true
-						break
-					}
-				}
+				found := slices.Contains(result, expectedHook)
 				if !found {
 					t.Errorf("Expected hook '%s' not found in result: %v",
 						expectedHook, result)

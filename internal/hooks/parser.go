@@ -437,7 +437,7 @@ func (e *HookEvent) analyzeToolResponse() (success bool, hasError bool, errorTyp
 		return true, false, "" // No response usually means success
 	}
 
-	var response map[string]interface{}
+	var response map[string]any
 	err := json.Unmarshal(*e.ToolResponse, &response)
 	if err != nil {
 		var responseText string
@@ -520,7 +520,7 @@ func analyzeTextToolResponse(responseText string) (success bool, hasError bool, 
 }
 
 func parseExitCode(responseText string) (int, bool) {
-	for _, line := range strings.Split(responseText, "\n") {
+	for line := range strings.SplitSeq(responseText, "\n") {
 		line = strings.TrimSpace(line)
 		rest, ok := strings.CutPrefix(strings.ToLower(line), "exit code:")
 		if !ok {
@@ -545,7 +545,7 @@ func (e *HookEvent) extractFileType() string {
 		return ""
 	}
 
-	var input map[string]interface{}
+	var input map[string]any
 	err := json.Unmarshal(*e.ToolInput, &input)
 	if err != nil {
 		slog.Debug("failed to parse tool input for file type extraction", "error", err)
@@ -571,7 +571,7 @@ func (e *HookEvent) extractCommandInfo() CommandInfo {
 		return CommandInfo{}
 	}
 
-	var input map[string]interface{}
+	var input map[string]any
 	err := json.Unmarshal(*e.ToolInput, &input)
 	if err != nil {
 		slog.Debug("failed to parse tool input for command extraction", "error", err)
@@ -632,12 +632,7 @@ func isValidSubcommand(command, word string) bool {
 	}
 
 	if subcommands, exists := knownSubcommands[command]; exists {
-		for _, subCmd := range subcommands {
-			if word == subCmd {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(subcommands, word)
 	}
 
 	// For unknown commands, be conservative - only allow alphanumeric subcommands

@@ -3,6 +3,7 @@ package audio
 import (
 	"reflect"
 	"runtime"
+	"slices"
 	"testing"
 
 	"claudio.click/internal/platform"
@@ -108,12 +109,7 @@ func TestDetectOptimalBackend(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Mock command existence checker
 			commandChecker := func(cmd string) bool {
-				for _, available := range tt.availableCommands {
-					if cmd == available {
-						return true
-					}
-				}
-				return false
+				return slices.Contains(tt.availableCommands, cmd)
 			}
 
 			result := detectOptimalBackendWithChecker(tt.isWSL, commandChecker)
@@ -172,12 +168,7 @@ func TestGetPreferredSystemCommand(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			commandChecker := func(cmd string) bool {
-				for _, available := range tt.availableCommands {
-					if cmd == available {
-						return true
-					}
-				}
-				return false
+				return slices.Contains(tt.availableCommands, cmd)
 			}
 
 			result := getPreferredSystemCommandWithChecker(commandChecker)
@@ -217,12 +208,7 @@ func TestGetAvailableSystemCommands(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			commandChecker := func(cmd string) bool {
-				for _, available := range tt.availableCommands {
-					if cmd == available {
-						return true
-					}
-				}
-				return false
+				return slices.Contains(tt.availableCommands, cmd)
 			}
 
 			got := getAvailableSystemCommandsWithChecker(commandChecker)

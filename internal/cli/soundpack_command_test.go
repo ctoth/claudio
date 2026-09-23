@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -517,7 +518,7 @@ func TestSoundpackValidate_CoverageCalculation(t *testing.T) {
 
 	// Create exactly 10 dummy WAV files
 	wavFiles := make([]string, 10)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		wavFiles[i] = filepath.Join(tmpDir, "sounds", fmt.Sprintf("sound%d.wav", i))
 		wavfixture.Write(t, wavFiles[i])
 	}
@@ -765,13 +766,7 @@ func TestExtractAllSoundKeys(t *testing.T) {
 	}
 
 	// Assert contains default.wav
-	found := false
-	for _, k := range keys {
-		if k == "default.wav" {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(keys, "default.wav")
 	if !found {
 		t.Error("expected keys to contain 'default.wav'")
 	}
@@ -971,7 +966,7 @@ func TestSoundpackInstall_IdempotentPathAddition(t *testing.T) {
 	jsonPath := createTestJSONSoundpack(t, srcDir, "idempotent-pack")
 
 	// Install twice
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		cli := NewCLI()
 		stdout := &bytes.Buffer{}
 		stderr := &bytes.Buffer{}
@@ -1007,7 +1002,7 @@ func TestSoundpackInstallCanReinstallFromInstalledManifest(t *testing.T) {
 	source := createTestJSONSoundpack(t, t.TempDir(), "self-reinstall-pack")
 
 	cli := NewCLI()
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		if i == 1 {
 			source = filepath.Join(dataDir, "claudio", "soundpacks", "self-reinstall-pack", "soundpack.json")
 		}
@@ -1323,7 +1318,7 @@ func TestSoundpackUseAlreadyActive(t *testing.T) {
 	defer cleanup()
 
 	// Use "windows" twice — second time should still succeed (idempotent)
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		cli := NewCLI()
 		stdout := &bytes.Buffer{}
 		stderr := &bytes.Buffer{}

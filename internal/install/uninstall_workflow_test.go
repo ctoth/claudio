@@ -105,7 +105,7 @@ func TestInstallUninstallWithExecutablePath(t *testing.T) {
 					t.Fatal("No hooks section found after install")
 				}
 
-				hooksMap, ok := hooksInterface.(map[string]interface{})
+				hooksMap, ok := hooksInterface.(map[string]any)
 				if !ok {
 					t.Fatal("Hooks section is not a map")
 				}
@@ -113,10 +113,10 @@ func TestInstallUninstallWithExecutablePath(t *testing.T) {
 				// Check that hooks are properly formatted with executable path
 				foundExecutableHooks := false
 				for hookName, hookValue := range hooksMap {
-					if hookArray, ok := hookValue.([]interface{}); ok && len(hookArray) > 0 {
-						if hookConfig, ok := hookArray[0].(map[string]interface{}); ok {
-							if hooksField, ok := hookConfig["hooks"].([]interface{}); ok && len(hooksField) > 0 {
-								if cmd, ok := hooksField[0].(map[string]interface{}); ok {
+					if hookArray, ok := hookValue.([]any); ok && len(hookArray) > 0 {
+						if hookConfig, ok := hookArray[0].(map[string]any); ok {
+							if hooksField, ok := hookConfig["hooks"].([]any); ok && len(hooksField) > 0 {
+								if cmd, ok := hooksField[0].(map[string]any); ok {
 									if cmdStr, ok := cmd["command"].(string); ok {
 										// Use the same detection logic as production code
 										if IsClaudioCommandString(cmdStr) {
@@ -160,7 +160,7 @@ func TestInstallUninstallWithExecutablePath(t *testing.T) {
 
 				// Check that hooks section is empty or doesn't exist
 				if finalHooks, exists := finalSettings["hooks"]; exists {
-					if finalHooksMap, ok := finalHooks.(map[string]interface{}); ok {
+					if finalHooksMap, ok := finalHooks.(map[string]any); ok {
 						for hookName := range finalHooksMap {
 							t.Errorf("Hook '%s' was not removed during uninstall", hookName)
 						}
@@ -178,7 +178,7 @@ func TestRunUninstallWorkflow(t *testing.T) {
 	testCases := []struct {
 		name                 string
 		scope                string
-		existingSettings     map[string]interface{}
+		existingSettings     map[string]any
 		existingSettingsFile bool
 		expectError          bool
 		expectedHooksCount   int
@@ -187,8 +187,8 @@ func TestRunUninstallWorkflow(t *testing.T) {
 		{
 			name:  "uninstall from settings with claudio hooks",
 			scope: "user",
-			existingSettings: map[string]interface{}{
-				"hooks": map[string]interface{}{
+			existingSettings: map[string]any{
+				"hooks": map[string]any{
 					"PreToolUse":       "claudio",
 					"PostToolUse":      "claudio",
 					"UserPromptSubmit": "claudio",
@@ -204,8 +204,8 @@ func TestRunUninstallWorkflow(t *testing.T) {
 		{
 			name:  "uninstall from settings without claudio - no changes",
 			scope: "user",
-			existingSettings: map[string]interface{}{
-				"hooks": map[string]interface{}{
+			existingSettings: map[string]any{
+				"hooks": map[string]any{
 					"Other": "different-tool",
 				},
 				"version": "1.0",
@@ -218,8 +218,8 @@ func TestRunUninstallWorkflow(t *testing.T) {
 		{
 			name:  "uninstall all hooks - hooks section deleted",
 			scope: "project",
-			existingSettings: map[string]interface{}{
-				"hooks": map[string]interface{}{
+			existingSettings: map[string]any{
+				"hooks": map[string]any{
 					"PreToolUse":       "claudio",
 					"PostToolUse":      "claudio",
 					"UserPromptSubmit": "claudio",
@@ -234,26 +234,26 @@ func TestRunUninstallWorkflow(t *testing.T) {
 		{
 			name:  "uninstall from complex array hooks",
 			scope: "user",
-			existingSettings: map[string]interface{}{
-				"hooks": map[string]interface{}{
-					"Notification": []interface{}{
-						map[string]interface{}{
-							"hooks": []interface{}{
-								map[string]interface{}{
+			existingSettings: map[string]any{
+				"hooks": map[string]any{
+					"Notification": []any{
+						map[string]any{
+							"hooks": []any{
+								map[string]any{
 									"command": "claudio",
 									"type":    "command",
 								},
-								map[string]interface{}{
+								map[string]any{
 									"command": "other-tool",
 									"type":    "command",
 								},
 							},
 						},
 					},
-					"Stop": []interface{}{
-						map[string]interface{}{
-							"hooks": []interface{}{
-								map[string]interface{}{
+					"Stop": []any{
+						map[string]any{
+							"hooks": []any{
+								map[string]any{
 									"command": "claudio",
 									"type":    "command",
 								},
@@ -270,13 +270,13 @@ func TestRunUninstallWorkflow(t *testing.T) {
 		{
 			name:  "uninstall from mixed simple and complex hooks",
 			scope: "user",
-			existingSettings: map[string]interface{}{
-				"hooks": map[string]interface{}{
+			existingSettings: map[string]any{
+				"hooks": map[string]any{
 					"PreToolUse": "claudio",
-					"SubagentStop": []interface{}{
-						map[string]interface{}{
-							"hooks": []interface{}{
-								map[string]interface{}{
+					"SubagentStop": []any{
+						map[string]any{
+							"hooks": []any{
+								map[string]any{
 									"command": "claudio",
 									"type":    "command",
 								},
@@ -294,7 +294,7 @@ func TestRunUninstallWorkflow(t *testing.T) {
 		{
 			name:  "uninstall from empty settings file",
 			scope: "user",
-			existingSettings: map[string]interface{}{
+			existingSettings: map[string]any{
 				"version": "1.0",
 			},
 			existingSettingsFile: true,
@@ -385,7 +385,7 @@ func TestRunUninstallWorkflow(t *testing.T) {
 				}
 			} else {
 				if hooks, exists := (*settings)["hooks"]; exists {
-					hooksMap, ok := hooks.(map[string]interface{})
+					hooksMap, ok := hooks.(map[string]any)
 					if !ok {
 						t.Errorf("Hooks should be a map, got: %T", hooks)
 					} else {
@@ -509,7 +509,7 @@ func TestUninstallWorkflowErrorHandling(t *testing.T) {
 }
 
 // getMapKeys lists a map's keys for failure messages.
-func getMapKeys(m map[string]interface{}) []string {
+func getMapKeys(m map[string]any) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
 		keys = append(keys, k)
@@ -549,7 +549,7 @@ func TestRunUninstallWorkflowUsesTargetConfigPath(t *testing.T) {
 	// Seed both files with claudio hooks so we can tell which one the
 	// workflow rewrote.
 	initial := SettingsMap{
-		"hooks": map[string]interface{}{
+		"hooks": map[string]any{
 			"PreToolUse": "/usr/local/bin/claudio",
 		},
 		"version": "test",
@@ -578,7 +578,7 @@ func TestRunUninstallWorkflowUsesTargetConfigPath(t *testing.T) {
 	if err := json.Unmarshal(resolvedAfter, &resolvedSettings); err != nil {
 		t.Fatalf("unmarshal resolved after: %v", err)
 	}
-	if hooks, ok := resolvedSettings["hooks"].(map[string]interface{}); ok {
+	if hooks, ok := resolvedSettings["hooks"].(map[string]any); ok {
 		if _, present := hooks["PreToolUse"]; present {
 			t.Errorf("resolved path's PreToolUse hook should have been removed, but it is still present: %v", hooks)
 		}
@@ -609,17 +609,17 @@ func TestRunUninstallWorkflowMissingSettingsFileIsNoop(t *testing.T) {
 func TestRunUninstallWorkflowCodexPreservesMixedGroupSibling(t *testing.T) {
 	settingsPath := filepath.Join(t.TempDir(), "settings.json")
 	initial := SettingsMap{
-		"hooks": map[string]interface{}{
-			"Stop": []interface{}{
-				map[string]interface{}{
+		"hooks": map[string]any{
+			"Stop": []any{
+				map[string]any{
 					"matcher": "*",
-					"hooks": []interface{}{
-						map[string]interface{}{
+					"hooks": []any{
+						map[string]any{
 							"type":           "command",
 							"command":        "C:/Users/Q/bin/claudio.exe",
 							"commandWindows": `& "C:/Users/Q/bin/claudio.exe"`,
 						},
-						map[string]interface{}{
+						map[string]any{
 							"type":    "command",
 							"command": "custom-stop-hook",
 						},
@@ -649,14 +649,14 @@ func TestRunUninstallWorkflowCodexPreservesMixedGroupSibling(t *testing.T) {
 	if err := json.Unmarshal(after, &settings); err != nil {
 		t.Fatalf("unmarshal settings after uninstall: %v", err)
 	}
-	hooks := settings["hooks"].(map[string]interface{})
-	groups := hooks["Stop"].([]interface{})
-	group := groups[0].(map[string]interface{})
-	entries := group["hooks"].([]interface{})
+	hooks := settings["hooks"].(map[string]any)
+	groups := hooks["Stop"].([]any)
+	group := groups[0].(map[string]any)
+	entries := group["hooks"].([]any)
 	if len(entries) != 1 {
 		t.Fatalf("expected one surviving custom command, got %v", entries)
 	}
-	entry := entries[0].(map[string]interface{})
+	entry := entries[0].(map[string]any)
 	if command := entry["command"]; command != "custom-stop-hook" {
 		t.Fatalf("expected custom sibling to survive, got command %v", command)
 	}

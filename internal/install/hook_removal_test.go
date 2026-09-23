@@ -1,6 +1,7 @@
 package install
 
 import (
+	"maps"
 	"reflect"
 	"testing"
 )
@@ -16,7 +17,7 @@ func TestRemoveClaudioHooksWithFullPaths(t *testing.T) {
 		{
 			name: "remove simple string hook - full system path",
 			initialSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"PreToolUse": "/usr/local/bin/claudio",
 					"PostCommit": "git push",
 				},
@@ -24,7 +25,7 @@ func TestRemoveClaudioHooksWithFullPaths(t *testing.T) {
 			},
 			hookNames: []string{"PreToolUse"},
 			expectedSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"PostCommit": "git push",
 				},
 				"version": "1.0",
@@ -33,14 +34,14 @@ func TestRemoveClaudioHooksWithFullPaths(t *testing.T) {
 		{
 			name: "remove simple string hook - dev directory path",
 			initialSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"PostToolUse": "/home/user/dev/claudio/claudio",
 					"Other":       "keep-this",
 				},
 			},
 			hookNames: []string{"PostToolUse"},
 			expectedSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"Other": "keep-this",
 				},
 			},
@@ -48,14 +49,14 @@ func TestRemoveClaudioHooksWithFullPaths(t *testing.T) {
 		{
 			name: "remove simple string hook - relative path",
 			initialSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"UserPromptSubmit": "./claudio",
 					"Other":            "keep",
 				},
 			},
 			hookNames: []string{"UserPromptSubmit"},
 			expectedSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"Other": "keep",
 				},
 			},
@@ -63,12 +64,12 @@ func TestRemoveClaudioHooksWithFullPaths(t *testing.T) {
 		{
 			name: "remove complex array hook - full system path",
 			initialSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
-					"Notification": []interface{}{
-						map[string]interface{}{
+				"hooks": map[string]any{
+					"Notification": []any{
+						map[string]any{
 							"matcher": ".*",
-							"hooks": []interface{}{
-								map[string]interface{}{
+							"hooks": []any{
+								map[string]any{
 									"command": "/usr/local/bin/claudio",
 									"type":    "command",
 								},
@@ -80,7 +81,7 @@ func TestRemoveClaudioHooksWithFullPaths(t *testing.T) {
 			},
 			hookNames: []string{"Notification"},
 			expectedSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"Other": "keep",
 				},
 			},
@@ -88,13 +89,13 @@ func TestRemoveClaudioHooksWithFullPaths(t *testing.T) {
 		{
 			name: "remove direct Copilot command hook",
 			initialSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
-					"PreToolUse": []interface{}{
-						map[string]interface{}{
+				"hooks": map[string]any{
+					"PreToolUse": []any{
+						map[string]any{
 							"command": "/usr/local/bin/claudio --hook-agent copilot",
 							"type":    "command",
 						},
-						map[string]interface{}{
+						map[string]any{
 							"command": "/usr/bin/logger",
 							"type":    "command",
 						},
@@ -103,9 +104,9 @@ func TestRemoveClaudioHooksWithFullPaths(t *testing.T) {
 			},
 			hookNames: []string{"PreToolUse"},
 			expectedSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
-					"PreToolUse": []interface{}{
-						map[string]interface{}{
+				"hooks": map[string]any{
+					"PreToolUse": []any{
+						map[string]any{
 							"command": "/usr/bin/logger",
 							"type":    "command",
 						},
@@ -116,12 +117,12 @@ func TestRemoveClaudioHooksWithFullPaths(t *testing.T) {
 		{
 			name: "remove complex array hook - dev directory path",
 			initialSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
-					"SessionStart": []interface{}{
-						map[string]interface{}{
+				"hooks": map[string]any{
+					"SessionStart": []any{
+						map[string]any{
 							"matcher": ".*",
-							"hooks": []interface{}{
-								map[string]interface{}{
+							"hooks": []any{
+								map[string]any{
 									"command": "/root/code/claudio/claudio",
 									"type":    "command",
 								},
@@ -138,16 +139,16 @@ func TestRemoveClaudioHooksWithFullPaths(t *testing.T) {
 		{
 			name: "remove claudio from mixed array with other commands - preserve others",
 			initialSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
-					"Stop": []interface{}{
-						map[string]interface{}{
+				"hooks": map[string]any{
+					"Stop": []any{
+						map[string]any{
 							"matcher": ".*",
-							"hooks": []interface{}{
-								map[string]interface{}{
+							"hooks": []any{
+								map[string]any{
 									"command": "/usr/local/bin/claudio",
 									"type":    "command",
 								},
-								map[string]interface{}{
+								map[string]any{
 									"command": "other-tool",
 									"type":    "command",
 								},
@@ -158,12 +159,12 @@ func TestRemoveClaudioHooksWithFullPaths(t *testing.T) {
 			},
 			hookNames: []string{"Stop"},
 			expectedSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
-					"Stop": []interface{}{
-						map[string]interface{}{
+				"hooks": map[string]any{
+					"Stop": []any{
+						map[string]any{
 							"matcher": ".*",
-							"hooks": []interface{}{
-								map[string]interface{}{
+							"hooks": []any{
+								map[string]any{
 									"command": "other-tool",
 									"type":    "command",
 								},
@@ -176,7 +177,7 @@ func TestRemoveClaudioHooksWithFullPaths(t *testing.T) {
 		{
 			name: "mixed full paths and backward compatibility",
 			initialSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"PreToolUse":  "claudio",                    // Old format - should be removed
 					"PostToolUse": "/usr/local/bin/claudio",     // Full path - should be removed
 					"Stop":        "./claudio",                  // Relative path - should be removed
@@ -185,7 +186,7 @@ func TestRemoveClaudioHooksWithFullPaths(t *testing.T) {
 			},
 			hookNames: []string{"PreToolUse", "PostToolUse", "Stop"},
 			expectedSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"Keep": "/usr/bin/different-command",
 				},
 			},
@@ -193,14 +194,14 @@ func TestRemoveClaudioHooksWithFullPaths(t *testing.T) {
 		{
 			name: "no claudio paths to remove - no changes",
 			initialSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"PreToolUse":  "/usr/bin/git",
 					"PostToolUse": "/bin/echo",
 				},
 			},
 			hookNames: []string{"PreToolUse", "PostToolUse"},
 			expectedSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"PreToolUse":  "/usr/bin/git",
 					"PostToolUse": "/bin/echo",
 				},
@@ -239,7 +240,7 @@ func TestRemoveSimpleClaudioHooks(t *testing.T) {
 		{
 			name: "remove single claudio hook with other hooks preserved",
 			initialSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"PreToolUse": "claudio",
 					"PostCommit": "git push",
 					"Other":      "keep-this",
@@ -248,7 +249,7 @@ func TestRemoveSimpleClaudioHooks(t *testing.T) {
 			},
 			hookNames: []string{"PreToolUse"},
 			expectedSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"PostCommit": "git push",
 					"Other":      "keep-this",
 				},
@@ -259,7 +260,7 @@ func TestRemoveSimpleClaudioHooks(t *testing.T) {
 		{
 			name: "remove multiple claudio hooks",
 			initialSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"PreToolUse":       "claudio",
 					"PostToolUse":      "claudio",
 					"UserPromptSubmit": "claudio",
@@ -268,7 +269,7 @@ func TestRemoveSimpleClaudioHooks(t *testing.T) {
 			},
 			hookNames: []string{"PreToolUse", "PostToolUse", "UserPromptSubmit"},
 			expectedSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"Other": "keep",
 				},
 			},
@@ -277,13 +278,13 @@ func TestRemoveSimpleClaudioHooks(t *testing.T) {
 		{
 			name: "remove non-existent hook - no changes",
 			initialSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"Other": "keep",
 				},
 			},
 			hookNames: []string{"NonExistent"},
 			expectedSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"Other": "keep",
 				},
 			},
@@ -303,7 +304,7 @@ func TestRemoveSimpleClaudioHooks(t *testing.T) {
 		{
 			name: "remove all hooks - hooks section deleted",
 			initialSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"PreToolUse": "claudio",
 				},
 				"version": "1.0",
@@ -324,14 +325,14 @@ func TestRemoveSimpleClaudioHooks(t *testing.T) {
 		{
 			name: "remove hook that exists but is not claudio - no changes",
 			initialSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"PreToolUse": "other-command",
 					"Other":      "keep",
 				},
 			},
 			hookNames: []string{"PreToolUse"},
 			expectedSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"PreToolUse": "other-command",
 					"Other":      "keep",
 				},
@@ -371,11 +372,9 @@ func copySettingsForTest(original *SettingsMap) *SettingsMap {
 	copy := make(SettingsMap)
 	for key, value := range *original {
 		if key == "hooks" {
-			if hooksMap, ok := value.(map[string]interface{}); ok {
-				hooksCopy := make(map[string]interface{})
-				for hookKey, hookValue := range hooksMap {
-					hooksCopy[hookKey] = hookValue
-				}
+			if hooksMap, ok := value.(map[string]any); ok {
+				hooksCopy := make(map[string]any)
+				maps.Copy(hooksCopy, hooksMap)
 				copy[key] = hooksCopy
 			} else {
 				copy[key] = value
@@ -407,8 +406,8 @@ func settingsEqual(a, b *SettingsMap) bool {
 		}
 
 		if key == "hooks" {
-			hooksA, okA := valueA.(map[string]interface{})
-			hooksB, okB := valueB.(map[string]interface{})
+			hooksA, okA := valueA.(map[string]any)
+			hooksB, okB := valueB.(map[string]any)
 			if okA != okB {
 				return false
 			}
@@ -445,15 +444,15 @@ func TestRemoveComplexClaudioHooks(t *testing.T) {
 		{
 			name: "remove claudio from array with other commands - preserve others",
 			initialSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
-					"Notification": []interface{}{
-						map[string]interface{}{
-							"hooks": []interface{}{
-								map[string]interface{}{
+				"hooks": map[string]any{
+					"Notification": []any{
+						map[string]any{
+							"hooks": []any{
+								map[string]any{
 									"command": "claudio",
 									"type":    "command",
 								},
-								map[string]interface{}{
+								map[string]any{
 									"command": "other-tool",
 									"type":    "command",
 								},
@@ -464,11 +463,11 @@ func TestRemoveComplexClaudioHooks(t *testing.T) {
 			},
 			hookNames: []string{"Notification"},
 			expectedSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
-					"Notification": []interface{}{
-						map[string]interface{}{
-							"hooks": []interface{}{
-								map[string]interface{}{
+				"hooks": map[string]any{
+					"Notification": []any{
+						map[string]any{
+							"hooks": []any{
+								map[string]any{
 									"command": "other-tool",
 									"type":    "command",
 								},
@@ -482,11 +481,11 @@ func TestRemoveComplexClaudioHooks(t *testing.T) {
 		{
 			name: "remove claudio from array with only claudio - delete entire hook",
 			initialSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
-					"Stop": []interface{}{
-						map[string]interface{}{
-							"hooks": []interface{}{
-								map[string]interface{}{
+				"hooks": map[string]any{
+					"Stop": []any{
+						map[string]any{
+							"hooks": []any{
+								map[string]any{
 									"command": "claudio",
 									"type":    "command",
 								},
@@ -498,7 +497,7 @@ func TestRemoveComplexClaudioHooks(t *testing.T) {
 			},
 			hookNames: []string{"Stop"},
 			expectedSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"Other": "keep-this",
 				},
 			},
@@ -507,25 +506,25 @@ func TestRemoveComplexClaudioHooks(t *testing.T) {
 		{
 			name: "remove claudio from multiple array elements",
 			initialSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
-					"PreCompact": []interface{}{
-						map[string]interface{}{
+				"hooks": map[string]any{
+					"PreCompact": []any{
+						map[string]any{
 							"matcher": ".*",
-							"hooks": []interface{}{
-								map[string]interface{}{
+							"hooks": []any{
+								map[string]any{
 									"command": "claudio",
 									"type":    "command",
 								},
-								map[string]interface{}{
+								map[string]any{
 									"command": "keep-this",
 									"type":    "command",
 								},
 							},
 						},
-						map[string]interface{}{
+						map[string]any{
 							"matcher": "specific",
-							"hooks": []interface{}{
-								map[string]interface{}{
+							"hooks": []any{
+								map[string]any{
 									"command": "claudio",
 									"type":    "command",
 								},
@@ -536,12 +535,12 @@ func TestRemoveComplexClaudioHooks(t *testing.T) {
 			},
 			hookNames: []string{"PreCompact"},
 			expectedSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
-					"PreCompact": []interface{}{
-						map[string]interface{}{
+				"hooks": map[string]any{
+					"PreCompact": []any{
+						map[string]any{
 							"matcher": ".*",
-							"hooks": []interface{}{
-								map[string]interface{}{
+							"hooks": []any{
+								map[string]any{
 									"command": "keep-this",
 									"type":    "command",
 								},
@@ -555,13 +554,13 @@ func TestRemoveComplexClaudioHooks(t *testing.T) {
 		{
 			name: "remove from non-array hook - no changes",
 			initialSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"Simple": "not-an-array",
 				},
 			},
 			hookNames: []string{"Simple"},
 			expectedSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"Simple": "not-an-array",
 				},
 			},
@@ -570,11 +569,11 @@ func TestRemoveComplexClaudioHooks(t *testing.T) {
 		{
 			name: "remove from array without claudio - no changes",
 			initialSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
-					"Other": []interface{}{
-						map[string]interface{}{
-							"hooks": []interface{}{
-								map[string]interface{}{
+				"hooks": map[string]any{
+					"Other": []any{
+						map[string]any{
+							"hooks": []any{
+								map[string]any{
 									"command": "different-tool",
 									"type":    "command",
 								},
@@ -585,11 +584,11 @@ func TestRemoveComplexClaudioHooks(t *testing.T) {
 			},
 			hookNames: []string{"Other"},
 			expectedSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
-					"Other": []interface{}{
-						map[string]interface{}{
-							"hooks": []interface{}{
-								map[string]interface{}{
+				"hooks": map[string]any{
+					"Other": []any{
+						map[string]any{
+							"hooks": []any{
+								map[string]any{
 									"command": "different-tool",
 									"type":    "command",
 								},
@@ -633,8 +632,8 @@ func deepCopyComplexSettings(original *SettingsMap) *SettingsMap {
 	copy := make(SettingsMap)
 	for key, value := range *original {
 		if key == "hooks" {
-			if hooksMap, ok := value.(map[string]interface{}); ok {
-				hooksCopy := make(map[string]interface{})
+			if hooksMap, ok := value.(map[string]any); ok {
+				hooksCopy := make(map[string]any)
 				for hookKey, hookValue := range hooksMap {
 					hooksCopy[hookKey] = deepCopyValue(hookValue)
 				}
@@ -650,16 +649,16 @@ func deepCopyComplexSettings(original *SettingsMap) *SettingsMap {
 }
 
 // Helper function to recursively deep copy interface{} values
-func deepCopyValue(value interface{}) interface{} {
+func deepCopyValue(value any) any {
 	switch v := value.(type) {
-	case []interface{}:
-		copiedSlice := make([]interface{}, len(v))
+	case []any:
+		copiedSlice := make([]any, len(v))
 		for i, item := range v {
 			copiedSlice[i] = deepCopyValue(item)
 		}
 		return copiedSlice
-	case map[string]interface{}:
-		copiedMap := make(map[string]interface{})
+	case map[string]any:
+		copiedMap := make(map[string]any)
 		for k, item := range v {
 			copiedMap[k] = deepCopyValue(item)
 		}
@@ -697,10 +696,10 @@ func complexSettingsEqual(a, b *SettingsMap) bool {
 }
 
 // Helper function to recursively compare interface{} values
-func deepValueEqual(a, b interface{}) bool {
+func deepValueEqual(a, b any) bool {
 	switch va := a.(type) {
-	case []interface{}:
-		vb, ok := b.([]interface{})
+	case []any:
+		vb, ok := b.([]any)
 		if !ok || len(va) != len(vb) {
 			return false
 		}
@@ -710,8 +709,8 @@ func deepValueEqual(a, b interface{}) bool {
 			}
 		}
 		return true
-	case map[string]interface{}:
-		vb, ok := b.(map[string]interface{})
+	case map[string]any:
+		vb, ok := b.(map[string]any)
 		if !ok || len(va) != len(vb) {
 			return false
 		}
@@ -737,11 +736,11 @@ func TestRemoveNewFormatClaudioHooks(t *testing.T) {
 		{
 			name: "remove new format claudio hook",
 			initialSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
-					"PreToolUse": []interface{}{
-						map[string]interface{}{
-							"hooks": []interface{}{
-								map[string]interface{}{
+				"hooks": map[string]any{
+					"PreToolUse": []any{
+						map[string]any{
+							"hooks": []any{
+								map[string]any{
 									"type":    "command",
 									"command": "claudio",
 								},
@@ -753,7 +752,7 @@ func TestRemoveNewFormatClaudioHooks(t *testing.T) {
 			},
 			hookNames: []string{"PreToolUse"},
 			expectedSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"PostToolUse": "other-command",
 				},
 			},
@@ -761,31 +760,31 @@ func TestRemoveNewFormatClaudioHooks(t *testing.T) {
 		{
 			name: "remove multiple new format hooks",
 			initialSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
-					"PreToolUse": []interface{}{
-						map[string]interface{}{
-							"hooks": []interface{}{
-								map[string]interface{}{
+				"hooks": map[string]any{
+					"PreToolUse": []any{
+						map[string]any{
+							"hooks": []any{
+								map[string]any{
 									"type":    "command",
 									"command": "claudio",
 								},
 							},
 						},
 					},
-					"PostToolUse": []interface{}{
-						map[string]interface{}{
-							"hooks": []interface{}{
-								map[string]interface{}{
+					"PostToolUse": []any{
+						map[string]any{
+							"hooks": []any{
+								map[string]any{
 									"type":    "command",
 									"command": "claudio",
 								},
 							},
 						},
 					},
-					"UserPromptSubmit": []interface{}{
-						map[string]interface{}{
-							"hooks": []interface{}{
-								map[string]interface{}{
+					"UserPromptSubmit": []any{
+						map[string]any{
+							"hooks": []any{
+								map[string]any{
 									"type":    "command",
 									"command": "claudio",
 								},
@@ -803,12 +802,12 @@ func TestRemoveNewFormatClaudioHooks(t *testing.T) {
 		{
 			name: "handle mixed old and new format hooks",
 			initialSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"PreToolUse": "claudio", // Old string format
-					"PostToolUse": []interface{}{ // New array format
-						map[string]interface{}{
-							"hooks": []interface{}{
-								map[string]interface{}{
+					"PostToolUse": []any{ // New array format
+						map[string]any{
+							"hooks": []any{
+								map[string]any{
 									"type":    "command",
 									"command": "claudio",
 								},
@@ -820,7 +819,7 @@ func TestRemoveNewFormatClaudioHooks(t *testing.T) {
 			},
 			hookNames: []string{"PreToolUse", "PostToolUse"},
 			expectedSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"UserPromptSubmit": "other-command",
 				},
 			},
@@ -860,7 +859,7 @@ func TestRemoveClaudioHooks_NoClaudioHooksRemain(t *testing.T) {
 		{
 			name: "simple string hooks pointing at claudio",
 			input: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"PreToolUse":  "/usr/local/bin/claudio",
 					"PostToolUse": "claudio",
 					"OtherCmd":    "git push",
@@ -870,23 +869,23 @@ func TestRemoveClaudioHooks_NoClaudioHooksRemain(t *testing.T) {
 		{
 			name: "array form claudio hooks",
 			input: &SettingsMap{
-				"hooks": map[string]interface{}{
-					"PreToolUse": []interface{}{
-						map[string]interface{}{
+				"hooks": map[string]any{
+					"PreToolUse": []any{
+						map[string]any{
 							"matcher": ".*",
-							"hooks": []interface{}{
-								map[string]interface{}{
+							"hooks": []any{
+								map[string]any{
 									"type":    "command",
 									"command": "/usr/local/bin/claudio",
 								},
 							},
 						},
 					},
-					"Other": []interface{}{
-						map[string]interface{}{
+					"Other": []any{
+						map[string]any{
 							"matcher": ".*",
-							"hooks": []interface{}{
-								map[string]interface{}{
+							"hooks": []any{
+								map[string]any{
 									"type":    "command",
 									"command": "/usr/bin/echo",
 								},
@@ -899,13 +898,13 @@ func TestRemoveClaudioHooks_NoClaudioHooksRemain(t *testing.T) {
 		{
 			name: "mixed string and array claudio hooks",
 			input: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"PreToolUse": "claudio",
-					"PostToolUse": []interface{}{
-						map[string]interface{}{
+					"PostToolUse": []any{
+						map[string]any{
 							"matcher": ".*",
-							"hooks": []interface{}{
-								map[string]interface{}{
+							"hooks": []any{
+								map[string]any{
 									"type":    "command",
 									"command": "claudio.exe",
 								},
@@ -919,7 +918,7 @@ func TestRemoveClaudioHooks_NoClaudioHooksRemain(t *testing.T) {
 		{
 			name: "no claudio hooks at all (idempotent)",
 			input: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"PreToolUse":  "echo hi",
 					"PostToolUse": "git push",
 				},
@@ -947,14 +946,14 @@ func TestRemoveClaudioHooks_NoClaudioHooksRemain(t *testing.T) {
 // would be silently deleted alongside the Claudio entry because the old code
 // used "filteredHooks is empty" as a proxy for "we removed Claudio".
 func TestRemoveComplexClaudioHooksPreservesPreExistingEmptyItem(t *testing.T) {
-	preExistingEmpty := map[string]interface{}{
+	preExistingEmpty := map[string]any{
 		"matcher": "user-block",
-		"hooks":   []interface{}{},
+		"hooks":   []any{},
 	}
-	claudioItem := map[string]interface{}{
+	claudioItem := map[string]any{
 		"matcher": "claudio-target",
-		"hooks": []interface{}{
-			map[string]interface{}{
+		"hooks": []any{
+			map[string]any{
 				"type":    "command",
 				"command": "/usr/local/bin/claudio",
 			},
@@ -962,8 +961,8 @@ func TestRemoveComplexClaudioHooksPreservesPreExistingEmptyItem(t *testing.T) {
 	}
 
 	settings := &SettingsMap{
-		"hooks": map[string]interface{}{
-			"PreToolUse": []interface{}{
+		"hooks": map[string]any{
+			"PreToolUse": []any{
 				claudioItem,
 				preExistingEmpty,
 			},
@@ -972,12 +971,12 @@ func TestRemoveComplexClaudioHooksPreservesPreExistingEmptyItem(t *testing.T) {
 
 	removeClaudioHooks(settings)
 
-	hooksMap, ok := (*settings)["hooks"].(map[string]interface{})
+	hooksMap, ok := (*settings)["hooks"].(map[string]any)
 	if !ok {
 		t.Fatalf("hooks section disappeared or wrong type: %T", (*settings)["hooks"])
 	}
 
-	pre, ok := hooksMap["PreToolUse"].([]interface{})
+	pre, ok := hooksMap["PreToolUse"].([]any)
 	if !ok {
 		t.Fatalf("PreToolUse disappeared or wrong type: %T", hooksMap["PreToolUse"])
 	}
@@ -986,7 +985,7 @@ func TestRemoveComplexClaudioHooksPreservesPreExistingEmptyItem(t *testing.T) {
 		t.Fatalf("expected exactly 1 surviving item (the pre-existing empty one); got %d: %v", len(pre), pre)
 	}
 
-	surviving, ok := pre[0].(map[string]interface{})
+	surviving, ok := pre[0].(map[string]any)
 	if !ok {
 		t.Fatalf("surviving item wrong type: %T", pre[0])
 	}
@@ -995,7 +994,7 @@ func TestRemoveComplexClaudioHooksPreservesPreExistingEmptyItem(t *testing.T) {
 		t.Errorf("surviving item lost its matcher: got %v, want %q", surviving["matcher"], "user-block")
 	}
 
-	hooksSub, ok := surviving["hooks"].([]interface{})
+	hooksSub, ok := surviving["hooks"].([]any)
 	if !ok {
 		t.Fatalf("surviving item's hooks field is wrong type (expected empty []interface{}, got %T)", surviving["hooks"])
 	}
@@ -1008,32 +1007,32 @@ func TestRemoveComplexClaudioHooksPreservesPreExistingEmptyItem(t *testing.T) {
 // array where only one item has a Claudio command. The other two — a custom
 // non-Claudio item and a pre-existing empty item — must both survive verbatim.
 func TestRemoveComplexClaudioHooksItemsWithoutClaudioUnchanged(t *testing.T) {
-	claudioItem := map[string]interface{}{
+	claudioItem := map[string]any{
 		"matcher": "claudio-target",
-		"hooks": []interface{}{
-			map[string]interface{}{
+		"hooks": []any{
+			map[string]any{
 				"type":    "command",
 				"command": "/usr/local/bin/claudio",
 			},
 		},
 	}
-	userNonClaudio := map[string]interface{}{
+	userNonClaudio := map[string]any{
 		"matcher": "user-non-claudio",
-		"hooks": []interface{}{
-			map[string]interface{}{
+		"hooks": []any{
+			map[string]any{
 				"type":    "command",
 				"command": "/usr/local/bin/lint",
 			},
 		},
 	}
-	userEmpty := map[string]interface{}{
+	userEmpty := map[string]any{
 		"matcher": "user-empty",
-		"hooks":   []interface{}{},
+		"hooks":   []any{},
 	}
 
 	settings := &SettingsMap{
-		"hooks": map[string]interface{}{
-			"PostToolUse": []interface{}{
+		"hooks": map[string]any{
+			"PostToolUse": []any{
 				claudioItem,
 				userNonClaudio,
 				userEmpty,
@@ -1043,8 +1042,8 @@ func TestRemoveComplexClaudioHooksItemsWithoutClaudioUnchanged(t *testing.T) {
 
 	removeClaudioHooks(settings)
 
-	hooksMap, _ := (*settings)["hooks"].(map[string]interface{})
-	post, ok := hooksMap["PostToolUse"].([]interface{})
+	hooksMap, _ := (*settings)["hooks"].(map[string]any)
+	post, ok := hooksMap["PostToolUse"].([]any)
 	if !ok {
 		t.Fatalf("PostToolUse disappeared or wrong type: %T", hooksMap["PostToolUse"])
 	}

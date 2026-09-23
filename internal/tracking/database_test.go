@@ -171,7 +171,7 @@ func TestNewDatabase_BusyTimeoutPersistsAcrossConnections(t *testing.T) {
 			_ = c.Close()
 		}
 	}()
-	for i := 0; i < n; i++ {
+	for i := range n {
 		c, err := db.Conn(ctx)
 		if err != nil {
 			t.Fatalf("db.Conn[%d]: %v", i, err)

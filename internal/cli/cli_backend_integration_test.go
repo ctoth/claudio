@@ -225,14 +225,14 @@ func TestCLIConfigBackendValidation(t *testing.T) {
 }
 
 // Helper functions
-func getTypeName(v interface{}) string {
+func getTypeName(v any) string {
 	if v == nil {
 		return "<nil>"
 	}
 	return getType(v)
 }
 
-func getType(v interface{}) string {
+func getType(v any) string {
 	// This is a simple type name extractor for testing
 	switch v.(type) {
 	case *nativebackend.Backend:

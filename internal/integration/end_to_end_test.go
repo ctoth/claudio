@@ -89,7 +89,7 @@ func TestEndToEndUnifiedSystemPerformance(t *testing.T) {
 // TestEndToEndSystemResourceCleanup validates proper resource management
 func TestEndToEndSystemResourceCleanup(t *testing.T) {
 	// Create and destroy multiple backends to test resource cleanup
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		backend, err := audio.NewBackend("oto")
 		if err != nil {
 			t.Fatalf("Failed to create backend %d: %v", i, err)

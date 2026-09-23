@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"testing"
 
@@ -298,13 +299,7 @@ func TestMapSoundFallbackSelection(t *testing.T) {
 
 			// Check that important expected paths are present
 			for _, expectedPath := range tc.expectedPaths {
-				found := false
-				for _, actualPath := range result.AllPaths {
-					if actualPath == expectedPath {
-						found = true
-						break
-					}
-				}
+				found := slices.Contains(result.AllPaths, expectedPath)
 				if !found {
 					t.Errorf("Expected path %s not found in generated paths: %v", expectedPath, result.AllPaths)
 				}

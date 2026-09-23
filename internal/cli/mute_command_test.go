@@ -120,7 +120,7 @@ func TestMuteIdempotent(t *testing.T) {
 		AudioBackend:     "auto",
 	})
 
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		cli := NewCLI()
 		stderr := &bytes.Buffer{}
 		code := cli.Run([]string{"claudio", "mute", "--config", configPath},

@@ -739,8 +739,8 @@ func embeddedPlatformSoundpackBasePaths(filename string, data []byte) []string {
 
 	if spFile, err := soundpack.PeekJSONSoundpackFromBytes(data); err == nil {
 		ids = append(ids, spFile.Name)
-		if strings.HasSuffix(spFile.Name, "-default") {
-			ids = append(ids, strings.TrimSuffix(spFile.Name, "-default"))
+		if base, ok := strings.CutSuffix(spFile.Name, "-default"); ok {
+			ids = append(ids, base)
 		}
 	}
 

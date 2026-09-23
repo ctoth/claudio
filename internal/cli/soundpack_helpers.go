@@ -377,8 +377,8 @@ func detectPlatformFile() string {
 // Keys like "loading/bash-start.wav" -> "loading"
 // Keys like "default.wav" -> "default"
 func categoryFromKey(key string) string {
-	if idx := strings.Index(key, "/"); idx >= 0 {
-		return key[:idx]
+	if category, _, ok := strings.Cut(key, "/"); ok {
+		return category
 	}
 	// Root-level keys like "default.wav"
 	return strings.TrimSuffix(key, filepath.Ext(key))

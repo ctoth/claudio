@@ -22,7 +22,7 @@ func TestLoadJSONSoundpack_RejectsAbsolutePath(t *testing.T) {
 		t.Fatalf("create real file: %v", err)
 	}
 
-	soundpackData := map[string]interface{}{
+	soundpackData := map[string]any{
 		"name": "abs-test",
 		"mappings": map[string]string{
 			"success/test.wav": realFile, // absolute path
@@ -144,7 +144,7 @@ func TestLoadEmbeddedPlatformSoundpack_AcceptsAbsolutePaths(t *testing.T) {
 		t.Fatalf("write wav: %v", err)
 	}
 
-	soundpackData := map[string]interface{}{
+	soundpackData := map[string]any{
 		"name": "embedded-test",
 		"mappings": map[string]string{
 			"success/test.wav": soundFile, // absolute, treated as-is
@@ -177,7 +177,7 @@ func TestLoadEmbeddedPlatformSoundpack_ResolvesRelativePathsAgainstBasePaths(t *
 		t.Fatalf("write wav: %v", err)
 	}
 
-	soundpackData := map[string]interface{}{
+	soundpackData := map[string]any{
 		"name": "embedded-relative-test",
 		"mappings": map[string]string{
 			"success/test.wav": "embedded-relative.wav",
@@ -274,7 +274,7 @@ func TestLoadJSONSoundpack_RejectsTooManyMappings(t *testing.T) {
 	for i := 0; i <= MaxSoundpackMappings; i++ {
 		mappings[fmt.Sprintf("key-%d", i)] = "x.wav"
 	}
-	soundpackData := map[string]interface{}{
+	soundpackData := map[string]any{
 		"name":     "too-many",
 		"mappings": mappings,
 	}
@@ -306,7 +306,7 @@ func TestLoadEmbeddedPlatformSoundpack_RejectsTooManyMappings(t *testing.T) {
 	for i := 0; i <= MaxSoundpackMappings; i++ {
 		mappings[fmt.Sprintf("key-%d", i)] = "/tmp/x.wav"
 	}
-	soundpackData := map[string]interface{}{
+	soundpackData := map[string]any{
 		"name":     "too-many-trusted",
 		"mappings": mappings,
 	}

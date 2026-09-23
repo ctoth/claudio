@@ -2,6 +2,7 @@ package install
 
 import (
 	"log/slog"
+	"maps"
 	"sort"
 )
 
@@ -17,11 +18,11 @@ import (
 // dropped only when removal emptied its hooks; groups without claudio
 // commands, including pre-existing empty ones, are kept verbatim. The
 // input is never modified.
-func stripClaudioEntries(entries []interface{}) ([]interface{}, int) {
-	kept := make([]interface{}, 0, len(entries))
+func stripClaudioEntries(entries []any) ([]any, int) {
+	kept := make([]any, 0, len(entries))
 	removed := 0
 	for _, entry := range entries {
-		entryMap, ok := entry.(map[string]interface{})
+		entryMap, ok := entry.(map[string]any)
 		if !ok {
 			kept = append(kept, entry)
 			continue
@@ -30,14 +31,14 @@ func stripClaudioEntries(entries []interface{}) ([]interface{}, int) {
 			removed++
 			continue
 		}
-		hooks, ok := entryMap["hooks"].([]interface{})
+		hooks, ok := entryMap["hooks"].([]any)
 		if !ok {
 			kept = append(kept, entry)
 			continue
 		}
-		keptHooks := make([]interface{}, 0, len(hooks))
+		keptHooks := make([]any, 0, len(hooks))
 		for _, hook := range hooks {
-			if hookMap, ok := hook.(map[string]interface{}); ok && isClaudioCommandValue(hookMap["command"]) {
+			if hookMap, ok := hook.(map[string]any); ok && isClaudioCommandValue(hookMap["command"]) {
 				continue
 			}
 			keptHooks = append(keptHooks, hook)
@@ -51,10 +52,8 @@ func stripClaudioEntries(entries []interface{}) ([]interface{}, int) {
 		if len(keptHooks) == 0 {
 			continue
 		}
-		group := make(map[string]interface{}, len(entryMap))
-		for k, v := range entryMap {
-			group[k] = v
-		}
+		group := make(map[string]any, len(entryMap))
+		maps.Copy(group, entryMap)
 		group["hooks"] = keptHooks
 		kept = append(kept, group)
 	}
@@ -63,7 +62,7 @@ func stripClaudioEntries(entries []interface{}) ([]interface{}, int) {
 
 // isClaudioCommandValue reports whether a JSON "command" value names the
 // claudio executable.
-func isClaudioCommandValue(v interface{}) bool {
+func isClaudioCommandValue(v any) bool {
 	s, ok := v.(string)
 	return ok && IsClaudioCommandString(s)
 }
@@ -72,13 +71,13 @@ func isClaudioCommandValue(v interface{}) bool {
 // value. It returns the remaining value, the number of commands removed,
 // and whether the event should be kept at all (false when removal left it
 // empty). Legacy string values are one command.
-func stripClaudioHookValue(value interface{}) (interface{}, int, bool) {
+func stripClaudioHookValue(value any) (any, int, bool) {
 	switch v := value.(type) {
 	case string:
 		if IsClaudioCommandString(v) {
 			return nil, 1, false
 		}
-	case []interface{}:
+	case []any:
 		kept, removed := stripClaudioEntries(v)
 		if removed == 0 {
 			return value, 0, true
@@ -90,17 +89,17 @@ func stripClaudioHookValue(value interface{}) (interface{}, int, bool) {
 
 // IsClaudioHook reports whether a hook event's value (legacy string or
 // array of entries) contains any claudio command.
-func IsClaudioHook(hookValue interface{}) bool {
+func IsClaudioHook(hookValue any) bool {
 	_, removed, _ := stripClaudioHookValue(hookValue)
 	return removed > 0
 }
 
 // hooksSection returns settings["hooks"] when it is a JSON object.
-func hooksSection(settings *SettingsMap) (map[string]interface{}, bool) {
+func hooksSection(settings *SettingsMap) (map[string]any, bool) {
 	if settings == nil {
 		return nil, false
 	}
-	hooks, ok := (*settings)["hooks"].(map[string]interface{})
+	hooks, ok := (*settings)["hooks"].(map[string]any)
 	return hooks, ok
 }
 

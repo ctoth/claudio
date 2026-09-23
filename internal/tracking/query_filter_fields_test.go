@@ -26,7 +26,7 @@ func TestQueryFilter_ContentFiltersHitRecordedData(t *testing.T) {
 	}
 
 	values := map[string]string{"Category": "success"}
-	typ := reflect.TypeOf(QueryFilter{})
+	typ := reflect.TypeFor[QueryFilter]()
 	for i := 0; i < typ.NumField(); i++ {
 		f := typ.Field(i)
 		if f.Type.Kind() != reflect.String || f.Name == "OrderBy" || f.Name == "DatePreset" {

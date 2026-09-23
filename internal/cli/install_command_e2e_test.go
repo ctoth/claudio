@@ -80,7 +80,7 @@ func TestRunInstallWorkflow_EndToEnd_NoDryRun(t *testing.T) {
 		t.Fatalf("expected settings.json under sandbox, got error: %v", err)
 	}
 
-	var settings map[string]interface{}
+	var settings map[string]any
 	if err := json.Unmarshal(data, &settings); err != nil {
 		t.Fatalf("settings.json is not valid JSON: %v\ndata=%s", err, string(data))
 	}
@@ -89,7 +89,7 @@ func TestRunInstallWorkflow_EndToEnd_NoDryRun(t *testing.T) {
 	if !ok {
 		t.Fatalf("settings.json has no 'hooks' key: %s", string(data))
 	}
-	hooks, ok := hooksAny.(map[string]interface{})
+	hooks, ok := hooksAny.(map[string]any)
 	if !ok {
 		t.Fatalf("settings.json 'hooks' is %T, want map[string]interface{}", hooksAny)
 	}
@@ -122,11 +122,11 @@ func TestRunInstallWorkflow_EndToEnd_NoDryRun(t *testing.T) {
 	if err != nil {
 		t.Fatalf("settings.json disappeared after second install: %v", err)
 	}
-	var settings2 map[string]interface{}
+	var settings2 map[string]any
 	if err := json.Unmarshal(data2, &settings2); err != nil {
 		t.Fatalf("settings.json after second install not valid JSON: %v", err)
 	}
-	hooks2, _ := settings2["hooks"].(map[string]interface{})
+	hooks2, _ := settings2["hooks"].(map[string]any)
 	for _, definition := range install.AgentClaude.EnabledHooks() {
 		name := definition.Name
 		if val, exists := hooks2[name]; !exists {
@@ -154,18 +154,18 @@ func TestRunInstallWorkflowCodexUsesCaptainHookSpecs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var settings map[string]interface{}
+	var settings map[string]any
 	if err := json.Unmarshal(data, &settings); err != nil {
 		t.Fatal(err)
 	}
-	hooks := settings["hooks"].(map[string]interface{})
+	hooks := settings["hooks"].(map[string]any)
 
-	stopGroups := hooks["Stop"].([]interface{})
+	stopGroups := hooks["Stop"].([]any)
 	customFound := false
 	for _, groupRaw := range stopGroups {
-		group := groupRaw.(map[string]interface{})
-		for _, entryRaw := range group["hooks"].([]interface{}) {
-			entry := entryRaw.(map[string]interface{})
+		group := groupRaw.(map[string]any)
+		for _, entryRaw := range group["hooks"].([]any) {
+			entry := entryRaw.(map[string]any)
 			if entry["command"] == "user-stop" {
 				customFound = true
 			}
@@ -176,12 +176,12 @@ func TestRunInstallWorkflowCodexUsesCaptainHookSpecs(t *testing.T) {
 	}
 
 	for _, definition := range install.AgentCodex.EnabledHooks() {
-		groups := hooks[definition.Name].([]interface{})
+		groups := hooks[definition.Name].([]any)
 		windowsCommandFound := false
 		for _, groupRaw := range groups {
-			group := groupRaw.(map[string]interface{})
-			for _, entryRaw := range group["hooks"].([]interface{}) {
-				entry := entryRaw.(map[string]interface{})
+			group := groupRaw.(map[string]any)
+			for _, entryRaw := range group["hooks"].([]any) {
+				entry := entryRaw.(map[string]any)
 				if command, ok := entry["commandWindows"].(string); ok && strings.HasPrefix(command, `& '`) {
 					windowsCommandFound = true
 				}

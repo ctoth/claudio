@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -32,10 +33,8 @@ func validateMappingValue(value, baseDir string) (resolved string, err error) {
 	}
 	// Reject `..` segments BEFORE Clean — Clean would resolve `a/../b` to
 	// `b` and silently lose the traversal attempt.
-	for _, seg := range strings.Split(filepath.ToSlash(value), "/") {
-		if seg == ".." {
-			return "", fmt.Errorf("path traversal not allowed: %q", value)
-		}
+	if slices.Contains(strings.Split(filepath.ToSlash(value), "/"), "..") {
+		return "", fmt.Errorf("path traversal not allowed: %q", value)
 	}
 	cleaned := filepath.Clean(filepath.Join(baseDir, value))
 	// Defense in depth — Clean+Join should already have prevented escape,

@@ -23,8 +23,7 @@ func ExpandSource(source string) (string, error) {
 		return "", fmt.Errorf("git source cannot be empty")
 	}
 
-	if strings.HasPrefix(source, "gh:") {
-		repo := strings.TrimPrefix(source, "gh:")
+	if repo, ok := strings.CutPrefix(source, "gh:"); ok {
 		if err := validateGitHubAliasRepo(repo); err != nil {
 			return "", err
 		}

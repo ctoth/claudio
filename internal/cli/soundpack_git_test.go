@@ -219,15 +219,13 @@ func TestConcurrentSameNameAddsConvergeOnOneValidInstall(t *testing.T) {
 	results := make(chan int, 2)
 	var wg sync.WaitGroup
 	for range 2 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			<-start
 			results <- NewCLI().Run(
 				[]string{"claudio", "soundpack", "add", repo, "--name", "same-name"},
 				nil, &bytes.Buffer{}, &bytes.Buffer{},
 			)
-		}()
+		})
 	}
 	close(start)
 	wg.Wait()

@@ -14,7 +14,7 @@ import (
 )
 
 // SettingsMap represents a Claude Code settings JSON object
-type SettingsMap map[string]interface{}
+type SettingsMap map[string]any
 
 // ReadSettingsFile reads and parses a Claude Code settings.json file using filesystem abstraction
 // Returns default empty settings if file doesn't exist or is empty

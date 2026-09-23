@@ -3,6 +3,7 @@ package audio
 import (
 	"errors"
 	"reflect"
+	"slices"
 	"testing"
 
 	"claudio.click/internal/config"
@@ -135,12 +136,7 @@ func TestNewBackend_WithChecker(t *testing.T) {
 
 			isWSLFunc := func() bool { return tt.isWSL }
 			commandExists := func(cmd string) bool {
-				for _, available := range tt.availableCommands {
-					if cmd == available {
-						return true
-					}
-				}
-				return false
+				return slices.Contains(tt.availableCommands, cmd)
 			}
 
 			backend, err := newBackendWithChecker(tt.backendType, isWSLFunc, commandExists)
@@ -204,12 +200,7 @@ func TestNewBackend_SystemCommandSelection(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			isWSLFunc := func() bool { return false }
 			commandExists := func(cmd string) bool {
-				for _, available := range tt.availableCommands {
-					if cmd == available {
-						return true
-					}
-				}
-				return false
+				return slices.Contains(tt.availableCommands, cmd)
 			}
 
 			backend, err := newBackendWithChecker("system_command", isWSLFunc, commandExists)

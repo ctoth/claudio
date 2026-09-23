@@ -54,7 +54,7 @@ func TestSoundpackListStillCountsDirectoryPackSounds(t *testing.T) {
 	if code := NewCLI().Run([]string{"claudio", "soundpack", "list"}, nil, stdout, stderr); code != 0 {
 		t.Fatalf("list failed: %s", stderr)
 	}
-	for _, line := range strings.Split(stdout.String(), "\n") {
+	for line := range strings.SplitSeq(stdout.String(), "\n") {
 		fields := strings.Fields(line)
 		if len(fields) >= 3 && fields[0] == "xdg-dir-pack" {
 			if fields[2] != "2" {

@@ -226,13 +226,7 @@ func (cm *ConfigManager) ValidateConfig(config *Config) error {
 	// Validate log level
 	validLogLevels := []string{"debug", "info", "warn", "error"}
 	if config.LogLevel != "" {
-		valid := false
-		for _, level := range validLogLevels {
-			if config.LogLevel == level {
-				valid = true
-				break
-			}
-		}
+		valid := slices.Contains(validLogLevels, config.LogLevel)
 		if !valid {
 			errors = append(errors, fmt.Sprintf("invalid log level '%s', must be one of: %s",
 				config.LogLevel, strings.Join(validLogLevels, ", ")))
