@@ -13,33 +13,20 @@ func FindCodexHooksPaths(scope string) ([]string, error) {
 		return nil, err
 	}
 	if normalizedScope == ScopeGlobal {
-		return findCodexUserScopePaths(), nil
+		return findCodexUserScopePaths()
 	}
 	return []string{filepath.Join(".codex", "hooks.json")}, nil
 }
 
-func findCodexUserScopePaths() []string {
+func findCodexUserScopePaths() ([]string, error) {
 	// Codex reads its configuration only from CODEX_HOME when it is set, so
 	// that is the only candidate: falling back to ~/.codex would write hooks
 	// Codex never loads (mirrors CLAUDE_CONFIG_DIR handling for Claude).
 	if codexHome := strings.TrimSpace(os.Getenv("CODEX_HOME")); codexHome != "" {
-		return []string{filepath.Join(codexHome, "hooks.json")}
+		return []string{filepath.Join(codexHome, "hooks.json")}, nil
 	}
 
-	var paths []string
-
-	homeDir := getHomeDirectory()
-	if homeDir != "" {
-		paths = append(paths, filepath.Join(homeDir, ".codex", "hooks.json"))
-	}
-
-	paths = appendUserProfilePath(paths, homeDir, ".codex", "hooks.json")
-
-	if len(paths) == 0 {
-		paths = append(paths, filepath.Join("~", ".codex", "hooks.json"))
-	}
-
-	return paths
+	return homeScopedPaths(".codex", "hooks.json")
 }
 
 // FindBestCodexPath returns the first existing Codex hooks path, or the first candidate for creation.

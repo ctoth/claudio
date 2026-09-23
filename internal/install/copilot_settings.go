@@ -14,7 +14,7 @@ func FindCopilotSettingsPaths(scope string) ([]string, error) {
 		return nil, err
 	}
 	if normalizedScope == ScopeGlobal {
-		return findCopilotGlobalScopePaths(), nil
+		return findCopilotGlobalScopePaths()
 	}
 	return []string{
 		filepath.Join(".github", "copilot", "settings.local.json"),
@@ -22,24 +22,12 @@ func FindCopilotSettingsPaths(scope string) ([]string, error) {
 	}, nil
 }
 
-func findCopilotGlobalScopePaths() []string {
+func findCopilotGlobalScopePaths() ([]string, error) {
 	if copilotHome := os.Getenv("COPILOT_HOME"); copilotHome != "" {
-		return []string{filepath.Join(copilotHome, "settings.json")}
+		return []string{filepath.Join(copilotHome, "settings.json")}, nil
 	}
 
-	var paths []string
-	homeDir := getHomeDirectory()
-	if homeDir != "" {
-		paths = append(paths, filepath.Join(homeDir, ".copilot", "settings.json"))
-	}
-
-	paths = appendUserProfilePath(paths, homeDir, ".copilot", "settings.json")
-
-	if len(paths) == 0 {
-		paths = append(paths, filepath.Join("~", ".copilot", "settings.json"))
-	}
-
-	return paths
+	return homeScopedPaths(".copilot", "settings.json")
 }
 
 // FindBestCopilotPath returns the first existing Copilot settings path, or the

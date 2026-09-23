@@ -14,26 +14,13 @@ func FindGeminiSettingsPaths(scope string) ([]string, error) {
 		return nil, err
 	}
 	if normalizedScope == ScopeGlobal {
-		return findGeminiGlobalScopePaths(), nil
+		return findGeminiGlobalScopePaths()
 	}
 	return []string{filepath.Join(".gemini", "settings.json")}, nil
 }
 
-func findGeminiGlobalScopePaths() []string {
-	var paths []string
-
-	homeDir := getHomeDirectory()
-	if homeDir != "" {
-		paths = append(paths, filepath.Join(homeDir, ".gemini", "settings.json"))
-	}
-
-	paths = appendUserProfilePath(paths, homeDir, ".gemini", "settings.json")
-
-	if len(paths) == 0 {
-		paths = append(paths, filepath.Join("~", ".gemini", "settings.json"))
-	}
-
-	return paths
+func findGeminiGlobalScopePaths() ([]string, error) {
+	return homeScopedPaths(".gemini", "settings.json")
 }
 
 // FindBestGeminiPath returns the first existing Gemini settings path, or the

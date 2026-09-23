@@ -28,23 +28,6 @@ func TestFindClaudeSettingsPathsGlobalScope(t *testing.T) {
 	}
 }
 
-func TestFindClaudeSettingsPathsGlobalFallbackWhenHomeMissing(t *testing.T) {
-	t.Setenv("HOME", "")
-	t.Setenv("USERPROFILE", "")
-	t.Setenv("HOMEDRIVE", "")
-	t.Setenv("HOMEPATH", "")
-
-	paths, err := FindClaudeSettingsPaths("global")
-	if err != nil {
-		t.Fatalf("FindClaudeSettingsPaths returned error: %v", err)
-	}
-
-	want := filepath.Join("~", ".claude", "settings.json")
-	if len(paths) != 1 || paths[0] != want {
-		t.Fatalf("fallback paths = %v, want [%q]", paths, want)
-	}
-}
-
 func TestFindClaudeSettings(t *testing.T) {
 	// TDD RED: Test Claude settings path detection for user and project scopes
 	testCases := []struct {

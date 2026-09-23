@@ -14,26 +14,13 @@ func FindQwenSettingsPaths(scope string) ([]string, error) {
 		return nil, err
 	}
 	if normalizedScope == ScopeGlobal {
-		return findQwenGlobalScopePaths(), nil
+		return findQwenGlobalScopePaths()
 	}
 	return []string{filepath.Join(".qwen", "settings.json")}, nil
 }
 
-func findQwenGlobalScopePaths() []string {
-	var paths []string
-
-	homeDir := getHomeDirectory()
-	if homeDir != "" {
-		paths = append(paths, filepath.Join(homeDir, ".qwen", "settings.json"))
-	}
-
-	paths = appendUserProfilePath(paths, homeDir, ".qwen", "settings.json")
-
-	if len(paths) == 0 {
-		paths = append(paths, filepath.Join("~", ".qwen", "settings.json"))
-	}
-
-	return paths
+func findQwenGlobalScopePaths() ([]string, error) {
+	return homeScopedPaths(".qwen", "settings.json")
 }
 
 // FindBestQwenPath returns the first existing Qwen settings path, or the

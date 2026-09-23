@@ -597,30 +597,6 @@ func TestAdditionalBestPathFallbacksAndInvalidScopes(t *testing.T) {
 	}
 }
 
-func TestAdditionalGlobalPathFallbacksWhenHomeMissing(t *testing.T) {
-	t.Setenv("HOME", "")
-	t.Setenv("USERPROFILE", "")
-	t.Setenv("HOMEDRIVE", "")
-	t.Setenv("HOMEPATH", "")
-	t.Setenv("COPILOT_HOME", "")
-
-	qwenPaths, err := FindQwenSettingsPaths("global")
-	if err != nil {
-		t.Fatalf("FindQwenSettingsPaths returned error: %v", err)
-	}
-	if want := filepath.Join("~", ".qwen", "settings.json"); len(qwenPaths) != 1 || qwenPaths[0] != want {
-		t.Fatalf("Qwen fallback paths = %v, want [%q]", qwenPaths, want)
-	}
-
-	copilotPaths, err := FindCopilotSettingsPaths("global")
-	if err != nil {
-		t.Fatalf("FindCopilotSettingsPaths returned error: %v", err)
-	}
-	if want := filepath.Join("~", ".copilot", "settings.json"); len(copilotPaths) != 1 || copilotPaths[0] != want {
-		t.Fatalf("Copilot fallback paths = %v, want [%q]", copilotPaths, want)
-	}
-}
-
 func TestResolveAgentTargetsRejectsInvalidScope(t *testing.T) {
 	if _, err := ResolveAgentTargets(AgentClaude, "bogus"); err == nil {
 		t.Fatal("expected invalid scope error")

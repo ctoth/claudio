@@ -30,25 +30,7 @@ func findUserScopePaths() ([]string, error) {
 		return []string{filepath.Join(configDir, "settings.json")}, nil
 	}
 
-	var paths []string
-
-	// Get home directory - try multiple environment variables for cross-platform support
-	homeDir := getHomeDirectory()
-	if homeDir != "" {
-		// Primary user settings path: ~/.claude/settings.json
-		userPath := filepath.Join(homeDir, ".claude", "settings.json")
-		paths = append(paths, userPath)
-	}
-
-	paths = appendUserProfilePath(paths, homeDir, ".claude", "settings.json")
-
-	// Ensure we have at least one path
-	if len(paths) == 0 {
-		// Fallback to relative path from home if no environment variables are set
-		paths = append(paths, filepath.Join("~", ".claude", "settings.json"))
-	}
-
-	return paths, nil
+	return homeScopedPaths(".claude", "settings.json")
 }
 
 // FindBestSettingsPath returns the first settings path where the file actually exists,

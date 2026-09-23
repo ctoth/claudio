@@ -45,23 +45,6 @@ func TestFindGeminiSettingsPathsLegacyUserScope(t *testing.T) {
 	}
 }
 
-func TestFindGeminiSettingsPathsGlobalFallbackWhenHomeMissing(t *testing.T) {
-	t.Setenv("HOME", "")
-	t.Setenv("USERPROFILE", "")
-	t.Setenv("HOMEDRIVE", "")
-	t.Setenv("HOMEPATH", "")
-
-	paths, err := FindGeminiSettingsPaths("global")
-	if err != nil {
-		t.Fatalf("FindGeminiSettingsPaths returned error: %v", err)
-	}
-
-	want := filepath.Join("~", ".gemini", "settings.json")
-	if len(paths) != 1 || paths[0] != want {
-		t.Fatalf("fallback paths = %v, want [%q]", paths, want)
-	}
-}
-
 func TestFindGeminiSettingsPathsProjectScope(t *testing.T) {
 	paths, err := FindGeminiSettingsPaths("project")
 	if err != nil {

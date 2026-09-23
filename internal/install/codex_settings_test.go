@@ -43,24 +43,6 @@ func TestFindCodexHooksPathsLegacyUserScope(t *testing.T) {
 	}
 }
 
-func TestFindCodexHooksPathsGlobalFallbackWhenHomeMissing(t *testing.T) {
-	t.Setenv("CODEX_HOME", "")
-	t.Setenv("HOME", "")
-	t.Setenv("USERPROFILE", "")
-	t.Setenv("HOMEDRIVE", "")
-	t.Setenv("HOMEPATH", "")
-
-	paths, err := FindCodexHooksPaths("global")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	want := filepath.Join("~", ".codex", "hooks.json")
-	if len(paths) != 1 || paths[0] != want {
-		t.Fatalf("fallback paths = %v, want [%q]", paths, want)
-	}
-}
-
 func TestFindCodexHooksPathsUserScopeHonorsCODEXHOME(t *testing.T) {
 	codexHome := t.TempDir()
 	t.Setenv("CODEX_HOME", codexHome)
