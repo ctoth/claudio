@@ -52,6 +52,28 @@ type Config struct {
 	SoundTracking    *SoundTrackingConfig `json:"sound_tracking,omitempty"` // Sound tracking configuration
 }
 
+// Clone returns a deep copy of c: pointer fields and slices are duplicated
+// so mutating the copy never affects the original.
+func (c *Config) Clone() *Config {
+	clone := *c
+	if c.Volume != nil {
+		v := *c.Volume
+		clone.Volume = &v
+	}
+	if c.SoundpackPaths != nil {
+		clone.SoundpackPaths = append([]string(nil), c.SoundpackPaths...)
+	}
+	if c.FileLogging != nil {
+		fl := *c.FileLogging
+		clone.FileLogging = &fl
+	}
+	if c.SoundTracking != nil {
+		st := *c.SoundTracking
+		clone.SoundTracking = &st
+	}
+	return &clone
+}
+
 // XDGInterface defines the interface for XDG directory operations
 type XDGInterface interface {
 	GetConfigPaths(filename string) []string
@@ -348,8 +370,8 @@ func (cm *ConfigManager) MergeConfigs(base, override *Config) *Config {
 func (cm *ConfigManager) ApplyEnvironmentOverrides(config *Config) *Config {
 	slog.Debug("applying environment variable overrides")
 
-	// Create a copy to modify
-	result := *config
+	// Deep copy so overrides never write through into the caller's config.
+	result := *config.Clone()
 
 	// CLAUDIO_VOLUME
 	if volStr := os.Getenv("CLAUDIO_VOLUME"); volStr != "" {
