@@ -2,6 +2,7 @@ package soundpack
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -198,8 +199,8 @@ func (e *FileNotFoundError) Error() string {
 
 // IsFileNotFoundError checks if an error is a FileNotFoundError
 func IsFileNotFoundError(err error) bool {
-	_, ok := err.(*FileNotFoundError)
-	return ok
+	var notFound *FileNotFoundError
+	return errors.As(err, &notFound)
 }
 
 // JSONSoundpackFile represents the structure of a JSON soundpack file

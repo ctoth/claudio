@@ -4,6 +4,7 @@ linters:
   enable:
     - modernize
     - usetesting
+    - errorlint
   settings:
     staticcheck:
       checks:

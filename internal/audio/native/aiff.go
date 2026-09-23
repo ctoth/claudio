@@ -13,7 +13,11 @@ import (
 func decodeAIFF(data []byte) (sound, error) {
 	d := aiff.NewDecoder(bytes.NewReader(data))
 	if !d.IsValidFile() {
-		return sound{}, fmt.Errorf("%w: not a readable AIFF file: %v", ErrInvalidData, d.Err())
+		// IsValidFile can fail on header fields with no decoder error set.
+		if cause := d.Err(); cause != nil {
+			return sound{}, fmt.Errorf("%w: not a readable AIFF file: %w", ErrInvalidData, cause)
+		}
+		return sound{}, fmt.Errorf("%w: not a readable AIFF file", ErrInvalidData)
 	}
 	depth := int(d.SampleBitDepth())
 	switch depth {
