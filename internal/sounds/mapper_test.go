@@ -420,7 +420,9 @@ func TestMapSoundWithOriginalToolFallback(t *testing.T) {
 	// Test context with extracted command but original tool for fallback
 	eventCtx := &hooks.EventContext{
 		Category:     hooks.Success,
-		ToolName:     "git",  // Extracted from Bash
+		ToolName:     "git", // Extracted from Bash
+		Command:      "git",
+		Subcommand:   "commit",
 		OriginalTool: "Bash", // Original tool for fallback
 		SoundHint:    "git-commit-success",
 		Operation:    "tool-complete",
@@ -475,6 +477,8 @@ func TestEventSpecificFallbackChains(t *testing.T) {
 			context: &hooks.EventContext{
 				Category:     hooks.Loading,
 				ToolName:     "git",
+				Command:      "git",
+				Subcommand:   "commit",
 				OriginalTool: "Bash",
 				SoundHint:    "git-commit-start",
 				Operation:    "tool-start",
@@ -489,6 +493,8 @@ func TestEventSpecificFallbackChains(t *testing.T) {
 			context: &hooks.EventContext{
 				Category:     hooks.Success,
 				ToolName:     "git",
+				Command:      "git",
+				Subcommand:   "commit",
 				OriginalTool: "Bash",
 				SoundHint:    "git-commit-success",
 				Operation:    "tool-complete",
@@ -504,6 +510,8 @@ func TestEventSpecificFallbackChains(t *testing.T) {
 			context: &hooks.EventContext{
 				Category:     hooks.Error,
 				ToolName:     "git",
+				Command:      "git",
+				Subcommand:   "commit",
 				OriginalTool: "Bash",
 				SoundHint:    "git-commit-error",
 				Operation:    "tool-complete",
@@ -607,6 +615,8 @@ func TestPreToolUse9LevelEnhancedFallback(t *testing.T) {
 	eventCtx := &hooks.EventContext{
 		Category:     hooks.Loading,
 		ToolName:     "git",
+		Command:      "git",
+		Subcommand:   "commit",
 		OriginalTool: "Bash",
 		SoundHint:    "git-commit-start",
 		Operation:    "tool-start",
@@ -656,6 +666,8 @@ func TestPostToolUse6LevelFallback(t *testing.T) {
 			context: &hooks.EventContext{
 				Category:     hooks.Success,
 				ToolName:     "git",
+				Command:      "git",
+				Subcommand:   "commit",
 				OriginalTool: "Bash",
 				SoundHint:    "git-commit-success",
 				Operation:    "tool-complete",
@@ -675,6 +687,8 @@ func TestPostToolUse6LevelFallback(t *testing.T) {
 			context: &hooks.EventContext{
 				Category:     hooks.Error,
 				ToolName:     "git",
+				Command:      "git",
+				Subcommand:   "commit",
 				OriginalTool: "Bash",
 				SoundHint:    "git-commit-error",
 				Operation:    "tool-complete",

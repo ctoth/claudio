@@ -144,9 +144,11 @@ func (m *SoundMapper) mapEnhancedSound(ctx context.Context, eventCtx *hooks.Even
 	paths := make([]string, 0, 9)
 	categoryStr := eventCtx.Category.String()
 
-	// Extract command and subcommand once for reuse
-	command, subcommand := m.extractCommandFromHint(eventCtx.SoundHint, eventCtx.ToolName)
-	suffix := m.extractSuffixFromOperation(eventCtx.Operation)
+	command, subcommand := commandOf(eventCtx)
+	suffix := eventCtx.Phase
+	if suffix == "" {
+		suffix = m.extractSuffixFromOperation(eventCtx.Operation)
+	}
 
 	// Level 1: Exact hint match
 	if eventCtx.SoundHint != "" {
@@ -276,50 +278,14 @@ func (m *SoundMapper) determineCategorySuffix(category hooks.EventCategory, oper
 	}
 }
 
-// extractCommandFromHint extracts command and subcommand from sound hint and tool name
-func (m *SoundMapper) extractCommandFromHint(hint, toolName string) (command, subcommand string) {
-	if hint == "" || toolName == "" {
-		return toolName, ""
+// commandOf returns the command and subcommand the command levels are
+// built from. The parser fills EventContext.Command for every tool event;
+// hand-built contexts without it fall back to ToolName with no subcommand.
+func commandOf(eventCtx *hooks.EventContext) (command, subcommand string) {
+	if eventCtx.Command != "" {
+		return eventCtx.Command, eventCtx.Subcommand
 	}
-
-	// Parse hint like "git-commit-start" to extract "git" and "commit"
-	parts := strings.Split(hint, "-")
-	if len(parts) >= 2 {
-		// First part should match the tool name
-		if strings.EqualFold(parts[0], toolName) {
-			command = parts[0]
-			// Check if second part is a known suffix, if not it's likely a subcommand
-			suffixes := []string{"start", "thinking", "success", "error", "complete"}
-			secondPart := parts[1]
-
-			// If second part is not a suffix, it's a subcommand
-			isSuffix := false
-			for _, suffix := range suffixes {
-				if strings.EqualFold(secondPart, suffix) {
-					isSuffix = true
-					break
-				}
-			}
-
-			if !isSuffix && len(parts) >= 3 {
-				// Pattern: git-commit-start -> command="git", subcommand="commit"
-				subcommand = secondPart
-			}
-		}
-	}
-
-	// Fallback: use toolName as command if extraction failed
-	if command == "" {
-		command = toolName
-	}
-
-	slog.Debug("extracted command from hint",
-		"hint", hint,
-		"tool_name", toolName,
-		"command", command,
-		"subcommand", subcommand)
-
-	return command, subcommand
+	return eventCtx.ToolName, ""
 }
 
 // extractSuffixFromOperation extracts the appropriate suffix from operation context
@@ -465,11 +431,14 @@ func (m *SoundMapper) mapPostToolSound(ctx context.Context, eventCtx *hooks.Even
 	paths := make([]string, 0, 6)
 	categoryStr := eventCtx.Category.String()
 
-	// Extract command once for reuse (skip subcommand since we don't use command-subcommand level)
-	command, _ := m.extractCommandFromHint(eventCtx.SoundHint, eventCtx.ToolName)
+	// The PostTool chain has no command-subcommand level.
+	command, _ := commandOf(eventCtx)
 
-	// Determine suffix based on category (success/error context)
-	suffix := m.determineCategorySuffix(eventCtx.Category, eventCtx.Operation)
+	// Suffix is the success/error phase.
+	suffix := eventCtx.Phase
+	if suffix == "" {
+		suffix = m.determineCategorySuffix(eventCtx.Category, eventCtx.Operation)
+	}
 
 	// Level 1: Exact hint match
 	if eventCtx.SoundHint != "" {

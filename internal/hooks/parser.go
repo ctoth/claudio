@@ -128,6 +128,16 @@ type EventContext struct {
 	SoundHint    string        `json:"SoundHint"`
 	FileType     string        `json:"FileType"`
 	Operation    string        `json:"Operation"`
+
+	// Command, Subcommand and Phase are the typed pieces the mapper builds
+	// its command levels from. For tool events Command is the resolved tool
+	// (the shell command for Bash, "mcp" for MCP tools, otherwise the tool
+	// name), Subcommand is the parsed shell subcommand (may contain '-', as
+	// in "port-forward"), and Phase is "start", "success" or "error".
+	// Lifecycle events leave them empty.
+	Command    string `json:"Command,omitempty"`
+	Subcommand string `json:"Subcommand,omitempty"`
+	Phase      string `json:"Phase,omitempty"`
 }
 
 // CommandInfo represents parsed command information from Bash tool input
@@ -496,6 +506,7 @@ func (e *HookEvent) populatePreToolContext(context *EventContext) {
 		if commandInfo.Command != "" {
 			context.OriginalTool = "Bash"
 			context.ToolName = commandInfo.Command
+			context.Subcommand = commandInfo.Subcommand
 
 			if commandInfo.HasSubcommand {
 				context.SoundHint = strings.ToLower(commandInfo.Command) + "-" +
@@ -515,6 +526,8 @@ func (e *HookEvent) populatePreToolContext(context *EventContext) {
 	} else {
 		context.SoundHint = "tool-loading"
 	}
+	context.Command = context.ToolName
+	context.Phase = "start"
 }
 
 func (e *HookEvent) populatePostToolContext(context *EventContext, forceError bool) {
@@ -535,6 +548,12 @@ func (e *HookEvent) populatePostToolContext(context *EventContext, forceError bo
 	}
 
 	context.Operation = "tool-complete"
+	context.Command = context.ToolName
+	if hasError {
+		context.Phase = "error"
+	} else {
+		context.Phase = "success"
+	}
 }
 
 func (e *HookEvent) populatePostToolErrorHint(context *EventContext, errorType string) {
@@ -543,6 +562,7 @@ func (e *HookEvent) populatePostToolErrorHint(context *EventContext, errorType s
 		if commandInfo.Command != "" {
 			context.OriginalTool = "Bash"
 			context.ToolName = commandInfo.Command
+			context.Subcommand = commandInfo.Subcommand
 
 			if errorType != "" {
 				context.SoundHint = errorType
@@ -580,6 +600,7 @@ func (e *HookEvent) populatePostToolSuccessHint(context *EventContext) {
 		if commandInfo.Command != "" {
 			context.OriginalTool = "Bash"
 			context.ToolName = commandInfo.Command
+			context.Subcommand = commandInfo.Subcommand
 
 			if commandInfo.HasSubcommand {
 				context.SoundHint = strings.ToLower(commandInfo.Command) + "-" +
