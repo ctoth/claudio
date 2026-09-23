@@ -74,18 +74,13 @@ func runSoundpackInstall(cmd *cobra.Command, srcPath string, setDefault, skipVal
 	// Validate unless --skip-validate
 	if !skipValidate {
 		slog.Debug("validating soundpack before install")
-		if isDir {
-			_, valErr := validateDirectorySoundpack(srcPath)
-			if valErr != nil {
-				slog.Error("validation failed", "error", valErr)
-				return fmt.Errorf("validation failed: %w", valErr)
-			}
-		} else {
-			_, valErr := validateJSONSoundpackFile(srcPath)
-			if valErr != nil {
-				slog.Error("validation failed", "error", valErr)
-				return fmt.Errorf("validation failed: %w", valErr)
-			}
+		result, valErr := validateSoundpackPath(srcPath)
+		if valErr == nil {
+			valErr = result.Err()
+		}
+		if valErr != nil {
+			slog.Error("validation failed", "error", valErr)
+			return fmt.Errorf("validation failed: %w", valErr)
 		}
 		slog.Info("soundpack validation passed")
 	}
@@ -210,7 +205,11 @@ func stageAndInstallSoundpack(srcPath, installDir string, isDir bool) error {
 		if err := stageJSONSoundpack(srcPath, stageDir); err != nil {
 			return err
 		}
-		if _, err := soundpack.CreateSoundpackMapper("installed", filepath.Join(stageDir, "soundpack.json")); err != nil {
+		staged, err := soundpack.ValidateJSONSoundpack(filepath.Join(stageDir, "soundpack.json"))
+		if err == nil {
+			err = staged.Err()
+		}
+		if err != nil {
 			return fmt.Errorf("staged soundpack validation failed: %w", err)
 		}
 	}

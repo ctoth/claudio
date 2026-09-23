@@ -414,26 +414,6 @@ func resolveTrustedRelativeMappings(soundpack *JSONSoundpackFile, basePaths []st
 	}
 }
 
-// ResolveJSONSoundpackMappings converts non-empty relative mapping values to
-// absolute paths rooted at baseDir. Absolute values are preserved.
-//
-// Retained for backward compatibility with code paths that build a
-// JSONSoundpackFile by hand and want to canonicalize relative values
-// the same way the loader does. New code should use
-// LoadJSONSoundpack(FromBytes) which now performs the strict validation.
-func ResolveJSONSoundpackMappings(soundpack *JSONSoundpackFile, baseDir string) {
-	if soundpack == nil || baseDir == "" {
-		return
-	}
-
-	for relativePath, mappedPath := range soundpack.Mappings {
-		if mappedPath == "" || filepath.IsAbs(mappedPath) {
-			continue
-		}
-		soundpack.Mappings[relativePath] = filepath.Clean(filepath.Join(baseDir, mappedPath))
-	}
-}
-
 // validateJSONSoundpackBasics checks structural invariants shared by
 // the trusted and untrusted load paths: required fields, non-empty
 // mappings, and the mappings-count cap.

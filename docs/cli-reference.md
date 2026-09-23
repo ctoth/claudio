@@ -263,8 +263,9 @@ claudio soundpack validate <path>
 ```
 
 Validation checks JSON shape, missing referenced files, known-key coverage, and
-supported extensions. WAV, MP3, and AIFF are supported. Broken references cause
-a non-zero exit. Empty mappings are informational.
+supported extensions. WAV, MP3, and AIFF are supported. Broken references and
+unsafe paths (absolute, or containing `..`) cause a non-zero exit. Empty
+mappings are informational.
 
 ### `soundpack install`
 

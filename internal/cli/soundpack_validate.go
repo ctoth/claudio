@@ -23,11 +23,12 @@ func newSoundpackValidateCommand() *cobra.Command {
 
 Checks:
   1. JSON structure: valid JSON that parses into a soundpack
-  2. Referenced files exist: non-empty mappings point to real files
+  2. Referenced files exist: non-empty mappings point to real files, given as
+     relative paths inside the soundpack (no absolute paths or "..")
   3. Coverage gaps: compare mappings against all known sound keys
   4. Format check: referenced files should be .wav, .mp3, or .aiff
 
-Exit code 0 if no broken references, non-zero if broken references found.
+Exit code 0 if no broken or unsafe references, non-zero otherwise.
 Empty mappings are informational, not errors.
 
 Examples:
@@ -49,37 +50,26 @@ type validateResult struct {
 	AllKeys        []string          // all known keys
 	MappedKeys     map[string]string // keys with non-empty values
 	BrokenRefs     map[string]string // key -> path for files that don't exist
+	UnsafeRefs     map[string]string // key -> reason the mapping path was rejected
 	FormatWarnings map[string]string // key -> path for files with non-audio extensions
 	IsDirectory    bool
+	problems       error // non-nil when BrokenRefs or UnsafeRefs is non-empty
 }
 
 // runSoundpackValidate executes the soundpack validate command
 func runSoundpackValidate(cmd *cobra.Command, path string) error {
 	slog.Debug("running soundpack validate", "path", path)
 
-	// Determine if path is a directory or JSON file
-	info, err := os.Stat(path)
-	if err != nil {
-		slog.Error("cannot access path", "path", path, "error", err)
-		return fmt.Errorf("cannot access path: %w", err)
-	}
-
-	var result validateResult
-	if info.IsDir() {
-		result, err = validateDirectorySoundpack(path)
-	} else {
-		result, err = validateJSONSoundpackFile(path)
-	}
+	result, err := validateSoundpackPath(path)
 	if err != nil {
 		return err
 	}
 
-	// Print the validation report
 	printValidateReport(cmd, result)
 
-	// Exit with non-zero if there are broken references
-	if len(result.BrokenRefs) > 0 {
-		return fmt.Errorf("validation failed: %d broken reference(s)", len(result.BrokenRefs))
+	// Exit with non-zero if there are broken or unsafe references
+	if err := result.Err(); err != nil {
+		return fmt.Errorf("validation failed: %w", err)
 	}
 
 	return nil
@@ -89,62 +79,70 @@ func runSoundpackValidate(cmd *cobra.Command, path string) error {
 func validateJSONSoundpackFile(path string) (validateResult, error) {
 	slog.Debug("validating JSON soundpack", "path", path)
 
-	// Peek applies the size cap + basics + mappings count cap. The
-	// validate command then walks the mappings to produce its own
-	// detailed broken-references report, which is richer than what the
-	// strict untrusted loader returns.
-	spFilePtr, err := soundpack.PeekJSONSoundpackFromFile(path)
+	// ValidateJSONSoundpack applies the size cap, basics and mappings
+	// count cap, then checks every mapping through the runtime loader's
+	// trust boundary, so validate, install and add accept exactly what the
+	// runtime will load.
+	v, err := soundpack.ValidateJSONSoundpack(path)
 	if err != nil {
-		slog.Error("failed to peek file", "path", path, "error", err)
+		slog.Error("failed to load JSON soundpack", "path", path, "error", err)
 		return validateResult{}, fmt.Errorf("failed to load JSON soundpack: %w", err)
 	}
-	spFile := *spFilePtr
-	soundpack.ResolveJSONSoundpackMappings(&spFile, filepath.Dir(path))
 
-	slog.Info("parsed JSON soundpack", "name", spFile.Name, "mappings", len(spFile.Mappings))
+	slog.Info("parsed JSON soundpack", "name", v.File.Name, "mappings", len(v.File.Mappings))
 
-	// Get all known keys
 	allKeys, err := ExtractAllSoundKeys()
 	if err != nil {
 		slog.Error("failed to extract all sound keys", "error", err)
 		return validateResult{}, fmt.Errorf("failed to extract sound keys: %w", err)
 	}
 
-	// Identify mapped (non-empty) keys, broken refs, and format warnings
 	mappedKeys := make(map[string]string)
-	brokenRefs := make(map[string]string)
-	formatWarnings := make(map[string]string)
-
-	for key, val := range spFile.Mappings {
-		if val == "" {
-			continue
+	for key, val := range v.File.Mappings {
+		if val != "" {
+			mappedKeys[key] = val
 		}
-		mappedKeys[key] = val
-
-		// Check if file exists
-		if _, statErr := os.Stat(val); statErr != nil {
-			slog.Warn("broken reference", "key", key, "path", val)
-			brokenRefs[key] = val
-		} else {
-			// Check file format
-			ext := strings.ToLower(filepath.Ext(val))
-			if ext != ".wav" && ext != ".mp3" && ext != ".aiff" {
-				slog.Warn("non-audio format", "key", key, "path", val, "ext", ext)
-				formatWarnings[key] = val
-			}
+	}
+	formatWarnings := make(map[string]string)
+	for key, resolved := range v.Resolved {
+		ext := strings.ToLower(filepath.Ext(resolved))
+		if ext != ".wav" && ext != ".mp3" && ext != ".aiff" {
+			slog.Warn("non-audio format", "key", key, "path", resolved, "ext", ext)
+			formatWarnings[key] = resolved
 		}
 	}
 
 	return validateResult{
-		Name:           spFile.Name,
-		Version:        spFile.Version,
-		Mappings:       spFile.Mappings,
+		Name:           v.File.Name,
+		Version:        v.File.Version,
+		Mappings:       v.File.Mappings,
 		AllKeys:        allKeys,
 		MappedKeys:     mappedKeys,
-		BrokenRefs:     brokenRefs,
+		BrokenRefs:     v.Broken,
+		UnsafeRefs:     v.Unsafe,
 		FormatWarnings: formatWarnings,
 		IsDirectory:    false,
+		problems:       v.Err(),
 	}, nil
+}
+
+// validateSoundpackPath validates a directory or JSON soundpack at path.
+// The returned error covers only unreadable or malformed packs; mapping
+// problems are in the result (see validateResult.Err).
+func validateSoundpackPath(path string) (validateResult, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return validateResult{}, fmt.Errorf("cannot access path: %w", err)
+	}
+	if info.IsDir() {
+		return validateDirectorySoundpack(path)
+	}
+	return validateJSONSoundpackFile(path)
+}
+
+// Err reports broken or unsafe mappings as an error.
+func (r validateResult) Err() error {
+	return r.problems
 }
 
 // validateDirectorySoundpack validates a directory-based soundpack
@@ -258,6 +256,20 @@ func printValidateReport(cmd *cobra.Command, result validateResult) {
 		sort.Strings(brokenKeys)
 		for _, key := range brokenKeys {
 			cmd.Printf("  %s -> %s\n", key, result.BrokenRefs[key])
+		}
+	}
+
+	// Unsafe References
+	if len(result.UnsafeRefs) > 0 {
+		cmd.Println()
+		cmd.Println("Unsafe References (must be relative paths inside the soundpack):")
+		unsafeKeys := make([]string, 0, len(result.UnsafeRefs))
+		for key := range result.UnsafeRefs {
+			unsafeKeys = append(unsafeKeys, key)
+		}
+		sort.Strings(unsafeKeys)
+		for _, key := range unsafeKeys {
+			cmd.Printf("  %s -> %s (%s)\n", key, result.Mappings[key], result.UnsafeRefs[key])
 		}
 	}
 

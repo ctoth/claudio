@@ -796,20 +796,21 @@ func playablePathForRecord(record gitSoundpackRecord) string {
 	return filepath.Join(record.Path, filepath.FromSlash(record.Subdir))
 }
 
+// validateSoundpackInstallPath fails when the pack at playablePath is
+// unreadable, malformed, or has broken or unsafe mappings.
 func validateSoundpackInstallPath(playablePath string) error {
 	info, err := os.Stat(playablePath)
 	if err != nil {
 		return fmt.Errorf("cannot access soundpack path: %w", err)
 	}
-	if info.IsDir() {
-		_, err = validateDirectorySoundpack(playablePath)
+	if !info.IsDir() && !strings.HasSuffix(strings.ToLower(playablePath), ".json") {
+		return fmt.Errorf("unsupported soundpack path: %s", playablePath)
+	}
+	result, err := validateSoundpackPath(playablePath)
+	if err != nil {
 		return err
 	}
-	if strings.HasSuffix(strings.ToLower(playablePath), ".json") {
-		_, err = validateJSONSoundpackFile(playablePath)
-		return err
-	}
-	return fmt.Errorf("unsupported soundpack path: %s", playablePath)
+	return result.Err()
 }
 
 var errNoSoundpackConfigChange = errors.New("soundpack config has no matching entry")
