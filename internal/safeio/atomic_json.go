@@ -72,7 +72,7 @@ func WriteFileAtomic(filesystem afero.Fs, filePath string, data []byte, mode os.
 	// Failure here is non-fatal — the rename already succeeded.
 	if _, isOs := filesystem.(*afero.OsFs); isOs {
 		if err := fsyncDir(dir); err != nil {
-			slog.Warn("parent dir fsync failed (non-fatal)", "dir", dir, "err", err)
+			slog.Warn("parent dir fsync failed (non-fatal)", "dir", dir, "error", err)
 		}
 	}
 
@@ -120,18 +120,18 @@ func BackupJSONFile(filesystem afero.Fs, filePath string, probe any, tempPattern
 	}
 	data, err := afero.ReadFile(filesystem, filePath)
 	if err != nil {
-		slog.Warn("backup skipped: read failed", "path", filePath, "err", err)
+		slog.Warn("backup skipped: read failed", "path", filePath, "error", err)
 		return
 	}
 	if err := json.Unmarshal(data, probe); err != nil {
 		slog.Warn("backup skipped: existing file is not valid JSON, refusing to overwrite .bak",
-			"path", filePath, "err", err)
+			"path", filePath, "error", err)
 		return
 	}
 
 	bakPath := filePath + ".bak"
 	if err := WriteFileAtomic(filesystem, bakPath, data, info.Mode()&os.ModePerm, tempPattern); err != nil {
-		slog.Warn("backup skipped: atomic write failed", "path", bakPath, "err", err)
+		slog.Warn("backup skipped: atomic write failed", "path", bakPath, "error", err)
 		return
 	}
 	slog.Debug("file backed up", "from", filePath, "to", bakPath)

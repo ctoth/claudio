@@ -581,7 +581,7 @@ func CreateSoundpackMapperWithBasePaths(name, primaryPath string, basePaths []st
 
 	slog.Debug("primary path failed, falling back to base paths",
 		"primary_path", primaryPath,
-		"primary_error", err,
+		"error", err,
 		"base_paths_count", len(basePaths))
 
 	// If primary path fails, create directory mapper with base paths
