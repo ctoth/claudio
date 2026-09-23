@@ -20,7 +20,6 @@ type QueryFilter struct {
 	// Content filters
 	Tool      string // Filter by specific tool
 	Category  string // Filter by category (success/error/loading)
-	Soundpack string // Filter by soundpack name/path
 	SessionID string // Filter by specific session
 
 	// Output control
@@ -108,12 +107,6 @@ func (q *QueryFilter) BuildWhereClause() (string, []interface{}) {
 	if q.SessionID != "" {
 		clauses = append(clauses, "session_id = ?")
 		args = append(args, q.SessionID)
-	}
-
-	// Soundpack filter (would be added when soundpack tracking is implemented)
-	if q.Soundpack != "" {
-		clauses = append(clauses, "JSON_EXTRACT(context, '$.SoundpackName') = ?")
-		args = append(args, q.Soundpack)
 	}
 
 	// Join with AND
