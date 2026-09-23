@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"math"
 	"sync"
 	"time"
 
@@ -97,8 +96,8 @@ func (b *Backend) SetVolume(volume float32) error {
 	if b.closed {
 		return audio.ErrBackendClosed
 	}
-	if math.IsNaN(float64(volume)) || math.IsInf(float64(volume), 0) || volume < 0 || volume > 1 {
-		return fmt.Errorf("invalid volume level: %v (must be finite and between 0 and 1)", volume)
+	if err := audio.ValidateVolume(float64(volume)); err != nil {
+		return err
 	}
 	b.volume = volume
 	for p := range b.plays {

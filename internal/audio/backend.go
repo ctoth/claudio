@@ -3,6 +3,8 @@ package audio
 import (
 	"context"
 	"errors"
+	"fmt"
+	"math"
 )
 
 // Common errors for AudioBackend implementations
@@ -29,4 +31,17 @@ type AudioBackend interface {
 
 	// Playback - unified interface supporting both file paths and readers
 	Play(ctx context.Context, source AudioSource) error
+}
+
+// ValidateVolume reports whether v is a usable volume: finite and within
+// [0.0, 1.0]. NaN fails both range comparisons, so it is checked first.
+// It is the single volume rule for backends, config and the CLI.
+func ValidateVolume(v float64) error {
+	if math.IsNaN(v) || math.IsInf(v, 0) {
+		return fmt.Errorf("volume must be a finite number between 0.0 and 1.0, got %v", v)
+	}
+	if v < 0.0 || v > 1.0 {
+		return fmt.Errorf("volume must be between 0.0 and 1.0, got %v", v)
+	}
+	return nil
 }

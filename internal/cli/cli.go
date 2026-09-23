@@ -101,15 +101,15 @@ func (c *CLI) loadAndValidateConfig(cmd *cobra.Command) (*config.Config, error) 
 	soundpackFlag, _ := cmd.Flags().GetString("soundpack")
 	silent, _ := cmd.Flags().GetBool("silent")
 
-	// Validate volume flag early to match old behavior
+	// Parse the volume flag before loading anything; its range is checked
+	// with the rest of the final configuration below.
+	var volumeOverride *float64
 	if volumeStr != "" {
 		vol, err := strconv.ParseFloat(volumeStr, 64)
 		if err != nil {
 			return nil, fmt.Errorf("invalid volume value '%s': %w", volumeStr, err)
 		}
-		if vol < 0.0 || vol > 1.0 {
-			return nil, fmt.Errorf("volume must be between 0.0 and 1.0, got %f", vol)
-		}
+		volumeOverride = &vol
 	}
 
 	// Load configuration. An unusable file is a warning, never a failed hook.
@@ -121,11 +121,9 @@ func (c *CLI) loadAndValidateConfig(cmd *cobra.Command) (*config.Config, error) 
 	cfg = c.configManager.ApplyEnvironmentOverrides(cfg)
 
 	// Apply command line overrides
-	if volumeStr != "" {
-		// Volume already validated above, just parse and apply
-		vol, _ := strconv.ParseFloat(volumeStr, 64)
-		cfg.Volume = &vol
-		slog.Debug("volume override applied", "value", vol)
+	if volumeOverride != nil {
+		cfg.Volume = volumeOverride
+		slog.Debug("volume override applied", "value", *volumeOverride)
 	}
 
 	if soundpackFlag != "" {
@@ -273,11 +271,7 @@ func (c *CLI) initializeAudioSystemWithBackend(cfg *config.Config) error {
 
 	c.audioBackend = backend
 
-	// Set volume on backend (use default 0.5 if not set)
-	volume := 0.5
-	if cfg.Volume != nil {
-		volume = *cfg.Volume
-	}
+	volume := cfg.EffectiveVolume()
 	err = c.audioBackend.SetVolume(float32(volume))
 	if err != nil {
 		return fmt.Errorf("failed to set volume on backend: %w", err)
@@ -523,11 +517,7 @@ func (c *CLI) processHookEvent(hookEvent *hooks.HookEvent, cfg *config.Config, s
 
 	// Play sound if audio is enabled
 	if cfg.Enabled && c.audioBackend != nil {
-		playVolume := 0.5
-		if cfg.Volume != nil {
-			playVolume = *cfg.Volume
-		}
-		err := c.playSoundWithBackend(result.SelectedPath, playVolume)
+		err := c.playSoundWithBackend(result.SelectedPath, cfg.EffectiveVolume())
 		if err != nil {
 			slog.Error("sound playback failed", "sound_path", result.SelectedPath, "error", err)
 			return

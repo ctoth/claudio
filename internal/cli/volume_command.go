@@ -3,12 +3,12 @@ package cli
 import (
 	"fmt"
 	"log/slog"
-	"math"
 	"os"
 	"strconv"
 
 	"github.com/spf13/cobra"
 
+	"claudio.click/internal/audio"
 	"claudio.click/internal/config"
 )
 
@@ -52,13 +52,8 @@ func (c *CLI) runVolume(cmd *cobra.Command, args []string) error {
 		// WRITE path below intentionally does NOT do this — persistence
 		// must be deterministic regardless of env state.
 		cfg = c.configManager.ApplyEnvironmentOverrides(cfg)
-		if cfg.Volume == nil {
-			fmt.Fprintln(cmd.OutOrStdout(), "volume: default (no persisted setting)")
-		} else if os.Getenv("CLAUDIO_VOLUME") != "" {
-			fmt.Fprintf(cmd.OutOrStdout(), "volume: %.2f (from CLAUDIO_VOLUME)\n", *cfg.Volume)
-		} else {
-			fmt.Fprintf(cmd.OutOrStdout(), "volume: %.2f\n", *cfg.Volume)
-		}
+		value, source := describeVolume(cfg)
+		fmt.Fprintf(cmd.OutOrStdout(), "volume: %s (%s)\n", value, source)
 		return nil
 	}
 
@@ -67,11 +62,8 @@ func (c *CLI) runVolume(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("invalid volume %q: must be a float between 0.0 and 1.0", args[0])
 	}
-	if math.IsNaN(v) || math.IsInf(v, 0) {
-		return fmt.Errorf("invalid volume %q: must be a finite float between 0.0 and 1.0", args[0])
-	}
-	if v < 0.0 || v > 1.0 {
-		return fmt.Errorf("volume must be between 0.0 and 1.0, got %f", v)
+	if err := audio.ValidateVolume(v); err != nil {
+		return err
 	}
 
 	previous := "default"
@@ -88,4 +80,20 @@ func (c *CLI) runVolume(cmd *cobra.Command, args []string) error {
 	fmt.Fprintf(cmd.OutOrStdout(), "volume: %s -> %.2f\n", previous, v)
 	slog.Info("volume persisted", "previous", previous, "value", v)
 	return nil
+}
+
+// describeVolume returns a printable value and a source annotation
+// (env / file / default), shared by `volume` and `status`.
+func describeVolume(cfg *config.Config) (string, string) {
+	// If CLAUDIO_VOLUME is set in the environment, ApplyEnvironmentOverrides
+	// already set cfg.Volume from it — annotate accordingly.
+	if envVol := os.Getenv("CLAUDIO_VOLUME"); envVol != "" {
+		if cfg.Volume != nil {
+			return fmt.Sprintf("%.2f", *cfg.Volume), "from CLAUDIO_VOLUME"
+		}
+	}
+	if cfg.Volume == nil {
+		return "default", "no persisted setting"
+	}
+	return fmt.Sprintf("%.2f", *cfg.Volume), "from config.json"
 }

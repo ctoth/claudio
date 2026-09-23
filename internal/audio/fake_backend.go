@@ -2,7 +2,6 @@ package audio
 
 import (
 	"context"
-	"errors"
 	"sync"
 )
 
@@ -81,8 +80,8 @@ func (f *FakeBackend) IsPlaying() bool {
 
 // SetVolume stores the supplied volume; range-checks to [0.0, 1.0].
 func (f *FakeBackend) SetVolume(volume float32) error {
-	if volume < 0.0 || volume > 1.0 {
-		return errors.New("volume out of range [0.0, 1.0]")
+	if err := ValidateVolume(float64(volume)); err != nil {
+		return err
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()

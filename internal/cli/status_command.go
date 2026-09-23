@@ -3,12 +3,10 @@ package cli
 import (
 	"fmt"
 	"log/slog"
-	"os"
 
 	"github.com/spf13/cobra"
 
 	"claudio.click/internal/audio"
-	"claudio.click/internal/config"
 	"claudio.click/internal/tracking"
 )
 
@@ -115,20 +113,4 @@ func describeConfigFile(l configLoad) string {
 	default:
 		return l.Path
 	}
-}
-
-// describeVolume returns a printable value and a source annotation
-// (env / file / default) for the status report.
-func describeVolume(cfg *config.Config) (string, string) {
-	// If CLAUDIO_VOLUME is set in the environment, ApplyEnvironmentOverrides
-	// already set cfg.Volume from it — annotate accordingly.
-	if envVol := os.Getenv("CLAUDIO_VOLUME"); envVol != "" {
-		if cfg.Volume != nil {
-			return fmt.Sprintf("%.2f", *cfg.Volume), "from CLAUDIO_VOLUME"
-		}
-	}
-	if cfg.Volume == nil {
-		return "default", "no persisted setting"
-	}
-	return fmt.Sprintf("%.2f", *cfg.Volume), "from config.json"
 }
