@@ -364,34 +364,7 @@ func (e *HookEvent) GetContext() *EventContext {
 func (e *HookEvent) populatePreToolContext(context *EventContext) {
 	context.Category = Loading
 	context.Operation = "tool-start"
-
-	if context.ToolName == "Bash" {
-		commandInfo := e.extractCommandInfo()
-		if commandInfo.Command != "" {
-			context.OriginalTool = "Bash"
-			context.ToolName = commandInfo.Command
-			context.Subcommand = commandInfo.Subcommand
-
-			if commandInfo.HasSubcommand {
-				context.SoundHint = strings.ToLower(commandInfo.Command) + "-" +
-					strings.ToLower(commandInfo.Subcommand) + "-start"
-			} else {
-				context.SoundHint = strings.ToLower(commandInfo.Command) + "-start"
-			}
-		} else {
-			context.SoundHint = strings.ToLower(context.ToolName) + "-start"
-		}
-	} else if isMCPToolName(context.ToolName) {
-		context.OriginalTool = getStringPtr(e.ToolName)
-		context.ToolName = "mcp"
-		context.SoundHint = "mcp-start"
-	} else if context.ToolName != "" {
-		context.SoundHint = strings.ToLower(context.ToolName) + "-start"
-	} else {
-		context.SoundHint = "tool-loading"
-	}
-	context.Command = context.ToolName
-	context.Phase = "start"
+	e.populateToolIdentity(context, "start", "")
 }
 
 func (e *HookEvent) populatePostToolContext(context *EventContext, forceError bool) {
@@ -402,87 +375,53 @@ func (e *HookEvent) populatePostToolContext(context *EventContext, forceError bo
 	}
 	context.IsSuccess = success
 	context.HasError = hasError
+	context.Operation = "tool-complete"
 
 	if hasError {
 		context.Category = Error
-		e.populatePostToolErrorHint(context, errorType)
+		e.populateToolIdentity(context, "error", errorType)
 	} else {
 		context.Category = Success
-		e.populatePostToolSuccessHint(context)
+		e.populateToolIdentity(context, "success", "")
 	}
+}
 
-	context.Operation = "tool-complete"
+// noToolHints is the hint for a tool event that names no tool, by phase.
+var noToolHints = map[string]string{
+	"start":   "tool-loading",
+	"success": "tool-success",
+	"error":   "tool-error",
+}
+
+// populateToolIdentity resolves the tool a tool event is about and sets
+// Command, Subcommand, Phase and SoundHint. Bash becomes its shell command
+// (OriginalTool "Bash") and MCP tools become "mcp" (OriginalTool the full
+// MCP name). The hint is errorType when set, otherwise
+// command[-subcommand]-phase.
+func (e *HookEvent) populateToolIdentity(context *EventContext, phase, errorType string) {
+	switch {
+	case context.ToolName == "Bash":
+		if info := e.extractCommandInfo(); info.Command != "" {
+			context.OriginalTool = "Bash"
+			context.ToolName = info.Command
+			context.Subcommand = info.Subcommand
+		}
+	case isMCPToolName(context.ToolName):
+		context.OriginalTool = getStringPtr(e.ToolName)
+		context.ToolName = "mcp"
+	}
 	context.Command = context.ToolName
-	if hasError {
-		context.Phase = "error"
-	} else {
-		context.Phase = "success"
-	}
-}
+	context.Phase = phase
 
-func (e *HookEvent) populatePostToolErrorHint(context *EventContext, errorType string) {
-	if context.ToolName == "Bash" {
-		commandInfo := e.extractCommandInfo()
-		if commandInfo.Command != "" {
-			context.OriginalTool = "Bash"
-			context.ToolName = commandInfo.Command
-			context.Subcommand = commandInfo.Subcommand
-
-			if errorType != "" {
-				context.SoundHint = errorType
-			} else if commandInfo.HasSubcommand {
-				context.SoundHint = strings.ToLower(commandInfo.Command) + "-" +
-					strings.ToLower(commandInfo.Subcommand) + "-error"
-			} else {
-				context.SoundHint = strings.ToLower(commandInfo.Command) + "-error"
-			}
-		} else if errorType != "" {
-			context.SoundHint = errorType
-		} else {
-			context.SoundHint = strings.ToLower(context.ToolName) + "-error"
-		}
-	} else if isMCPToolName(context.ToolName) {
-		context.OriginalTool = getStringPtr(e.ToolName)
-		context.ToolName = "mcp"
-		if errorType != "" {
-			context.SoundHint = errorType
-		} else {
-			context.SoundHint = "mcp-error"
-		}
-	} else if errorType != "" {
+	switch {
+	case errorType != "":
 		context.SoundHint = errorType
-	} else if context.ToolName != "" {
-		context.SoundHint = strings.ToLower(context.ToolName) + "-error"
-	} else {
-		context.SoundHint = "tool-error"
-	}
-}
-
-func (e *HookEvent) populatePostToolSuccessHint(context *EventContext) {
-	if context.ToolName == "Bash" {
-		commandInfo := e.extractCommandInfo()
-		if commandInfo.Command != "" {
-			context.OriginalTool = "Bash"
-			context.ToolName = commandInfo.Command
-			context.Subcommand = commandInfo.Subcommand
-
-			if commandInfo.HasSubcommand {
-				context.SoundHint = strings.ToLower(commandInfo.Command) + "-" +
-					strings.ToLower(commandInfo.Subcommand) + "-success"
-			} else {
-				context.SoundHint = strings.ToLower(commandInfo.Command) + "-success"
-			}
-		} else {
-			context.SoundHint = strings.ToLower(context.ToolName) + "-success"
-		}
-	} else if isMCPToolName(context.ToolName) {
-		context.OriginalTool = getStringPtr(e.ToolName)
-		context.ToolName = "mcp"
-		context.SoundHint = "mcp-success"
-	} else if context.ToolName != "" {
-		context.SoundHint = strings.ToLower(context.ToolName) + "-success"
-	} else {
-		context.SoundHint = "tool-success"
+	case context.ToolName == "":
+		context.SoundHint = noToolHints[phase]
+	case context.Subcommand != "":
+		context.SoundHint = strings.ToLower(context.Command) + "-" + strings.ToLower(context.Subcommand) + "-" + phase
+	default:
+		context.SoundHint = strings.ToLower(context.Command) + "-" + phase
 	}
 }
 
@@ -723,13 +662,8 @@ func (e *HookEvent) extractCommandInfo() CommandInfo {
 
 // isValidSubcommand determines if a word is likely a subcommand rather than an argument
 func isValidSubcommand(command, word string) bool {
-	// Paths and file names are not subcommands
+	// Paths, file names and URLs are not subcommands
 	if strings.Contains(word, "/") || strings.Contains(word, ".") {
-		return false
-	}
-
-	// URLs are not subcommands
-	if strings.Contains(word, "://") {
 		return false
 	}
 
