@@ -1,13 +1,13 @@
-package uninstall
+package install
 
 import (
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
-	"claudio.click/internal/install"
 	"github.com/spf13/afero"
 )
 
@@ -62,14 +62,14 @@ func TestInstallUninstallWithExecutablePath(t *testing.T) {
 				// Use an explicit fixture path so the test does not depend on go test's
 				// binary name leaking through GetExecutablePath().
 				execPath := "/usr/local/bin/claudio"
-				claudioHooks, err := install.GenerateClaudioHooksForAgent(execPath, install.AgentClaude)
+				claudioHooks, err := GenerateClaudioHooksForAgent(execPath, AgentClaude)
 				if err != nil {
 					t.Fatalf("Failed to generate claudio hooks: %v", err)
 				}
 
 				// Create empty settings to install into
-				initialSettings := install.SettingsMap{"version": "1.0"}
-				mergedSettings, err := install.MergeHooksIntoSettings(&initialSettings, claudioHooks)
+				initialSettings := SettingsMap{"version": "1.0"}
+				mergedSettings, err := MergeHooksIntoSettings(&initialSettings, claudioHooks)
 				if err != nil {
 					t.Fatalf("Failed to merge hooks: %v", err)
 				}
@@ -93,7 +93,7 @@ func TestInstallUninstallWithExecutablePath(t *testing.T) {
 				// Debug: Print the actual settings content
 				t.Logf("Settings file content: %s", string(settingsData))
 
-				var readSettings install.SettingsMap
+				var readSettings SettingsMap
 				err = json.Unmarshal(settingsData, &readSettings)
 				if err != nil {
 					t.Fatalf("Failed to unmarshal settings: %v", err)
@@ -119,7 +119,7 @@ func TestInstallUninstallWithExecutablePath(t *testing.T) {
 								if cmd, ok := hooksField[0].(map[string]interface{}); ok {
 									if cmdStr, ok := cmd["command"].(string); ok {
 										// Use the same detection logic as production code
-										if install.IsClaudioCommandString(cmdStr) {
+										if IsClaudioCommandString(cmdStr) {
 											foundExecutableHooks = true
 											t.Logf("Hook %s uses executable command: %s", hookName, cmdStr)
 											break
@@ -138,7 +138,7 @@ func TestInstallUninstallWithExecutablePath(t *testing.T) {
 				// Step 3: Run uninstall workflow to remove hooks. Inject the
 				// test's tempdir path via swapAgentResolver so we don't write
 				// to the user's real settings file.
-				err = RunUninstallWorkflow(afero.NewOsFs(), install.AgentTarget{Agent: install.AgentClaude, ConfigPath: settingsPath})
+				err = RunUninstallWorkflow(afero.NewOsFs(), AgentTarget{Agent: AgentClaude, ConfigPath: settingsPath})
 				if tc.expectError && err == nil {
 					t.Error("Expected error but got none")
 				}
@@ -152,7 +152,7 @@ func TestInstallUninstallWithExecutablePath(t *testing.T) {
 					t.Fatalf("Failed to read final settings: %v", err)
 				}
 
-				var finalSettings install.SettingsMap
+				var finalSettings SettingsMap
 				err = json.Unmarshal(finalData, &finalSettings)
 				if err != nil {
 					t.Fatalf("Failed to unmarshal final settings: %v", err)
@@ -341,7 +341,7 @@ func TestRunUninstallWorkflow(t *testing.T) {
 			// Test the complete uninstall workflow. Inject the test's tempdir
 			// path via swapAgentResolver so the workflow targets settingsFile
 			// instead of resolving via agent.BestConfigPath.
-			err = RunUninstallWorkflow(afero.NewOsFs(), install.AgentTarget{Agent: install.AgentClaude, ConfigPath: settingsFile})
+			err = RunUninstallWorkflow(afero.NewOsFs(), AgentTarget{Agent: AgentClaude, ConfigPath: settingsFile})
 
 			if tc.expectError && err == nil {
 				t.Errorf("Expected error but got none")
@@ -370,7 +370,7 @@ func TestRunUninstallWorkflow(t *testing.T) {
 				return
 			}
 
-			var settingsMap install.SettingsMap
+			var settingsMap SettingsMap
 			err = json.Unmarshal(settingsData, &settingsMap)
 			if err != nil {
 				t.Errorf("Failed to parse settings JSON: %v", err)
@@ -395,7 +395,7 @@ func TestRunUninstallWorkflow(t *testing.T) {
 						}
 
 						// 4. Verify no claudio hooks remain
-						claudioHooks := install.ClaudioHookNames(settings)
+						claudioHooks := ClaudioHookNames(settings)
 						if len(claudioHooks) > 0 {
 							t.Errorf("Claudio hooks still present after uninstall: %v", claudioHooks)
 						}
@@ -489,12 +489,12 @@ func TestUninstallWorkflowErrorHandling(t *testing.T) {
 			settingsPath, cleanup := tc.setupFunc()
 			defer cleanup()
 
-			err := RunUninstallWorkflow(afero.NewOsFs(), install.AgentTarget{Agent: install.AgentClaude, ConfigPath: settingsPath})
+			err := RunUninstallWorkflow(afero.NewOsFs(), AgentTarget{Agent: AgentClaude, ConfigPath: settingsPath})
 
 			if tc.expectError {
 				if err == nil {
 					t.Errorf("Expected error but got none")
-				} else if tc.errorMsg != "" && !containsString(err.Error(), tc.errorMsg) {
+				} else if tc.errorMsg != "" && !strings.Contains(err.Error(), tc.errorMsg) {
 					t.Errorf("Expected error containing '%s', got: %v", tc.errorMsg, err)
 				}
 			} else {
@@ -508,25 +508,11 @@ func TestUninstallWorkflowErrorHandling(t *testing.T) {
 	}
 }
 
-// Helper functions reused from hook_removal_test.go
+// getMapKeys lists a map's keys for failure messages.
 func getMapKeys(m map[string]interface{}) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
 		keys = append(keys, k)
 	}
 	return keys
-}
-
-func containsString(s, substr string) bool {
-	return len(s) >= len(substr) &&
-		(s == substr || findSubstringSimple(s, substr))
-}
-
-func findSubstringSimple(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }
