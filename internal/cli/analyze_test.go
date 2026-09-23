@@ -3,7 +3,6 @@ package cli
 import (
 	"bytes"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -94,12 +93,8 @@ func TestAnalyzeMissingCommand(t *testing.T) {
 	}
 
 	// Set environment to use our test database
-	os.Setenv("CLAUDIO_SOUND_TRACKING", "true")
-	os.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
-	defer func() {
-		os.Unsetenv("CLAUDIO_SOUND_TRACKING")
-		os.Unsetenv("CLAUDIO_SOUND_TRACKING_DB")
-	}()
+	t.Setenv("CLAUDIO_SOUND_TRACKING", "true")
+	t.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
 
 	// Test the analyze missing command
 	cli := NewCLI()
@@ -211,12 +206,8 @@ func TestAnalyzeMissingCommandWithFilters(t *testing.T) {
 	}
 
 	// Set environment to use our test database
-	os.Setenv("CLAUDIO_SOUND_TRACKING", "true")
-	os.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
-	defer func() {
-		os.Unsetenv("CLAUDIO_SOUND_TRACKING")
-		os.Unsetenv("CLAUDIO_SOUND_TRACKING_DB")
-	}()
+	t.Setenv("CLAUDIO_SOUND_TRACKING", "true")
+	t.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
 
 	// Test with --days filter
 	cli := NewCLI()
@@ -300,12 +291,8 @@ func TestAnalyzeMissingCommandWithToolFilter(t *testing.T) {
 	}
 
 	// Set environment to use our test database
-	os.Setenv("CLAUDIO_SOUND_TRACKING", "true")
-	os.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
-	defer func() {
-		os.Unsetenv("CLAUDIO_SOUND_TRACKING")
-		os.Unsetenv("CLAUDIO_SOUND_TRACKING_DB")
-	}()
+	t.Setenv("CLAUDIO_SOUND_TRACKING", "true")
+	t.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
 
 	// Test with --tool filter
 	cli := NewCLI()
@@ -340,8 +327,7 @@ func TestAnalyzeMissingCommandWithToolFilter(t *testing.T) {
 func TestAnalyzeMissingCommandNoDatabase(t *testing.T) {
 	testenv.IsolateXDG(t)
 	// Test behavior when tracking is disabled or database doesn't exist
-	os.Setenv("CLAUDIO_SOUND_TRACKING", "false")
-	defer os.Unsetenv("CLAUDIO_SOUND_TRACKING")
+	t.Setenv("CLAUDIO_SOUND_TRACKING", "false")
 
 	cli := NewCLI()
 	stdin := strings.NewReader("")
@@ -594,12 +580,8 @@ func TestAnalyzeUsageCommand(t *testing.T) {
 	}
 
 	// Set environment to use our test database
-	os.Setenv("CLAUDIO_SOUND_TRACKING", "true")
-	os.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
-	defer func() {
-		os.Unsetenv("CLAUDIO_SOUND_TRACKING")
-		os.Unsetenv("CLAUDIO_SOUND_TRACKING_DB")
-	}()
+	t.Setenv("CLAUDIO_SOUND_TRACKING", "true")
+	t.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
 
 	// Test the analyze usage command
 	cli := NewCLI()
@@ -694,12 +676,8 @@ func TestAnalyzeUsageCommandWithFilters(t *testing.T) {
 	}
 
 	// Set environment to use our test database
-	os.Setenv("CLAUDIO_SOUND_TRACKING", "true")
-	os.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
-	defer func() {
-		os.Unsetenv("CLAUDIO_SOUND_TRACKING")
-		os.Unsetenv("CLAUDIO_SOUND_TRACKING_DB")
-	}()
+	t.Setenv("CLAUDIO_SOUND_TRACKING", "true")
+	t.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
 
 	// Test with --days filter
 	cli := NewCLI()
@@ -781,12 +759,8 @@ func TestAnalyzeUsageCommandWithSummaryAndFallbacks(t *testing.T) {
 	}
 
 	// Set environment to use our test database
-	os.Setenv("CLAUDIO_SOUND_TRACKING", "true")
-	os.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
-	defer func() {
-		os.Unsetenv("CLAUDIO_SOUND_TRACKING")
-		os.Unsetenv("CLAUDIO_SOUND_TRACKING_DB")
-	}()
+	t.Setenv("CLAUDIO_SOUND_TRACKING", "true")
+	t.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
 
 	// Test with --show-summary and --show-chains
 	cli := NewCLI()
@@ -858,12 +832,8 @@ func TestAnalyzeUsageCommandWithPresets(t *testing.T) {
 	}
 
 	// Set environment to use our test database
-	os.Setenv("CLAUDIO_SOUND_TRACKING", "true")
-	os.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
-	defer func() {
-		os.Unsetenv("CLAUDIO_SOUND_TRACKING")
-		os.Unsetenv("CLAUDIO_SOUND_TRACKING_DB")
-	}()
+	t.Setenv("CLAUDIO_SOUND_TRACKING", "true")
+	t.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
 
 	// Test with --preset today
 	cli := NewCLI()
@@ -903,8 +873,7 @@ func TestAnalyzeUsageCommandWithPresets(t *testing.T) {
 func TestAnalyzeUsageCommandNoDatabase(t *testing.T) {
 	testenv.IsolateXDG(t)
 	// Test behavior when tracking is disabled
-	os.Setenv("CLAUDIO_SOUND_TRACKING", "false")
-	defer os.Unsetenv("CLAUDIO_SOUND_TRACKING")
+	t.Setenv("CLAUDIO_SOUND_TRACKING", "false")
 
 	cli := NewCLI()
 	stdin := strings.NewReader("")
@@ -943,12 +912,8 @@ func TestAnalyzeUsageCommandNoData(t *testing.T) {
 	defer db.Close()
 
 	// Set environment to use our empty test database
-	os.Setenv("CLAUDIO_SOUND_TRACKING", "true")
-	os.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
-	defer func() {
-		os.Unsetenv("CLAUDIO_SOUND_TRACKING")
-		os.Unsetenv("CLAUDIO_SOUND_TRACKING_DB")
-	}()
+	t.Setenv("CLAUDIO_SOUND_TRACKING", "true")
+	t.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
 
 	// Test the analyze usage command with no data
 	cli := NewCLI()

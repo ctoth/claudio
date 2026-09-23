@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"log/slog"
-	"os"
 	"strings"
 	"testing"
 
@@ -150,8 +149,7 @@ func TestConfigAudioBackendEnvironmentOverride(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Set environment variable
 			if tt.envValue != "" {
-				os.Setenv("CLAUDIO_AUDIO_BACKEND", tt.envValue)
-				defer os.Unsetenv("CLAUDIO_AUDIO_BACKEND")
+				t.Setenv("CLAUDIO_AUDIO_BACKEND", tt.envValue)
 			}
 
 			config := mgr.GetDefaultConfig()
@@ -168,8 +166,7 @@ func TestConfigAudioBackendInvalidEnvironmentOverride(t *testing.T) {
 	mgr := NewConfigManager()
 
 	// Set invalid environment variable
-	os.Setenv("CLAUDIO_AUDIO_BACKEND", "invalid")
-	defer os.Unsetenv("CLAUDIO_AUDIO_BACKEND")
+	t.Setenv("CLAUDIO_AUDIO_BACKEND", "invalid")
 
 	config := mgr.GetDefaultConfig()
 	result := mgr.ApplyEnvironmentOverrides(config)

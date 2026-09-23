@@ -23,11 +23,14 @@ import (
 // `go test` that re-invokes the test binary and would recursively run
 // the entire test suite. CLAUDIO_DETACH_DISABLE=1 short-circuits the
 // detach path so tests observe in-process side effects.
+//
+// TestMain has no *testing.T, so t.Setenv is unavailable; the variable is
+// set process-wide for the whole run and the process exits right after.
 func TestMain(m *testing.M) {
-	os.Setenv("CLAUDIO_DETACH_DISABLE", "1")
-	code := m.Run()
-	os.Unsetenv("CLAUDIO_DETACH_DISABLE")
-	os.Exit(code)
+	if err := os.Setenv("CLAUDIO_DETACH_DISABLE", "1"); err != nil {
+		panic(err)
+	}
+	os.Exit(m.Run())
 }
 
 func TestCLI(t *testing.T) {
@@ -525,12 +528,8 @@ func TestCLIEnvironmentVariables(t *testing.T) {
 	cli := NewCLI()
 
 	// Set environment variables
-	os.Setenv("CLAUDIO_VOLUME", "0.6")
-	os.Setenv("CLAUDIO_SOUNDPACK", "env-pack")
-	defer func() {
-		os.Unsetenv("CLAUDIO_VOLUME")
-		os.Unsetenv("CLAUDIO_SOUNDPACK")
-	}()
+	t.Setenv("CLAUDIO_VOLUME", "0.6")
+	t.Setenv("CLAUDIO_SOUNDPACK", "env-pack")
 
 	hookJSON := `{
 		"session_id": "test",

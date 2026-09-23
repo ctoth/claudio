@@ -321,14 +321,9 @@ func TestConfigEnvironmentOverrides(t *testing.T) {
 	mgr := NewConfigManager()
 
 	// Set environment variables
-	os.Setenv("CLAUDIO_VOLUME", "0.9")
-	os.Setenv("CLAUDIO_SOUNDPACK", "env-pack")
-	os.Setenv("CLAUDIO_ENABLED", "false")
-	defer func() {
-		os.Unsetenv("CLAUDIO_VOLUME")
-		os.Unsetenv("CLAUDIO_SOUNDPACK")
-		os.Unsetenv("CLAUDIO_ENABLED")
-	}()
+	t.Setenv("CLAUDIO_VOLUME", "0.9")
+	t.Setenv("CLAUDIO_SOUNDPACK", "env-pack")
+	t.Setenv("CLAUDIO_ENABLED", "false")
 
 	baseConfig := &Config{
 		Volume:           ptrFloat64(0.5),
