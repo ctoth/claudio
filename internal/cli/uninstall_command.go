@@ -114,7 +114,7 @@ func runUninstallTargets(cmd *cobra.Command, scope InstallScope, targets []insta
 			cmd.Printf("Settings path: %s\n", target.ConfigPath)
 		}
 
-		err := uninstall.RunUninstallWorkflow(afero.NewOsFs(), scope.String(), target.Agent)
+		err := uninstall.RunUninstallWorkflow(afero.NewOsFs(), target)
 		if err != nil {
 			return fmt.Errorf("uninstall failed for %s: %w", target.Agent, err)
 		}
@@ -161,7 +161,7 @@ func handlePrintUninstall(cmd *cobra.Command, scope InstallScope, targets []inst
 			continue
 		}
 
-		claudioHooks := uninstall.DetectClaudioHooks(settings)
+		claudioHooks := install.ClaudioHookNames(settings)
 		if len(claudioHooks) == 0 {
 			cmd.Printf("  Hooks to remove: None (no claudio hooks found)\n")
 		} else {
@@ -196,7 +196,7 @@ func handleDryRunUninstall(cmd *cobra.Command, scope InstallScope, targets []ins
 			continue
 		}
 
-		claudioHooks := uninstall.DetectClaudioHooks(settings)
+		claudioHooks := install.ClaudioHookNames(settings)
 		if len(claudioHooks) == 0 {
 			if !quiet {
 				cmd.Printf("No claudio hooks found to remove.\n")

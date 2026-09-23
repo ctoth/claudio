@@ -268,158 +268,53 @@ func deepCopySettings(original *SettingsMap) (*SettingsMap, error) {
 	return &copy, nil
 }
 
-// mergeHookValues merges an existing hook value with a Claudio hook value
-// Returns the merged result in array format, preserving existing non-Claudio
-// commands and replacing any pre-existing Claudio entries with the new ones.
-// The merge is idempotent regardless of element ordering: any Claudio entry in
-// the existing array is filtered out before the new Claudio entries are
-// appended, so merge(merge(existing)) == merge(existing).
+// mergeHookValues merges an existing hook value with a Claudio hook value.
+// It strips any pre-existing claudio entries (stripClaudioEntries, the same
+// engine uninstall uses) and appends the new claudio entries, so the merge
+// is idempotent regardless of element ordering and never touches the
+// user's own entries. A legacy string value is converted to one matcher
+// group first.
 //
 // An existing value that is neither a string nor an array is an error: it
 // is not a hook shape claudio understands, so it must not be rewritten.
 func mergeHookValues(existingValue, claudioValue interface{}) (interface{}, error) {
-	slog.Debug("merging hook values", "existing_type", fmt.Sprintf("%T", existingValue), "claudio_type", fmt.Sprintf("%T", claudioValue))
-
-	// Convert Claudio value to array format (it should already be, but be safe)
 	claudioArray, ok := claudioValue.([]interface{})
 	if !ok {
 		return nil, fmt.Errorf("claudio hook value must be an array, got %T", claudioValue)
 	}
 
-	// Convert existing value to array format
 	var existingArray []interface{}
-	if existingStr, ok := existingValue.(string); ok {
-		// Convert string hook to array format
+	switch v := existingValue.(type) {
+	case string:
 		existingArray = []interface{}{
 			map[string]interface{}{
 				"matcher": ".*",
 				"hooks": []interface{}{
 					map[string]interface{}{
 						"type":    "command",
-						"command": existingStr,
+						"command": v,
 					},
 				},
 			},
 		}
-		slog.Debug("converted existing string hook to array format", "command", existingStr)
-	} else if existingArr, ok := existingValue.([]interface{}); ok {
-		// Already in array format
-		existingArray = existingArr
-		slog.Debug("existing hook already in array format")
-	} else {
+	case []interface{}:
+		existingArray = v
+	default:
 		return nil, fmt.Errorf("unsupported existing hook value: expected a string or an array, got %T", existingValue)
 	}
 
-	// Strip any pre-existing Claudio entries from the existing array, then
-	// append the new Claudio entries. Filtering operates at HOOK granularity
-	// inside each item's "hooks" sub-array (mirroring removeClaudioFromArray
-	// in internal/uninstall/hook_removal.go): for each existing item, build
-	// a new item whose hooks sub-array contains only the non-Claudio
-	// entries. Drop the item only when removal emptied its hooks sub-array.
-	// Items with no Claudio commands pass through verbatim. This preserves
-	// user non-Claudio hooks that share a matcher's hooks sub-array with a
-	// Claudio command (Chunk 5 analyst Finding 1).
-	filteredExisting := make([]interface{}, 0, len(existingArray))
-	strippedCount := 0
-	for _, item := range existingArray {
-		itemMap, ok := item.(map[string]interface{})
-		if !ok {
-			// Preserve non-map entries verbatim
-			filteredExisting = append(filteredExisting, item)
-			continue
-		}
-		if cmdStr, ok := itemMap["command"].(string); ok {
-			if isClaudioCommandString(cmdStr) {
-				strippedCount++
-				continue
-			}
-			filteredExisting = append(filteredExisting, item)
-			continue
-		}
-		hooks, ok := itemMap["hooks"].([]interface{})
-		if !ok {
-			// Preserve items without a hooks sub-array verbatim
-			filteredExisting = append(filteredExisting, item)
-			continue
-		}
-		keptHooks := make([]interface{}, 0, len(hooks))
-		itemStripped := 0
-		for _, h := range hooks {
-			hookMap, ok := h.(map[string]interface{})
-			if !ok {
-				keptHooks = append(keptHooks, h)
-				continue
-			}
-			cmdStr, ok := hookMap["command"].(string)
-			if !ok {
-				keptHooks = append(keptHooks, h)
-				continue
-			}
-			if isClaudioCommandString(cmdStr) {
-				itemStripped++
-				continue
-			}
-			keptHooks = append(keptHooks, h)
-		}
-		if itemStripped == 0 {
-			// No Claudio commands in this item; preserve verbatim.
-			filteredExisting = append(filteredExisting, item)
-			continue
-		}
-		strippedCount += itemStripped
-		if len(keptHooks) == 0 {
-			// Item was Claudio-only; drop it. The new Claudio entries will
-			// be appended below.
-			continue
-		}
-		// Item had Claudio + non-Claudio siblings; preserve the non-Claudio
-		// siblings in a copied item so we never mutate the input map.
-		newItem := make(map[string]interface{}, len(itemMap))
-		for k, v := range itemMap {
-			newItem[k] = v
-		}
-		newItem["hooks"] = keptHooks
-		filteredExisting = append(filteredExisting, newItem)
-	}
-
-	mergedArray := make([]interface{}, 0, len(filteredExisting)+len(claudioArray))
-	mergedArray = append(mergedArray, filteredExisting...)
-	mergedArray = append(mergedArray, claudioArray...)
+	kept, stripped := stripClaudioEntries(existingArray)
+	merged := make([]interface{}, 0, len(kept)+len(claudioArray))
+	merged = append(merged, kept...)
+	merged = append(merged, claudioArray...)
 
 	slog.Debug("completed hook value merge",
 		"existing_elements", len(existingArray),
-		"existing_claudio_entries_stripped", strippedCount,
+		"existing_claudio_entries_stripped", stripped,
 		"claudio_elements", len(claudioArray),
-		"merged_elements", len(mergedArray))
+		"merged_elements", len(merged))
 
-	return mergedArray, nil
-}
-
-// itemContainsClaudioCommand returns true if the given hook-array element
-// (a map with a "hooks" sub-array) contains any hook whose command resolves
-// to the claudio executable per executableRecognizer.
-func itemContainsClaudioCommand(item map[string]interface{}) bool {
-	if cmdStr, ok := item["command"].(string); ok && isClaudioCommandString(cmdStr) {
-		return true
-	}
-	hooks, ok := item["hooks"].([]interface{})
-	if !ok {
-		return false
-	}
-	for _, h := range hooks {
-		cmd, ok := h.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		cmdStr, ok := cmd["command"].(string)
-		if !ok {
-			continue
-		}
-		if isClaudioCommandString(cmdStr) {
-			return true
-		}
-	}
-	return false
+	return merged, nil
 }
 
 // IsClaudioCommandString reports whether a command string refers to the
@@ -488,42 +383,6 @@ func commandBasename(cmdStr string) string {
 		return cmdStr[i+1:]
 	}
 	return cmdStr
-}
-
-// isClaudioCommandString is the previous (unexported) spelling, kept as
-// a thin alias so adjacent install-package call sites stay readable.
-func isClaudioCommandString(cmdStr string) bool {
-	return IsClaudioCommandString(cmdStr)
-}
-
-// IsClaudioHook reports whether a hook value contains any reference to the
-// claudio executable. Supports the old string format and the new array
-// format. The array form is scanned exhaustively — return true if ANY array
-// element contains ANY hooks-sub-array entry whose command refers to claudio.
-// This any-element semantics matches the merge-side filter so a mixed array
-// like [customHook, claudioHook] is correctly identified as containing
-// Claudio regardless of element ordering.
-func IsClaudioHook(hookValue interface{}) bool {
-	// Check old string format (backward compatibility)
-	if str, ok := hookValue.(string); ok {
-		return isClaudioCommandString(str)
-	}
-
-	// Check new array format — scan every element, not just arr[0].
-	if arr, ok := hookValue.([]interface{}); ok && len(arr) > 0 {
-		for _, item := range arr {
-			itemMap, ok := item.(map[string]interface{})
-			if !ok {
-				continue
-			}
-			if itemContainsClaudioCommand(itemMap) {
-				return true
-			}
-		}
-		return false
-	}
-
-	return false
 }
 
 // GetExecutablePath returns the current executable path using filesystem abstraction.

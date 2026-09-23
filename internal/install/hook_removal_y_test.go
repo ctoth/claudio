@@ -1,10 +1,8 @@
-package uninstall
+package install
 
 import (
 	"reflect"
 	"testing"
-
-	"claudio.click/internal/install"
 )
 
 // TestRemoveComplexClaudioHooksPreservesPreExistingEmptyItem regresses the
@@ -26,7 +24,7 @@ func TestRemoveComplexClaudioHooksPreservesPreExistingEmptyItem(t *testing.T) {
 		},
 	}
 
-	settings := &install.SettingsMap{
+	settings := &SettingsMap{
 		"hooks": map[string]interface{}{
 			"PreToolUse": []interface{}{
 				claudioItem,
@@ -35,7 +33,7 @@ func TestRemoveComplexClaudioHooksPreservesPreExistingEmptyItem(t *testing.T) {
 		},
 	}
 
-	removeComplexClaudioHooks(settings, []string{"PreToolUse"})
+	removeClaudioHooks(settings)
 
 	hooksMap, ok := (*settings)["hooks"].(map[string]interface{})
 	if !ok {
@@ -96,7 +94,7 @@ func TestRemoveComplexClaudioHooksItemsWithoutClaudioUnchanged(t *testing.T) {
 		"hooks":   []interface{}{},
 	}
 
-	settings := &install.SettingsMap{
+	settings := &SettingsMap{
 		"hooks": map[string]interface{}{
 			"PostToolUse": []interface{}{
 				claudioItem,
@@ -106,7 +104,7 @@ func TestRemoveComplexClaudioHooksItemsWithoutClaudioUnchanged(t *testing.T) {
 		},
 	}
 
-	removeComplexClaudioHooks(settings, []string{"PostToolUse"})
+	removeClaudioHooks(settings)
 
 	hooksMap, _ := (*settings)["hooks"].(map[string]interface{})
 	post, ok := hooksMap["PostToolUse"].([]interface{})

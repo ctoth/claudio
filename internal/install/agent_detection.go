@@ -131,27 +131,7 @@ func hasExistingClaudioHooks(agent Agent, scope string) bool {
 		if err != nil {
 			continue
 		}
-		if settingsContainClaudioHooks(settings) {
-			return true
-		}
-	}
-	return false
-}
-
-func settingsContainClaudioHooks(settings *SettingsMap) bool {
-	if settings == nil {
-		return false
-	}
-	hooksValue, ok := (*settings)["hooks"]
-	if !ok {
-		return false
-	}
-	hooksMap, ok := hooksValue.(map[string]interface{})
-	if !ok {
-		return false
-	}
-	for _, hookValue := range hooksMap {
-		if IsClaudioHook(hookValue) {
+		if len(ClaudioHookNames(settings)) > 0 {
 			return true
 		}
 	}

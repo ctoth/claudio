@@ -119,7 +119,7 @@ func TestInstallUninstallWithExecutablePath(t *testing.T) {
 								if cmd, ok := hooksField[0].(map[string]interface{}); ok {
 									if cmdStr, ok := cmd["command"].(string); ok {
 										// Use the same detection logic as production code
-										if isClaudioCommand(cmdStr) {
+										if install.IsClaudioCommandString(cmdStr) {
 											foundExecutableHooks = true
 											t.Logf("Hook %s uses executable command: %s", hookName, cmdStr)
 											break
@@ -138,8 +138,7 @@ func TestInstallUninstallWithExecutablePath(t *testing.T) {
 				// Step 3: Run uninstall workflow to remove hooks. Inject the
 				// test's tempdir path via swapAgentResolver so we don't write
 				// to the user's real settings file.
-				swapAgentResolver(t, fixedPathResolver(settingsPath))
-				err = RunUninstallWorkflow(afero.NewOsFs(), tc.scope, install.AgentClaude)
+				err = RunUninstallWorkflow(afero.NewOsFs(), install.AgentTarget{Agent: install.AgentClaude, ConfigPath: settingsPath})
 				if tc.expectError && err == nil {
 					t.Error("Expected error but got none")
 				}
@@ -342,8 +341,7 @@ func TestRunUninstallWorkflow(t *testing.T) {
 			// Test the complete uninstall workflow. Inject the test's tempdir
 			// path via swapAgentResolver so the workflow targets settingsFile
 			// instead of resolving via agent.BestConfigPath.
-			swapAgentResolver(t, fixedPathResolver(settingsFile))
-			err = RunUninstallWorkflow(afero.NewOsFs(), tc.scope, install.AgentClaude)
+			err = RunUninstallWorkflow(afero.NewOsFs(), install.AgentTarget{Agent: install.AgentClaude, ConfigPath: settingsFile})
 
 			if tc.expectError && err == nil {
 				t.Errorf("Expected error but got none")
@@ -397,7 +395,7 @@ func TestRunUninstallWorkflow(t *testing.T) {
 						}
 
 						// 4. Verify no claudio hooks remain
-						claudioHooks := DetectClaudioHooks(settings)
+						claudioHooks := install.ClaudioHookNames(settings)
 						if len(claudioHooks) > 0 {
 							t.Errorf("Claudio hooks still present after uninstall: %v", claudioHooks)
 						}
@@ -442,16 +440,6 @@ func TestUninstallWorkflowErrorHandling(t *testing.T) {
 		expectError bool
 		errorMsg    string
 	}{
-		{
-			name:  "invalid scope",
-			scope: "invalid",
-			setupFunc: func() (string, func()) {
-				tempDir := t.TempDir()
-				return filepath.Join(tempDir, "settings.json"), func() {}
-			},
-			expectError: true,
-			errorMsg:    "invalid scope",
-		},
 		{
 			name:  "permission denied directory",
 			scope: "user",
@@ -501,8 +489,7 @@ func TestUninstallWorkflowErrorHandling(t *testing.T) {
 			settingsPath, cleanup := tc.setupFunc()
 			defer cleanup()
 
-			swapAgentResolver(t, fixedPathResolver(settingsPath))
-			err := RunUninstallWorkflow(afero.NewOsFs(), tc.scope, install.AgentClaude)
+			err := RunUninstallWorkflow(afero.NewOsFs(), install.AgentTarget{Agent: install.AgentClaude, ConfigPath: settingsPath})
 
 			if tc.expectError {
 				if err == nil {

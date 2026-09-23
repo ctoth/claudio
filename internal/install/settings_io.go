@@ -3,7 +3,9 @@ package install
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
+	"reflect"
 	"strings"
 
 	"github.com/spf13/afero"
@@ -103,4 +105,42 @@ func getJSONType(data []byte) string {
 	}
 	// Likely a number or unrecognized
 	return "non-object value"
+}
+
+// ModifySettings runs one locked read-modify-write of the settings file at
+// filePath: it takes the settings-dir lock (LockSettingsDir), reads the
+// file (missing means empty), passes the settings to fn, and writes fn's
+// result back via WriteSettingsFile. When fn returns an error, or a result
+// equal to what was read, the file is not written.
+//
+// fn must return a new map and leave its argument unmodified (as
+// InstallAgentHooks and RemoveAgentHooks do); the argument is what the
+// result is compared against.
+func ModifySettings(filesystem afero.Fs, filePath string, fn func(*SettingsMap) (*SettingsMap, error)) error {
+	lock, err := LockSettingsDir(filePath)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if unlockErr := lock.Unlock(); unlockErr != nil {
+			slog.Warn("failed to release settings lock", "error", unlockErr)
+		}
+	}()
+
+	settings, err := ReadSettingsFile(filesystem, filePath)
+	if err != nil {
+		return fmt.Errorf("failed to read settings from %s: %w", filePath, err)
+	}
+	updated, err := fn(settings)
+	if err != nil {
+		return err
+	}
+	if reflect.DeepEqual(settings, updated) {
+		slog.Debug("settings unchanged, not rewriting", "path", filePath)
+		return nil
+	}
+	if err := WriteSettingsFile(filesystem, filePath, updated); err != nil {
+		return fmt.Errorf("failed to write settings to %s: %w", filePath, err)
+	}
+	return nil
 }

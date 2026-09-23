@@ -1,23 +1,21 @@
-package uninstall
+package install
 
 import (
 	"reflect"
 	"testing"
-
-	"claudio.click/internal/install"
 )
 
 func TestRemoveClaudioHooksWithFullPaths(t *testing.T) {
 	// TDD RED: Test removal of claudio hooks with full executable paths instead of just "claudio"
 	testCases := []struct {
 		name             string
-		initialSettings  *install.SettingsMap
+		initialSettings  *SettingsMap
 		hookNames        []string
-		expectedSettings *install.SettingsMap
+		expectedSettings *SettingsMap
 	}{
 		{
 			name: "remove simple string hook - full system path",
-			initialSettings: &install.SettingsMap{
+			initialSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"PreToolUse": "/usr/local/bin/claudio",
 					"PostCommit": "git push",
@@ -25,7 +23,7 @@ func TestRemoveClaudioHooksWithFullPaths(t *testing.T) {
 				"version": "1.0",
 			},
 			hookNames: []string{"PreToolUse"},
-			expectedSettings: &install.SettingsMap{
+			expectedSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"PostCommit": "git push",
 				},
@@ -34,14 +32,14 @@ func TestRemoveClaudioHooksWithFullPaths(t *testing.T) {
 		},
 		{
 			name: "remove simple string hook - dev directory path",
-			initialSettings: &install.SettingsMap{
+			initialSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"PostToolUse": "/home/user/dev/claudio/claudio",
 					"Other":       "keep-this",
 				},
 			},
 			hookNames: []string{"PostToolUse"},
-			expectedSettings: &install.SettingsMap{
+			expectedSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"Other": "keep-this",
 				},
@@ -49,14 +47,14 @@ func TestRemoveClaudioHooksWithFullPaths(t *testing.T) {
 		},
 		{
 			name: "remove simple string hook - relative path",
-			initialSettings: &install.SettingsMap{
+			initialSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"UserPromptSubmit": "./claudio",
 					"Other":            "keep",
 				},
 			},
 			hookNames: []string{"UserPromptSubmit"},
-			expectedSettings: &install.SettingsMap{
+			expectedSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"Other": "keep",
 				},
@@ -64,7 +62,7 @@ func TestRemoveClaudioHooksWithFullPaths(t *testing.T) {
 		},
 		{
 			name: "remove complex array hook - full system path",
-			initialSettings: &install.SettingsMap{
+			initialSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"Notification": []interface{}{
 						map[string]interface{}{
@@ -81,7 +79,7 @@ func TestRemoveClaudioHooksWithFullPaths(t *testing.T) {
 				},
 			},
 			hookNames: []string{"Notification"},
-			expectedSettings: &install.SettingsMap{
+			expectedSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"Other": "keep",
 				},
@@ -89,7 +87,7 @@ func TestRemoveClaudioHooksWithFullPaths(t *testing.T) {
 		},
 		{
 			name: "remove direct Copilot command hook",
-			initialSettings: &install.SettingsMap{
+			initialSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"PreToolUse": []interface{}{
 						map[string]interface{}{
@@ -104,7 +102,7 @@ func TestRemoveClaudioHooksWithFullPaths(t *testing.T) {
 				},
 			},
 			hookNames: []string{"PreToolUse"},
-			expectedSettings: &install.SettingsMap{
+			expectedSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"PreToolUse": []interface{}{
 						map[string]interface{}{
@@ -117,7 +115,7 @@ func TestRemoveClaudioHooksWithFullPaths(t *testing.T) {
 		},
 		{
 			name: "remove complex array hook - dev directory path",
-			initialSettings: &install.SettingsMap{
+			initialSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"SessionStart": []interface{}{
 						map[string]interface{}{
@@ -133,13 +131,13 @@ func TestRemoveClaudioHooksWithFullPaths(t *testing.T) {
 				},
 			},
 			hookNames:        []string{"SessionStart"},
-			expectedSettings: &install.SettingsMap{
+			expectedSettings: &SettingsMap{
 				// hooks section should be removed when empty
 			},
 		},
 		{
 			name: "remove claudio from mixed array with other commands - preserve others",
-			initialSettings: &install.SettingsMap{
+			initialSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"Stop": []interface{}{
 						map[string]interface{}{
@@ -159,7 +157,7 @@ func TestRemoveClaudioHooksWithFullPaths(t *testing.T) {
 				},
 			},
 			hookNames: []string{"Stop"},
-			expectedSettings: &install.SettingsMap{
+			expectedSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"Stop": []interface{}{
 						map[string]interface{}{
@@ -177,7 +175,7 @@ func TestRemoveClaudioHooksWithFullPaths(t *testing.T) {
 		},
 		{
 			name: "mixed full paths and backward compatibility",
-			initialSettings: &install.SettingsMap{
+			initialSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"PreToolUse":  "claudio",                    // Old format - should be removed
 					"PostToolUse": "/usr/local/bin/claudio",     // Full path - should be removed
@@ -186,7 +184,7 @@ func TestRemoveClaudioHooksWithFullPaths(t *testing.T) {
 				},
 			},
 			hookNames: []string{"PreToolUse", "PostToolUse", "Stop"},
-			expectedSettings: &install.SettingsMap{
+			expectedSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"Keep": "/usr/bin/different-command",
 				},
@@ -194,14 +192,14 @@ func TestRemoveClaudioHooksWithFullPaths(t *testing.T) {
 		},
 		{
 			name: "no claudio paths to remove - no changes",
-			initialSettings: &install.SettingsMap{
+			initialSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"PreToolUse":  "/usr/bin/git",
 					"PostToolUse": "/bin/echo",
 				},
 			},
 			hookNames: []string{"PreToolUse", "PostToolUse"},
-			expectedSettings: &install.SettingsMap{
+			expectedSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"PreToolUse":  "/usr/bin/git",
 					"PostToolUse": "/bin/echo",
@@ -213,11 +211,10 @@ func TestRemoveClaudioHooksWithFullPaths(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Make a copy to avoid modifying the original
-			settingsCopy := deepCopySettings(tc.initialSettings)
+			settingsCopy := copySettingsForTest(tc.initialSettings)
 
 			// Call both removal functions (since we don't know which format is used)
-			removeSimpleClaudioHooks(settingsCopy, tc.hookNames)
-			removeComplexClaudioHooks(settingsCopy, tc.hookNames)
+			removeClaudioHooks(settingsCopy)
 
 			// Verify the result
 			if !settingsEqual(settingsCopy, tc.expectedSettings) {
@@ -234,14 +231,14 @@ func TestRemoveSimpleClaudioHooks(t *testing.T) {
 	// TDD RED: Test removal of simple string claudio hooks
 	testCases := []struct {
 		name             string
-		initialSettings  *install.SettingsMap
+		initialSettings  *SettingsMap
 		hookNames        []string
-		expectedSettings *install.SettingsMap
+		expectedSettings *SettingsMap
 		expectError      bool
 	}{
 		{
 			name: "remove single claudio hook with other hooks preserved",
-			initialSettings: &install.SettingsMap{
+			initialSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"PreToolUse": "claudio",
 					"PostCommit": "git push",
@@ -250,7 +247,7 @@ func TestRemoveSimpleClaudioHooks(t *testing.T) {
 				"version": "1.0",
 			},
 			hookNames: []string{"PreToolUse"},
-			expectedSettings: &install.SettingsMap{
+			expectedSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"PostCommit": "git push",
 					"Other":      "keep-this",
@@ -261,7 +258,7 @@ func TestRemoveSimpleClaudioHooks(t *testing.T) {
 		},
 		{
 			name: "remove multiple claudio hooks",
-			initialSettings: &install.SettingsMap{
+			initialSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"PreToolUse":       "claudio",
 					"PostToolUse":      "claudio",
@@ -270,7 +267,7 @@ func TestRemoveSimpleClaudioHooks(t *testing.T) {
 				},
 			},
 			hookNames: []string{"PreToolUse", "PostToolUse", "UserPromptSubmit"},
-			expectedSettings: &install.SettingsMap{
+			expectedSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"Other": "keep",
 				},
@@ -279,13 +276,13 @@ func TestRemoveSimpleClaudioHooks(t *testing.T) {
 		},
 		{
 			name: "remove non-existent hook - no changes",
-			initialSettings: &install.SettingsMap{
+			initialSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"Other": "keep",
 				},
 			},
 			hookNames: []string{"NonExistent"},
-			expectedSettings: &install.SettingsMap{
+			expectedSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"Other": "keep",
 				},
@@ -294,25 +291,25 @@ func TestRemoveSimpleClaudioHooks(t *testing.T) {
 		},
 		{
 			name: "remove from empty settings - no changes",
-			initialSettings: &install.SettingsMap{
+			initialSettings: &SettingsMap{
 				"version": "1.0",
 			},
 			hookNames: []string{"PreToolUse"},
-			expectedSettings: &install.SettingsMap{
+			expectedSettings: &SettingsMap{
 				"version": "1.0",
 			},
 			expectError: false,
 		},
 		{
 			name: "remove all hooks - hooks section deleted",
-			initialSettings: &install.SettingsMap{
+			initialSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"PreToolUse": "claudio",
 				},
 				"version": "1.0",
 			},
 			hookNames: []string{"PreToolUse"},
-			expectedSettings: &install.SettingsMap{
+			expectedSettings: &SettingsMap{
 				"version": "1.0",
 			},
 			expectError: false,
@@ -326,14 +323,14 @@ func TestRemoveSimpleClaudioHooks(t *testing.T) {
 		},
 		{
 			name: "remove hook that exists but is not claudio - no changes",
-			initialSettings: &install.SettingsMap{
+			initialSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"PreToolUse": "other-command",
 					"Other":      "keep",
 				},
 			},
 			hookNames: []string{"PreToolUse"},
-			expectedSettings: &install.SettingsMap{
+			expectedSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"PreToolUse": "other-command",
 					"Other":      "keep",
@@ -346,13 +343,13 @@ func TestRemoveSimpleClaudioHooks(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Make a copy to avoid modifying the original
-			var settingsCopy *install.SettingsMap
+			var settingsCopy *SettingsMap
 			if tc.initialSettings != nil {
-				settingsCopy = deepCopySettings(tc.initialSettings)
+				settingsCopy = copySettingsForTest(tc.initialSettings)
 			}
 
 			// Call the function
-			removeSimpleClaudioHooks(settingsCopy, tc.hookNames)
+			removeClaudioHooks(settingsCopy)
 
 			// Verify the result
 			if !settingsEqual(settingsCopy, tc.expectedSettings) {
@@ -366,12 +363,12 @@ func TestRemoveSimpleClaudioHooks(t *testing.T) {
 }
 
 // Helper function to deep copy settings for testing
-func deepCopySettings(original *install.SettingsMap) *install.SettingsMap {
+func copySettingsForTest(original *SettingsMap) *SettingsMap {
 	if original == nil {
 		return nil
 	}
 
-	copy := make(install.SettingsMap)
+	copy := make(SettingsMap)
 	for key, value := range *original {
 		if key == "hooks" {
 			if hooksMap, ok := value.(map[string]interface{}); ok {
@@ -391,7 +388,7 @@ func deepCopySettings(original *install.SettingsMap) *install.SettingsMap {
 }
 
 // Helper function to compare settings maps
-func settingsEqual(a, b *install.SettingsMap) bool {
+func settingsEqual(a, b *SettingsMap) bool {
 	if a == nil && b == nil {
 		return true
 	}
@@ -440,14 +437,14 @@ func TestRemoveComplexClaudioHooks(t *testing.T) {
 	// TDD RED: Test removal of complex array claudio hooks
 	testCases := []struct {
 		name             string
-		initialSettings  *install.SettingsMap
+		initialSettings  *SettingsMap
 		hookNames        []string
-		expectedSettings *install.SettingsMap
+		expectedSettings *SettingsMap
 		expectError      bool
 	}{
 		{
 			name: "remove claudio from array with other commands - preserve others",
-			initialSettings: &install.SettingsMap{
+			initialSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"Notification": []interface{}{
 						map[string]interface{}{
@@ -466,7 +463,7 @@ func TestRemoveComplexClaudioHooks(t *testing.T) {
 				},
 			},
 			hookNames: []string{"Notification"},
-			expectedSettings: &install.SettingsMap{
+			expectedSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"Notification": []interface{}{
 						map[string]interface{}{
@@ -484,7 +481,7 @@ func TestRemoveComplexClaudioHooks(t *testing.T) {
 		},
 		{
 			name: "remove claudio from array with only claudio - delete entire hook",
-			initialSettings: &install.SettingsMap{
+			initialSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"Stop": []interface{}{
 						map[string]interface{}{
@@ -500,7 +497,7 @@ func TestRemoveComplexClaudioHooks(t *testing.T) {
 				},
 			},
 			hookNames: []string{"Stop"},
-			expectedSettings: &install.SettingsMap{
+			expectedSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"Other": "keep-this",
 				},
@@ -509,7 +506,7 @@ func TestRemoveComplexClaudioHooks(t *testing.T) {
 		},
 		{
 			name: "remove claudio from multiple array elements",
-			initialSettings: &install.SettingsMap{
+			initialSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"PreCompact": []interface{}{
 						map[string]interface{}{
@@ -538,7 +535,7 @@ func TestRemoveComplexClaudioHooks(t *testing.T) {
 				},
 			},
 			hookNames: []string{"PreCompact"},
-			expectedSettings: &install.SettingsMap{
+			expectedSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"PreCompact": []interface{}{
 						map[string]interface{}{
@@ -557,13 +554,13 @@ func TestRemoveComplexClaudioHooks(t *testing.T) {
 		},
 		{
 			name: "remove from non-array hook - no changes",
-			initialSettings: &install.SettingsMap{
+			initialSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"Simple": "not-an-array",
 				},
 			},
 			hookNames: []string{"Simple"},
-			expectedSettings: &install.SettingsMap{
+			expectedSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"Simple": "not-an-array",
 				},
@@ -572,7 +569,7 @@ func TestRemoveComplexClaudioHooks(t *testing.T) {
 		},
 		{
 			name: "remove from array without claudio - no changes",
-			initialSettings: &install.SettingsMap{
+			initialSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"Other": []interface{}{
 						map[string]interface{}{
@@ -587,7 +584,7 @@ func TestRemoveComplexClaudioHooks(t *testing.T) {
 				},
 			},
 			hookNames: []string{"Other"},
-			expectedSettings: &install.SettingsMap{
+			expectedSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"Other": []interface{}{
 						map[string]interface{}{
@@ -608,13 +605,13 @@ func TestRemoveComplexClaudioHooks(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Make a copy to avoid modifying the original
-			var settingsCopy *install.SettingsMap
+			var settingsCopy *SettingsMap
 			if tc.initialSettings != nil {
 				settingsCopy = deepCopyComplexSettings(tc.initialSettings)
 			}
 
 			// Call the function
-			removeComplexClaudioHooks(settingsCopy, tc.hookNames)
+			removeClaudioHooks(settingsCopy)
 
 			// Verify the result
 			if !complexSettingsEqual(settingsCopy, tc.expectedSettings) {
@@ -628,12 +625,12 @@ func TestRemoveComplexClaudioHooks(t *testing.T) {
 }
 
 // Helper function for deep copying complex settings with arrays
-func deepCopyComplexSettings(original *install.SettingsMap) *install.SettingsMap {
+func deepCopyComplexSettings(original *SettingsMap) *SettingsMap {
 	if original == nil {
 		return nil
 	}
 
-	copy := make(install.SettingsMap)
+	copy := make(SettingsMap)
 	for key, value := range *original {
 		if key == "hooks" {
 			if hooksMap, ok := value.(map[string]interface{}); ok {
@@ -673,7 +670,7 @@ func deepCopyValue(value interface{}) interface{} {
 }
 
 // Helper function to compare complex settings with arrays
-func complexSettingsEqual(a, b *install.SettingsMap) bool {
+func complexSettingsEqual(a, b *SettingsMap) bool {
 	if a == nil && b == nil {
 		return true
 	}
@@ -733,13 +730,13 @@ func TestRemoveNewFormatClaudioHooks(t *testing.T) {
 	// TDD: Test removal of Claude Code's new array/object format hooks
 	testCases := []struct {
 		name             string
-		initialSettings  *install.SettingsMap
+		initialSettings  *SettingsMap
 		hookNames        []string
-		expectedSettings *install.SettingsMap
+		expectedSettings *SettingsMap
 	}{
 		{
 			name: "remove new format claudio hook",
-			initialSettings: &install.SettingsMap{
+			initialSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"PreToolUse": []interface{}{
 						map[string]interface{}{
@@ -755,7 +752,7 @@ func TestRemoveNewFormatClaudioHooks(t *testing.T) {
 				},
 			},
 			hookNames: []string{"PreToolUse"},
-			expectedSettings: &install.SettingsMap{
+			expectedSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"PostToolUse": "other-command",
 				},
@@ -763,7 +760,7 @@ func TestRemoveNewFormatClaudioHooks(t *testing.T) {
 		},
 		{
 			name: "remove multiple new format hooks",
-			initialSettings: &install.SettingsMap{
+			initialSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"PreToolUse": []interface{}{
 						map[string]interface{}{
@@ -799,13 +796,13 @@ func TestRemoveNewFormatClaudioHooks(t *testing.T) {
 				"version": "1.0",
 			},
 			hookNames: []string{"PreToolUse", "PostToolUse", "UserPromptSubmit"},
-			expectedSettings: &install.SettingsMap{
+			expectedSettings: &SettingsMap{
 				"version": "1.0",
 			},
 		},
 		{
 			name: "handle mixed old and new format hooks",
-			initialSettings: &install.SettingsMap{
+			initialSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"PreToolUse": "claudio", // Old string format
 					"PostToolUse": []interface{}{ // New array format
@@ -822,7 +819,7 @@ func TestRemoveNewFormatClaudioHooks(t *testing.T) {
 				},
 			},
 			hookNames: []string{"PreToolUse", "PostToolUse"},
-			expectedSettings: &install.SettingsMap{
+			expectedSettings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"UserPromptSubmit": "other-command",
 				},
@@ -833,10 +830,10 @@ func TestRemoveNewFormatClaudioHooks(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Make a copy to avoid modifying the original
-			settingsCopy := deepCopySettings(tc.initialSettings)
+			settingsCopy := copySettingsForTest(tc.initialSettings)
 
 			// The current implementation should handle both formats
-			removeSimpleClaudioHooks(settingsCopy, tc.hookNames)
+			removeClaudioHooks(settingsCopy)
 
 			// Verify the result
 			if !settingsEqual(settingsCopy, tc.expectedSettings) {
@@ -853,16 +850,16 @@ func TestRemoveNewFormatClaudioHooks(t *testing.T) {
 // condition that was previously enforced as a self-confirming read-back
 // inside RunUninstallWorkflow (finding #92). It asserts the actual
 // invariant — after running both removal primitives over a settings
-// map, DetectClaudioHooks returns the empty set regardless of the
+// map, ClaudioHookNames returns the empty set regardless of the
 // input shape (string form, array form, mixed, multiple-claudio).
 func TestRemoveClaudioHooks_NoClaudioHooksRemain(t *testing.T) {
 	cases := []struct {
 		name  string
-		input *install.SettingsMap
+		input *SettingsMap
 	}{
 		{
 			name: "simple string hooks pointing at claudio",
-			input: &install.SettingsMap{
+			input: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"PreToolUse":  "/usr/local/bin/claudio",
 					"PostToolUse": "claudio",
@@ -872,7 +869,7 @@ func TestRemoveClaudioHooks_NoClaudioHooksRemain(t *testing.T) {
 		},
 		{
 			name: "array form claudio hooks",
-			input: &install.SettingsMap{
+			input: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"PreToolUse": []interface{}{
 						map[string]interface{}{
@@ -901,7 +898,7 @@ func TestRemoveClaudioHooks_NoClaudioHooksRemain(t *testing.T) {
 		},
 		{
 			name: "mixed string and array claudio hooks",
-			input: &install.SettingsMap{
+			input: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"PreToolUse": "claudio",
 					"PostToolUse": []interface{}{
@@ -921,7 +918,7 @@ func TestRemoveClaudioHooks_NoClaudioHooksRemain(t *testing.T) {
 		},
 		{
 			name: "no claudio hooks at all (idempotent)",
-			input: &install.SettingsMap{
+			input: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"PreToolUse":  "echo hi",
 					"PostToolUse": "git push",
@@ -932,15 +929,11 @@ func TestRemoveClaudioHooks_NoClaudioHooksRemain(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Detect, then remove (both primitives, mirroring the
-			// workflow's order).
-			claudioHooks := DetectClaudioHooks(tc.input)
-			removeSimpleClaudioHooks(tc.input, claudioHooks)
-			removeComplexClaudioHooks(tc.input, claudioHooks)
+			removeClaudioHooks(tc.input)
 
 			// Invariant: no claudio hooks remain after removal,
 			// regardless of input shape.
-			remaining := DetectClaudioHooks(tc.input)
+			remaining := ClaudioHookNames(tc.input)
 			if len(remaining) != 0 {
 				t.Errorf("invariant violated: claudio hooks still detected after removal: %v\nresulting settings: %+v", remaining, *tc.input)
 			}

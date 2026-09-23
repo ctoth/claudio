@@ -525,11 +525,11 @@ func TestHookArrayDetectionAdditionalBranches(t *testing.T) {
 	}
 
 	directCommand := map[string]interface{}{"command": "/opt/claudio"}
-	if !itemContainsClaudioCommand(directCommand) {
+	if !IsClaudioHook([]interface{}{directCommand}) {
 		t.Error("direct command item should be recognized")
 	}
 	noHookArray := map[string]interface{}{"matcher": "*"}
-	if itemContainsClaudioCommand(noHookArray) {
+	if IsClaudioHook([]interface{}{noHookArray}) {
 		t.Error("item without hooks array must not be recognized")
 	}
 	nestedCommand := map[string]interface{}{
@@ -539,7 +539,7 @@ func TestHookArrayDetectionAdditionalBranches(t *testing.T) {
 			map[string]interface{}{"command": "/opt/claudio"},
 		},
 	}
-	if !itemContainsClaudioCommand(nestedCommand) {
+	if !IsClaudioHook([]interface{}{nestedCommand}) {
 		t.Error("nested claudio command should be recognized")
 	}
 }

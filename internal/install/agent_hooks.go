@@ -48,3 +48,26 @@ func (a Agent) UsesCaptainHook() bool {
 	s, _ := a.spec()
 	return s.captainHook
 }
+
+// RemoveAgentHooks returns a copy of settings with every claudio hook
+// removed, and the sorted names of the events that held one. The input
+// settings are not modified.
+func RemoveAgentHooks(settings *SettingsMap, agent Agent) (*SettingsMap, []string, error) {
+	spec, err := agent.concreteSpec()
+	if err != nil {
+		return nil, nil, err
+	}
+	copied, err := deepCopySettings(settings)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to copy settings: %w", err)
+	}
+	names := ClaudioHookNames(copied)
+	if spec.captainHook {
+		captainSettings := captainhook.SettingsMap(*copied)
+		captainhook.Uninstall(&captainSettings, captainhook.IdentityFunc(IsClaudioCommandString))
+		converted := SettingsMap(captainSettings)
+		return &converted, names, nil
+	}
+	removeClaudioHooks(copied)
+	return copied, names, nil
+}

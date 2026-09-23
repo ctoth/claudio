@@ -4,19 +4,17 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"strings"
+
 	"testing"
 
 	"claudio.click/internal/install"
 	"github.com/spf13/afero"
 )
 
-// TestRunUninstallWorkflowUsesAgentResolvedPath asserts that the workflow
-// targets the path returned by agentResolver — not any value passed by the
-// caller. Regression test for the latent vulnerability that a caller could
-// pass scope=user with an unrelated settingsPath and the validation would
-// not prevent the write going elsewhere.
-func TestRunUninstallWorkflowUsesAgentResolvedPath(t *testing.T) {
+// TestRunUninstallWorkflowUsesTargetConfigPath asserts that the workflow
+// rewrites exactly the target's resolved ConfigPath (the path the CLI
+// printed), not a path it re-resolves itself, and leaves other files alone.
+func TestRunUninstallWorkflowUsesTargetConfigPath(t *testing.T) {
 	tempDir := t.TempDir()
 	resolvedPath := filepath.Join(tempDir, "resolved", "settings.json")
 	decoyPath := filepath.Join(tempDir, "decoy", "settings.json")
@@ -47,11 +45,7 @@ func TestRunUninstallWorkflowUsesAgentResolvedPath(t *testing.T) {
 		t.Fatalf("write decoy file: %v", err)
 	}
 
-	// Inject the resolved path via the resolver — the workflow's only
-	// source of truth for the target path.
-	swapAgentResolver(t, fixedPathResolver(resolvedPath))
-
-	if err := RunUninstallWorkflow(afero.NewOsFs(), "user", install.AgentClaude); err != nil {
+	if err := RunUninstallWorkflow(afero.NewOsFs(), install.AgentTarget{Agent: install.AgentClaude, ConfigPath: resolvedPath}); err != nil {
 		t.Fatalf("workflow failed: %v", err)
 	}
 
@@ -80,28 +74,10 @@ func TestRunUninstallWorkflowUsesAgentResolvedPath(t *testing.T) {
 	}
 }
 
-// TestRunUninstallWorkflowAgentResolverError asserts the workflow surfaces
-// errors from the agent path resolution rather than silently writing to an
-// empty path.
-func TestRunUninstallWorkflowAgentResolverError(t *testing.T) {
-	swapAgentResolver(t, func(install.Agent, string) (string, error) {
-		return "", os.ErrNotExist
-	})
-
-	err := RunUninstallWorkflow(afero.NewOsFs(), "user", install.AgentClaude)
-	if err == nil {
-		t.Fatalf("expected resolver error to surface, got nil")
-	}
-	if !strings.Contains(err.Error(), "failed to resolve settings path") {
-		t.Errorf("expected wrapping error message; got %q", err.Error())
-	}
-}
-
 func TestRunUninstallWorkflowMissingSettingsFileIsNoop(t *testing.T) {
 	settingsPath := filepath.Join(t.TempDir(), "missing", "settings.json")
-	swapAgentResolver(t, fixedPathResolver(settingsPath))
 
-	if err := RunUninstallWorkflow(afero.NewOsFs(), install.ScopeGlobal, install.AgentClaude); err != nil {
+	if err := RunUninstallWorkflow(afero.NewOsFs(), install.AgentTarget{Agent: install.AgentClaude, ConfigPath: settingsPath}); err != nil {
 		t.Fatalf("missing settings file should be an idempotent uninstall, got: %v", err)
 	}
 
@@ -141,8 +117,7 @@ func TestRunUninstallWorkflowCodexPreservesMixedGroupSibling(t *testing.T) {
 		t.Fatalf("write settings: %v", err)
 	}
 
-	swapAgentResolver(t, fixedPathResolver(settingsPath))
-	if err := RunUninstallWorkflow(afero.NewOsFs(), install.ScopeGlobal, install.AgentCodex); err != nil {
+	if err := RunUninstallWorkflow(afero.NewOsFs(), install.AgentTarget{Agent: install.AgentCodex, ConfigPath: settingsPath}); err != nil {
 		t.Fatalf("workflow failed: %v", err)
 	}
 

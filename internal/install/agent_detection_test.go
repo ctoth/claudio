@@ -246,8 +246,8 @@ func TestSettingsContainClaudioHooks(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := settingsContainClaudioHooks(tc.settings); got != tc.want {
-				t.Fatalf("settingsContainClaudioHooks() = %v, want %v", got, tc.want)
+			if got := len(ClaudioHookNames(tc.settings)) > 0; got != tc.want {
+				t.Fatalf("ClaudioHookNames non-empty = %v, want %v", got, tc.want)
 			}
 		})
 	}
