@@ -4,16 +4,26 @@ import (
 	"context"
 	"errors"
 	"io"
+	"reflect"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 )
 
-// TestAudioBackendInterface tests that AudioBackend interface is properly defined
+// AudioBackend is only what production calls: play, set the volume, close.
+// Stop, IsPlaying and GetVolume stay on the concrete types that need them.
 func TestAudioBackendInterface(t *testing.T) {
-	// This test ensures the interface compiles and has expected methods
 	var _ AudioBackend = (*mockAudioBackend)(nil)
+	typ := reflect.TypeFor[AudioBackend]()
+	var got []string
+	for i := range typ.NumMethod() {
+		got = append(got, typ.Method(i).Name)
+	}
+	if want := []string{"Close", "Play", "SetVolume"}; !slices.Equal(got, want) {
+		t.Errorf("AudioBackend methods = %v, want %v", got, want)
+	}
 }
 
 // mockAudioBackend is a test implementation of AudioBackend

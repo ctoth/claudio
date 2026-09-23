@@ -4,6 +4,8 @@ import (
 	"errors"
 	"reflect"
 	"testing"
+
+	"claudio.click/internal/config"
 )
 
 // registerFakeOtoForTest installs a stub "oto" constructor for the
@@ -169,37 +171,17 @@ func TestNewBackend_WithChecker(t *testing.T) {
 	}
 }
 
-func TestSupportedBackendTypes(t *testing.T) {
-	expected := []string{"auto", "system_command", "oto", "fake"}
-	if len(SupportedBackendTypes) != len(expected) {
-		t.Errorf("expected %d supported backend types, got %d", len(expected), len(SupportedBackendTypes))
-	}
-	for _, want := range expected {
-		found := false
-		for _, got := range SupportedBackendTypes {
-			if got == want {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("expected backend type %q in SupportedBackendTypes: %v", want, SupportedBackendTypes)
+// The factory switch and config validation name the same backends: every
+// name config accepts is one the factory knows, and nothing else is.
+func TestFactoryKnowsExactlyTheConfigBackends(t *testing.T) {
+	for _, name := range config.NewConfigManager().GetSupportedAudioBackends() {
+		if _, _, err := planBackend(name, false, func(string) bool { return true }); errors.Is(err, ErrInvalidBackendType) {
+			t.Errorf("config accepts %q but the factory rejects it: %v", name, err)
 		}
 	}
-}
-
-func TestIsValidBackendType(t *testing.T) {
-	validTypes := []string{"auto", "system_command", "oto", "fake", ""}
-	for _, backendType := range validTypes {
-		if !IsValidBackendType(backendType) {
-			t.Errorf("backend type %q should be valid", backendType)
-		}
-	}
-
-	invalidTypes := []string{"invalid", "unknown", "pulseaudio", "alsa"}
-	for _, backendType := range invalidTypes {
-		if IsValidBackendType(backendType) {
-			t.Errorf("backend type %q should be invalid", backendType)
+	for _, name := range []string{"invalid", "unknown", "pulseaudio", "alsa", "malgo"} {
+		if _, _, err := planBackend(name, false, func(string) bool { return true }); !errors.Is(err, ErrInvalidBackendType) {
+			t.Errorf("planBackend(%q) = %v, want ErrInvalidBackendType", name, err)
 		}
 	}
 }

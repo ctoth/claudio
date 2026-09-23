@@ -95,13 +95,6 @@ func TestEndToEndSystemResourceCleanup(t *testing.T) {
 			t.Fatalf("Failed to create backend %d: %v", i, err)
 		}
 
-		// Test lifecycle (Start was dropped in finding #44; both Stop and Close
-		// must succeed)
-		err = backend.Stop()
-		if err != nil {
-			t.Errorf("Failed to stop backend %d: %v", i, err)
-		}
-
 		err = backend.Close()
 		if err != nil {
 			t.Errorf("Failed to close backend %d: %v", i, err)

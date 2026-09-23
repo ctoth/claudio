@@ -59,7 +59,7 @@ func TestFakeBackend_VolumeAffectsRecordedPlays(t *testing.T) {
 	if err := be.SetVolume(0.5); err != nil {
 		t.Fatalf("SetVolume: %v", err)
 	}
-	if got := be.GetVolume(); got != 0.5 {
+	if got := be.(*FakeBackend).GetVolume(); got != 0.5 {
 		t.Errorf("GetVolume=%v, want 0.5", got)
 	}
 
@@ -132,11 +132,5 @@ func TestFakeBackend_StopFlipsIsPlaying(t *testing.T) {
 	}
 	if be.IsPlaying() {
 		t.Error("expected !IsPlaying after Stop")
-	}
-}
-
-func TestFakeBackend_IsValidBackendType(t *testing.T) {
-	if !IsValidBackendType("fake") {
-		t.Error("IsValidBackendType(\"fake\") should return true")
 	}
 }
