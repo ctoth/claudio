@@ -29,7 +29,6 @@ func runSoundpackList(cmd *cobra.Command) error {
 
 	packs, err := discoverSoundpacks()
 	if err != nil {
-		slog.Error("failed to discover soundpacks", "error", err)
 		return fmt.Errorf("failed to discover soundpacks: %w", err)
 	}
 

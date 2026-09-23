@@ -74,6 +74,5 @@ func soundpackNotFoundError(name string, configPaths []string) error {
 		}
 	}
 	sort.Strings(available)
-	slog.Error("soundpack not found", "name", name, "available", available)
 	return fmt.Errorf("soundpack '%s' not found. Available soundpacks: %s", name, strings.Join(available, ", "))
 }

@@ -137,7 +137,6 @@ func runAnalyzeMissing(cmd *cobra.Command, days int, tool, category string, limi
 	// Get missing sounds data
 	missingSounds, err := tracking.GetMissingSounds(cli.trackingDB, filter)
 	if err != nil {
-		slog.Error("failed to get missing sounds", "error", err)
 		return fmt.Errorf("failed to analyze missing sounds: %w", err)
 	}
 

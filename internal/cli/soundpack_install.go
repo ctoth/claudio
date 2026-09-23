@@ -55,7 +55,6 @@ func runSoundpackInstall(cmd *cobra.Command, srcPath string, setDefault, skipVal
 	// Check that the source path exists
 	srcInfo, err := os.Stat(srcPath)
 	if err != nil {
-		slog.Error("cannot access source path", "path", srcPath, "error", err)
 		return fmt.Errorf("cannot access source path: %w", err)
 	}
 
@@ -78,7 +77,6 @@ func runSoundpackInstall(cmd *cobra.Command, srcPath string, setDefault, skipVal
 			valErr = result.Err()
 		}
 		if valErr != nil {
-			slog.Error("validation failed", "error", valErr)
 			return fmt.Errorf("validation failed: %w", valErr)
 		}
 		slog.Info("soundpack validation passed")
@@ -92,7 +90,6 @@ func runSoundpackInstall(cmd *cobra.Command, srcPath string, setDefault, skipVal
 	if !isDir {
 		spFile, peekErr := soundpack.PeekJSONSoundpackMetadataFromFile(srcPath)
 		if peekErr != nil {
-			slog.Error("failed to peek JSON file", "path", srcPath, "error", peekErr)
 			return fmt.Errorf("failed to load JSON file: %w", peekErr)
 		}
 		if spFile.Name != "" {
@@ -123,14 +120,12 @@ func installSoundpackFiles(cmd *cobra.Command, srcPath, name string, isDir, setD
 		return fmt.Errorf("failed to load config before installing soundpack: %w", err)
 	}
 	if err := stageAndInstallSoundpack(srcPath, installDir, isDir); err != nil {
-		slog.Error("failed to install soundpack files", "src", srcPath, "dst", installDir, "error", err)
 		return err
 	}
 	slog.Info("soundpack copied successfully", "install_path", installPath)
 
 	// Update config
 	if err := updateConfigForInstall(cmd, installPath, name, setDefault); err != nil {
-		slog.Error("failed to update config", "error", err)
 		return fmt.Errorf("failed to update config: %w", err)
 	}
 

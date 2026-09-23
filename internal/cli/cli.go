@@ -44,6 +44,10 @@ func NewCLI() *CLI {
 		Long:    "Claudio is a hook-based audio plugin for coding agents that plays contextual sounds based on tool usage and events.",
 		Version: Version,
 		RunE:    runStdinModeE, // Default behavior when no subcommand is provided
+		// Run prints a failed command's error once. Usage text is for
+		// --help only: on stdout an agent would read it as hook output.
+		SilenceErrors: true,
+		SilenceUsage:  true,
 	}
 	// Preserve the historical version output shape ("claudio version X (Version X)\n...")
 	// that downstream tooling and tests check against.
@@ -158,13 +162,9 @@ func loadAndValidateConfig(cmd *cobra.Command, cli *CLI) (*config.Config, error)
 	if volumeStr != "" {
 		vol, err := strconv.ParseFloat(volumeStr, 64)
 		if err != nil {
-			cmd.PrintErrf("Error: invalid volume value '%s': %v\n", volumeStr, err)
-			slog.Error("invalid volume value", "value", volumeStr, "error", err)
 			return nil, fmt.Errorf("invalid volume value '%s': %w", volumeStr, err)
 		}
 		if vol < 0.0 || vol > 1.0 {
-			cmd.PrintErrf("Error: volume must be between 0.0 and 1.0, got %f\n", vol)
-			slog.Error("volume out of range", "value", vol)
 			return nil, fmt.Errorf("volume must be between 0.0 and 1.0, got %f", vol)
 		}
 	}
@@ -197,8 +197,6 @@ func loadAndValidateConfig(cmd *cobra.Command, cli *CLI) (*config.Config, error)
 
 	// Validate final configuration
 	if err := cli.configManager.ValidateConfig(cfg); err != nil {
-		cmd.PrintErrf("Error: invalid configuration: %v\n", err)
-		slog.Error("config validation failed", "error", err)
 		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
 
@@ -322,8 +320,6 @@ func initializeAudioSystem(cmd *cobra.Command, cli *CLI, cfg *config.Config) err
 	if cfg.Enabled {
 		err = cli.initializeAudioSystemWithBackend(cfg)
 		if err != nil {
-			cmd.PrintErrf("Error initializing audio backend: %v\n", err)
-			slog.Error("audio backend initialization failed", "error", err)
 			return fmt.Errorf("error initializing audio backend: %w", err)
 		}
 		slog.Debug("audio backend system initialized")
@@ -339,7 +335,6 @@ func (c *CLI) initializeAudioSystemWithBackend(cfg *config.Config) error {
 	// Create audio backend using package-level constructor
 	backend, err := audio.NewBackend(cfg.AudioBackend)
 	if err != nil {
-		slog.Error("failed to create audio backend", "backend_type", cfg.AudioBackend, "error", err)
 		return fmt.Errorf("failed to create audio backend '%s': %w", cfg.AudioBackend, err)
 	}
 
@@ -352,7 +347,6 @@ func (c *CLI) initializeAudioSystemWithBackend(cfg *config.Config) error {
 	}
 	err = c.audioBackend.SetVolume(float32(volume))
 	if err != nil {
-		slog.Error("failed to set volume on backend", "volume", volume, "error", err)
 		return fmt.Errorf("failed to set volume on backend: %w", err)
 	}
 
@@ -409,10 +403,6 @@ func processHookInput(cmd *cobra.Command, cli *CLI, cfg *config.Config, inputDat
 	defaultEvent, _ := cmd.Flags().GetString("hook-event")
 	hookEvent, err := hooks.ParseHookEventWithDefault(inputData, defaultEvent)
 	if err != nil {
-		cmd.PrintErrf("Error: %v\n", err)
-		slog.Error("hook JSON parsing failed", "error", err)
-		// Already reported above; keep Cobra from printing it a second time.
-		cmd.SilenceErrors = true
 		return fmt.Errorf("error parsing hook JSON: %w", err)
 	}
 
@@ -429,11 +419,6 @@ func processHookInput(cmd *cobra.Command, cli *CLI, cfg *config.Config, inputDat
 
 // runStdinModeE handles the default behavior of reading hook JSON from stdin
 func runStdinModeE(cmd *cobra.Command, args []string) error {
-	// Flags are parsed by now, so any error from here on is a runtime error,
-	// not a usage error. Cobra prints usage to the command's stdout, which
-	// agents read as hook output.
-	cmd.SilenceUsage = true
-
 	// Extract CLI instance from context
 	cli := cliFromContext(cmd.Context())
 	if cli == nil {
@@ -454,8 +439,6 @@ func runStdinModeE(cmd *cobra.Command, args []string) error {
 	// Read hook input payload once so we can optionally detach.
 	inputData, err := readHookInput(cmd)
 	if err != nil {
-		cmd.PrintErrf("Error reading hook input: %v\n", err)
-		slog.Error("hook input read failed", "error", err)
 		return err
 	}
 
@@ -463,9 +446,6 @@ func runStdinModeE(cmd *cobra.Command, args []string) error {
 	// worker's stderr. This does not open a device or test playback.
 	if cfg.Enabled && len(inputData) > 0 {
 		if _, err := audio.ResolveBackend(cfg.AudioBackend); err != nil {
-			// Run logs the error once; Cobra usage would bury the remedy.
-			cmd.SilenceErrors = true
-			cmd.SilenceUsage = true
 			return err
 		}
 	}
@@ -473,8 +453,6 @@ func runStdinModeE(cmd *cobra.Command, args []string) error {
 	// Default behavior: detach hook processing so the invoking hook returns immediately.
 	if shouldDetachHookProcessing(cmd, cfg, inputData) {
 		if err := spawnDetachedHookWorker(cmd, inputData); err != nil {
-			cmd.PrintErrf("Error starting detached hook worker: %v\n", err)
-			slog.Error("detached hook worker start failed", "error", err)
 			return err
 		}
 		return writeJSONHookSuccessResponse(cmd, inputData)
@@ -527,16 +505,7 @@ func (c *CLI) Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 	// observable "fast path" invariant covered by TestVersionFlagEarlyExit
 	// while letting cobra produce the actual output.
 	if hasVersionFlag(args) {
-		c.rootCmd.SetArgs(args[1:])
-		c.rootCmd.SetIn(stdin)
-		c.rootCmd.SetOut(stdout)
-		c.rootCmd.SetErr(stderr)
-		c.rootCmd.SetContext(contextWithCLI(c))
-		if err := c.rootCmd.Execute(); err != nil {
-			slog.Error("cobra execution failed", "error", err)
-			return 1
-		}
-		return 0
+		return c.execute(args, stdin, stdout, stderr)
 	}
 
 	// Initialize systems only when actually needed (not for version flag)
@@ -561,21 +530,25 @@ func (c *CLI) Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 		}
 	}()
 
-	// Configure cobra to use the provided I/O streams
-	c.rootCmd.SetArgs(args[1:]) // Skip program name
+	return c.execute(args, stdin, stdout, stderr)
+}
+
+// execute runs cobra on args (program name first) and reports a failure
+// exactly once. Cobra's own error and usage printing is silenced on the
+// root, so this is the only place a command error reaches stderr; the log
+// record is WARN so the ERROR-only stderr handler does not repeat it.
+func (c *CLI) execute(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	c.rootCmd.SetArgs(args[1:])
 	c.rootCmd.SetIn(stdin)
 	c.rootCmd.SetOut(stdout)
 	c.rootCmd.SetErr(stderr)
-
-	// Store CLI instance for access in command handlers
 	c.rootCmd.SetContext(contextWithCLI(c))
 
-	// Execute cobra command
 	if err := c.rootCmd.Execute(); err != nil {
-		slog.Error("cobra execution failed", "error", err)
+		fmt.Fprintf(stderr, "Error: %v\n", err)
+		slog.Warn("command failed", "error", err)
 		return 1
 	}
-
 	return 0
 }
 
@@ -679,7 +652,6 @@ func (c *CLI) processHookEvent(hookEvent *hooks.HookEvent, cfg *config.Config, s
 		}
 		err := c.playSoundWithBackend(result.SelectedPath, playVolume)
 		if err != nil {
-			fmt.Fprintf(stderr, "Error playing sound: %v\n", err)
 			slog.Error("sound playback failed", "sound_path", result.SelectedPath, "error", err)
 			return
 		}
@@ -710,7 +682,6 @@ func (c *CLI) playSoundWithBackend(soundPath string, volume float64) error {
 	ctx := context.Background()
 	err = c.audioBackend.Play(ctx, source)
 	if err != nil {
-		slog.Error("backend playback failed", "path", fullPath, "backend_type", fmt.Sprintf("%T", c.audioBackend), "error", err)
 		return fmt.Errorf("failed to play sound with backend: %w", err)
 	}
 

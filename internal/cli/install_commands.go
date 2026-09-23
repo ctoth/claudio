@@ -328,7 +328,6 @@ func installCommandArtifact(artifact commandArtifact) error {
 
 	err := os.MkdirAll(artifact.Directory, 0755)
 	if err != nil {
-		slog.Error("failed to create command artifact directory", "path", artifact.Directory, "error", err)
 		return fmt.Errorf("failed to create command artifact directory: %w", err)
 	}
 
