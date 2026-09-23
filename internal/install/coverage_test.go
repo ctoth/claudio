@@ -292,7 +292,11 @@ func TestMergeHookValuesPreservesNonClaudioEntriesWhileRefreshingClaudio(t *test
 		},
 	}
 
-	filtered := mergeHookValues(entries, claudioValue).([]interface{})
+	merged, err := mergeHookValues(entries, claudioValue)
+	if err != nil {
+		t.Fatal(err)
+	}
+	filtered := merged.([]interface{})
 	if len(filtered) != 4 {
 		t.Fatalf("merged entry count = %d, want 4: %#v", len(filtered), filtered)
 	}
@@ -429,25 +433,6 @@ func TestMergeHooksMarshalErrorPropagates(t *testing.T) {
 	}
 }
 
-func TestMergeHookValuesUnknownExistingFormat(t *testing.T) {
-	// Existing PreToolUse hook stored as a number (neither string nor array)
-	// exercises the fallback branch in mergeHookValues.
-	existing := &SettingsMap{
-		"hooks": map[string]interface{}{
-			"PreToolUse": float64(42),
-		},
-	}
-	claudioHooks, _ := GenerateClaudioHooksForAgent("/usr/local/bin/claudio", AgentClaude)
-	merged, err := MergeHooksIntoSettings(existing, claudioHooks)
-	if err != nil {
-		t.Fatal(err)
-	}
-	hooksSection := (*merged)["hooks"].(map[string]interface{})
-	if _, ok := hooksSection["PreToolUse"].([]interface{}); !ok {
-		t.Errorf("expected PreToolUse coerced to array, got %T", hooksSection["PreToolUse"])
-	}
-}
-
 func TestFindBestPathReturnsExistingFile(t *testing.T) {
 	dir := t.TempDir()
 	orig, err := os.Getwd()
@@ -559,9 +544,9 @@ func TestHookArrayDetectionAdditionalBranches(t *testing.T) {
 	}
 }
 
-func TestMergeHookValuesReturnsNonArrayClaudioValue(t *testing.T) {
-	if got := mergeHookValues([]interface{}{}, "not-array"); got != "not-array" {
-		t.Errorf("mergeHookValues returned %v, want non-array claudio value", got)
+func TestMergeHookValuesRejectsNonArrayClaudioValue(t *testing.T) {
+	if got, err := mergeHookValues([]interface{}{}, "not-array"); err == nil {
+		t.Errorf("mergeHookValues returned %v, want error for non-array claudio value", got)
 	}
 }
 

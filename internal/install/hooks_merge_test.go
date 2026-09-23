@@ -563,7 +563,10 @@ func TestMergeHookValues(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Call the function we're about to implement
-			result := mergeHookValues(tc.existingValue, tc.claudioValue)
+			result, err := mergeHookValues(tc.existingValue, tc.claudioValue)
+			if err != nil {
+				t.Fatal(err)
+			}
 
 			// Result should always be in array format
 			resultArray, ok := result.([]interface{})

@@ -233,7 +233,11 @@ func MergeHooksIntoSettings(existingSettings *SettingsMap, claudioHooks interfac
 	// regardless of ordering and is idempotent across repeated merges.
 	for hookName, claudioValue := range claudioHooksMap {
 		if existingValue, exists := mergedHooks[hookName]; exists {
-			mergedHooks[hookName] = mergeHookValues(existingValue, claudioValue)
+			merged, err := mergeHookValues(existingValue, claudioValue)
+			if err != nil {
+				return nil, fmt.Errorf("hook %s: %w", hookName, err)
+			}
+			mergedHooks[hookName] = merged
 			slog.Debug("merged existing hook with Claudio (strip-and-replace)",
 				"hook_name", hookName)
 		} else {
@@ -278,14 +282,16 @@ func deepCopySettings(original *SettingsMap) (*SettingsMap, error) {
 // The merge is idempotent regardless of element ordering: any Claudio entry in
 // the existing array is filtered out before the new Claudio entries are
 // appended, so merge(merge(existing)) == merge(existing).
-func mergeHookValues(existingValue, claudioValue interface{}) interface{} {
+//
+// An existing value that is neither a string nor an array is an error: it
+// is not a hook shape claudio understands, so it must not be rewritten.
+func mergeHookValues(existingValue, claudioValue interface{}) (interface{}, error) {
 	slog.Debug("merging hook values", "existing_type", fmt.Sprintf("%T", existingValue), "claudio_type", fmt.Sprintf("%T", claudioValue))
 
 	// Convert Claudio value to array format (it should already be, but be safe)
 	claudioArray, ok := claudioValue.([]interface{})
 	if !ok {
-		slog.Warn("claudio value is not array format, returning as-is", "type", fmt.Sprintf("%T", claudioValue))
-		return claudioValue
+		return nil, fmt.Errorf("claudio hook value must be an array, got %T", claudioValue)
 	}
 
 	// Convert existing value to array format
@@ -309,19 +315,7 @@ func mergeHookValues(existingValue, claudioValue interface{}) interface{} {
 		existingArray = existingArr
 		slog.Debug("existing hook already in array format")
 	} else {
-		slog.Warn("unknown existing hook format, treating as string", "type", fmt.Sprintf("%T", existingValue))
-		// Fallback: treat as string
-		existingArray = []interface{}{
-			map[string]interface{}{
-				"matcher": ".*",
-				"hooks": []interface{}{
-					map[string]interface{}{
-						"type":    "command",
-						"command": fmt.Sprintf("%v", existingValue),
-					},
-				},
-			},
-		}
+		return nil, fmt.Errorf("unsupported existing hook value: expected a string or an array, got %T", existingValue)
 	}
 
 	// Strip any pre-existing Claudio entries from the existing array, then
@@ -406,7 +400,7 @@ func mergeHookValues(existingValue, claudioValue interface{}) interface{} {
 		"claudio_elements", len(claudioArray),
 		"merged_elements", len(mergedArray))
 
-	return mergedArray
+	return mergedArray, nil
 }
 
 // itemContainsClaudioCommand returns true if the given hook-array element
