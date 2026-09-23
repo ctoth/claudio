@@ -68,15 +68,11 @@ func GenerateCodexHookSpecs(executablePath string) []captainhook.HookSpec {
 // GenerateClaudioHooksForAgent creates hook configuration for the given agent
 // using its registry and config shape.
 func GenerateClaudioHooksForAgent(executablePath string, agent Agent) (interface{}, error) {
-	slog.Debug("generating Claudio hooks configuration",
-		"agent", agent, "executable_path", executablePath)
-
 	spec, err := agent.concreteSpec()
 	if err != nil {
 		return nil, err
 	}
 	enabledHooks := agent.EnabledHooks()
-	slog.Debug("retrieved enabled hooks for agent", "agent", agent, "count", len(enabledHooks))
 
 	hooks := make(HooksMap)
 
@@ -110,11 +106,6 @@ func GenerateClaudioHooksForAgent(executablePath string, agent Agent) (interface
 	// Generate hooks for all enabled hooks in the agent's registry
 	for _, hookDef := range enabledHooks {
 		hooks[hookDef.Name] = createHookConfig(hookDef)
-		slog.Debug("added hook from registry",
-			"agent", agent,
-			"hook_name", hookDef.Name,
-			"category", hookDef.Category,
-			"description", hookDef.Description)
 	}
 
 	slog.Info("generated Claudio hooks configuration",
@@ -157,8 +148,6 @@ func getHookNamesList(hooks HooksMap) []string {
 // Creates a deep copy of existing settings and safely merges hooks without modifying originals
 // Preserves existing non-Claudio hooks and all other settings
 func MergeHooksIntoSettings(existingSettings *SettingsMap, claudioHooks interface{}) (*SettingsMap, error) {
-	slog.Debug("starting hook merge operation")
-
 	// Validate inputs
 	if existingSettings == nil {
 		return nil, fmt.Errorf("settings cannot be nil")
@@ -179,8 +168,6 @@ func MergeHooksIntoSettings(existingSettings *SettingsMap, claudioHooks interfac
 		}
 	}
 
-	slog.Debug("validated inputs", "claudio_hooks_count", len(claudioHooksMap))
-
 	// Create deep copy of existing settings using JSON round-trip
 	settingsCopy, err := deepCopySettings(existingSettings)
 	if err != nil {
@@ -193,14 +180,12 @@ func MergeHooksIntoSettings(existingSettings *SettingsMap, claudioHooks interfac
 		// Validate existing hooks type
 		if hooksMap, ok := hooksInterface.(map[string]interface{}); ok {
 			existingHooks = HooksMap(hooksMap)
-			slog.Debug("found existing hooks", "existing_hooks_count", len(existingHooks))
 		} else {
 			return nil, fmt.Errorf("existing hooks invalid: expected map[string]interface{}, got %T", hooksInterface)
 		}
 	} else {
 		// Create new hooks section
 		existingHooks = make(HooksMap)
-		slog.Debug("created new hooks section")
 	}
 
 	// Merge Claudio hooks into existing hooks
@@ -210,7 +195,6 @@ func MergeHooksIntoSettings(existingSettings *SettingsMap, claudioHooks interfac
 	// First, copy all existing hooks
 	for hookName, hookValue := range existingHooks {
 		mergedHooks[hookName] = hookValue
-		slog.Debug("preserved existing hook", "hook_name", hookName, "hook_value", hookValue)
 	}
 
 	// Then, add/update Claudio hooks with strip-and-replace merging.
@@ -230,7 +214,6 @@ func MergeHooksIntoSettings(existingSettings *SettingsMap, claudioHooks interfac
 		} else {
 			// No conflict - add new Claudio hook
 			mergedHooks[hookName] = claudioValue
-			slog.Debug("adding new Claudio hook", "hook_name", hookName)
 		}
 	}
 
@@ -298,16 +281,10 @@ func mergeHookValues(existingValue, claudioValue interface{}) (interface{}, erro
 		return nil, fmt.Errorf("unsupported existing hook value: expected a string or an array, got %T", existingValue)
 	}
 
-	kept, stripped := stripClaudioEntries(existingArray)
+	kept, _ := stripClaudioEntries(existingArray)
 	merged := make([]interface{}, 0, len(kept)+len(claudioArray))
 	merged = append(merged, kept...)
 	merged = append(merged, claudioArray...)
-
-	slog.Debug("completed hook value merge",
-		"existing_elements", len(existingArray),
-		"existing_claudio_entries_stripped", stripped,
-		"claudio_elements", len(claudioArray),
-		"merged_elements", len(merged))
 
 	return merged, nil
 }

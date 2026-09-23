@@ -76,8 +76,6 @@ func (scb *SystemCommandBackend) Play(ctx context.Context, source AudioSource) e
 		return ErrBackendClosed
 	}
 
-	slog.Debug("SystemCommandBackend starting playback", "commands", scb.commands)
-
 	// Fast path: source can provide a file path directly (FileSource). Exec
 	// the player binary against the path without the read-then-write-temp
 	// dance.
@@ -219,7 +217,6 @@ func (scb *SystemCommandBackend) playReaderViaTempFile(ctx context.Context, read
 	tempPath := tempFile.Name()
 	defer func() {
 		os.Remove(tempPath)
-		slog.Debug("temporary file cleaned up", "path", tempPath)
 	}()
 
 	// Copy reader data to temporary file
@@ -234,8 +231,6 @@ func (scb *SystemCommandBackend) playReaderViaTempFile(ctx context.Context, read
 	if err != nil {
 		return fmt.Errorf("failed to close temporary file: %w", err)
 	}
-
-	slog.Debug("temporary file created successfully", "path", tempPath, "format", format)
 
 	// Play the temporary file
 	return scb.playFile(ctx, tempPath)

@@ -31,8 +31,6 @@ type QueryFilter struct {
 
 // ApplyTimeFilter converts QueryFilter time options to Unix timestamps
 func (q *QueryFilter) ApplyTimeFilter(now time.Time) (startUnix, endUnix int64) {
-	slog.Debug("applying time filter", "days", q.Days, "date_preset", q.DatePreset)
-
 	endUnix = now.Unix()
 
 	// Priority order: DatePreset > StartTime/EndTime > Days > no filter
@@ -73,8 +71,6 @@ func (q *QueryFilter) ApplyTimeFilter(now time.Time) (startUnix, endUnix int64) 
 func (q *QueryFilter) BuildWhereClause() (string, []interface{}, error) {
 	var clauses []string
 	var args []interface{}
-
-	slog.Debug("building where clause", "tool", q.Tool, "category", q.Category, "session_id", q.SessionID)
 
 	// Apply time filters
 	if q.StartTime != nil || q.EndTime != nil || q.Days > 0 || q.DatePreset != "" {
@@ -145,8 +141,6 @@ var DatePresets = []string{"today", "yesterday", "this-week", "last-week", "this
 
 // ParseDatePreset converts date preset strings to time ranges
 func ParseDatePreset(preset string, now time.Time) (start, end time.Time, err error) {
-	slog.Debug("parsing date preset", "preset", preset)
-
 	switch preset {
 	case "today":
 		start = beginningOfDay(now)
@@ -172,7 +166,6 @@ func ParseDatePreset(preset string, now time.Time) (start, end time.Time, err er
 		end = now
 	default:
 		err = fmt.Errorf("unknown preset: %s", preset)
-		slog.Error("invalid date preset", "preset", preset)
 		return
 	}
 

@@ -41,8 +41,6 @@ type CLI struct {
 // the returned *CLI, so they share its config manager and lazily opened
 // resources (resolver, audio backend, tracking DB) without a context lookup.
 func NewCLI() *CLI {
-	slog.Debug("creating new CLI instance")
-
 	c := &CLI{configManager: config.NewConfigManager()}
 
 	rootCmd := &cobra.Command{
@@ -167,7 +165,6 @@ func (c *CLI) initializeAudioSystem(cfg *config.Config) error {
 	if err := c.initializeAudioSystemWithBackend(cfg); err != nil {
 		return fmt.Errorf("error initializing audio backend: %w", err)
 	}
-	slog.Debug("audio backend system initialized")
 	return nil
 }
 
@@ -263,8 +260,6 @@ func (c *CLI) platformSoundpackMapper() (soundpack.PathMapper, error) {
 
 // initializeAudioSystemWithBackend creates and configures the audio backend
 func (c *CLI) initializeAudioSystemWithBackend(cfg *config.Config) error {
-	slog.Debug("initializing audio backend", "backend_type", cfg.AudioBackend)
-
 	// Create audio backend using package-level constructor
 	backend, err := audio.NewBackend(cfg.AudioBackend)
 	if err != nil {
@@ -470,8 +465,6 @@ func setupDefaultCommandLogging(stderr io.Writer) {
 
 // processHookEvent processes the parsed hook event
 func (c *CLI) processHookEvent(hookEvent *hooks.HookEvent, cfg *config.Config, stdout, stderr io.Writer) {
-	slog.Debug("processing hook event", "event_name", hookEvent.EventName)
-
 	// Extract hook context directly from event
 	eventCtx := hookEvent.GetContext()
 
@@ -498,9 +491,6 @@ func (c *CLI) processHookEvent(hookEvent *hooks.HookEvent, cfg *config.Config, s
 		buf = tracking.NewLookupBuffer()
 		dbHook = tracking.NewDBHook(c.trackingDB, hookEvent.SessionID)
 		observer = buf.Observer()
-		slog.Debug("created LookupBuffer + DBHook for tracking", "session_id", hookEvent.SessionID)
-	} else {
-		slog.Debug("tracking disabled; mapper resolves without an observer")
 	}
 
 	soundMapper := sounds.NewSoundMapperWithResolver(c.soundpackResolver, observer)
@@ -544,8 +534,6 @@ func (c *CLI) processHookEvent(hookEvent *hooks.HookEvent, cfg *config.Config, s
 
 // playSoundWithBackend plays the specified sound file using the configured audio backend
 func (c *CLI) playSoundWithBackend(soundPath string, volume float64) error {
-	slog.Debug("loading and playing sound with backend", "path", soundPath, "volume", volume)
-
 	// Use unified soundpack resolver to resolve sound file path
 	fullPath, err := c.soundpackResolver.ResolveSound(soundPath)
 	if err != nil {
@@ -566,7 +554,6 @@ func (c *CLI) playSoundWithBackend(soundPath string, volume float64) error {
 		return fmt.Errorf("failed to play sound with backend: %w", err)
 	}
 
-	slog.Debug("sound playback completed successfully", "path", soundPath, "backend_type", fmt.Sprintf("%T", c.audioBackend))
 	return nil
 }
 
@@ -660,27 +647,13 @@ func setupLogging(cfg *config.Config, stderrWriter io.Writer) {
 // any --config override the user passed, because the second LoadConfig
 // went through the env+default search path instead.
 func (c *CLI) initializeTracking(cfg *config.Config) {
-	slog.Debug("initializeTracking() called", "trackingDB_nil", c.trackingDB == nil)
-
 	if c.trackingDB != nil {
-		slog.Debug("tracking database already initialized, skipping")
 		return // Already initialized
 	}
 
 	if cfg == nil {
-		slog.Debug("initializeTracking called with nil cfg; skipping")
 		return
 	}
-
-	slog.Debug("tracking config loaded",
-		"tracking_nil", cfg.SoundTracking == nil,
-		"enabled", cfg.SoundTracking != nil && cfg.SoundTracking.Enabled,
-		"db_path", func() string {
-			if cfg.SoundTracking != nil {
-				return cfg.SoundTracking.DatabasePath
-			}
-			return ""
-		}())
 
 	// Check if tracking is enabled
 	if cfg.SoundTracking == nil || !cfg.SoundTracking.Enabled {
@@ -705,8 +678,6 @@ func (c *CLI) initializeTracking(cfg *config.Config) {
 		}
 		slog.Debug("using default XDG database path", "path", dbPath)
 	}
-
-	slog.Debug("attempting to initialize tracking database", "path", dbPath)
 
 	// Initialize database with graceful degradation
 	db, err := tracking.NewDatabase(dbPath)
@@ -737,7 +708,6 @@ func getPlatformExecutableDirectory() string {
 	}
 
 	execDir := filepath.Dir(executable)
-	slog.Debug("executable directory detected for platform detection", "executable", executable, "directory", execDir)
 
 	return execDir
 }
@@ -748,8 +718,6 @@ func loadEmbeddedPlatformSoundpack(identifier string) (soundpack.PathMapper, err
 	if !ok {
 		return nil, fmt.Errorf("invalid embedded soundpack identifier: %s", identifier)
 	}
-
-	slog.Debug("loading embedded platform soundpack", "filename", filename)
 
 	data, err := config.GetEmbeddedPlatformSoundpackData(filename)
 	if err != nil {

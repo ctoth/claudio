@@ -79,7 +79,6 @@ type UnifiedSoundpackResolver struct {
 
 // NewSoundpackResolver creates a new unified soundpack resolver
 func NewSoundpackResolver(mapper PathMapper) SoundpackResolver {
-
 	return &UnifiedSoundpackResolver{
 		mapper: mapper,
 	}
@@ -91,26 +90,14 @@ func (u *UnifiedSoundpackResolver) ResolveSound(relativePath string) (string, er
 		return "", fmt.Errorf("sound path cannot be empty")
 	}
 
-	slog.Debug("resolving sound path",
-		"relative_path", relativePath,
-		"mapper_type", u.mapper.GetType(),
-		"mapper_name", u.mapper.GetName())
-
 	// Get candidate paths from mapper
 	candidates, err := u.mapper.MapPath(relativePath)
 	if err != nil {
 		return "", fmt.Errorf("path mapping failed: %w", err)
 	}
 
-	slog.Debug("path mapping completed",
-		"relative_path", relativePath,
-		"candidates_count", len(candidates),
-		"candidates", candidates)
-
 	// Try each candidate path until we find an existing file
 	for i, candidate := range candidates {
-		slog.Debug("checking candidate", "index", i, "candidate", candidate)
-
 		if info, err := os.Stat(candidate); err == nil && info.Mode().IsRegular() {
 			slog.Debug("sound path resolved successfully",
 				"relative_path", relativePath,
@@ -119,8 +106,6 @@ func (u *UnifiedSoundpackResolver) ResolveSound(relativePath string) (string, er
 				"candidate_index", i)
 
 			return candidate, nil
-		} else {
-			slog.Debug("candidate not found", "candidate", candidate, "error", err)
 		}
 	}
 
@@ -161,7 +146,6 @@ func (u *UnifiedSoundpackResolver) ResolveSoundWithFallback(paths []string, opts
 	var lastErr error
 	for i, path := range paths {
 		sequence := i + 1
-		slog.Debug("trying fallback path", "index", i, "path", path)
 
 		resolved, err := u.ResolveSound(path)
 		if err == nil {
@@ -183,7 +167,6 @@ func (u *UnifiedSoundpackResolver) ResolveSoundWithFallback(paths []string, opts
 		}
 
 		lastErr = err
-		slog.Debug("fallback path failed", "index", i, "path", path, "error", err)
 	}
 
 	slog.Warn("all fallback paths failed",
@@ -243,8 +226,6 @@ const MaxSoundpackMappings = 10_000
 // bytes that reference absolute system paths, use
 // LoadEmbeddedPlatformSoundpack instead.
 func LoadJSONSoundpack(filePath string) (PathMapper, error) {
-	slog.Debug("loading JSON soundpack", "file_path", filePath)
-
 	// Open and read the JSON file
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -320,7 +301,6 @@ func loadJSONSoundpackUntrusted(data []byte, baseDir string) (PathMapper, error)
 	resolved := make(map[string]string, len(soundpack.Mappings))
 	for key, value := range soundpack.Mappings {
 		if value == "" {
-			slog.Debug("skipping empty mapping value", "key", key)
 			continue
 		}
 		abs, err := validateMappingValue(value, baseDir)
@@ -330,10 +310,6 @@ func loadJSONSoundpackUntrusted(data []byte, baseDir string) (PathMapper, error)
 		resolved[key] = abs
 	}
 	soundpack.Mappings = pruneMissingMappingFiles(resolved)
-
-	slog.Debug("untrusted JSON soundpack parsed",
-		"name", soundpack.Name,
-		"mappings_count", len(soundpack.Mappings))
 
 	return NewJSONMapper(soundpack.Name, soundpack.Mappings), nil
 }
@@ -517,8 +493,6 @@ func PeekJSONSoundpackMetadataFromFile(path string) (*JSONSoundpackFile, error) 
 
 // CreateSoundpackMapper auto-detects soundpack type and creates appropriate mapper
 func CreateSoundpackMapper(name, path string) (PathMapper, error) {
-	slog.Debug("creating soundpack mapper", "name", name, "path", path)
-
 	// Check if path exists
 	info, err := os.Stat(path)
 	if err != nil {
@@ -550,11 +524,6 @@ func CreateSoundpackMapper(name, path string) (PathMapper, error) {
 // CreateSoundpackMapperWithBasePaths creates a mapper with fallback to base paths
 // This is used when the exact soundpack path doesn't exist but we have base directories to search
 func CreateSoundpackMapperWithBasePaths(name, primaryPath string, basePaths []string) (PathMapper, error) {
-	slog.Debug("creating soundpack mapper with base paths",
-		"name", name,
-		"primary_path", primaryPath,
-		"base_paths", basePaths)
-
 	// First try to create mapper with primary path
 	mapper, err := CreateSoundpackMapper(name, primaryPath)
 	if err == nil {
@@ -574,9 +543,6 @@ func CreateSoundpackMapperWithBasePaths(name, primaryPath string, basePaths []st
 	}
 
 	// Create directory mapper with base paths for fallback
-	slog.Debug("creating directory mapper with base paths",
-		"name", name,
-		"base_paths", basePaths)
 
 	return NewDirectoryMapper(name, basePaths), nil
 }

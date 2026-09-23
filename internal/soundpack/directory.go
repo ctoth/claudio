@@ -26,7 +26,6 @@ type DirectoryMapper struct {
 
 // NewDirectoryMapper creates a new directory-based path mapper
 func NewDirectoryMapper(name string, basePaths []string) PathMapper {
-
 	return &DirectoryMapper{
 		name:      name,
 		basePaths: basePaths,
@@ -39,31 +38,10 @@ func (d *DirectoryMapper) MapPath(relativePath string) ([]string, error) {
 		return []string{}, nil
 	}
 
-	slog.Debug("mapping directory path",
-		"relative_path", relativePath,
-		"base_paths_count", len(d.basePaths),
-		"mapper_name", d.name)
-
 	var candidates []string
-	for i, basePath := range d.basePaths {
-		candidate := filepath.Join(basePath, relativePath)
-		candidates = append(candidates, candidate)
-
-		slog.Debug("generated directory candidate",
-			"index", i,
-			"base_path", basePath,
-			"relative_path", relativePath,
-			"candidate", candidate)
-
-		for _, alternateCandidate := range existingAlternateAudioPaths(basePath, relativePath) {
-			candidates = append(candidates, alternateCandidate)
-
-			slog.Debug("generated alternate directory candidate",
-				"index", i,
-				"base_path", basePath,
-				"relative_path", relativePath,
-				"candidate", alternateCandidate)
-		}
+	for _, basePath := range d.basePaths {
+		candidates = append(candidates, filepath.Join(basePath, relativePath))
+		candidates = append(candidates, existingAlternateAudioPaths(basePath, relativePath)...)
 	}
 
 	slog.Debug("directory mapping completed",

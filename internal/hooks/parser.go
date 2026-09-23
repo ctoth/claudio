@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"maps"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -321,20 +320,6 @@ func (e *HookEvent) GetContext() *EventContext {
 		context.FileType = e.extractFileType()
 	}
 
-	slog.Debug("event context extracted",
-		"event_name", e.EventName,
-		"category", context.Category.String(),
-		"sound_hint", context.SoundHint,
-		"tool_name", context.ToolName,
-		"original_tool", context.OriginalTool,
-		"command", context.Command,
-		"subcommand", context.Subcommand,
-		"phase", context.Phase,
-		"is_success", context.IsSuccess,
-		"has_error", context.HasError,
-		"file_type", context.FileType,
-		"operation", context.Operation)
-
 	return context
 }
 
@@ -449,7 +434,6 @@ func isMCPToolName(toolName string) bool {
 // analyzeToolResponse examines tool response to determine success/error status and error type
 func (e *HookEvent) analyzeToolResponse() (success bool, hasError bool, errorType string) {
 	if e.ToolResponse == nil {
-		slog.Debug("no tool response to analyze")
 		return true, false, "" // No response usually means success
 	}
 
@@ -460,11 +444,9 @@ func (e *HookEvent) analyzeToolResponse() (success bool, hasError bool, errorTyp
 		if stringErr := json.Unmarshal(*e.ToolResponse, &responseText); stringErr == nil {
 			return analyzeTextToolResponse(responseText)
 		}
-		slog.Error("failed to parse tool response", "error", err)
+		slog.Warn("tool response is not JSON; treating it as an error", "error", err)
 		return false, true, ""
 	}
-
-	slog.Debug("analyzing tool response", "response_keys", slices.Collect(maps.Keys(response)))
 
 	// Check for interruption first (more specific than stderr)
 	if interrupted, ok := response["interrupted"].(bool); ok && interrupted {
@@ -575,7 +557,6 @@ func (e *HookEvent) extractFileType() string {
 		if path, ok := input[field].(string); ok && path != "" {
 			fileType := extractFileExtension(path)
 			if fileType != "" {
-				slog.Debug("extracted file type", "field", field, "path", path, "file_type", fileType)
 				return fileType
 			}
 		}
@@ -627,12 +608,6 @@ func (e *HookEvent) extractCommandInfo() CommandInfo {
 		Subcommand:    subCmd,
 		HasSubcommand: subCmd != "",
 	}
-
-	slog.Debug("extracted command info",
-		"original", command,
-		"command", result.Command,
-		"subcommand", result.Subcommand,
-		"has_subcommand", result.HasSubcommand)
 
 	return result
 }

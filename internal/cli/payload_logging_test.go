@@ -79,3 +79,17 @@ func TestRejectedHookPayloadIsLoggedAsLengthAndHash(t *testing.T) {
 		}
 	}
 }
+
+// A tool_response of an unexpected shape makes the event an error sound;
+// it is not a claudio failure, so nothing is written to the agent's stderr.
+func TestOddToolResponseShapeStaysOffStderr(t *testing.T) {
+	testenv.IsolateXDG(t)
+	payload := `{"session_id":"s","cwd":"/c","hook_event_name":"PostToolUse","tool_name":"Read","tool_response":[1,2]}`
+	var stdout, stderr bytes.Buffer
+	if code := NewCLI().Run([]string{"claudio", "--silent"}, strings.NewReader(payload), &stdout, &stderr); code != 0 {
+		t.Fatalf("exit %d: %s", code, stderr.String())
+	}
+	if stderr.Len() != 0 {
+		t.Errorf("stderr = %q, want empty", stderr.String())
+	}
+}

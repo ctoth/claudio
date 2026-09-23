@@ -142,8 +142,6 @@ func (cm *ConfigManager) GetDefaultConfig() *Config {
 
 // LoadFromFile loads configuration from a specific file
 func (cm *ConfigManager) LoadFromFile(filePath string) (*Config, error) {
-	slog.Debug("loading config from file", "file_path", filePath)
-
 	// Failures are returned, not logged: callers decide whether a bad file
 	// is fatal (write paths) or a warning (hook mode), and log it once.
 	data, err := afero.ReadFile(cm.fs, filePath)
@@ -266,14 +264,11 @@ func (cm *ConfigManager) ValidateConfig(config *Config) error {
 		return fmt.Errorf("config validation failed: %s", errMsg)
 	}
 
-	slog.Debug("config validation passed")
 	return nil
 }
 
 // ApplyEnvironmentOverrides applies environment variable overrides to config
 func (cm *ConfigManager) ApplyEnvironmentOverrides(config *Config) *Config {
-	slog.Debug("applying environment variable overrides")
-
 	// Deep copy so overrides never write through into the caller's config.
 	result := config.Clone()
 	applyEnvVars(result, configEnvVars)
@@ -376,18 +371,12 @@ func GetEmbeddedSoundData(name string) ([]byte, error) {
 // always satisfied with afero.NewOsFs(), defeating the cm.fs seam tests
 // relied on. Drop the parameter; use cm.fs.
 func (cm *ConfigManager) GetPlatformSoundpack(executableDir string) string {
-	slog.Debug("detecting platform soundpack with enhanced detection",
-		"executable_dir", executableDir,
-		"is_wsl", platform.IsWSL(),
-		"runtime_goos", runtime.GOOS)
-
 	// WSL detection first - prefer wsl.json over linux.json when in WSL
 	if platform.IsWSL() {
 		if wslPath := cm.checkPlatformFile(executableDir, "wsl.json"); wslPath != "" {
 			slog.Debug("WSL platform soundpack found", "path", wslPath)
 			return wslPath
 		}
-		slog.Debug("WSL detected but wsl.json not found in executable directory", "exec_dir", executableDir)
 	}
 
 	// Regular OS-specific detection
@@ -449,7 +438,6 @@ func (cm *ConfigManager) getExecutableDirectoryForDefault() string {
 	}
 
 	execDir := filepath.Dir(executable)
-	slog.Debug("executable directory detected for default config", "executable", executable, "directory", execDir)
 
 	// If executable is in a temp build directory (e.g. /tmp/go-buildXXX on
 	// POSIX, %TEMP%\go-buildNNN\... on Windows), also check current working
@@ -459,7 +447,6 @@ func (cm *ConfigManager) getExecutableDirectoryForDefault() string {
 	if isGoTestTempExecutable(executable, os.TempDir()) {
 		cwd, err := os.Getwd()
 		if err == nil {
-			slog.Debug("executable appears to be temp build, also checking current working directory", "cwd", cwd, "temp_exec", executable)
 			// Use the receiver's own filesystem so the recheck honors
 			// NewConfigManagerWithFilesystem.
 			cwdResult := cm.GetPlatformSoundpack(cwd)
