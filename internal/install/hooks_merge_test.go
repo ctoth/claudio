@@ -1108,3 +1108,197 @@ func TestMergeHooksIdempotent_ClaudioSiblingNonClaudio(t *testing.T) {
 		t.Errorf("merge not idempotent:\nfirst:  %s\nsecond: %s", firstJSON, secondJSON)
 	}
 }
+
+func TestMergeHookValuesStringFormatExisting(t *testing.T) {
+	// Existing hook in legacy string format (non-claudio) must be preserved
+	// and merged into array form alongside the claudio command.
+	existing := &SettingsMap{
+		"hooks": map[string]interface{}{
+			"PreToolUse": "/usr/bin/other-tool",
+		},
+	}
+	claudioHooks, err := GenerateClaudioHooksForAgent("/usr/local/bin/claudio", AgentClaude)
+	if err != nil {
+		t.Fatal(err)
+	}
+	merged, err := MergeHooksIntoSettings(existing, claudioHooks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hooksSection := (*merged)["hooks"].(map[string]interface{})
+	arr, ok := hooksSection["PreToolUse"].([]interface{})
+	if !ok {
+		t.Fatalf("expected PreToolUse merged into array, got %T", hooksSection["PreToolUse"])
+	}
+	foundOther, foundClaudio := false, false
+	for _, e := range arr {
+		cfg := e.(map[string]interface{})
+		for _, h := range cfg["hooks"].([]interface{}) {
+			switch h.(map[string]interface{})["command"] {
+			case "/usr/bin/other-tool":
+				foundOther = true
+			case "/usr/local/bin/claudio":
+				foundClaudio = true
+			}
+		}
+	}
+	if !foundOther || !foundClaudio {
+		t.Errorf("merge lost a command: other=%v claudio=%v", foundOther, foundClaudio)
+	}
+}
+
+func TestMergeHooksRefreshesClaudioWithoutDroppingExistingHooks(t *testing.T) {
+	existing := &SettingsMap{
+		"hooks": map[string]interface{}{
+			"PreToolUse": []interface{}{
+				map[string]interface{}{
+					"matcher": ".*",
+					"hooks": []interface{}{
+						map[string]interface{}{"command": "/usr/bin/logger"},
+					},
+				},
+				map[string]interface{}{
+					"matcher": "*",
+					"hooks": []interface{}{
+						map[string]interface{}{"command": "/old/claudio"},
+					},
+				},
+			},
+		},
+	}
+	claudioHooks, err := GenerateClaudioHooksForAgent("/new/claudio", AgentCodex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	merged, err := MergeHooksIntoSettings(existing, claudioHooks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hooksSection := (*merged)["hooks"].(map[string]interface{})
+	arr := hooksSection["PreToolUse"].([]interface{})
+
+	foundLogger := false
+	foundOldClaudio := false
+	foundNewClaudio := false
+	for _, e := range arr {
+		cfg := e.(map[string]interface{})
+		for _, h := range cfg["hooks"].([]interface{}) {
+			switch h.(map[string]interface{})["command"] {
+			case "/usr/bin/logger":
+				foundLogger = true
+			case "/old/claudio":
+				foundOldClaudio = true
+			case "/new/claudio":
+				foundNewClaudio = true
+			}
+		}
+	}
+	if !foundLogger {
+		t.Error("existing non-claudio hook was dropped")
+	}
+	if foundOldClaudio {
+		t.Error("old claudio hook was not refreshed")
+	}
+	if !foundNewClaudio {
+		t.Error("new claudio hook missing after refresh")
+	}
+}
+
+func TestMergeHookValuesPreservesNonClaudioEntriesWhileRefreshingClaudio(t *testing.T) {
+	entries := []interface{}{
+		"raw-entry",
+		map[string]interface{}{"matcher": "*"},
+		map[string]interface{}{
+			"matcher": "mixed",
+			"hooks": []interface{}{
+				"raw-hook",
+				map[string]interface{}{"command": 42},
+				map[string]interface{}{"command": "/old/claudio"},
+				map[string]interface{}{"command": "/usr/bin/logger"},
+			},
+		},
+		map[string]interface{}{
+			"matcher": "claudio-only",
+			"hooks": []interface{}{
+				map[string]interface{}{"command": "/old/claudio"},
+			},
+		},
+	}
+	claudioValue := []interface{}{
+		map[string]interface{}{
+			"matcher": "*",
+			"hooks": []interface{}{
+				map[string]interface{}{"command": "/new/claudio"},
+			},
+		},
+	}
+
+	merged, err := mergeHookValues(entries, claudioValue)
+	if err != nil {
+		t.Fatal(err)
+	}
+	filtered := merged.([]interface{})
+	if len(filtered) != 4 {
+		t.Fatalf("merged entry count = %d, want 4: %#v", len(filtered), filtered)
+	}
+
+	foundLogger := false
+	foundOldClaudio := false
+	foundNewClaudio := false
+	foundRawHook := false
+	foundNumericCommand := false
+	for _, entry := range filtered {
+		cfg, ok := entry.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		hooksList, ok := cfg["hooks"].([]interface{})
+		if !ok {
+			continue
+		}
+		for _, hook := range hooksList {
+			if hook == "raw-hook" {
+				foundRawHook = true
+				continue
+			}
+			cmd, ok := hook.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			switch cmd["command"] {
+			case 42:
+				foundNumericCommand = true
+			case "/old/claudio":
+				foundOldClaudio = true
+			case "/new/claudio":
+				foundNewClaudio = true
+			case "/usr/bin/logger":
+				foundLogger = true
+			}
+		}
+	}
+	if !foundLogger || !foundRawHook || !foundNumericCommand {
+		t.Errorf("non-claudio content not preserved: logger=%v raw=%v numeric=%v", foundLogger, foundRawHook, foundNumericCommand)
+	}
+	if foundOldClaudio {
+		t.Error("old claudio command was not removed")
+	}
+	if !foundNewClaudio {
+		t.Error("new claudio command was not appended")
+	}
+}
+
+func TestMergeHooksMarshalErrorPropagates(t *testing.T) {
+	// A channel value cannot be JSON-marshaled, forcing deepCopySettings to error.
+	bad := &SettingsMap{"x": make(chan int)}
+	claudioHooks, _ := GenerateClaudioHooksForAgent("/usr/local/bin/claudio", AgentClaude)
+	if _, err := MergeHooksIntoSettings(bad, claudioHooks); err == nil {
+		t.Error("expected error when existing settings cannot be deep-copied")
+	}
+}
+
+func TestMergeHookValuesRejectsNonArrayClaudioValue(t *testing.T) {
+	if got, err := mergeHookValues([]interface{}{}, "not-array"); err == nil {
+		t.Errorf("mergeHookValues returned %v, want error for non-array claudio value", got)
+	}
+}

@@ -331,3 +331,28 @@ func targetAgents(targets []AgentTarget) map[Agent]bool {
 	}
 	return agents
 }
+
+func TestResolveAgentTargetsRejectsInvalidScope(t *testing.T) {
+	if _, err := ResolveAgentTargets(AgentClaude, "bogus"); err == nil {
+		t.Fatal("expected invalid scope error")
+	}
+}
+
+func TestAutoDetectUsesGlobalConfigEvidenceForProjectScope(t *testing.T) {
+	home := t.TempDir()
+	setIsolatedAgentEnv(t, t.TempDir(), home)
+	if err := os.MkdirAll(filepath.Join(home, ".gemini"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	targets, err := ResolveAgentTargets(AgentAuto, ScopeProject)
+	if err != nil {
+		t.Fatalf("ResolveAgentTargets returned error: %v", err)
+	}
+	if len(targets) != 1 || targets[0].Agent != AgentGemini {
+		t.Fatalf("targets = %+v, want only gemini", targets)
+	}
+	if got := filepath.Base(filepath.Dir(targets[0].ConfigPath)); got != ".gemini" {
+		t.Fatalf("project target dir = %q, want .gemini", got)
+	}
+}
