@@ -17,9 +17,7 @@ func FindCopilotSettingsPaths(scope string) ([]string, error) {
 		return findCopilotGlobalScopePaths(), nil
 	}
 	return []string{
-		filepath.Join(".", ".github", "copilot", "settings.local.json"),
 		filepath.Join(".github", "copilot", "settings.local.json"),
-		filepath.Join(".", ".github", "copilot", "settings.json"),
 		filepath.Join(".github", "copilot", "settings.json"),
 	}, nil
 }

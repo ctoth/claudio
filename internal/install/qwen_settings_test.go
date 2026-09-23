@@ -29,7 +29,6 @@ func TestFindQwenSettingsPathsProjectScope(t *testing.T) {
 		t.Fatalf("FindQwenSettingsPaths returned error: %v", err)
 	}
 	want := []string{
-		filepath.Join(".", ".qwen", "settings.json"),
 		filepath.Join(".qwen", "settings.json"),
 	}
 	if len(paths) != len(want) {

@@ -73,16 +73,8 @@ func FindBestSettingsPath(scope string) (string, error) {
 
 // findProjectScopePaths returns potential project-scope Claude settings paths
 func findProjectScopePaths() ([]string, error) {
-	var paths []string
-
-	// Project settings are relative to current working directory
-	// Primary project path: ./.claude/settings.json
-	paths = append(paths, filepath.Join(".", ".claude", "settings.json"))
-
-	// Alternative project path without leading dot-slash
-	paths = append(paths, filepath.Join(".claude", "settings.json"))
-
-	return paths, nil
+	// Project settings are relative to the current working directory.
+	return []string{filepath.Join(".claude", "settings.json")}, nil
 }
 
 // normalizeMSYSPath converts MSYS/Git Bash-style paths (e.g. /c/Users/Q) to

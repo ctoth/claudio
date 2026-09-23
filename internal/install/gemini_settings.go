@@ -16,10 +16,7 @@ func FindGeminiSettingsPaths(scope string) ([]string, error) {
 	if normalizedScope == ScopeGlobal {
 		return findGeminiGlobalScopePaths(), nil
 	}
-	return []string{
-		filepath.Join(".", ".gemini", "settings.json"),
-		filepath.Join(".gemini", "settings.json"),
-	}, nil
+	return []string{filepath.Join(".gemini", "settings.json")}, nil
 }
 
 func findGeminiGlobalScopePaths() []string {

@@ -44,9 +44,7 @@ func TestFindCopilotSettingsPathsProjectScope(t *testing.T) {
 		t.Fatalf("FindCopilotSettingsPaths returned error: %v", err)
 	}
 	want := []string{
-		filepath.Join(".", ".github", "copilot", "settings.local.json"),
 		filepath.Join(".github", "copilot", "settings.local.json"),
-		filepath.Join(".", ".github", "copilot", "settings.json"),
 		filepath.Join(".github", "copilot", "settings.json"),
 	}
 	if len(paths) != len(want) {

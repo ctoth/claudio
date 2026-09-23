@@ -15,10 +15,7 @@ func FindCodexHooksPaths(scope string) ([]string, error) {
 	if normalizedScope == ScopeGlobal {
 		return findCodexUserScopePaths(), nil
 	}
-	return []string{
-		filepath.Join(".", ".codex", "hooks.json"),
-		filepath.Join(".codex", "hooks.json"),
-	}, nil
+	return []string{filepath.Join(".codex", "hooks.json")}, nil
 }
 
 func findCodexUserScopePaths() []string {

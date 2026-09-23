@@ -16,10 +16,7 @@ func FindQwenSettingsPaths(scope string) ([]string, error) {
 	if normalizedScope == ScopeGlobal {
 		return findQwenGlobalScopePaths(), nil
 	}
-	return []string{
-		filepath.Join(".", ".qwen", "settings.json"),
-		filepath.Join(".qwen", "settings.json"),
-	}, nil
+	return []string{filepath.Join(".qwen", "settings.json")}, nil
 }
 
 func findQwenGlobalScopePaths() []string {

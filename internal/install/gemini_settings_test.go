@@ -69,7 +69,6 @@ func TestFindGeminiSettingsPathsProjectScope(t *testing.T) {
 	}
 
 	want := []string{
-		filepath.Join(".", ".gemini", "settings.json"),
 		filepath.Join(".gemini", "settings.json"),
 	}
 	if len(paths) != len(want) {
