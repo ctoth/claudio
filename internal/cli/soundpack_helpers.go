@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -387,11 +388,23 @@ func categoryFromKey(key string) string {
 	return strings.TrimSuffix(key, filepath.Ext(key))
 }
 
-// copyFile copies a single file from src to dst, creating parent directories as needed.
-func copyFile(src, dst string) error {
+// copyFile copies the regular file src to dst, creating parent directories
+// as needed. src must not be a symlink: soundpack sources are untrusted and
+// a link could pull in a file from outside the pack.
+func copyFile(src, dst string) (err error) {
 	slog.Debug("copying file", "src", src, "dst", dst)
 
-	// Create destination directory
+	info, err := os.Lstat(src)
+	if err != nil {
+		return fmt.Errorf("failed to inspect source: %w", err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("refusing to copy symlink: %s", src)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("refusing to copy non-regular file: %s", src)
+	}
+
 	dstDir := filepath.Dir(dst)
 	if err := os.MkdirAll(dstDir, 0755); err != nil {
 		return fmt.Errorf("failed to create directory %s: %w", dstDir, err)
@@ -407,7 +420,11 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create destination: %w", err)
 	}
-	defer dstFile.Close()
+	defer func() {
+		if closeErr := dstFile.Close(); closeErr != nil && err == nil {
+			err = fmt.Errorf("failed to close destination: %w", closeErr)
+		}
+	}()
 
 	if _, err := io.Copy(dstFile, srcFile); err != nil {
 		return fmt.Errorf("failed to copy data: %w", err)
@@ -416,29 +433,40 @@ func copyFile(src, dst string) error {
 	return nil
 }
 
-// copyDirectory recursively copies a directory from src to dst.
+// copyDirectory recursively copies the directory src to dst. A symlinked
+// src root is resolved first; any symlink inside the tree is an error, and
+// .git directories are skipped.
 func copyDirectory(src, dst string) error {
 	slog.Debug("copying directory", "src", src, "dst", dst)
 
-	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+	root, err := filepath.EvalSymlinks(src)
+	if err != nil {
+		return fmt.Errorf("failed to resolve source directory: %w", err)
+	}
+
+	return filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 
-		// Calculate relative path
-		rel, relErr := filepath.Rel(src, path)
+		rel, relErr := filepath.Rel(root, path)
 		if relErr != nil {
 			return fmt.Errorf("failed to calculate relative path: %w", relErr)
 		}
-
 		dstPath := filepath.Join(dst, rel)
 
-		if info.IsDir() {
+		switch {
+		case d.Type()&fs.ModeSymlink != 0:
+			return fmt.Errorf("soundpack contains a symlink, which is not allowed: %s", path)
+		case d.IsDir() && path != root && d.Name() == ".git":
+			slog.Debug("skipping VCS metadata directory", "path", path)
+			return filepath.SkipDir
+		case d.IsDir():
 			slog.Debug("creating directory", "path", dstPath)
 			return os.MkdirAll(dstPath, 0755)
+		default:
+			slog.Debug("copying file in directory", "src", path, "dst", dstPath)
+			return copyFile(path, dstPath)
 		}
-
-		slog.Debug("copying file in directory", "src", path, "dst", dstPath)
-		return copyFile(path, dstPath)
 	})
 }

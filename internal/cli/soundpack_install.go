@@ -281,7 +281,13 @@ func stageJSONSoundpack(srcPath, stageDir string) error {
 			return fmt.Errorf("failed to copy mapped file %q: %w", value, err)
 		}
 	}
-	if err := copyFile(srcPath, filepath.Join(stageDir, "soundpack.json")); err != nil {
+	// The manifest path is the user's own argument, so a symlink there is
+	// resolved; symlinks among the mapped files are rejected by copyFile.
+	manifestPath, err := filepath.EvalSymlinks(srcPath)
+	if err != nil {
+		return fmt.Errorf("failed to resolve soundpack manifest: %w", err)
+	}
+	if err := copyFile(manifestPath, filepath.Join(stageDir, "soundpack.json")); err != nil {
 		return fmt.Errorf("failed to copy soundpack manifest: %w", err)
 	}
 	return nil
