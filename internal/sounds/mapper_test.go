@@ -49,9 +49,9 @@ func TestMapSoundEventSpecificFallback(t *testing.T) {
 	testCases := []struct {
 		name          string
 		context       *hooks.EventContext
-		expectedPaths []string // Event-specific fallback system
-		expectedLevel int      // which level should be selected (0-based)
-		chainType     string   // expected chain type
+		expectedPaths []string  // Event-specific fallback system
+		expectedLevel int       // which level should be selected (0-based)
+		chainType     ChainType // expected chain type
 	}{
 		{
 			name: "bash thinking - enhanced 9-level fallback",
@@ -467,7 +467,7 @@ func TestEventSpecificFallbackChains(t *testing.T) {
 		name              string
 		eventName         string
 		context           *hooks.EventContext
-		expectedChainType string
+		expectedChainType ChainType
 		expectedPathCount int
 		description       string
 	}{
@@ -962,7 +962,7 @@ func TestMapSound_ObserverFiresOncePerChainCandidate(t *testing.T) {
 	tests := []struct {
 		name              string
 		eventCtx          *hooks.EventContext
-		expectedChainType string
+		expectedChainType ChainType
 	}{
 		{
 			name: "enhanced chain (PreToolUse with tool)",

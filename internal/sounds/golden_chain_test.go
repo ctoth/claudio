@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"slices"
+	"strings"
 	"testing"
 
 	"claudio.click/internal/hooks"
@@ -364,6 +365,24 @@ func TestCommandSubcommandLevelUsesParsedCommand(t *testing.T) {
 			}
 			if tc.notWant != "" && slices.Contains(got.paths, tc.notWant) {
 				t.Errorf("paths contain %q: %q", tc.notWant, got.paths)
+			}
+		})
+	}
+}
+
+// TestNoEmptyCandidateNames checks that a command which normalizes to
+// nothing (shell punctuation) never yields names like "loading/.wav" or
+// "loading/-start.wav".
+func TestNoEmptyCandidateNames(t *testing.T) {
+	for _, g := range []goldenEvent{
+		{name: "pre punctuation", event: "PreToolUse", tool: "Bash", input: bashCmd("&& ls")},
+		{name: "post punctuation", event: "PostToolUse", tool: "Bash", input: bashCmd("| grep x"), response: okResp},
+	} {
+		t.Run(g.name, func(t *testing.T) {
+			for _, p := range mapGoldenEvent(t, g).paths {
+				if strings.Contains(p, "/.") || strings.Contains(p, "/-") {
+					t.Errorf("candidate %q has an empty name", p)
+				}
 			}
 		})
 	}
