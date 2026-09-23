@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"claudio.click/internal/audio"
+	"claudio.click/internal/volume"
 )
 
 func init() {
@@ -90,19 +91,19 @@ func (b *Backend) IsPlaying() bool {
 	return false
 }
 
-func (b *Backend) SetVolume(volume float32) error {
+func (b *Backend) SetVolume(v float32) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.closed {
 		return audio.ErrBackendClosed
 	}
-	if err := audio.ValidateVolume(float64(volume)); err != nil {
+	if err := volume.Validate(float64(v)); err != nil {
 		return err
 	}
-	b.volume = volume
+	b.volume = v
 	for p := range b.plays {
 		if p.player != nil {
-			p.player.SetVolume(float64(volume))
+			p.player.SetVolume(float64(v))
 		}
 	}
 	return nil

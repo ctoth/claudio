@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"claudio.click/internal/volume"
 )
 
 // SystemCommandBackend implements AudioBackend using system commands like paplay
@@ -72,10 +74,10 @@ func (scb *SystemCommandBackend) IsPlaying() bool {
 }
 
 // SetVolume sets the volume level (0.0 to 1.0)
-func (scb *SystemCommandBackend) SetVolume(volume float32) error {
+func (scb *SystemCommandBackend) SetVolume(v float32) error {
 	// Non-finite values would otherwise reach the player argv
 	// (e.g. 'afplay -v NaN').
-	if err := ValidateVolume(float64(volume)); err != nil {
+	if err := volume.Validate(float64(v)); err != nil {
 		return err
 	}
 
@@ -87,8 +89,8 @@ func (scb *SystemCommandBackend) SetVolume(volume float32) error {
 	}
 
 	oldVolume := scb.volume
-	scb.volume = volume
-	slog.Debug("volume changed", "old_volume", oldVolume, "new_volume", volume)
+	scb.volume = v
+	slog.Debug("volume changed", "old_volume", oldVolume, "new_volume", v)
 	return nil
 }
 

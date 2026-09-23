@@ -15,8 +15,8 @@ import (
 
 	"github.com/spf13/afero"
 
-	"claudio.click/internal/audio"
 	"claudio.click/internal/platform"
+	"claudio.click/internal/volume"
 )
 
 // wsl.json is not embedded: it is derived from windows.json (wsl_pack.go).
@@ -264,7 +264,7 @@ func (cm *ConfigManager) ValidateConfig(config *Config) error {
 
 	// Validate volume (nil is valid - means use default).
 	if config.Volume != nil {
-		if err := audio.ValidateVolume(*config.Volume); err != nil {
+		if err := volume.Validate(*config.Volume); err != nil {
 			errors = append(errors, err.Error())
 		}
 	}

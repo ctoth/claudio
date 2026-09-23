@@ -8,8 +8,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"claudio.click/internal/audio"
 	"claudio.click/internal/config"
+	"claudio.click/internal/volume"
 )
 
 // newVolumeCommand returns the `claudio volume [LEVEL]` subcommand.
@@ -62,7 +62,7 @@ func (c *CLI) runVolume(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("invalid volume %q: must be a float between 0.0 and 1.0", args[0])
 	}
-	if err := audio.ValidateVolume(v); err != nil {
+	if err := volume.Validate(v); err != nil {
 		return err
 	}
 
