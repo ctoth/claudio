@@ -422,10 +422,8 @@ func settingsEqual(a, b *SettingsMap) bool {
 					}
 				}
 			}
-		} else {
-			if !reflect.DeepEqual(valueA, valueB) {
-				return false
-			}
+		} else if !reflect.DeepEqual(valueA, valueB) {
+			return false
 		}
 	}
 

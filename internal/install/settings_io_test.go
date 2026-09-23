@@ -156,10 +156,8 @@ func TestReadSettingsInvalidJSON(t *testing.T) {
 			if tc.expectError {
 				if err == nil {
 					t.Errorf("Expected error but got none for content: %s", tc.fileContent)
-				} else {
-					if !strings.Contains(err.Error(), tc.errorMsg) {
-						t.Errorf("Expected error containing '%s', got: %v", tc.errorMsg, err)
-					}
+				} else if !strings.Contains(err.Error(), tc.errorMsg) {
+					t.Errorf("Expected error containing '%s', got: %v", tc.errorMsg, err)
 				}
 				if settings != nil {
 					t.Errorf("Expected nil settings on error, got: %v", settings)

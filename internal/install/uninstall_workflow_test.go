@@ -38,13 +38,8 @@ func TestInstallUninstallWithExecutablePath(t *testing.T) {
 			// Create temporary directory for test settings
 			tempDir := t.TempDir()
 
-			// Set up test environment
-			var settingsPath string
-			if tc.scope == "user" {
-				settingsPath = filepath.Join(tempDir, ".claude", "settings.json")
-			} else {
-				settingsPath = filepath.Join(tempDir, ".claude", "settings.json")
-			}
+			// User and project scope use the same layout under tempDir.
+			settingsPath := filepath.Join(tempDir, ".claude", "settings.json")
 
 			// Create settings directory
 			settingsDir := filepath.Dir(settingsPath)

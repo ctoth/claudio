@@ -236,11 +236,12 @@ func outputMissingSoundsHierarchical(w io.Writer, sounds []tracking.MissingSound
 
 	// Header with hierarchical context
 	var timeContext string
-	if filter.DatePreset != "" {
+	switch {
+	case filter.DatePreset != "":
 		timeContext = filter.DatePreset
-	} else if filter.Days > 0 {
+	case filter.Days > 0:
 		timeContext = fmt.Sprintf("last %d days", filter.Days)
-	} else {
+	default:
 		timeContext = "all time"
 	}
 
@@ -414,11 +415,12 @@ func outputUsageStatistics(w io.Writer, usage []tracking.SoundUsage, filter trac
 	fmt.Fprintln(w, "=====================")
 
 	// Show filter details
-	if filter.DatePreset != "" {
+	switch {
+	case filter.DatePreset != "":
 		fmt.Fprintf(w, "Time Range: %s\n", filter.DatePreset)
-	} else if filter.Days > 0 {
+	case filter.Days > 0:
 		fmt.Fprintf(w, "Time Range: Last %d days\n", filter.Days)
-	} else {
+	default:
 		fmt.Fprintln(w, "Time Range: All time")
 	}
 
