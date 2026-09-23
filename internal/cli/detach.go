@@ -6,9 +6,11 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"slices"
 
 	"claudio.click/internal/config"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 // shouldDetachHookProcessing determines whether hook processing should run in a detached worker.
@@ -114,32 +116,29 @@ func detachStdio(childCmd *exec.Cmd) {
 	childCmd.Stderr = nil
 }
 
+// workerOwnFlags are set by spawnDetachedHookWorker itself, never copied
+// from the invoking command.
+var workerOwnFlags = []string{"daemon-child", "hook-input-file"}
+
+// buildDetachedWorkerArgs forwards every flag the hook invocation set, so
+// the worker sees the same configuration without a list to keep in sync.
+// Flags are visited in name order; bools pass as bare "--name" when true.
 func buildDetachedWorkerArgs(cmd *cobra.Command, hookInputFile string) []string {
 	args := []string{"--daemon-child", "--hook-input-file", hookInputFile}
 
-	if configFile, _ := cmd.Flags().GetString("config"); configFile != "" {
-		args = append(args, "--config", configFile)
-	}
-
-	if volume, _ := cmd.Flags().GetString("volume"); volume != "" {
-		args = append(args, "--volume", volume)
-	}
-
-	if soundpack, _ := cmd.Flags().GetString("soundpack"); soundpack != "" {
-		args = append(args, "--soundpack", soundpack)
-	}
-
-	if silent, _ := cmd.Flags().GetBool("silent"); silent {
-		args = append(args, "--silent")
-	}
-
-	if hookAgent, _ := cmd.Flags().GetString("hook-agent"); hookAgent != "" {
-		args = append(args, "--hook-agent", hookAgent)
-	}
-
-	if hookEvent, _ := cmd.Flags().GetString("hook-event"); hookEvent != "" {
-		args = append(args, "--hook-event", hookEvent)
-	}
+	cmd.Flags().Visit(func(f *pflag.Flag) {
+		if slices.Contains(workerOwnFlags, f.Name) {
+			return
+		}
+		switch {
+		case f.Value.Type() == "bool" && f.Value.String() == "true":
+			args = append(args, "--"+f.Name)
+		case f.Value.Type() == "bool":
+			args = append(args, "--"+f.Name+"="+f.Value.String())
+		default:
+			args = append(args, "--"+f.Name, f.Value.String())
+		}
+	})
 
 	return args
 }
