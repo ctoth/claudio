@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -145,129 +146,119 @@ func (c *CLI) loadAndValidateConfig(cmd *cobra.Command) (*config.Config, error) 
 	return cfg, nil
 }
 
-// initializeAudioSystem sets up the soundpack resolver and audio backend
-func initializeAudioSystem(cmd *cobra.Command, cli *CLI, cfg *config.Config) error {
+// initializeAudioSystem sets up the soundpack resolver and, unless audio is
+// disabled, the audio backend.
+func (c *CLI) initializeAudioSystem(cfg *config.Config) error {
 	slog.Debug("initializing audio system",
 		"volume", cfg.Volume,
 		"soundpack", cfg.DefaultSoundpack,
 		"audio_backend", cfg.AudioBackend,
 		"enabled", cfg.Enabled)
 
-	// Initialize unified soundpack resolver with auto-detection
-	soundpackPaths := config.SoundpackPaths(cfg.DefaultSoundpack)
-	soundpackPaths = append(soundpackPaths, cfg.SoundpackPaths...)
-
-	// Check if configured soundpack exists before trying to create mapper
-	var mapper soundpack.PathMapper
-	var err error
-	var shouldTryPlatformFallback bool
-
-	// Check for embedded soundpack identifiers first
-	if strings.HasPrefix(cfg.DefaultSoundpack, "embedded:") {
-		// Load embedded soundpack directly
-		mapper, err = loadEmbeddedPlatformSoundpack(cfg.DefaultSoundpack)
-		if err != nil {
-			slog.Warn("failed to load embedded platform soundpack from config",
-				"identifier", cfg.DefaultSoundpack, "error", err)
-		}
-	} else if pack, ok := lookupSoundpack(cfg.DefaultSoundpack, cfg.SoundpackPaths); ok && pack.Type == soundpackTypeEmbedded {
-		mapper, err = loadEmbeddedPlatformSoundpack(pack.Identifier)
-		if err != nil {
-			slog.Warn("failed to load embedded platform soundpack from config name",
-				"name", cfg.DefaultSoundpack, "identifier", pack.Identifier, "error", err)
-		}
-	} else {
-		// A name resolves exactly as `soundpack list` shows it (the same
-		// lookup `soundpack use` validates against). Only a value that is
-		// not a known name is treated as a direct path.
-		resolvedPath := cfg.DefaultSoundpack
-		if ok {
-			slog.Debug("resolved soundpack name to path",
-				"name", cfg.DefaultSoundpack, "type", pack.Type, "path", pack.Path)
-			resolvedPath = pack.Path
-		}
-
-		// Check if resolved soundpack path exists
-		if _, statErr := os.Stat(resolvedPath); statErr != nil {
-			slog.Debug("configured soundpack not found, will try platform fallback",
-				"soundpack", cfg.DefaultSoundpack, "resolved", resolvedPath, "error", statErr)
-			shouldTryPlatformFallback = true
-		}
-
-		// Always try to create mapper first
-		mapper, err = soundpack.CreateSoundpackMapperWithBasePaths(
-			cfg.DefaultSoundpack,
-			resolvedPath,   // Try resolved path first
-			soundpackPaths, // Fallback to base directory search
-		)
-
-		// If the configured path doesn't exist, force platform fallback even if mapper creation succeeded
-		if shouldTryPlatformFallback && err == nil {
-			err = fmt.Errorf("configured soundpack path does not exist, trying platform fallback")
-		}
-	}
-
-	if err != nil {
-		slog.Debug("configured soundpack unavailable, trying platform JSON fallback",
-			"soundpack", cfg.DefaultSoundpack)
-
-		// Try platform JSON fallback (e.g., wsl.json, darwin.json, linux.json)
-		cfgMgr := config.NewConfigManager()
-		execDir := getPlatformExecutableDirectory()
-		platformSoundpack := cfgMgr.GetPlatformSoundpack(execDir)
-
-		if platformSoundpack != "default" {
-			slog.Debug("using platform-specific soundpack", "path", platformSoundpack)
-
-			var platformMapper soundpack.PathMapper
-			var platformErr error
-
-			if strings.HasPrefix(platformSoundpack, "embedded:") {
-				// Load from embedded content
-				platformMapper, platformErr = loadEmbeddedPlatformSoundpack(platformSoundpack)
-			} else {
-				// Load from file path (development scenario)
-				platformMapper, platformErr = soundpack.CreateSoundpackMapperWithBasePaths(
-					platformSoundpack,
-					platformSoundpack, // Platform JSON is already full path
-					[]string{},        // No additional paths needed
-				)
-			}
-
-			if platformErr == nil {
-				slog.Debug("platform soundpack loaded successfully", "identifier", platformSoundpack)
-				mapper = platformMapper
-			} else {
-				slog.Warn("platform soundpack failed to load",
-					"identifier", platformSoundpack,
-					"error", platformErr)
-				// Create empty directory mapper as final fallback
-				mapper = soundpack.NewDirectoryMapper("fallback", []string{})
-			}
-		} else {
-			slog.Debug("no platform soundpack found, using empty mapper")
-			// Create empty directory mapper as fallback to prevent crashes
-			mapper = soundpack.NewDirectoryMapper("fallback", []string{})
-		}
-	}
-
-	cli.soundpackResolver = soundpack.NewSoundpackResolver(mapper)
-
+	c.soundpackResolver = soundpack.NewSoundpackResolver(c.selectSoundpackMapper(cfg))
 	slog.Debug("soundpack resolver initialized",
 		"soundpack_name", cfg.DefaultSoundpack,
-		"resolver_type", cli.soundpackResolver.GetType(),
-		"resolver_name", cli.soundpackResolver.GetName())
+		"resolver_type", c.soundpackResolver.GetType(),
+		"resolver_name", c.soundpackResolver.GetName())
 
-	// Initialize audio backend system if not in silent mode
-	if cfg.Enabled {
-		err = cli.initializeAudioSystemWithBackend(cfg)
+	if !cfg.Enabled {
+		return nil
+	}
+	if err := c.initializeAudioSystemWithBackend(cfg); err != nil {
+		return fmt.Errorf("error initializing audio backend: %w", err)
+	}
+	slog.Debug("audio backend system initialized")
+	return nil
+}
+
+// embeddedSoundpackPrefix marks a soundpack source baked into the binary
+// ("embedded:<platform>.json") rather than a filesystem path.
+const embeddedSoundpackPrefix = "embedded:"
+
+func isEmbeddedSoundpack(source string) bool {
+	return strings.HasPrefix(source, embeddedSoundpackPrefix)
+}
+
+// errNoPlatformSoundpack reports that neither a platform JSON file next to
+// the executable nor an embedded platform pack exists.
+var errNoPlatformSoundpack = errors.New("no platform soundpack available")
+
+// selectSoundpackMapper returns the mapper for the configured soundpack,
+// falling back to the platform pack and then to an empty mapper, so a hook
+// never fails over a missing soundpack.
+func (c *CLI) selectSoundpackMapper(cfg *config.Config) soundpack.PathMapper {
+	mapper, err := configuredSoundpackMapper(cfg)
+	if err == nil {
+		return mapper
+	}
+	slog.Debug("configured soundpack unavailable, trying platform soundpack",
+		"soundpack", cfg.DefaultSoundpack, "error", err)
+
+	mapper, err = c.platformSoundpackMapper()
+	if err == nil {
+		return mapper
+	}
+	if errors.Is(err, errNoPlatformSoundpack) {
+		slog.Debug("no platform soundpack found, using empty mapper")
+	} else {
+		slog.Warn("platform soundpack failed to load", "error", err)
+	}
+	return soundpack.NewDirectoryMapper("fallback", []string{})
+}
+
+// resolveSoundpackSource turns a configured soundpack value into what to
+// load: an embedded identifier or a filesystem path. A known name resolves
+// exactly as `soundpack list` shows it (the lookup `soundpack use`
+// validates against); any other value is taken as a path.
+func resolveSoundpackSource(value string, configPaths []string) string {
+	if isEmbeddedSoundpack(value) {
+		return value
+	}
+	pack, ok := lookupSoundpack(value, configPaths)
+	if !ok {
+		return value
+	}
+	slog.Debug("resolved soundpack name", "name", value, "type", pack.Type, "path", pack.Path)
+	if pack.Type == soundpackTypeEmbedded {
+		return pack.Identifier
+	}
+	return pack.Path
+}
+
+// configuredSoundpackMapper loads cfg.DefaultSoundpack. A path that does
+// not exist is an error, so the caller falls back to the platform pack; a
+// path that exists but cannot be loaded as a pack is searched for by name
+// in the soundpack base directories.
+func configuredSoundpackMapper(cfg *config.Config) (soundpack.PathMapper, error) {
+	source := resolveSoundpackSource(cfg.DefaultSoundpack, cfg.SoundpackPaths)
+	if isEmbeddedSoundpack(source) {
+		mapper, err := loadEmbeddedPlatformSoundpack(source)
 		if err != nil {
-			return fmt.Errorf("error initializing audio backend: %w", err)
+			slog.Warn("failed to load embedded platform soundpack from config",
+				"soundpack", cfg.DefaultSoundpack, "identifier", source, "error", err)
 		}
-		slog.Debug("audio backend system initialized")
+		return mapper, err
 	}
 
-	return nil
+	if _, err := os.Stat(source); err != nil {
+		return nil, fmt.Errorf("configured soundpack %q: %w", cfg.DefaultSoundpack, err)
+	}
+	basePaths := append(config.SoundpackPaths(cfg.DefaultSoundpack), cfg.SoundpackPaths...)
+	return soundpack.CreateSoundpackMapperWithBasePaths(cfg.DefaultSoundpack, source, basePaths)
+}
+
+// platformSoundpackMapper loads the platform pack: a platform JSON file next
+// to the executable (development builds) or the embedded one.
+func (c *CLI) platformSoundpackMapper() (soundpack.PathMapper, error) {
+	source := c.configManager.GetPlatformSoundpack(getPlatformExecutableDirectory())
+	switch {
+	case source == "default":
+		return nil, errNoPlatformSoundpack
+	case isEmbeddedSoundpack(source):
+		return loadEmbeddedPlatformSoundpack(source)
+	default:
+		return soundpack.CreateSoundpackMapper(source, source)
+	}
 }
 
 // initializeAudioSystemWithBackend creates and configures the audio backend
@@ -400,7 +391,7 @@ func (c *CLI) runStdinMode(cmd *cobra.Command, _ []string) error {
 	c.initializeTracking(cfg)
 
 	// Initialize audio and soundpack systems
-	err = initializeAudioSystem(cmd, c, cfg)
+	err = c.initializeAudioSystem(cfg)
 	if err != nil {
 		return err
 	}
@@ -749,11 +740,11 @@ func getPlatformExecutableDirectory() string {
 
 // loadEmbeddedPlatformSoundpack loads a platform soundpack from embedded data
 func loadEmbeddedPlatformSoundpack(identifier string) (soundpack.PathMapper, error) {
-	if !strings.HasPrefix(identifier, "embedded:") {
+	filename, ok := strings.CutPrefix(identifier, embeddedSoundpackPrefix)
+	if !ok {
 		return nil, fmt.Errorf("invalid embedded soundpack identifier: %s", identifier)
 	}
 
-	filename := strings.TrimPrefix(identifier, "embedded:")
 	slog.Debug("loading embedded platform soundpack", "filename", filename)
 
 	data, err := config.GetEmbeddedPlatformSoundpackData(filename)

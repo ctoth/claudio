@@ -103,7 +103,7 @@ func TestCLIPlaySoundWithBackend(t *testing.T) {
 	cfg.AudioBackend = "oto"
 
 	// Need to initialize soundpack resolver for playSoundWithBackend to work
-	err := initializeAudioSystem(nil, cli, cfg)
+	err := cli.initializeAudioSystem(cfg)
 	if err != nil {
 		t.Fatalf("failed to initialize audio system: %v", err)
 	}

@@ -86,7 +86,7 @@ func TestEverySoundpackUseAcceptsResolvesAtRuntime(t *testing.T) {
 			}
 			runtimeCfg.Enabled = false
 			runtimeCLI := NewCLI()
-			if err := initializeAudioSystem(runtimeCLI.rootCmd, runtimeCLI, runtimeCfg); err != nil {
+			if err := runtimeCLI.initializeAudioSystem(runtimeCfg); err != nil {
 				t.Fatalf("runtime init failed: %v", err)
 			}
 			resolved, err := runtimeCLI.soundpackResolver.ResolveSound("default.wav")
@@ -130,7 +130,7 @@ func TestSoundpackNamePrefersListedPackOverWorkingDirectory(t *testing.T) {
 	cfg.DefaultSoundpack = "shadowed"
 	cfg.Enabled = false
 	cli := NewCLI()
-	if err := initializeAudioSystem(cli.rootCmd, cli, cfg); err != nil {
+	if err := cli.initializeAudioSystem(cfg); err != nil {
 		t.Fatal(err)
 	}
 	resolved, err := cli.soundpackResolver.ResolveSound("default.wav")
