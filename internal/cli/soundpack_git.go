@@ -725,21 +725,14 @@ func lockSoundpackRegistry() (*flock.Flock, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return nil, fmt.Errorf("failed to create soundpack registry directory: %w", err)
 	}
-	lockPath := path + ".lock"
-	lock := flock.New(lockPath)
-	for attempt := 0; attempt < 5; attempt++ {
-		locked, err := lock.TryLock()
-		if err != nil {
-			return nil, fmt.Errorf("failed to lock soundpack registry: %w", err)
-		}
-		if locked {
-			return lock, nil
-		}
-		if attempt < 4 {
-			time.Sleep(200 * time.Millisecond)
-		}
+	lock, err := safeio.LockFile(path + ".lock")
+	if errors.Is(err, safeio.ErrLockHeld) {
+		return nil, fmt.Errorf("another soundpack registry write is already running")
 	}
-	return nil, fmt.Errorf("another soundpack registry write is already running")
+	if err != nil {
+		return nil, fmt.Errorf("failed to lock soundpack registry: %w", err)
+	}
+	return lock, nil
 }
 
 func lockSoundpackName(name string) (*flock.Flock, error) {
@@ -750,20 +743,14 @@ func lockSoundpackName(name string) (*flock.Flock, error) {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create managed soundpack directory: %w", err)
 	}
-	lock := flock.New(filepath.Join(dir, "."+name+".lock"))
-	for attempt := 0; attempt < 5; attempt++ {
-		locked, err := lock.TryLock()
-		if err != nil {
-			return nil, fmt.Errorf("failed to lock managed soundpack %q: %w", name, err)
-		}
-		if locked {
-			return lock, nil
-		}
-		if attempt < 4 {
-			time.Sleep(200 * time.Millisecond)
-		}
+	lock, err := safeio.LockFile(filepath.Join(dir, "."+name+".lock"))
+	if errors.Is(err, safeio.ErrLockHeld) {
+		return nil, fmt.Errorf("another operation for managed soundpack %q is already running", name)
 	}
-	return nil, fmt.Errorf("another operation for managed soundpack %q is already running", name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to lock managed soundpack %q: %w", name, err)
+	}
+	return lock, nil
 }
 
 func gitSoundpackBaseDir() string {
