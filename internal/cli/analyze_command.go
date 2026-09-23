@@ -55,14 +55,66 @@ func newAnalyzeCommand(c *CLI) *cobra.Command {
 	return analyzeCmd
 }
 
+// analyzeFilterFlags are the query flags both analyze subcommands take.
+type analyzeFilterFlags struct {
+	days     int
+	tool     string
+	category string
+	limit    int
+	preset   string
+}
+
+func (f *analyzeFilterFlags) register(cmd *cobra.Command) {
+	cmd.Flags().IntVar(&f.days, "days", 7, "Number of days to analyze (0 = all time)")
+	cmd.Flags().StringVar(&f.tool, "tool", "", "Filter by specific tool name")
+	cmd.Flags().StringVar(&f.category, "category", "", "Filter by category ("+strings.Join(analyzeCategories, ", ")+")")
+	cmd.Flags().IntVar(&f.limit, "limit", 20, "Maximum number of results to show")
+	cmd.Flags().StringVar(&f.preset, "preset", "", "Date preset ("+strings.Join(tracking.DatePresets, ", ")+")")
+}
+
+// filter validates the flag values and returns the query they select,
+// most frequent first.
+func (f *analyzeFilterFlags) filter() (tracking.QueryFilter, error) {
+	if err := validateAnalyzeFilterValues(f.category, f.preset); err != nil {
+		return tracking.QueryFilter{}, err
+	}
+	return tracking.QueryFilter{
+		Days:       f.days,
+		Tool:       f.tool,
+		Category:   f.category,
+		Limit:      f.limit,
+		DatePreset: f.preset,
+		OrderBy:    "frequency",
+		OrderDesc:  true,
+	}, nil
+}
+
+// openAnalyzeDB validates the filter flags, loads the config (honoring
+// --config, so an override reaches the tracking database path) and opens
+// the tracking database. With tracking off it prints a hint and returns a
+// nil db: there is nothing to analyze, which is not an error.
+func (c *CLI) openAnalyzeDB(cmd *cobra.Command, flags *analyzeFilterFlags) (*sql.DB, tracking.QueryFilter, error) {
+	filter, err := flags.filter()
+	if err != nil {
+		return nil, filter, err
+	}
+	slog.Debug("running analyze command", "command", cmd.Name(), "filter", filter)
+
+	cfg, err := c.loadAndValidateConfig(cmd)
+	if err != nil {
+		return nil, filter, err
+	}
+	c.initializeTracking(cfg)
+	if c.trackingDB == nil {
+		fmt.Fprintln(cmd.OutOrStdout(), "Sound tracking is not enabled or database not available.")
+		fmt.Fprintln(cmd.OutOrStdout(), "Enable tracking with CLAUDIO_SOUND_TRACKING=true")
+	}
+	return c.trackingDB, filter, nil
+}
+
 // newAnalyzeMissingCommand creates the analyze missing subcommand
 func newAnalyzeMissingCommand(c *CLI) *cobra.Command {
-	var days int
-	var tool string
-	var category string
-	var limit int
-	var preset string
-
+	var flags analyzeFilterFlags
 	missingCmd := &cobra.Command{
 		Use:   "missing",
 		Short: "Show missing sounds that were requested but not found",
@@ -81,66 +133,33 @@ Examples:
   claudio analyze missing --preset today    # Today only
   claudio analyze missing --tool Edit       # Edit tool only
   claudio analyze missing --category error  # Error sounds only`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return c.runAnalyzeMissing(cmd, days, tool, category, limit, preset)
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return c.runAnalyzeMissing(cmd, &flags)
 		},
 	}
-
-	// Add flags - now consistent with analyze usage
-	missingCmd.Flags().IntVar(&days, "days", 7, "Number of days to analyze (0 = all time)")
-	missingCmd.Flags().StringVar(&tool, "tool", "", "Filter by specific tool name")
-	missingCmd.Flags().StringVar(&category, "category", "", "Filter by category ("+strings.Join(analyzeCategories, ", ")+")")
-	missingCmd.Flags().IntVar(&limit, "limit", 20, "Maximum number of results to show")
-	missingCmd.Flags().StringVar(&preset, "preset", "", "Date preset ("+strings.Join(tracking.DatePresets, ", ")+")")
-
+	flags.register(missingCmd)
 	return missingCmd
 }
 
 // runAnalyzeMissing executes the analyze missing command
-func (c *CLI) runAnalyzeMissing(cmd *cobra.Command, days int, tool, category string, limit int, preset string) error {
-	slog.Debug("running analyze missing command", "days", days, "tool", tool, "category", category, "limit", limit, "preset", preset)
-	if err := validateAnalyzeFilterValues(category, preset); err != nil {
+func (c *CLI) runAnalyzeMissing(cmd *cobra.Command, flags *analyzeFilterFlags) error {
+	db, filter, err := c.openAnalyzeDB(cmd, flags)
+	if err != nil || db == nil {
 		return err
 	}
 
-	// Load config (honoring --config) and pass to tracking init so the
-	// override reaches the tracking database path.
-	cfg, cfgErr := c.loadAndValidateConfig(cmd)
-	if cfgErr != nil {
-		return cfgErr
-	}
-	c.initializeTracking(cfg)
-
-	// Check if tracking database is available
-	if c.trackingDB == nil {
-		return fmt.Errorf("sound tracking is not enabled or database is not available")
-	}
-
-	// Build query filter using new common infrastructure
-	filter := tracking.QueryFilter{
-		Days:       days,
-		Tool:       tool,
-		Category:   category,
-		Limit:      limit,
-		DatePreset: preset,
-		OrderBy:    "frequency",
-		OrderDesc:  true,
-	}
-
-	// Get missing sounds data
-	missingSounds, err := tracking.GetMissingSounds(c.trackingDB, filter)
+	missingSounds, err := tracking.GetMissingSounds(db, filter)
 	if err != nil {
 		return fmt.Errorf("failed to analyze missing sounds: %w", err)
 	}
 
 	// Get summary statistics
-	summary, err := tracking.GetMissingSoundsSummary(c.trackingDB, filter)
+	summary, err := tracking.GetMissingSoundsSummary(db, filter)
 	if err != nil {
 		slog.Warn("failed to get missing sounds summary", "error", err)
 		// Continue without summary - not critical
 	}
 
-	// TDD Step 3 GREEN: Replace flat output with hierarchical tool-grouped output
 	return outputMissingSoundsHierarchical(cmd.OutOrStdout(), missingSounds, summary, filter)
 }
 
@@ -420,18 +439,10 @@ func sortSoundsByRequestCount(sounds []tracking.MissingSound) []tracking.Missing
 	return sorted
 }
 
-// TDD RED: New analyze usage command implementation
-
 // newAnalyzeUsageCommand creates the analyze usage subcommand
 func newAnalyzeUsageCommand(c *CLI) *cobra.Command {
-	var days int
-	var tool string
-	var category string
-	var limit int
-	var preset string
-	var showChains bool
-	var showSummary bool
-
+	var flags analyzeFilterFlags
+	var showChains, showSummary bool
 	usageCmd := &cobra.Command{
 		Use:   "usage",
 		Short: "Show actual sound usage patterns and statistics",
@@ -455,67 +466,30 @@ Examples:
   claudio analyze usage --category success # Success sounds only
   claudio analyze usage --show-chains     # Include chain-type statistics
   claudio analyze usage --show-summary    # Show summary statistics`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return c.runAnalyzeUsage(cmd, days, tool, category, limit, preset, showChains, showSummary)
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return c.runAnalyzeUsage(cmd, &flags, showChains, showSummary)
 		},
 	}
-
-	// Add flags
-	usageCmd.Flags().IntVar(&days, "days", 7, "Number of days to analyze (0 = all time)")
-	usageCmd.Flags().StringVar(&tool, "tool", "", "Filter by specific tool name")
-	usageCmd.Flags().StringVar(&category, "category", "", "Filter by category ("+strings.Join(analyzeCategories, ", ")+")")
-	usageCmd.Flags().IntVar(&limit, "limit", 20, "Maximum number of results to show")
-	usageCmd.Flags().StringVar(&preset, "preset", "", "Date preset ("+strings.Join(tracking.DatePresets, ", ")+")")
+	flags.register(usageCmd)
 	usageCmd.Flags().BoolVar(&showChains, "show-chains", false, "Show per-chain-type statistics")
 	usageCmd.Flags().BoolVar(&showSummary, "show-summary", false, "Show usage summary statistics")
-
 	return usageCmd
 }
 
 // runAnalyzeUsage executes the analyze usage command
-func (c *CLI) runAnalyzeUsage(cmd *cobra.Command, days int, tool, category string, limit int, preset string, showChains, showSummary bool) error {
-	slog.Debug("running analyze usage command", "days", days, "tool", tool, "category", category, "limit", limit, "preset", preset)
-	if err := validateAnalyzeFilterValues(category, preset); err != nil {
+func (c *CLI) runAnalyzeUsage(cmd *cobra.Command, flags *analyzeFilterFlags, showChains, showSummary bool) error {
+	db, filter, err := c.openAnalyzeDB(cmd, flags)
+	if err != nil || db == nil {
 		return err
 	}
 
-	// Load config (honoring --config) and pass to tracking init so the
-	// override reaches the tracking database path.
-	cfg, cfgErr := c.loadAndValidateConfig(cmd)
-	if cfgErr != nil {
-		return cfgErr
-	}
-	c.initializeTracking(cfg)
-
-	// Check if tracking database is available
-	if c.trackingDB == nil {
-		fmt.Fprintln(cmd.OutOrStdout(), "Sound tracking is not enabled or database not available.")
-		fmt.Fprintln(cmd.OutOrStdout(), "Enable tracking with CLAUDIO_SOUND_TRACKING=true")
-		return nil
-	}
-
-	// Build query filter
-	filter := tracking.QueryFilter{
-		Days:       days,
-		Tool:       tool,
-		Category:   category,
-		Limit:      limit,
-		DatePreset: preset,
-		OrderBy:    "frequency",
-		OrderDesc:  true,
-	}
-
-	// Get sound usage statistics
-	usage, err := tracking.GetSoundUsage(c.trackingDB, filter)
+	usage, err := tracking.GetSoundUsage(db, filter)
 	if err != nil {
 		return fmt.Errorf("failed to get sound usage: %w", err)
 	}
-
-	// Output results
-	if err := outputUsageStatistics(cmd.OutOrStdout(), usage, filter, showChains, showSummary, c.trackingDB); err != nil {
+	if err := outputUsageStatistics(cmd.OutOrStdout(), usage, filter, showChains, showSummary, db); err != nil {
 		return fmt.Errorf("failed to output usage statistics: %w", err)
 	}
-
 	return nil
 }
 
