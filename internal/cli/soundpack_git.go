@@ -165,6 +165,9 @@ func runSoundpackAdd(cmd *cobra.Command, source, requestedName, ref, subdir stri
 	if err := validateGitSubdir(subdir); err != nil {
 		return err
 	}
+	if err := validateGitRef(ref); err != nil {
+		return err
+	}
 	if err := validateConfigMutationTarget(cmd); err != nil {
 		return fmt.Errorf("failed to load config before adding soundpack: %w", err)
 	}
@@ -238,11 +241,12 @@ func runSoundpackAdd(cmd *cobra.Command, source, requestedName, ref, subdir stri
 			_ = removeManagedGitClone(stagingPath)
 		}
 	}()
-	if _, err := runGit("", "clone", url, stagingPath); err != nil {
+	ctx := commandContext(cmd)
+	if _, err := runGit(ctx, "", "clone", "--", url, stagingPath); err != nil {
 		return fmt.Errorf("failed to clone soundpack repo: %w", err)
 	}
 	if ref != "" {
-		if _, err := runGit(stagingPath, "checkout", ref); err != nil {
+		if err := checkoutGitRef(ctx, stagingPath, ref); err != nil {
 			return fmt.Errorf("failed to check out ref %q: %w", ref, err)
 		}
 	}
@@ -257,7 +261,7 @@ func runSoundpackAdd(cmd *cobra.Command, source, requestedName, ref, subdir stri
 		}
 	}
 
-	commit, err := currentGitCommit(stagingPath)
+	commit, err := currentGitCommit(ctx, stagingPath)
 	if err != nil {
 		return err
 	}
@@ -371,7 +375,7 @@ func runSoundpackUpdate(cmd *cobra.Command, name string, all, force bool) error 
 	}
 
 	for _, packName := range names {
-		updated, err := updateRegisteredGitSoundpack(packName, force)
+		updated, err := updateRegisteredGitSoundpack(commandContext(cmd), packName, force)
 		if err != nil {
 			return err
 		}
@@ -381,7 +385,7 @@ func runSoundpackUpdate(cmd *cobra.Command, name string, all, force bool) error 
 	return nil
 }
 
-func updateRegisteredGitSoundpack(name string, force bool) (gitSoundpackRecord, error) {
+func updateRegisteredGitSoundpack(ctx context.Context, name string, force bool) (gitSoundpackRecord, error) {
 	nameLock, err := lockSoundpackName(name)
 	if err != nil {
 		return gitSoundpackRecord{}, err
@@ -409,7 +413,7 @@ func updateRegisteredGitSoundpack(name string, force bool) (gitSoundpackRecord, 
 		return gitSoundpackRecord{}, fmt.Errorf("managed git soundpack %q not found", name)
 	}
 
-	updated, err := updateGitSoundpack(record, force)
+	updated, err := updateGitSoundpack(ctx, record, force)
 	if err != nil {
 		return gitSoundpackRecord{}, err
 	}
@@ -544,7 +548,7 @@ func runSoundpackStatus(cmd *cobra.Command, name string) error {
 		state := "missing"
 		if _, err := os.Stat(record.Path); err == nil {
 			state = "clean"
-			dirty, err := gitWorktreeDirty(record.Path)
+			dirty, err := gitWorktreeDirty(commandContext(cmd), record.Path)
 			if err != nil {
 				state = "error"
 			} else if dirty {
@@ -562,12 +566,15 @@ func runSoundpackStatus(cmd *cobra.Command, name string) error {
 	return nil
 }
 
-func updateGitSoundpack(record gitSoundpackRecord, force bool) (gitSoundpackRecord, error) {
+func updateGitSoundpack(ctx context.Context, record gitSoundpackRecord, force bool) (gitSoundpackRecord, error) {
+	if err := validateGitRef(record.Ref); err != nil {
+		return record, fmt.Errorf("managed git soundpack %q has an invalid ref: %w", record.Name, err)
+	}
 	if _, err := os.Stat(record.Path); err != nil {
 		return record, fmt.Errorf("managed clone for %q is missing: %w", record.Name, err)
 	}
 
-	dirty, err := gitWorktreeDirty(record.Path)
+	dirty, err := gitWorktreeDirty(ctx, record.Path)
 	if err != nil {
 		return record, err
 	}
@@ -575,29 +582,29 @@ func updateGitSoundpack(record gitSoundpackRecord, force bool) (gitSoundpackReco
 		if !force {
 			return record, fmt.Errorf("managed clone for %q has local changes; use --force to discard them", record.Name)
 		}
-		if _, err := runGit(record.Path, "reset", "--hard"); err != nil {
+		if _, err := runGit(ctx, record.Path, "reset", "--hard"); err != nil {
 			return record, err
 		}
-		if _, err := runGit(record.Path, "clean", "-fd"); err != nil {
+		if _, err := runGit(ctx, record.Path, "clean", "-fd"); err != nil {
 			return record, err
 		}
 	}
 
 	previousCommit := record.ResolvedCommit
 	if previousCommit == "" {
-		previousCommit, _ = currentGitCommit(record.Path)
+		previousCommit, _ = currentGitCommit(ctx, record.Path)
 	}
 
-	if _, err := runGit(record.Path, "fetch", "--all", "--tags", "--prune"); err != nil {
+	if _, err := runGit(ctx, record.Path, "fetch", "--all", "--tags", "--prune"); err != nil {
 		return record, fmt.Errorf("failed to fetch updates for %q: %w", record.Name, err)
 	}
 	if record.Ref != "" {
-		if _, err := runGit(record.Path, "checkout", record.Ref); err != nil {
+		if err := checkoutGitRef(ctx, record.Path, record.Ref); err != nil {
 			return record, fmt.Errorf("failed to check out ref %q for %q: %w", record.Ref, record.Name, err)
 		}
 	}
-	if branch, _ := currentGitBranch(record.Path); branch != "" {
-		if _, err := runGit(record.Path, "pull", "--ff-only"); err != nil {
+	if branch, _ := currentGitBranch(ctx, record.Path); branch != "" {
+		if _, err := runGit(ctx, record.Path, "pull", "--ff-only"); err != nil {
 			return record, fmt.Errorf("failed to update %q: %w", record.Name, err)
 		}
 	}
@@ -605,12 +612,12 @@ func updateGitSoundpack(record gitSoundpackRecord, force bool) (gitSoundpackReco
 	playablePath := playablePathForRecord(record)
 	if err := validateSoundpackInstallPath(playablePath); err != nil {
 		if previousCommit != "" {
-			_, _ = runGit(record.Path, "reset", "--hard", previousCommit)
+			_, _ = runGit(ctx, record.Path, "reset", "--hard", previousCommit)
 		}
 		return record, fmt.Errorf("validation failed after update for %q: %w", record.Name, err)
 	}
 
-	commit, err := currentGitCommit(record.Path)
+	commit, err := currentGitCommit(ctx, record.Path)
 	if err != nil {
 		return record, err
 	}
@@ -888,14 +895,38 @@ func requireGit() error {
 	return nil
 }
 
-func runGit(dir string, args ...string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
+// gitCommandTimeout bounds every git invocation so a hung remote cannot
+// wedge the CLI.
+const gitCommandTimeout = 2 * time.Minute
 
+// gitCommand builds a non-interactive git invocation. GIT_TERMINAL_PROMPT=0
+// makes git fail instead of blocking on a credential prompt nobody can
+// answer (hooks and detached workers have no terminal).
+func gitCommand(ctx context.Context, dir string, args ...string) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	if dir != "" {
 		cmd.Dir = dir
 	}
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	return cmd
+}
+
+// commandContext returns the cobra command's context, or Background when
+// the command was run without one.
+func commandContext(cmd *cobra.Command) context.Context {
+	if cmd != nil {
+		if ctx := cmd.Context(); ctx != nil {
+			return ctx
+		}
+	}
+	return context.Background()
+}
+
+func runGit(ctx context.Context, dir string, args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, gitCommandTimeout)
+	defer cancel()
+
+	cmd := gitCommand(ctx, dir, args...)
 	output, err := cmd.CombinedOutput()
 	text := strings.TrimSpace(string(output))
 	if ctx.Err() == context.DeadlineExceeded {
@@ -910,24 +941,59 @@ func runGit(dir string, args ...string) (string, error) {
 	return text, nil
 }
 
-func currentGitCommit(repoPath string) (string, error) {
-	commit, err := runGit(repoPath, "rev-parse", "HEAD")
+// validateGitRef rejects refs git would parse as an option. Refs come from
+// the --ref flag and from the registry file, which is attacker-influenced.
+func validateGitRef(ref string) error {
+	if strings.HasPrefix(ref, "-") {
+		return fmt.Errorf("invalid git ref %q: refs may not start with '-'", ref)
+	}
+	return nil
+}
+
+// checkoutGitRef detaches HEAD at ref. The remote-tracking branch
+// (origin/<ref>) wins over a local name so branch refs advance after a
+// fetch; tags and commit ids resolve directly. --detach makes git treat the
+// argument as a commit, never as a pathspec.
+func checkoutGitRef(ctx context.Context, repoPath, ref string) error {
+	if err := validateGitRef(ref); err != nil {
+		return err
+	}
+	commit, err := resolveGitRef(ctx, repoPath, ref)
+	if err != nil {
+		return err
+	}
+	_, err = runGit(ctx, repoPath, "checkout", "--detach", commit)
+	return err
+}
+
+func resolveGitRef(ctx context.Context, repoPath, ref string) (string, error) {
+	for _, candidate := range []string{"refs/remotes/origin/" + ref, ref} {
+		commit, err := runGit(ctx, repoPath, "rev-parse", "--verify", "--quiet", candidate+"^{commit}")
+		if err == nil && commit != "" {
+			return commit, nil
+		}
+	}
+	return "", fmt.Errorf("cannot resolve git ref %q", ref)
+}
+
+func currentGitCommit(ctx context.Context, repoPath string) (string, error) {
+	commit, err := runGit(ctx, repoPath, "rev-parse", "HEAD")
 	if err != nil {
 		return "", err
 	}
 	return strings.TrimSpace(commit), nil
 }
 
-func currentGitBranch(repoPath string) (string, error) {
-	branch, err := runGit(repoPath, "symbolic-ref", "--short", "-q", "HEAD")
+func currentGitBranch(ctx context.Context, repoPath string) (string, error) {
+	branch, err := runGit(ctx, repoPath, "symbolic-ref", "--short", "-q", "HEAD")
 	if err != nil {
 		return "", err
 	}
 	return strings.TrimSpace(branch), nil
 }
 
-func gitWorktreeDirty(repoPath string) (bool, error) {
-	status, err := runGit(repoPath, "status", "--porcelain")
+func gitWorktreeDirty(ctx context.Context, repoPath string) (bool, error) {
+	status, err := runGit(ctx, repoPath, "status", "--porcelain")
 	if err != nil {
 		return false, err
 	}

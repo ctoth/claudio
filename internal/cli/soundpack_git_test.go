@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -162,7 +163,7 @@ func TestSoundpackReplaceFailurePreservesExistingManagedPack(t *testing.T) {
 		t.Fatalf("initial add exited %d", code)
 	}
 	clone := filepath.Join(dataDir, "claudio", "soundpack-repos", "replace-safe")
-	before, err := currentGitCommit(clone)
+	before, err := currentGitCommit(context.Background(), clone)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +171,7 @@ func TestSoundpackReplaceFailurePreservesExistingManagedPack(t *testing.T) {
 	if code := cli.Run([]string{"claudio", "soundpack", "add", repo, "--name", "replace-safe", "--replace", "--ref", "missing-ref"}, nil, &bytes.Buffer{}, &bytes.Buffer{}); code == 0 {
 		t.Fatal("expected invalid replacement ref to fail")
 	}
-	after, err := currentGitCommit(clone)
+	after, err := currentGitCommit(context.Background(), clone)
 	if err != nil {
 		t.Fatalf("existing clone was lost: %v", err)
 	}
@@ -474,13 +475,13 @@ func createTestGitSoundpackRepo(t *testing.T) string {
 	repoPath := filepath.Join(t.TempDir(), "repo")
 	createDummyWAV(t, filepath.Join(repoPath, "success", "success.wav"))
 
-	if _, err := runGit(repoPath, "init"); err != nil {
+	if _, err := runGit(context.Background(), repoPath, "init"); err != nil {
 		t.Fatalf("git init failed: %v", err)
 	}
-	if _, err := runGit(repoPath, "config", "user.email", "test@example.com"); err != nil {
+	if _, err := runGit(context.Background(), repoPath, "config", "user.email", "test@example.com"); err != nil {
 		t.Fatalf("git config user.email failed: %v", err)
 	}
-	if _, err := runGit(repoPath, "config", "user.name", "Test User"); err != nil {
+	if _, err := runGit(context.Background(), repoPath, "config", "user.name", "Test User"); err != nil {
 		t.Fatalf("git config user.name failed: %v", err)
 	}
 	commitTestGitRepo(t, repoPath, "initial soundpack")
@@ -489,10 +490,10 @@ func createTestGitSoundpackRepo(t *testing.T) string {
 
 func commitTestGitRepo(t *testing.T, repoPath, message string) {
 	t.Helper()
-	if _, err := runGit(repoPath, "add", "."); err != nil {
+	if _, err := runGit(context.Background(), repoPath, "add", "."); err != nil {
 		t.Fatalf("git add failed: %v", err)
 	}
-	if _, err := runGit(repoPath, "commit", "-m", message); err != nil {
+	if _, err := runGit(context.Background(), repoPath, "commit", "-m", message); err != nil {
 		t.Fatalf("git commit failed: %v", err)
 	}
 }
