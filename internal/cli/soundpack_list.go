@@ -33,6 +33,7 @@ func runSoundpackList(cmd *cobra.Command) error {
 		return fmt.Errorf("failed to discover soundpacks: %w", err)
 	}
 
+	packs = withSoundCounts(packs)
 	slog.Info("discovered soundpacks", "count", len(packs))
 
 	// Calculate column widths for tabular formatting

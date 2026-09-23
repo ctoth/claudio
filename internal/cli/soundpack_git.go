@@ -629,21 +629,13 @@ func discoverManagedGitSoundpacks() []soundpackInfo {
 	packs := make([]soundpackInfo, 0, len(registry.Packs))
 	for _, record := range registry.Packs {
 		playablePath := playablePathForRecord(record)
-		info, err := os.Stat(playablePath)
-		if err != nil {
+		if _, err := os.Stat(playablePath); err != nil {
 			continue
 		}
-		count := 0
-		if info.IsDir() {
-			count = countAudioFiles(playablePath)
-		} else if strings.HasSuffix(strings.ToLower(playablePath), ".json") {
-			count = countJSONMappings(playablePath)
-		}
 		packs = append(packs, soundpackInfo{
-			Name:       record.Name,
-			Type:       "git",
-			SoundCount: count,
-			Path:       playablePath,
+			Name: record.Name,
+			Type: "git",
+			Path: playablePath,
 		})
 	}
 	return packs
