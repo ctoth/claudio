@@ -156,17 +156,11 @@ func ParseHookEvent(data []byte) (*HookEvent, error) {
 // payload format does not include hook_event_name.
 func ParseHookEventWithDefault(data []byte, defaultEvent string) (*HookEvent, error) {
 	if len(data) == 0 {
-		err := fmt.Errorf("empty JSON data")
-		slog.Error("parse failed: empty data", "error", err)
-		return nil, err
+		return nil, fmt.Errorf("empty JSON data")
 	}
 
-	slog.Debug("parsing hook JSON", "size_bytes", len(data))
-
 	var event HookEvent
-	err := json.Unmarshal(data, &event)
-	if err != nil {
-		slog.Error("failed to unmarshal hook JSON", "error", err, "data_preview", string(data[:min(100, len(data))]))
+	if err := json.Unmarshal(data, &event); err != nil {
 		return nil, fmt.Errorf("failed to parse hook JSON: %w", err)
 	}
 	if err := event.applyCompatibilityAliases(data); err != nil {
@@ -179,29 +173,14 @@ func ParseHookEventWithDefault(data []byte, defaultEvent string) (*HookEvent, er
 
 	// Validate required fields
 	if event.SessionID == "" {
-		err := fmt.Errorf("missing required field: session_id")
-		slog.Error("validation failed", "error", err)
-		return nil, err
+		return nil, fmt.Errorf("missing required field: session_id")
 	}
-
 	if event.EventName == "" {
-		err := fmt.Errorf("missing required field: hook_event_name")
-		slog.Error("validation failed", "error", err)
-		return nil, err
+		return nil, fmt.Errorf("missing required field: hook_event_name")
 	}
-
 	if event.CWD == "" {
-		err := fmt.Errorf("missing required field: cwd")
-		slog.Error("validation failed", "error", err)
-		return nil, err
+		return nil, fmt.Errorf("missing required field: cwd")
 	}
-
-	slog.Debug("hook event parsed successfully",
-		"event_name", event.EventName,
-		"session_id", event.SessionID,
-		"tool_name", getStringPtr(event.ToolName),
-		"has_tool_response", event.ToolResponse != nil)
-
 	return &event, nil
 }
 
@@ -229,7 +208,6 @@ type hookEventAliases struct {
 func (e *HookEvent) applyCompatibilityAliases(data []byte) error {
 	var aliases hookEventAliases
 	if err := json.Unmarshal(data, &aliases); err != nil {
-		slog.Error("failed to unmarshal hook JSON aliases", "error", err)
 		return fmt.Errorf("failed to parse hook JSON aliases: %w", err)
 	}
 	if e.SessionID == "" {
@@ -726,33 +704,22 @@ var (
 	idleKeywords       = []string{"idle", "been idle", "idle for"}
 )
 
-// detectNotificationType analyzes notification message content to generate specific sound hints
+// detectNotificationType analyzes notification message content to generate
+// specific sound hints. The message is user content and is never logged.
 func (e *HookEvent) detectNotificationType() string {
 	if e.Message == nil {
-		slog.Debug("detectNotificationType: no message field, using generic notification")
 		return "notification"
 	}
-
 	message := strings.ToLower(*e.Message)
-	slog.Debug("detectNotificationType: analyzing message", "message", *e.Message)
-
-	// Check for permission-related notifications
 	for _, keyword := range permissionKeywords {
 		if strings.Contains(message, keyword) {
-			slog.Debug("detectNotificationType: detected permission notification", "keyword", keyword)
 			return "notification-permission"
 		}
 	}
-
-	// Check for idle-related notifications
 	for _, keyword := range idleKeywords {
 		if strings.Contains(message, keyword) {
-			slog.Debug("detectNotificationType: detected idle notification", "keyword", keyword)
 			return "notification-idle"
 		}
 	}
-
-	// Default fallback for generic notifications
-	slog.Debug("detectNotificationType: using generic notification fallback")
 	return "notification"
 }

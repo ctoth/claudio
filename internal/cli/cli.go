@@ -2,7 +2,9 @@ package cli
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -284,6 +286,13 @@ func (c *CLI) initializeAudioSystemWithBackend(cfg *config.Config) error {
 	return nil
 }
 
+// payloadFingerprint is a short SHA-256 prefix that identifies a hook
+// payload in logs without revealing its content.
+func payloadFingerprint(data []byte) string {
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:6])
+}
+
 // readHookInput reads hook JSON from stdin or an internal payload file.
 func readHookInput(cmd *cobra.Command) ([]byte, error) {
 	hookInputFile, _ := cmd.Flags().GetString("hook-input-file")
@@ -330,6 +339,11 @@ func processHookInput(cmd *cobra.Command, cli *CLI, cfg *config.Config, inputDat
 	defaultEvent, _ := cmd.Flags().GetString("hook-event")
 	hookEvent, err := hooks.ParseHookEventWithDefault(inputData, defaultEvent)
 	if err != nil {
+		// The payload can carry prompts and tool output: identify it by
+		// size and hash only. Run logs the error itself.
+		slog.Warn("hook payload rejected",
+			"payload_bytes", len(inputData),
+			"payload_sha256", payloadFingerprint(inputData))
 		return fmt.Errorf("error parsing hook JSON: %w", err)
 	}
 
