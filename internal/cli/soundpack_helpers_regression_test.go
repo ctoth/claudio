@@ -9,6 +9,7 @@ import (
 
 	"claudio.click/internal/config"
 	"claudio.click/internal/soundpack"
+	"github.com/spf13/afero"
 )
 
 func TestCanonicalInstalledManifestUsesMetadataNameWithoutPhantomAlias(t *testing.T) {
@@ -30,7 +31,7 @@ func TestCanonicalInstalledManifestUsesMetadataNameWithoutPhantomAlias(t *testin
 	}
 	cfg := config.NewConfigManager().GetDefaultConfig()
 	cfg.SoundpackPaths = []string{manifestPath}
-	if err := config.NewConfigManager().SaveToFile(cfg, filepath.Join(configDir, "claudio", "config.json")); err != nil {
+	if err := config.WriteConfigFile(afero.NewOsFs(), filepath.Join(configDir, "claudio", "config.json"), cfg); err != nil {
 		t.Fatal(err)
 	}
 

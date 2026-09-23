@@ -74,8 +74,6 @@ func spawnDetachedHookWorker(cmd *cobra.Command, inputData []byte) error {
 	// exec.Cmd's parent-stdio defaults, defeating detach.
 	detachStdio(childCmd)
 
-	childCmd.Env = append(os.Environ(), "CLAUDIO_DAEMON_CHILD=1")
-
 	if err := childCmd.Start(); err != nil {
 		_ = os.Remove(hookPath)
 		return fmt.Errorf("failed to start detached worker: %w", err)

@@ -3,8 +3,6 @@ package audio
 import (
 	"log/slog"
 	"os/exec"
-
-	"claudio.click/internal/platform"
 )
 
 // CommandExists checks if a command is available in the system's PATH using exec.LookPath
@@ -19,12 +17,8 @@ func CommandExists(command string) bool {
 	return exists
 }
 
-// DetectOptimalBackend determines the best audio backend for the current system
-func DetectOptimalBackend() string {
-	return detectOptimalBackendWithChecker(platform.IsWSL(), CommandExists)
-}
-
-// detectOptimalBackendWithChecker allows dependency injection for testing
+// detectOptimalBackendWithChecker picks the "auto" backend; the command
+// checker is injected so tests can simulate any PATH.
 func detectOptimalBackendWithChecker(isWSL bool, commandChecker func(string) bool) string {
 	slog.Debug("detecting optimal audio backend", "is_wsl", isWSL)
 

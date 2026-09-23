@@ -4,6 +4,8 @@ import (
 	"reflect"
 	"runtime"
 	"testing"
+
+	"claudio.click/internal/platform"
 )
 
 // TestPlatformDetectionInterface tests that the audio package's
@@ -11,7 +13,6 @@ import (
 // signatures. WSL detection itself now lives in internal/platform.
 func TestPlatformDetectionInterface(t *testing.T) {
 	_ = CommandExists("test")
-	_ = DetectOptimalBackend()
 }
 
 func TestCommandExists(t *testing.T) {
@@ -251,7 +252,7 @@ func TestRealSystemIntegration(t *testing.T) {
 	})
 
 	t.Run("real backend detection", func(t *testing.T) {
-		backend := DetectOptimalBackend()
+		backend := detectOptimalBackendWithChecker(platform.IsWSL(), CommandExists)
 		t.Logf("Real system optimal backend: %s", backend)
 
 		// Should return one of our known backend types
@@ -261,7 +262,7 @@ func TestRealSystemIntegration(t *testing.T) {
 		}
 
 		if !validBackends[backend] {
-			t.Errorf("DetectOptimalBackend returned invalid backend: %s", backend)
+			t.Errorf("backend detection returned invalid backend: %s", backend)
 		}
 	})
 }

@@ -62,7 +62,7 @@ func TestInstallUninstallWithExecutablePath(t *testing.T) {
 				// Use an explicit fixture path so the test does not depend on go test's
 				// binary name leaking through GetExecutablePath().
 				execPath := "/usr/local/bin/claudio"
-				claudioHooks, err := install.GenerateClaudioHooks(execPath)
+				claudioHooks, err := install.GenerateClaudioHooksForAgent(execPath, install.AgentClaude)
 				if err != nil {
 					t.Fatalf("Failed to generate claudio hooks: %v", err)
 				}

@@ -77,7 +77,6 @@ func TestWriteConfigWithMemoryFilesystem(t *testing.T) {
 	// TDD RED: Test writing config to memory filesystem
 	memFS := afero.NewMemMapFs()
 
-	cm := NewConfigManagerWithFilesystem(memFS)
 	config := &Config{
 		Volume:           ptrFloat(0.3),
 		DefaultSoundpack: "memory-test",
@@ -94,8 +93,8 @@ func TestWriteConfigWithMemoryFilesystem(t *testing.T) {
 		t.Fatalf("Failed to create directory: %v", err)
 	}
 
-	// This will fail until we implement WriteConfig with filesystem abstraction
-	err = cm.WriteConfig(configPath, config)
+	// This will fail until we implement WriteConfigFile with filesystem abstraction
+	err = WriteConfigFile(memFS, configPath, config)
 	if err != nil {
 		t.Errorf("Expected successful config writing to memory fs, got error: %v", err)
 	}
@@ -131,7 +130,7 @@ func TestConfigManagerIsolationFromRealFilesystem(t *testing.T) {
 	dangerousPath := "/tmp/claudio-test-isolation.json"
 	config := cm.GetDefaultConfig()
 
-	err := cm.WriteConfig(dangerousPath, config)
+	err := WriteConfigFile(memFS, dangerousPath, config)
 	if err != nil {
 		t.Errorf("Failed to write to memory filesystem: %v", err)
 	}

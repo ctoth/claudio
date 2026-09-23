@@ -34,11 +34,6 @@ var executableRecognizer = func(name string) bool {
 	return false
 }
 
-// GenerateClaudioHooks creates the Claude Code hook configuration (backward-compatible default).
-func GenerateClaudioHooks(executablePath string) (interface{}, error) {
-	return GenerateClaudioHooksForAgent(executablePath, AgentClaude)
-}
-
 // powerShellSingleQuoteEscaper doubles every character PowerShell treats as a
 // single quote: the ASCII apostrophe and U+2018 through U+201B.
 var powerShellSingleQuoteEscaper = strings.NewReplacer(

@@ -50,7 +50,7 @@ func waitForDevicePlayback(t *testing.T, b *Backend, done <-chan error) {
 	tick := time.NewTicker(5 * time.Millisecond)
 	defer tick.Stop()
 	for {
-		if b.IsPlaying() {
+		if isPlaying(b) {
 			return
 		}
 		select {
@@ -101,14 +101,14 @@ func TestOtoDevicePlaybackAndCancellation(t *testing.T) {
 	if err := waitPlay(t, done1); err != nil {
 		t.Fatal(err)
 	}
-	if !b2.IsPlaying() {
+	if !isPlaying(b2) {
 		t.Fatal("closing one backend stopped the other's player")
 	}
 	stop()
 	if err := waitPlay(t, done2); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancellation: %v", err)
 	}
-	if b1.IsPlaying() || b2.IsPlaying() {
+	if isPlaying(b1) || isPlaying(b2) {
 		t.Fatal("playback still active after shutdown")
 	}
 	t.Log("concurrent backends, isolated close, and caller cancellation completed")

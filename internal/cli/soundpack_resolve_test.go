@@ -10,6 +10,7 @@ import (
 
 	"claudio.click/internal/config"
 	"claudio.click/internal/soundpack"
+	"github.com/spf13/afero"
 )
 
 func writeNamedJSONPack(t *testing.T, path, name, sound string) {
@@ -62,7 +63,7 @@ func TestEverySoundpackUseAcceptsResolvesAtRuntime(t *testing.T) {
 	cfg := cm.GetDefaultConfig()
 	cfg.SoundpackPaths = []string{extDir, extJSON}
 	configPath := filepath.Join(configDir, "claudio", "config.json")
-	if err := cm.SaveToFile(cfg, configPath); err != nil {
+	if err := config.WriteConfigFile(afero.NewOsFs(), configPath, cfg); err != nil {
 		t.Fatal(err)
 	}
 

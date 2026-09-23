@@ -180,30 +180,6 @@ func TestConfigAudioBackendInvalidEnvironmentOverride(t *testing.T) {
 	}
 }
 
-func TestConfigAudioBackendMerging(t *testing.T) {
-	mgr := NewConfigManager()
-
-	baseConfig := mgr.GetDefaultConfig()
-	baseConfig.AudioBackend = "auto"
-
-	overrideConfig := mgr.GetDefaultConfig()
-	overrideConfig.AudioBackend = "system_command"
-
-	merged := mgr.MergeConfigs(baseConfig, overrideConfig)
-
-	if merged.AudioBackend != "system_command" {
-		t.Errorf("expected merged audio backend 'system_command', got '%s'", merged.AudioBackend)
-	}
-
-	// Test that empty override doesn't change base
-	overrideConfig.AudioBackend = ""
-	merged = mgr.MergeConfigs(baseConfig, overrideConfig)
-
-	if merged.AudioBackend != "auto" {
-		t.Errorf("expected audio backend to remain 'auto' with empty override, got '%s'", merged.AudioBackend)
-	}
-}
-
 func TestGetSupportedAudioBackends(t *testing.T) {
 	mgr := NewConfigManager()
 

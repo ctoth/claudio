@@ -268,18 +268,6 @@ func resolveCommandArtifacts(agent commandArtifactAgent) ([]commandArtifact, err
 	}
 }
 
-// installCommandsToPath creates the commands directory and writes claudio.md.
-func installCommandsToPath(commandsDir, claudioMdPath string) error {
-	return installCommandArtifact(commandArtifact{
-		Agent:     commandArtifactAgentClaude,
-		Kind:      "slash command",
-		Directory: commandsDir,
-		Path:      claudioMdPath,
-		Content:   claudioCommandContent,
-		Retired:   retiredClaudioCommandContents,
-	})
-}
-
 // Check every destination before a known conflict can cause a partial update.
 // Each mutation rechecks its own file to catch changes after the preflight.
 func preflightCommandArtifacts(artifacts []commandArtifact) error {

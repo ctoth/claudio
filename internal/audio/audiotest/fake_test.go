@@ -125,23 +125,6 @@ func TestLastFakeBackend_TracksMostRecent(t *testing.T) {
 	}
 }
 
-func TestFakeBackend_StopFlipsIsPlaying(t *testing.T) {
-	be := NewFakeBackend()
-	src := audio.NewFileSource("/x.wav")
-	if err := be.Play(context.Background(), src); err != nil {
-		t.Fatalf("Play: %v", err)
-	}
-	if !be.IsPlaying() {
-		t.Error("expected IsPlaying after Play")
-	}
-	if err := be.Stop(); err != nil {
-		t.Fatalf("Stop: %v", err)
-	}
-	if be.IsPlaying() {
-		t.Error("expected !IsPlaying after Stop")
-	}
-}
-
 func TestFakeBackend_RejectsNonFiniteVolume(t *testing.T) {
 	be := NewFakeBackend()
 	for _, v := range []float32{float32(math.NaN()), float32(math.Inf(1)), -1, 2} {

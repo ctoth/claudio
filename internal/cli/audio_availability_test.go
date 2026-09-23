@@ -30,7 +30,6 @@ func TestNoCGOBinaryAudioAvailability(t *testing.T) {
 	t.Setenv("CLAUDIO_ENABLED", "true")
 	t.Setenv("CLAUDIO_SOUND_TRACKING", "false")
 	t.Setenv("CLAUDIO_DETACH_DISABLE", "")
-	t.Setenv("CLAUDIO_DAEMON_CHILD", "")
 	t.Setenv("CLAUDIO_TEST_RECOGNIZE_GO_TEST", "")
 	for _, tc := range []struct {
 		name, backend string

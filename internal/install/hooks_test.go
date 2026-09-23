@@ -25,7 +25,7 @@ func TestGenerateClaudioHooks(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Test the GenerateClaudioHooks function
 			execPath, _ := GetExecutablePath()
-			hooks, err := GenerateClaudioHooks(execPath)
+			hooks, err := GenerateClaudioHooksForAgent(execPath, AgentClaude)
 
 			if err != nil {
 				t.Errorf("Unexpected error generating hooks: %v", err)
@@ -56,7 +56,7 @@ func TestGenerateClaudioHooks(t *testing.T) {
 
 			// Verify hooks exist and have correct structure
 			// (detailed structure testing is in TestGenerateClaudioHooksCorrectFormat)
-			expectedCount := len(GetEnabledHooks())
+			expectedCount := enabledClaudeHookCount()
 			if len(parsedHooks) != expectedCount {
 				t.Errorf("Expected %d hooks from registry, got %d", expectedCount, len(parsedHooks))
 			}
@@ -257,11 +257,11 @@ func getHookNames(hooks map[string]interface{}) []string {
 func generateTestHooks() (interface{}, error) {
 	// Use mock executable path to prevent config corruption during tests
 	mockExecPath := "/test/mock/claudio"
-	return GenerateClaudioHooks(mockExecPath)
+	return GenerateClaudioHooksForAgent(mockExecPath, AgentClaude)
 }
 
 // Functions that will need to be implemented (currently undefined):
-// - GenerateClaudioHooks() (interface{}, error)
+// - GenerateClaudioHooksForAgent(, AgentClaude) (interface{}, error)
 
 func TestGenerateClaudioHooksCorrectFormat(t *testing.T) {
 	// TDD RED: Test that generated hooks follow Claude Code's required format
@@ -669,13 +669,13 @@ func TestGenerateClaudioHooksForCopilotAgent(t *testing.T) {
 	}
 }
 
-func TestGenerateClaudioHooksDefaultsToClaude(t *testing.T) {
-	result, err := GenerateClaudioHooks("/usr/local/bin/claudio")
+func TestGenerateClaudioHooksForClaude(t *testing.T) {
+	result, err := GenerateClaudioHooksForAgent("/usr/local/bin/claudio", AgentClaude)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	hooks := result.(HooksMap)
-	if len(hooks) != len(GetEnabledHooks()) {
+	if len(hooks) != enabledClaudeHookCount() {
 		t.Errorf("claude generation count mismatch")
 	}
 	arr := hooks["PreToolUse"].([]interface{})

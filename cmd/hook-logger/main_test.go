@@ -120,13 +120,6 @@ func isolateUserCache(t *testing.T) string {
 	return cacheRoot
 }
 
-func pathWithin(root, path string) bool {
-	relative, err := filepath.Rel(root, path)
-	return err == nil && relative != ".." &&
-		!strings.HasPrefix(relative, ".."+string(filepath.Separator)) &&
-		!filepath.IsAbs(relative)
-}
-
 func assertPermissions(t *testing.T, path string, want os.FileMode) {
 	t.Helper()
 	info, err := os.Stat(path)

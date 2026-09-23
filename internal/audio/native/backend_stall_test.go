@@ -22,7 +22,7 @@ func TestBackendAbandonsPlaybackThatNeverFinishes(t *testing.T) {
 	if !errors.Is(err, ErrPlaybackStalled) {
 		t.Fatalf("stalled playback returned %v, want ErrPlaybackStalled", err)
 	}
-	if !p.paused || b.IsPlaying() {
+	if !p.paused || isPlaying(b) {
 		t.Fatal("stalled player was not released")
 	}
 }

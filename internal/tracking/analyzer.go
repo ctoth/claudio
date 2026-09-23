@@ -229,21 +229,6 @@ type UsageSummary struct {
 	TimeRange    string `json:"time_range,omitempty"` // Human readable
 }
 
-// ToolUsageStats represents tool-specific usage statistics.
-type ToolUsageStats struct {
-	ToolName   string   `json:"tool_name"`
-	UsageCount int      `json:"usage_count"`
-	LastUsed   int64    `json:"last_used"`
-	Categories []string `json:"categories,omitempty"` // Categories this tool uses
-}
-
-// CategoryDistribution represents category usage statistics
-type CategoryDistribution struct {
-	Category   string  `json:"category"`
-	Count      int     `json:"count"`
-	Percentage float64 `json:"percentage"`
-}
-
 // ChainTypeStatistic summarizes how often each chain type fires and how
 // deep into its fallback chain it landed on average. Replaces the
 // removed FallbackStatistic — chain-scoped sequence is the only honest
@@ -365,79 +350,6 @@ func GetUsageSummary(db *sql.DB, filter QueryFilter) (*UsageSummary, error) {
 	return &summary, nil
 }
 
-// GetToolUsageStats returns tool-specific usage statistics
-func GetToolUsageStats(db *sql.DB, filter QueryFilter) ([]ToolUsageStats, error) {
-	if db == nil {
-		return nil, fmt.Errorf("database connection is nil")
-	}
-
-	// Build query to get tool usage statistics
-	baseQuery := `
-		SELECT
-			JSON_EXTRACT(he.context, '$.ToolName') as tool_name,
-			COUNT(*) as usage_count,
-			MAX(he.timestamp) as last_used,
-			GROUP_CONCAT(DISTINCT ` + categorySQL("he.context") + `) as categories
-		FROM hook_events he
-		WHERE he.context != '' AND JSON_EXTRACT(he.context, '$.ToolName') IS NOT NULL`
-
-	// Apply filters using common QueryFilter
-	whereClause, args, err := filter.BuildWhereClause()
-	if err != nil {
-		return nil, err
-	}
-	if whereClause != "" {
-		baseQuery += " AND " + whereClause
-	}
-
-	baseQuery += `
-		GROUP BY JSON_EXTRACT(he.context, '$.ToolName')
-		ORDER BY usage_count DESC, tool_name`
-
-	// Apply limit
-	if filter.Limit > 0 {
-		baseQuery += fmt.Sprintf(" LIMIT %d", filter.Limit)
-	}
-
-	rows, err := db.Query(baseQuery, args...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query tool usage stats: %w", err)
-	}
-	defer rows.Close()
-
-	var results []ToolUsageStats
-	for rows.Next() {
-		var stats ToolUsageStats
-		var toolName, categoriesStr sql.NullString
-
-		err := rows.Scan(&toolName, &stats.UsageCount, &stats.LastUsed, &categoriesStr)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan tool usage stats row: %w", err)
-		}
-
-		if toolName.Valid {
-			stats.ToolName = toolName.String
-		}
-
-		// Parse categories (comma-separated names), dropping unknown values
-		if categoriesStr.Valid {
-			known := slices.DeleteFunc(parseCommaSeparated(categoriesStr.String), func(name string) bool {
-				_, err := hooks.ParseEventCategory(name)
-				return err != nil
-			})
-			stats.Categories = sortedUnique(known)
-		}
-
-		results = append(results, stats)
-	}
-
-	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating tool usage stats rows: %w", err)
-	}
-
-	return results, nil
-}
-
 // GetChainTypeStatistics returns per-chain-type event counts and average
 // selected-path depth (joined from path_lookups). The depth reflects how
 // far down the fallback chain Claudio had to walk before finding a
@@ -499,74 +411,6 @@ func GetChainTypeStatistics(db *sql.DB, filter QueryFilter) ([]ChainTypeStatisti
 	for i := range results {
 		if total > 0 {
 			results[i].Percentage = float64(results[i].EventCount) / float64(total) * 100.0
-		}
-	}
-
-	return results, nil
-}
-
-// GetCategoryDistribution returns category usage distribution
-func GetCategoryDistribution(db *sql.DB, filter QueryFilter) ([]CategoryDistribution, error) {
-	if db == nil {
-		return nil, fmt.Errorf("database connection is nil")
-	}
-
-	// Build query to get category distribution
-	baseQuery := `
-		SELECT 
-			` + categorySQL("he.context") + ` as category,
-			COUNT(*) as count
-		FROM hook_events he
-		WHERE he.context != '' AND JSON_EXTRACT(he.context, '$.Category') IS NOT NULL`
-
-	// Apply filters using common QueryFilter
-	whereClause, args, err := filter.BuildWhereClause()
-	if err != nil {
-		return nil, err
-	}
-	if whereClause != "" {
-		baseQuery += " AND " + whereClause
-	}
-
-	baseQuery += `
-		GROUP BY category
-		ORDER BY count DESC, category`
-
-	rows, err := db.Query(baseQuery, args...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query category distribution: %w", err)
-	}
-	defer rows.Close()
-
-	var results []CategoryDistribution
-	var totalCount int
-
-	// First pass: collect data and calculate total
-	for rows.Next() {
-		var category sql.NullString
-		var count int
-
-		if err := rows.Scan(&category, &count); err != nil {
-			return nil, fmt.Errorf("failed to scan category distribution row: %w", err)
-		}
-
-		if category.Valid {
-			results = append(results, CategoryDistribution{
-				Category: categoryName(category),
-				Count:    count,
-			})
-			totalCount += count
-		}
-	}
-
-	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating category distribution rows: %w", err)
-	}
-
-	// Second pass: calculate percentages
-	for i := range results {
-		if totalCount > 0 {
-			results[i].Percentage = float64(results[i].Count) / float64(totalCount) * 100.0
 		}
 	}
 

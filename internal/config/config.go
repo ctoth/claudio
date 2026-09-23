@@ -5,7 +5,6 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -196,46 +195,6 @@ func (cm *ConfigManager) LoadFromFile(filePath string) (*Config, error) {
 	return &config, nil
 }
 
-// SaveToFile saves configuration to a specific file
-func (cm *ConfigManager) SaveToFile(config *Config, filePath string) error {
-	slog.Debug("saving config to file", "file_path", filePath)
-
-	err := cm.ValidateConfig(config)
-	if err != nil {
-		slog.Error("cannot save invalid config", "error", err)
-		return fmt.Errorf("cannot save invalid config: %w", err)
-	}
-
-	// Create directory if it doesn't exist
-	dir := filepath.Dir(filePath)
-	err = cm.fs.MkdirAll(dir, 0755)
-	if err != nil {
-		slog.Error("failed to create config directory", "directory", dir, "error", err)
-		return fmt.Errorf("failed to create config directory: %w", err)
-	}
-
-	// Marshal with indentation for readability
-	data, err := json.MarshalIndent(config, "", "  ")
-	if err != nil {
-		slog.Error("failed to marshal config", "error", err)
-		return fmt.Errorf("failed to marshal config: %w", err)
-	}
-
-	err = afero.WriteFile(cm.fs, filePath, data, 0644)
-	if err != nil {
-		slog.Error("failed to write config file", "file_path", filePath, "error", err)
-		return fmt.Errorf("failed to write config file: %w", err)
-	}
-
-	slog.Info("config saved successfully", "file_path", filePath)
-	return nil
-}
-
-// WriteConfig is an alias for SaveToFile for compatibility with tests
-func (cm *ConfigManager) WriteConfig(filePath string, config *Config) error {
-	return cm.SaveToFile(config, filePath)
-}
-
 // LoadConfig loads configuration using XDG path discovery
 func (cm *ConfigManager) LoadConfig() (*Config, error) {
 	path := cm.FindConfigFile()
@@ -324,47 +283,6 @@ func (cm *ConfigManager) ValidateConfig(config *Config) error {
 	return nil
 }
 
-// MergeConfigs merges two configurations, with override taking precedence
-func (cm *ConfigManager) MergeConfigs(base, override *Config) *Config {
-	slog.Debug("merging configurations")
-
-	// Start with a copy of base
-	merged := *base
-
-	// Apply overrides (only if explicitly set)
-	if override.Volume != nil {
-		merged.Volume = override.Volume
-		slog.Debug("merged volume override", "value", *override.Volume)
-	}
-
-	if override.DefaultSoundpack != "" {
-		merged.DefaultSoundpack = override.DefaultSoundpack
-		slog.Debug("merged soundpack override", "value", override.DefaultSoundpack)
-	}
-
-	if len(override.SoundpackPaths) > 0 {
-		merged.SoundpackPaths = override.SoundpackPaths
-		slog.Debug("merged soundpack paths override", "paths", override.SoundpackPaths)
-	}
-
-	if override.LogLevel != "" {
-		merged.LogLevel = override.LogLevel
-		slog.Debug("merged log level override", "value", override.LogLevel)
-	}
-
-	if override.AudioBackend != "" {
-		merged.AudioBackend = override.AudioBackend
-		slog.Debug("merged audio backend override", "value", override.AudioBackend)
-	}
-
-	// Note: Enabled is a bool, so we need special handling
-	// In JSON, explicit false would override true from base
-	// This is handled naturally by the struct unmarshaling
-
-	slog.Debug("configurations merged successfully")
-	return &merged
-}
-
 // ApplyEnvironmentOverrides applies environment variable overrides to config
 func (cm *ConfigManager) ApplyEnvironmentOverrides(config *Config) *Config {
 	slog.Debug("applying environment variable overrides")
@@ -383,44 +301,6 @@ func (cm *ConfigManager) ApplyEnvironmentOverrides(config *Config) *Config {
 	return result
 }
 
-// ApplyLogLevel configures slog with the specified log level
-func (cm *ConfigManager) ApplyLogLevel(logLevel string) error {
-	if logLevel == "" {
-		slog.Debug("no log level specified, keeping current slog configuration")
-		return nil
-	}
-
-	slog.Debug("applying log level configuration", "log_level", logLevel)
-
-	// Parse log level string to slog.Level
-	var level slog.Level
-	switch strings.ToLower(logLevel) {
-	case "debug":
-		level = slog.LevelDebug
-	case "info":
-		level = slog.LevelInfo
-	case "warn":
-		level = slog.LevelWarn
-	case "error":
-		level = slog.LevelError
-	default:
-		err := fmt.Errorf("invalid log level '%s', must be one of: debug, info, warn, error", logLevel)
-		slog.Error("invalid log level for slog configuration", "log_level", logLevel, "error", err)
-		return err
-	}
-
-	// Create new handler with the specified level
-	handler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-		Level: level,
-	})
-
-	// Set as default slog logger
-	slog.SetDefault(slog.New(handler))
-
-	slog.Debug("slog configured successfully", "log_level", logLevel, "slog_level", level)
-	return nil
-}
-
 // ResolveLogFilePath resolves the log file path using XDG cache directory when filename is empty
 func (cm *ConfigManager) ResolveLogFilePath(filename string) string {
 	if filename != "" {
@@ -429,44 +309,6 @@ func (cm *ConfigManager) ResolveLogFilePath(filename string) string {
 
 	// Use XDG cache directory for log files
 	return CachePath("logs", "claudio.log")
-}
-
-// ApplyLogLevelWithWriter configures slog with the specified log level and custom writer (for testing)
-func (cm *ConfigManager) ApplyLogLevelWithWriter(logLevel string, writer io.Writer) error {
-	if logLevel == "" {
-		slog.Debug("no log level specified, keeping current slog configuration")
-		return nil
-	}
-
-	slog.Debug("applying log level configuration with custom writer", "log_level", logLevel)
-
-	// Parse log level string to slog.Level
-	var level slog.Level
-	switch strings.ToLower(logLevel) {
-	case "debug":
-		level = slog.LevelDebug
-	case "info":
-		level = slog.LevelInfo
-	case "warn":
-		level = slog.LevelWarn
-	case "error":
-		level = slog.LevelError
-	default:
-		err := fmt.Errorf("invalid log level '%s', must be one of: debug, info, warn, error", logLevel)
-		slog.Error("invalid log level for slog configuration", "log_level", logLevel, "error", err)
-		return err
-	}
-
-	// Create new handler with the specified level and writer
-	handler := slog.NewTextHandler(writer, &slog.HandlerOptions{
-		Level: level,
-	})
-
-	// Set as default slog logger
-	slog.SetDefault(slog.New(handler))
-
-	slog.Debug("slog configured successfully with custom writer", "log_level", logLevel, "slog_level", level)
-	return nil
 }
 
 // GetSupportedAudioBackends returns a list of all supported audio backend

@@ -28,8 +28,8 @@ const (
 )
 
 // Backend owns each admitted playback from decode through player shutdown.
-// Stop cancels the current set; Close also rejects future admissions. Neither
-// owns the process-wide Oto context, so closing one backend cannot stop another.
+// Close cancels the current set and rejects future admissions. It does not
+// own the process-wide Oto context, so closing one backend cannot stop another.
 type Backend struct {
 	mu         sync.Mutex
 	closed     bool
@@ -55,18 +55,9 @@ func NewBackend() *Backend {
 	}
 }
 
-func (b *Backend) Stop() error  { return b.stop(false) }
-func (b *Backend) Close() error { return b.stop(true) }
-
-func (b *Backend) stop(closeBackend bool) error {
+func (b *Backend) Close() error {
 	b.mu.Lock()
-	if b.closed && !closeBackend {
-		b.mu.Unlock()
-		return audio.ErrBackendClosed
-	}
-	if closeBackend {
-		b.closed = true
-	}
+	b.closed = true
 	active := make([]*playback, 0, len(b.plays))
 	for p := range b.plays {
 		p.cancel()
@@ -77,17 +68,6 @@ func (b *Backend) stop(closeBackend bool) error {
 		<-p.done
 	}
 	return nil
-}
-
-func (b *Backend) IsPlaying() bool {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	for p := range b.plays {
-		if p.player != nil && p.player.IsPlaying() {
-			return true
-		}
-	}
-	return false
 }
 
 func (b *Backend) SetVolume(v float32) error {
@@ -106,15 +86,6 @@ func (b *Backend) SetVolume(v float32) error {
 		}
 	}
 	return nil
-}
-
-func (b *Backend) GetVolume() float32 {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if b.closed {
-		return 0
-	}
-	return b.volume
 }
 
 func (b *Backend) Play(ctx context.Context, source audio.AudioSource) (err error) {
@@ -140,7 +111,7 @@ func (b *Backend) Play(ctx context.Context, source audio.AudioSource) (err error
 			err = ctx.Err()
 		} else if playCtx.Err() != nil {
 			err = nil
-		} // Stop/Close are successful stops.
+		} // Close is a successful stop.
 		cancel()
 		b.mu.Lock()
 		delete(b.plays, p)
@@ -178,8 +149,8 @@ func (b *Backend) Play(ctx context.Context, source audio.AudioSource) (err error
 		return fmt.Errorf("oto output: %w", err)
 	}
 
-	// Admission and start share the stop lock. A cancelled admission never
-	// starts a player after Stop has taken its snapshot.
+	// Admission and start share the close lock. A cancelled admission never
+	// starts a player after Close has taken its snapshot.
 	b.mu.Lock()
 	if err = playCtx.Err(); err != nil {
 		b.mu.Unlock()

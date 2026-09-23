@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"claudio.click/internal/audio"
+	"claudio.click/internal/audio/audiotest"
 	nativebackend "claudio.click/internal/audio/native"
 )
 
@@ -162,6 +163,8 @@ func TestCLIBackendLifecycleManagement(t *testing.T) {
 }
 
 func TestCLIVolumeControlWithBackend(t *testing.T) {
+	// The fake stands in for "oto" so the stored volume can be read back.
+	audiotest.Install(t)
 	cli := NewCLI()
 
 	cfg := cli.configManager.GetDefaultConfig()

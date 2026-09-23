@@ -13,11 +13,10 @@ import (
 // touches real audio hardware. It is not part of the production binary:
 // Install puts it in place of the "oto" backend for one test.
 type FakeBackend struct {
-	mu        sync.Mutex
-	plays     []FakePlay
-	volume    float32
-	isPlaying bool
-	closed    bool
+	mu     sync.Mutex
+	plays  []FakePlay
+	volume float32
+	closed bool
 }
 
 // FakePlay records a single Play call.
@@ -46,15 +45,6 @@ func (f *FakeBackend) Play(ctx context.Context, source audio.AudioSource) error 
 		}
 	}
 	f.plays = append(f.plays, FakePlay{SourcePath: path, Volume: f.volume})
-	f.isPlaying = true
-	return nil
-}
-
-// Stop flips the isPlaying flag to false.
-func (f *FakeBackend) Stop() error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.isPlaying = false
 	return nil
 }
 
@@ -63,15 +53,7 @@ func (f *FakeBackend) Close() error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.closed = true
-	f.isPlaying = false
 	return nil
-}
-
-// IsPlaying returns the most-recent Play/Stop state.
-func (f *FakeBackend) IsPlaying() bool {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return f.isPlaying
 }
 
 // SetVolume stores the supplied volume; range-checks to [0.0, 1.0].

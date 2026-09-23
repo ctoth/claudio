@@ -231,55 +231,6 @@ func TestParseDatePreset(t *testing.T) {
 	}
 }
 
-func TestQueryFilter_WithNaturalLanguageDates(t *testing.T) {
-	// TDD RED: Test natural language date parsing integration
-	tests := []struct {
-		name        string
-		naturalDate string
-		wantError   bool
-	}{
-		{
-			name:        "yesterday using natural language",
-			naturalDate: "yesterday",
-			wantError:   false,
-		},
-		{
-			name:        "last week using natural language",
-			naturalDate: "last week",
-			wantError:   false,
-		},
-		{
-			name:        "5 days ago",
-			naturalDate: "5 days ago",
-			wantError:   false,
-		},
-		{
-			name:        "2 weeks ago",
-			naturalDate: "2 weeks ago",
-			wantError:   false,
-		},
-		{
-			name:        "invalid natural date returns current time",
-			naturalDate: "completely nonsensical gibberish text that cannot be a date",
-			wantError:   false, // go-naturaldate is permissive and returns current time
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// TDD RED: This function doesn't exist yet
-			result, err := ParseNaturalDate(tt.naturalDate)
-
-			if tt.wantError {
-				assert.Error(t, err, "Expected error for invalid natural date")
-			} else {
-				assert.NoError(t, err, "Unexpected error")
-				assert.NotZero(t, result, "Expected non-zero result time")
-			}
-		})
-	}
-}
-
 // Helper functions for tests
 
 // timePtr returns a pointer to a time.Time
