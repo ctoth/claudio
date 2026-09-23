@@ -20,7 +20,7 @@ func TestDirectoryCoverageCountsOnlyResolvableKnownKeys(t *testing.T) {
 		t.Fatal(err)
 	}
 	// More stray audio files than there are known keys.
-	for i := 0; i < len(keys)+10; i++ {
+	for i := range len(keys) + 10 {
 		wavfixture.Write(t, filepath.Join(packDir, "extra", fmt.Sprintf("stray-%d.wav", i)))
 	}
 

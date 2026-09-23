@@ -158,7 +158,7 @@ func containsAfero(s, substr string) bool {
 func indexOfAfero(s, substr string) int {
 	for i := 0; i <= len(s)-len(substr); i++ {
 		match := true
-		for j := 0; j < len(substr); j++ {
+		for j := range len(substr) {
 			if s[i+j] != substr[j] {
 				match = false
 				break

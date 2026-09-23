@@ -5,6 +5,7 @@ linters:
     - modernize
     - usetesting
     - errorlint
+    - intrange
   settings:
     staticcheck:
       checks:
