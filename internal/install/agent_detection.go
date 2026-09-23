@@ -105,7 +105,7 @@ func hasAgentExecutable(agent Agent) bool {
 }
 
 func hasAgentConfigEvidence(agent Agent, scope string) bool {
-	paths, err := agentConfigPaths(agent, scope)
+	paths, err := agent.ConfigPaths(scope)
 	if err != nil {
 		return false
 	}
@@ -118,7 +118,7 @@ func hasAgentConfigEvidence(agent Agent, scope string) bool {
 }
 
 func hasExistingClaudioHooks(agent Agent, scope string) bool {
-	paths, err := agentConfigPaths(agent, scope)
+	paths, err := agent.ConfigPaths(scope)
 	if err != nil {
 		return false
 	}
@@ -136,23 +136,6 @@ func hasExistingClaudioHooks(agent Agent, scope string) bool {
 		}
 	}
 	return false
-}
-
-func agentConfigPaths(agent Agent, scope string) ([]string, error) {
-	switch agent {
-	case AgentClaude:
-		return FindClaudeSettingsPaths(scope)
-	case AgentCodex:
-		return FindCodexHooksPaths(scope)
-	case AgentGemini:
-		return FindGeminiSettingsPaths(scope)
-	case AgentQwen:
-		return FindQwenSettingsPaths(scope)
-	case AgentCopilot:
-		return FindCopilotSettingsPaths(scope)
-	default:
-		return nil, fmt.Errorf("invalid concrete agent '%s'", agent)
-	}
 }
 
 func settingsContainClaudioHooks(settings *SettingsMap) bool {

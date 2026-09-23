@@ -90,7 +90,7 @@ func RunUninstallWorkflow(filesystem afero.Fs, scope string, agent install.Agent
 
 	slog.Info("detected claudio hooks for removal", "hooks", claudioHooks)
 
-	if agent == install.AgentCodex {
+	if agent.UsesCaptainHook() {
 		captainSettings := captainhook.SettingsMap(*existingSettings)
 		captainhook.Uninstall(
 			&captainSettings,

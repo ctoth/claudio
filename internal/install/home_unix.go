@@ -8,7 +8,3 @@ import "os"
 func getHomeDirectory() string {
 	return os.Getenv("HOME")
 }
-
-func appendUserProfilePath(paths []string, homeDir, dirName, fileName string) []string {
-	return paths
-}

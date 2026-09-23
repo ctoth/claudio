@@ -76,8 +76,11 @@ func GenerateClaudioHooksForAgent(executablePath string, agent Agent) (interface
 	slog.Debug("generating Claudio hooks configuration",
 		"agent", agent, "executable_path", executablePath)
 
+	spec, err := agent.concreteSpec()
+	if err != nil {
+		return nil, err
+	}
 	enabledHooks := agent.EnabledHooks()
-	matcher := agent.Matcher()
 	slog.Debug("retrieved enabled hooks for agent", "agent", agent, "count", len(enabledHooks))
 
 	hooks := make(HooksMap)
@@ -86,17 +89,22 @@ func GenerateClaudioHooksForAgent(executablePath string, agent Agent) (interface
 	createHookConfig := func(hookDef HookDefinition) interface{} {
 		commandConfig := map[string]interface{}{
 			"type":    "command",
-			"command": hookCommandForHook(executablePath, agent, hookDef.Name),
+			"command": spec.hookCommand(executablePath, hookDef.Name),
 		}
-		addAgentHookMetadata(commandConfig, agent)
+		if spec.commandName != "" {
+			commandConfig["name"] = spec.commandName
+		}
+		if spec.timeoutSec > 0 {
+			commandConfig["timeoutSec"] = spec.timeoutSec
+		}
 
-		if agent == AgentCopilot {
+		if spec.shape == shapeFlatCommands {
 			return []interface{}{commandConfig}
 		}
 
 		return []interface{}{
 			map[string]interface{}{
-				"matcher": matcher,
+				"matcher": spec.matcher,
 				"hooks": []interface{}{
 					commandConfig,
 				},
@@ -122,32 +130,16 @@ func GenerateClaudioHooksForAgent(executablePath string, agent Agent) (interface
 	return hooks, nil
 }
 
-func hookCommandForAgent(executablePath string, agent Agent) string {
-	switch agent {
-	case AgentGemini, AgentQwen, AgentCopilot:
-		return quoteCommandArg(executablePath) + " --hook-agent " + string(agent)
-	default:
+// hookCommand returns the command string the agent runs for hookName.
+func (s agentSpec) hookCommand(executablePath, hookName string) string {
+	if !s.hookAgentFlag {
 		return executablePath
 	}
-}
-
-func hookCommandForHook(executablePath string, agent Agent, hookName string) string {
-	command := hookCommandForAgent(executablePath, agent)
-	if agent == AgentCopilot && hookName == "subagentStart" {
-		return command + " --hook-event subagentStart"
+	command := quoteCommandArg(executablePath) + " --hook-agent " + string(s.agent)
+	if s.eventFlagHooks[hookName] {
+		command += " --hook-event " + hookName
 	}
 	return command
-}
-
-func addAgentHookMetadata(commandConfig map[string]interface{}, agent Agent) {
-	switch agent {
-	case AgentGemini:
-		commandConfig["name"] = "claudio"
-	case AgentQwen:
-		commandConfig["name"] = "claudio"
-	case AgentCopilot:
-		commandConfig["timeoutSec"] = 30
-	}
 }
 
 func quoteCommandArg(arg string) string {

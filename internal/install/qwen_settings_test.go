@@ -13,7 +13,7 @@ func TestFindQwenSettingsPathsGlobalScope(t *testing.T) {
 	t.Setenv("HOMEDRIVE", "")
 	t.Setenv("HOMEPATH", "")
 
-	paths, err := FindQwenSettingsPaths("global")
+	paths, err := AgentQwen.ConfigPaths("global")
 	if err != nil {
 		t.Fatalf("FindQwenSettingsPaths returned error: %v", err)
 	}
@@ -24,7 +24,7 @@ func TestFindQwenSettingsPathsGlobalScope(t *testing.T) {
 }
 
 func TestFindQwenSettingsPathsProjectScope(t *testing.T) {
-	paths, err := FindQwenSettingsPaths("project")
+	paths, err := AgentQwen.ConfigPaths("project")
 	if err != nil {
 		t.Fatalf("FindQwenSettingsPaths returned error: %v", err)
 	}
@@ -56,7 +56,7 @@ func TestFindBestQwenPathPrefersExistingFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := FindBestQwenPath("global")
+	got, err := AgentQwen.BestConfigPath("global")
 	if err != nil {
 		t.Fatalf("FindBestQwenPath returned error: %v", err)
 	}
@@ -66,7 +66,7 @@ func TestFindBestQwenPathPrefersExistingFile(t *testing.T) {
 }
 
 func TestFindQwenSettingsPathsInvalidScope(t *testing.T) {
-	if _, err := FindQwenSettingsPaths("bogus"); err == nil {
+	if _, err := AgentQwen.ConfigPaths("bogus"); err == nil {
 		t.Error("expected invalid Qwen scope error")
 	}
 }

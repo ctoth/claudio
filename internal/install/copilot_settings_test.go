@@ -14,7 +14,7 @@ func TestFindCopilotSettingsPathsGlobalScope(t *testing.T) {
 	t.Setenv("HOMEPATH", "")
 	t.Setenv("COPILOT_HOME", "")
 
-	paths, err := FindCopilotSettingsPaths("global")
+	paths, err := AgentCopilot.ConfigPaths("global")
 	if err != nil {
 		t.Fatalf("FindCopilotSettingsPaths returned error: %v", err)
 	}
@@ -28,7 +28,7 @@ func TestFindCopilotSettingsPathsHonorsCOPILOTHOME(t *testing.T) {
 	copilotHome := t.TempDir()
 	t.Setenv("COPILOT_HOME", copilotHome)
 
-	paths, err := FindCopilotSettingsPaths("global")
+	paths, err := AgentCopilot.ConfigPaths("global")
 	if err != nil {
 		t.Fatalf("FindCopilotSettingsPaths returned error: %v", err)
 	}
@@ -39,7 +39,7 @@ func TestFindCopilotSettingsPathsHonorsCOPILOTHOME(t *testing.T) {
 }
 
 func TestFindCopilotSettingsPathsProjectScope(t *testing.T) {
-	paths, err := FindCopilotSettingsPaths("project")
+	paths, err := AgentCopilot.ConfigPaths("project")
 	if err != nil {
 		t.Fatalf("FindCopilotSettingsPaths returned error: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestFindBestCopilotPathPrefersExistingFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := FindBestCopilotPath("global")
+	got, err := AgentCopilot.BestConfigPath("global")
 	if err != nil {
 		t.Fatalf("FindBestCopilotPath returned error: %v", err)
 	}
@@ -83,7 +83,7 @@ func TestFindBestCopilotPathPrefersExistingFile(t *testing.T) {
 }
 
 func TestFindCopilotSettingsPathsInvalidScope(t *testing.T) {
-	if _, err := FindCopilotSettingsPaths("bogus"); err == nil {
+	if _, err := AgentCopilot.ConfigPaths("bogus"); err == nil {
 		t.Error("expected invalid Copilot scope error")
 	}
 }

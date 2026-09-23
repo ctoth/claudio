@@ -2,13 +2,11 @@
 
 package install
 
-import (
-	"os"
-	"path/filepath"
-)
+import "os"
 
 // getHomeDirectory returns the user's home directory using Windows-specific
-// environment fallbacks.
+// environment fallbacks: USERPROFILE, then an MSYS-style HOME (/c/Users/x),
+// then HOMEDRIVE+HOMEPATH.
 func getHomeDirectory() string {
 	if userProfile := os.Getenv("USERPROFILE"); userProfile != "" {
 		return userProfile
@@ -22,12 +20,4 @@ func getHomeDirectory() string {
 		}
 	}
 	return ""
-}
-
-func appendUserProfilePath(paths []string, homeDir, dirName, fileName string) []string {
-	userProfile := os.Getenv("USERPROFILE")
-	if userProfile != "" && userProfile != homeDir {
-		return append(paths, filepath.Join(userProfile, dirName, fileName))
-	}
-	return paths
 }

@@ -451,7 +451,7 @@ func TestFindBestPathReturnsExistingFile(t *testing.T) {
 	if err := afero.WriteFile(afero.NewOsFs(), ".codex/hooks.json", []byte("{}"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	got, err := FindBestCodexPath("project")
+	got, err := AgentCodex.BestConfigPath("project")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -466,7 +466,7 @@ func TestFindBestPathReturnsExistingFile(t *testing.T) {
 	if err := afero.WriteFile(afero.NewOsFs(), ".claude/settings.json", []byte("{}"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	cgot, err := FindBestSettingsPath("project")
+	cgot, err := AgentClaude.BestConfigPath("project")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -476,13 +476,13 @@ func TestFindBestPathReturnsExistingFile(t *testing.T) {
 }
 
 func TestHookCommandQuotingAndRecognitionBranches(t *testing.T) {
-	if got := hookCommandForAgent("/usr/local/bin/claudio", AgentClaude); got != "/usr/local/bin/claudio" {
+	if got := mustSpec(t, AgentClaude).hookCommand("/usr/local/bin/claudio", "PreToolUse"); got != "/usr/local/bin/claudio" {
 		t.Errorf("claude hook command = %q", got)
 	}
-	if got := hookCommandForAgent(`/opt/Claudio Tools/claudio`, AgentGemini); got != `"/opt/Claudio Tools/claudio" --hook-agent gemini` {
+	if got := mustSpec(t, AgentGemini).hookCommand(`/opt/Claudio Tools/claudio`, "PreToolUse"); got != `"/opt/Claudio Tools/claudio" --hook-agent gemini` {
 		t.Errorf("gemini hook command = %q", got)
 	}
-	if got := hookCommandForAgent(`/opt/cla"udio`, AgentQwen); got != `"/opt/cla\"udio" --hook-agent qwen` {
+	if got := mustSpec(t, AgentQwen).hookCommand(`/opt/cla"udio`, "PreToolUse"); got != `"/opt/cla\"udio" --hook-agent qwen` {
 		t.Errorf("qwen hook command = %q", got)
 	}
 	if got := quoteCommandArg("plain"); got != "plain" {
@@ -558,7 +558,7 @@ func TestAdditionalBestPathFallbacksAndInvalidScopes(t *testing.T) {
 	t.Setenv("HOMEPATH", "")
 	t.Setenv("COPILOT_HOME", "")
 
-	qwenPath, err := FindBestQwenPath("global")
+	qwenPath, err := AgentQwen.BestConfigPath("global")
 	if err != nil {
 		t.Fatalf("FindBestQwenPath returned error: %v", err)
 	}
@@ -566,7 +566,7 @@ func TestAdditionalBestPathFallbacksAndInvalidScopes(t *testing.T) {
 		t.Errorf("FindBestQwenPath = %q, want %q", qwenPath, want)
 	}
 
-	copilotPath, err := FindBestCopilotPath("global")
+	copilotPath, err := AgentCopilot.BestConfigPath("global")
 	if err != nil {
 		t.Fatalf("FindBestCopilotPath returned error: %v", err)
 	}
@@ -574,10 +574,10 @@ func TestAdditionalBestPathFallbacksAndInvalidScopes(t *testing.T) {
 		t.Errorf("FindBestCopilotPath = %q, want %q", copilotPath, want)
 	}
 
-	if _, err := FindBestQwenPath("bogus"); err == nil {
+	if _, err := AgentQwen.BestConfigPath("bogus"); err == nil {
 		t.Error("expected invalid Qwen best path scope error")
 	}
-	if _, err := FindBestCopilotPath("bogus"); err == nil {
+	if _, err := AgentCopilot.BestConfigPath("bogus"); err == nil {
 		t.Error("expected invalid Copilot best path scope error")
 	}
 }

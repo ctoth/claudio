@@ -6,16 +6,9 @@ import "testing"
 // unique: filepath.Join(".", x) == x, so listing both forms duplicated
 // every candidate.
 func TestProjectScopePathsListedOnce(t *testing.T) {
-	finders := map[string]func(string) ([]string, error){
-		"claude":  FindClaudeSettingsPaths,
-		"codex":   FindCodexHooksPaths,
-		"gemini":  FindGeminiSettingsPaths,
-		"qwen":    FindQwenSettingsPaths,
-		"copilot": FindCopilotSettingsPaths,
-	}
-	for name, find := range finders {
-		t.Run(name, func(t *testing.T) {
-			paths, err := find(ScopeProject)
+	for _, agent := range ConcreteAgents() {
+		t.Run(string(agent), func(t *testing.T) {
+			paths, err := agent.ConfigPaths(ScopeProject)
 			if err != nil {
 				t.Fatal(err)
 			}

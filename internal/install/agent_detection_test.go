@@ -263,7 +263,7 @@ func TestAgentDetectionPrivateHelpersRejectInvalidInputs(t *testing.T) {
 	if hasExistingClaudioHooks(AgentAuto, ScopeGlobal) {
 		t.Fatal("auto is not a concrete agent and should not have hook evidence")
 	}
-	if _, err := agentConfigPaths(AgentAuto, ScopeGlobal); err == nil {
+	if _, err := AgentAuto.ConfigPaths(ScopeGlobal); err == nil {
 		t.Fatal("expected invalid concrete agent error for auto")
 	}
 }

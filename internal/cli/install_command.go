@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"claudio.click/internal/install"
-	captainhook "github.com/ctoth/captain-hook"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 )
@@ -157,8 +156,8 @@ func handleDryRunInstall(cmd *cobra.Command, scope InstallScope, targets []insta
 
 			hookList := strings.Join(enabledHookNames(target.Agent), ", ")
 			cmd.Printf("Would install hooks: %s\n", hookList)
-			if target.Agent == install.AgentCodex {
-				cmd.Printf("After install, run /hooks in Codex to trust the claudio hook.\n")
+			if hint := target.Agent.TrustHint(); hint != "" {
+				cmd.Printf("After install, %s\n", lowerFirst(hint))
 			}
 		}
 		cmd.Printf("No changes will be made.\n")
@@ -168,6 +167,15 @@ func handleDryRunInstall(cmd *cobra.Command, scope InstallScope, targets []insta
 		}
 	}
 	return nil
+}
+
+// lowerFirst lower-cases the first byte of an ASCII sentence so it can
+// follow a lead-in clause.
+func lowerFirst(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToLower(s[:1]) + s[1:]
 }
 
 func enabledHookNames(agent install.Agent) []string {
@@ -200,8 +208,8 @@ func runInstallTargets(cmd *cobra.Command, scope InstallScope, targets []install
 		cmd.Printf("✅ Claudio installation completed successfully!\n")
 		cmd.Printf("Audio hooks have been added to selected agent settings.\n")
 		for _, target := range targets {
-			if target.Agent == install.AgentCodex {
-				cmd.Printf("Run /hooks in Codex to trust the claudio hook.\n")
+			if hint := target.Agent.TrustHint(); hint != "" {
+				cmd.Printf("%s\n", hint)
 				break
 			}
 		}
@@ -269,30 +277,9 @@ func runInstallWorkflow(agent install.Agent, scope string, settingsPath string) 
 		return fmt.Errorf("failed to get executable path: %w", err)
 	}
 
-	var mergedSettings *install.SettingsMap
-	if agent == install.AgentCodex {
-		captainSettings := captainhook.SettingsMap(*existingSettings)
-		if err := captainhook.Install(
-			&captainSettings,
-			install.GenerateCodexHookSpecs(execPath),
-			captainhook.IdentityFunc(install.IsClaudioCommandString),
-		); err != nil {
-			return fmt.Errorf("failed to install Codex hooks: %w", err)
-		}
-		converted := install.SettingsMap(captainSettings)
-		mergedSettings = &converted
-	} else {
-		claudioHooks, err := install.GenerateClaudioHooksForAgent(execPath, agent)
-		if err != nil {
-			return fmt.Errorf("failed to generate Claudio hooks: %w", err)
-		}
-
-		slog.Info("generated Claudio hooks", "hooks", claudioHooks)
-		slog.Debug("merging Claudio hooks into existing settings")
-		mergedSettings, err = install.MergeHooksIntoSettings(existingSettings, claudioHooks)
-		if err != nil {
-			return fmt.Errorf("failed to merge Claudio hooks into settings: %w", err)
-		}
+	mergedSettings, err := install.InstallAgentHooks(existingSettings, agent, execPath)
+	if err != nil {
+		return err
 	}
 
 	slog.Info("merged Claudio hooks into settings",

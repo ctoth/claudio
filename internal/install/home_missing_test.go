@@ -21,7 +21,7 @@ func TestGlobalPathsErrorWhenHomeMissing(t *testing.T) {
 	clearHomeEnv(t)
 	for _, agent := range ConcreteAgents() {
 		t.Run(string(agent), func(t *testing.T) {
-			paths, err := agentConfigPaths(agent, ScopeGlobal)
+			paths, err := agent.ConfigPaths(ScopeGlobal)
 			if err == nil {
 				t.Fatalf("expected error without a home directory, got paths %v", paths)
 			}
@@ -38,8 +38,10 @@ func TestResolveAgentTargetsWithoutHomeCreatesNoTildeDir(t *testing.T) {
 	clearHomeEnv(t)
 	t.Chdir(t.TempDir())
 
-	if _, err := ResolveAgentTargets(AgentAll, ScopeGlobal); err == nil {
-		t.Fatal("expected error resolving global targets without a home directory")
+	for _, agent := range []Agent{AgentAll, AgentClaude} {
+		if _, err := ResolveAgentTargets(agent, ScopeGlobal); err == nil {
+			t.Fatalf("expected error resolving global %s targets without a home directory", agent)
+		}
 	}
 	if _, err := os.Stat(filepath.Join(".", "~")); !os.IsNotExist(err) {
 		t.Fatalf("a literal ~ directory exists in the cwd (err=%v)", err)
