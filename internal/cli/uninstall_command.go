@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"log/slog"
 
 	"claudio.click/internal/install"
 	"claudio.click/internal/uninstall"
@@ -12,208 +11,107 @@ import (
 
 // newUninstallCommand creates the uninstall subcommand with flags
 func newUninstallCommand() *cobra.Command {
+	var flags hookTargetFlags
 	cmd := &cobra.Command{
 		Use:   "uninstall",
 		Short: "Remove claudio hooks from agent settings",
 		Long:  "Remove claudio hooks from supported coding-agent settings to disable audio feedback for tool usage and events.",
-		RunE:  runUninstallCommandE,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return runUninstallCommand(cmd, &flags)
+		},
 	}
-
-	// Add --scope flag with validation
-	cmd.Flags().StringP("scope", "s", install.ScopeGlobal, "Uninstall scope: 'global' for user-wide settings, 'project' for project-specific settings")
-
-	// Add --agent flag with validation
-	cmd.Flags().StringP("agent", "a", string(install.AgentAuto), "Target agent: 'auto', 'claude', 'codex', 'gemini', 'qwen', 'copilot', or 'all'")
-
-	// Add --dry-run flag
-	cmd.Flags().BoolP("dry-run", "d", false, "Show what would be removed without making changes (simulation mode)")
-
-	// Add --quiet flag
-	cmd.Flags().BoolP("quiet", "q", false, "Suppress output (no progress messages)")
-
-	// Add --print flag
-	cmd.Flags().BoolP("print", "p", false, "Print hooks that would be removed")
-
+	flags.register(cmd, hookTargetHelp{
+		scope:  "Uninstall scope",
+		dryRun: "Show what would be removed without making changes (simulation mode)",
+		print:  "Print hooks that would be removed",
+	})
 	return cmd
 }
 
-// runUninstallCommandE handles the uninstall subcommand execution
-func runUninstallCommandE(cmd *cobra.Command, args []string) error {
-	slog.Debug("uninstall command started", "args", args)
-
-	// Get and validate scope flag
-	scopeStr, err := cmd.Flags().GetString("scope")
-	if err != nil {
-		return fmt.Errorf("failed to get scope flag: %w", err)
-	}
-
-	normalizedScope, err := install.NormalizeScope(scopeStr)
-	if err != nil {
-		return err
-	}
-	scope := InstallScope(normalizedScope)
-
-	// Get and validate agent flag
-	agentStr, err := cmd.Flags().GetString("agent")
-	if err != nil {
-		return fmt.Errorf("failed to get agent flag: %w", err)
-	}
-	agent, err := install.ParseAgent(agentStr)
+// runUninstallCommand handles the uninstall subcommand execution
+func runUninstallCommand(cmd *cobra.Command, flags *hookTargetFlags) error {
+	scope, targets, err := flags.resolve()
 	if err != nil {
 		return err
 	}
 
-	// Get dry-run flag
-	dryRun, err := cmd.Flags().GetBool("dry-run")
-	if err != nil {
-		return fmt.Errorf("failed to get dry-run flag: %w", err)
+	switch {
+	case flags.print:
+		flags.printHookTargets(cmd, "uninstall", scope, targets, func(target install.AgentTarget) {
+			hooks, err := claudioHooksIn(target)
+			switch {
+			case err != nil:
+				cmd.Printf("  Warning: Could not read settings file: %v\n", err)
+			case len(hooks) == 0:
+				cmd.Printf("  Hooks to remove: None (no claudio hooks found)\n")
+			default:
+				cmd.Printf("  Hooks to remove: %v\n", hooks)
+			}
+		})
+		return nil
+	case flags.dryRun:
+		handleDryRunUninstall(cmd, flags, scope, targets)
+		return nil
+	default:
+		return runUninstallTargets(cmd, flags, scope, targets)
 	}
-
-	// Get quiet flag
-	quiet, err := cmd.Flags().GetBool("quiet")
-	if err != nil {
-		return fmt.Errorf("failed to get quiet flag: %w", err)
-	}
-
-	// Get print flag
-	print, err := cmd.Flags().GetBool("print")
-	if err != nil {
-		return fmt.Errorf("failed to get print flag: %w", err)
-	}
-
-	slog.Info("uninstall command executing", "scope", scope, "agent", agent, "dry_run", dryRun, "quiet", quiet, "print", print)
-
-	targets, err := install.ResolveAgentTargets(agent, scope.String())
-	if err != nil {
-		return err
-	}
-
-	slog.Debug("resolved uninstall targets", "scope", scope, "agent", agent, "count", len(targets))
-
-	// Handle print flag - shows what hooks would be removed
-	if print {
-		return handlePrintUninstall(cmd, scope, targets, dryRun, quiet)
-	}
-
-	// Handle dry-run mode - show what would be done without making changes
-	if dryRun {
-		return handleDryRunUninstall(cmd, scope, targets, quiet)
-	}
-
-	return runUninstallTargets(cmd, scope, targets, quiet)
 }
 
-func runUninstallTargets(cmd *cobra.Command, scope InstallScope, targets []install.AgentTarget, quiet bool) error {
-	if !quiet {
-		cmd.Printf("Uninstalling Claudio hooks for %s scope...\n", scope.String())
+// claudioHooksIn lists the claudio hook names in the target's settings.
+func claudioHooksIn(target install.AgentTarget) ([]string, error) {
+	settings, err := install.ReadSettingsFile(afero.NewOsFs(), target.ConfigPath)
+	if err != nil {
+		return nil, err
 	}
+	return install.ClaudioHookNames(settings), nil
+}
 
-	for _, target := range targets {
-		if !quiet {
-			cmd.Printf("Target agent: %s\n", target.Agent)
-			cmd.Printf("Settings path: %s\n", target.ConfigPath)
-		}
-
-		err := uninstall.RunUninstallWorkflow(afero.NewOsFs(), target)
-		if err != nil {
+func runUninstallTargets(cmd *cobra.Command, flags *hookTargetFlags, scope string, targets []install.AgentTarget) error {
+	err := flags.applyToTargets(cmd, "Uninstalling", scope, targets, func(target install.AgentTarget) error {
+		if err := uninstall.RunUninstallWorkflow(afero.NewOsFs(), target); err != nil {
 			return fmt.Errorf("uninstall failed for %s: %w", target.Agent, err)
 		}
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 
-	// Success message
-	if !quiet {
-		cmd.Printf("✅ Claudio uninstall completed successfully!\n")
-		cmd.Printf("Audio hooks have been removed from selected agent settings.\n")
-	} else {
-		cmd.Printf("Uninstall: %s ✅\n", scope.String())
+	if flags.quiet {
+		cmd.Printf("Uninstall: %s ✅\n", scope)
+		return nil
 	}
-
-	return nil
-}
-
-// handlePrintUninstall shows configuration details about what would be removed
-func handlePrintUninstall(cmd *cobra.Command, scope InstallScope, targets []install.AgentTarget, dryRun bool, quiet bool) error {
-	var configDetails string
-	if dryRun {
-		configDetails = "PRINT: DRY-RUN uninstall configuration for scope: " + scope.String()
-	} else {
-		configDetails = "PRINT: Uninstall configuration for scope: " + scope.String()
-	}
-
-	cmd.Printf("%s\n", configDetails)
-	if dryRun {
-		cmd.Printf("  Mode: Simulation (no changes will be made)\n")
-	}
-	if quiet {
-		cmd.Printf("  Output: Quiet mode (minimal messages)\n")
-	}
-	cmd.Printf("  Scope: %s\n", scope.String())
-
-	for _, target := range targets {
-		cmd.Printf("  Target agent: %s\n", target.Agent)
-		cmd.Printf("  Settings Path: %s\n", target.ConfigPath)
-
-		// Try to read settings and show what hooks would be removed
-		prodFS := afero.NewOsFs()
-		settings, err := install.ReadSettingsFile(prodFS, target.ConfigPath)
-		if err != nil {
-			cmd.Printf("  Warning: Could not read settings file: %v\n", err)
-			continue
-		}
-
-		claudioHooks := install.ClaudioHookNames(settings)
-		if len(claudioHooks) == 0 {
-			cmd.Printf("  Hooks to remove: None (no claudio hooks found)\n")
-		} else {
-			cmd.Printf("  Hooks to remove: %v\n", claudioHooks)
-		}
-	}
-
+	cmd.Printf("✅ Claudio uninstall completed successfully!\n")
+	cmd.Printf("Audio hooks have been removed from selected agent settings.\n")
 	return nil
 }
 
 // handleDryRunUninstall shows what would be done without making changes
-func handleDryRunUninstall(cmd *cobra.Command, scope InstallScope, targets []install.AgentTarget, quiet bool) error {
-	if !quiet {
-		cmd.Printf("DRY-RUN: Claudio uninstall simulation for %s scope\n", scope.String())
+func handleDryRunUninstall(cmd *cobra.Command, flags *hookTargetFlags, scope string, targets []install.AgentTarget) {
+	if !flags.quiet {
+		cmd.Printf("DRY-RUN: Claudio uninstall simulation for %s scope\n", scope)
 	}
 
 	for _, target := range targets {
-		if !quiet {
-			cmd.Printf("Target agent: %s\n", target.Agent)
-			cmd.Printf("Settings path: %s\n", target.ConfigPath)
-		}
+		flags.printTarget(cmd, target)
 
-		// Try to read settings and show what would be removed
-		prodFS := afero.NewOsFs()
-		settings, err := install.ReadSettingsFile(prodFS, target.ConfigPath)
-		if err != nil {
-			if !quiet {
-				cmd.Printf("Would attempt to read settings, but got error: %v\n", err)
-			} else {
-				cmd.Printf("DRY-RUN: %s %s -> ERROR: %v\n", scope.String(), target.Agent, err)
-			}
-			continue
-		}
-
-		claudioHooks := install.ClaudioHookNames(settings)
-		if len(claudioHooks) == 0 {
-			if !quiet {
-				cmd.Printf("No claudio hooks found to remove.\n")
-			} else {
-				cmd.Printf("DRY-RUN: %s %s -> No hooks to remove\n", scope.String(), target.Agent)
-			}
-		} else {
-			if !quiet {
-				cmd.Printf("Would remove hooks: %v\n", claudioHooks)
-			} else {
-				cmd.Printf("DRY-RUN: %s %s -> Would remove: %v\n", scope.String(), target.Agent, claudioHooks)
-			}
+		hooks, err := claudioHooksIn(target)
+		switch {
+		case err != nil && flags.quiet:
+			cmd.Printf("DRY-RUN: %s %s -> ERROR: %v\n", scope, target.Agent, err)
+		case err != nil:
+			cmd.Printf("Would attempt to read settings, but got error: %v\n", err)
+		case len(hooks) == 0 && flags.quiet:
+			cmd.Printf("DRY-RUN: %s %s -> No hooks to remove\n", scope, target.Agent)
+		case len(hooks) == 0:
+			cmd.Printf("No claudio hooks found to remove.\n")
+		case flags.quiet:
+			cmd.Printf("DRY-RUN: %s %s -> Would remove: %v\n", scope, target.Agent, hooks)
+		default:
+			cmd.Printf("Would remove hooks: %v\n", hooks)
 		}
 	}
-	if !quiet {
+	if !flags.quiet {
 		cmd.Printf("No changes will be made.\n")
 	}
-
-	return nil
 }
