@@ -150,15 +150,35 @@ func (a Agent) ConfigPaths(scope string) ([]string, error) {
 	if normalizedScope == ScopeProject {
 		return append([]string(nil), s.projectPaths...), nil
 	}
-	// A config-home variable replaces the default directory entirely, so it
-	// is the only candidate: falling back to <home>/<dir> would write hooks
-	// the agent never loads.
+	dir, err := s.configDir()
+	if err != nil {
+		return nil, err
+	}
+	return []string{filepath.Join(dir, s.globalFile)}, nil
+}
+
+// configDir returns the agent's global configuration directory. A
+// config-home variable replaces <home>/<dir> entirely, so it is the only
+// candidate: falling back to <home>/<dir> would write files the agent
+// never loads.
+func (s agentSpec) configDir() (string, error) {
 	if s.homeEnv != "" {
 		if dir := strings.TrimSpace(os.Getenv(s.homeEnv)); dir != "" {
-			return []string{filepath.Join(dir, s.globalFile)}, nil
+			return dir, nil
 		}
 	}
-	return homeScopedPaths(s.homeDir, s.globalFile)
+	home, err := HomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, s.homeDir), nil
+}
+
+// ClaudeConfigDir returns Claude Code's configuration directory:
+// CLAUDE_CONFIG_DIR when set, else <home>/.claude.
+func ClaudeConfigDir() (string, error) {
+	s, _ := AgentClaude.spec()
+	return s.configDir()
 }
 
 // BestConfigPath returns the first candidate config path that exists, or

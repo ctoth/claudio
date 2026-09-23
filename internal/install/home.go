@@ -11,13 +11,15 @@ import (
 // "~" directory under the current working directory.
 var errNoHomeDirectory = errors.New("cannot determine home directory: set HOME (or USERPROFILE on Windows)")
 
-// homeScopedPaths returns the global-scope candidates <home>/dirName/fileName.
-func homeScopedPaths(dirName, fileName string) ([]string, error) {
+// HomeDir returns the user's home directory as install resolves it (on
+// Windows: USERPROFILE, then an MSYS-style HOME, then HOMEDRIVE+HOMEPATH).
+// With no home directory it returns an error rather than "~".
+func HomeDir() (string, error) {
 	homeDir := getHomeDirectory()
 	if homeDir == "" {
-		return nil, errNoHomeDirectory
+		return "", errNoHomeDirectory
 	}
-	return []string{filepath.Join(homeDir, dirName, fileName)}, nil
+	return homeDir, nil
 }
 
 // normalizeMSYSPath converts MSYS/Git Bash-style paths (e.g. /c/Users/Q) to

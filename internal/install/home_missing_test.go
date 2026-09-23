@@ -47,3 +47,30 @@ func TestResolveAgentTargetsWithoutHomeCreatesNoTildeDir(t *testing.T) {
 		t.Fatalf("a literal ~ directory exists in the cwd (err=%v)", err)
 	}
 }
+
+func TestHomeDirAndClaudeConfigDir(t *testing.T) {
+	clearHomeEnv(t)
+	if _, err := HomeDir(); err == nil {
+		t.Error("HomeDir: expected error without a home directory")
+	}
+	if _, err := ClaudeConfigDir(); err == nil {
+		t.Error("ClaudeConfigDir: expected error without a home directory")
+	}
+
+	custom := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", " "+custom+" ")
+	if got, err := ClaudeConfigDir(); err != nil || got != custom {
+		t.Errorf("ClaudeConfigDir() = %q, %v; want %q (trimmed CLAUDE_CONFIG_DIR)", got, err, custom)
+	}
+
+	home := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	if got, err := HomeDir(); err != nil || got != home {
+		t.Errorf("HomeDir() = %q, %v; want %q", got, err, home)
+	}
+	if got, err := ClaudeConfigDir(); err != nil || got != filepath.Join(home, ".claude") {
+		t.Errorf("ClaudeConfigDir() = %q, %v; want %q", got, err, filepath.Join(home, ".claude"))
+	}
+}

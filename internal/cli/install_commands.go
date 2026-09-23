@@ -6,8 +6,8 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strings"
 
+	"claudio.click/internal/install"
 	"claudio.click/internal/safeio"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
@@ -208,18 +208,18 @@ func parseCommandArtifactAgent(s string) (commandArtifactAgent, error) {
 func (a commandArtifactAgent) String() string { return string(a) }
 
 func resolveCommandArtifacts(agent commandArtifactAgent) ([]commandArtifact, error) {
-	homeDir, err := os.UserHomeDir()
+	homeDir, err := install.HomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get home directory: %w", err)
 	}
 
 	switch agent {
 	case commandArtifactAgentClaude:
-		// Honor CLAUDE_CONFIG_DIR like Claude Code itself: when set, it
-		// replaces ~/.claude as the configuration directory.
-		claudeDir := filepath.Join(homeDir, ".claude")
-		if configDir := strings.TrimSpace(os.Getenv("CLAUDE_CONFIG_DIR")); configDir != "" {
-			claudeDir = configDir
+		// Honor CLAUDE_CONFIG_DIR like Claude Code itself (and like hook
+		// install): when set, it replaces ~/.claude.
+		claudeDir, err := install.ClaudeConfigDir()
+		if err != nil {
+			return nil, err
 		}
 		commandsDir := filepath.Join(claudeDir, "commands")
 		return []commandArtifact{{
