@@ -88,7 +88,7 @@ func NewSoundpackResolver(mapper PathMapper) SoundpackResolver {
 // ResolveSound resolves a single sound path using the configured mapper
 func (u *UnifiedSoundpackResolver) ResolveSound(relativePath string) (string, error) {
 	if relativePath == "" {
-		return "", fmt.Errorf("sound path cannot be empty")
+		return "", errors.New("sound path cannot be empty")
 	}
 
 	// Get candidate paths from mapper
@@ -137,7 +137,7 @@ func (u *UnifiedSoundpackResolver) ResolveSoundWithFallback(paths []string, opts
 	cfg := buildResolveConfig(opts)
 
 	if len(paths) == 0 {
-		return "", fmt.Errorf("no fallback paths provided")
+		return "", errors.New("no fallback paths provided")
 	}
 
 	slog.Debug("resolving sound with fallback",
@@ -374,10 +374,10 @@ func resolveTrustedRelativeMappings(soundpack *JSONSoundpackFile, basePaths []st
 // mappings, and the mappings-count cap.
 func validateJSONSoundpackBasics(soundpack JSONSoundpackFile) error {
 	if soundpack.Name == "" {
-		return fmt.Errorf("JSON soundpack missing required 'name' field")
+		return errors.New("JSON soundpack missing required 'name' field")
 	}
 	if len(soundpack.Mappings) == 0 {
-		return fmt.Errorf("JSON soundpack missing or empty 'mappings' field")
+		return errors.New("JSON soundpack missing or empty 'mappings' field")
 	}
 	if len(soundpack.Mappings) > MaxSoundpackMappings {
 		return fmt.Errorf("soundpack mappings exceed limit of %d entries (got %d)",

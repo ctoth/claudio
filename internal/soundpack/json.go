@@ -1,6 +1,7 @@
 package soundpack
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -26,7 +27,7 @@ import (
 // in addition to the GOOS-aware check.
 func validateMappingValue(value, baseDir string) (resolved string, err error) {
 	if value == "" {
-		return "", fmt.Errorf("empty mapping value")
+		return "", errors.New("empty mapping value")
 	}
 	if isAnyPlatformAbsolute(value) {
 		return "", fmt.Errorf("absolute paths not allowed: %q", value)

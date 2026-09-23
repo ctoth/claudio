@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -25,7 +26,7 @@ func resolveWritableConfigPath(cmd *cobra.Command) (string, error) {
 	}
 	paths := config.ConfigPaths("config.json")
 	if len(paths) == 0 {
-		return "", fmt.Errorf("no XDG config path available")
+		return "", errors.New("no XDG config path available")
 	}
 	return paths[0], nil
 }

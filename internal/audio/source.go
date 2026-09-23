@@ -56,7 +56,7 @@ func NewFileSource(path string) *FileSource {
 // backends can skip the open-read-temp dance.
 func (fs *FileSource) FilePath() (string, error) {
 	if fs.path == "" {
-		return "", fmt.Errorf("file path is empty")
+		return "", errors.New("file path is empty")
 	}
 	return fs.path, nil
 }
@@ -67,7 +67,7 @@ func (fs *FileSource) FilePath() (string, error) {
 // against the full filename.
 func (fs *FileSource) Reader() (io.ReadCloser, string, error) {
 	if fs.path == "" {
-		return nil, "", fmt.Errorf("file path is empty")
+		return nil, "", errors.New("file path is empty")
 	}
 
 	file, err := os.Open(fs.path)

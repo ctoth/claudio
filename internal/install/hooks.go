@@ -2,6 +2,7 @@ package install
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"maps"
@@ -151,11 +152,11 @@ func getHookNamesList(hooks HooksMap) []string {
 func MergeHooksIntoSettings(existingSettings *SettingsMap, claudioHooks any) (*SettingsMap, error) {
 	// Validate inputs
 	if existingSettings == nil {
-		return nil, fmt.Errorf("settings cannot be nil")
+		return nil, errors.New("settings cannot be nil")
 	}
 
 	if claudioHooks == nil {
-		return nil, fmt.Errorf("hooks cannot be nil")
+		return nil, errors.New("hooks cannot be nil")
 	}
 
 	// Validate Claudio hooks type

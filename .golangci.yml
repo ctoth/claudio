@@ -6,6 +6,7 @@ linters:
     - usetesting
     - errorlint
     - intrange
+    - perfsprint
   settings:
     staticcheck:
       checks:

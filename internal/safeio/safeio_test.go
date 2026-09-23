@@ -3,8 +3,8 @@ package safeio
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -49,7 +49,7 @@ func TestReadAllCapped_OneByteOverCap(t *testing.T) {
 	if !strings.Contains(msg, "soundpack JSON") {
 		t.Errorf("error %q should name the kind 'soundpack JSON'", msg)
 	}
-	wantCap := fmt.Sprintf("%d", cap)
+	wantCap := strconv.FormatInt(cap, 10)
 	if !strings.Contains(msg, wantCap) {
 		t.Errorf("error %q should mention cap value %q", msg, wantCap)
 	}

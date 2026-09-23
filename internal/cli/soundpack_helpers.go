@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -119,7 +120,7 @@ func discoverEmbeddedSoundpacks() ([]soundpackInfo, error) {
 	}
 
 	if len(packs) == 0 {
-		return nil, fmt.Errorf("no embedded platform soundpacks found")
+		return nil, errors.New("no embedded platform soundpacks found")
 	}
 
 	return packs, nil
@@ -345,7 +346,7 @@ func ExtractAllSoundKeys() ([]string, error) {
 	}
 
 	if len(keySet) == 0 {
-		return nil, fmt.Errorf("no sound keys found in any embedded platform soundpack")
+		return nil, errors.New("no sound keys found in any embedded platform soundpack")
 	}
 
 	// Convert to sorted slice

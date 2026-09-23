@@ -2,6 +2,7 @@ package hooks
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"path/filepath"
@@ -154,7 +155,7 @@ func ParseHookEvent(data []byte) (*HookEvent, error) {
 // payload format does not include hook_event_name.
 func ParseHookEventWithDefault(data []byte, defaultEvent string) (*HookEvent, error) {
 	if len(data) == 0 {
-		return nil, fmt.Errorf("empty JSON data")
+		return nil, errors.New("empty JSON data")
 	}
 
 	var event HookEvent
@@ -171,13 +172,13 @@ func ParseHookEventWithDefault(data []byte, defaultEvent string) (*HookEvent, er
 
 	// Validate required fields
 	if event.SessionID == "" {
-		return nil, fmt.Errorf("missing required field: session_id")
+		return nil, errors.New("missing required field: session_id")
 	}
 	if event.EventName == "" {
-		return nil, fmt.Errorf("missing required field: hook_event_name")
+		return nil, errors.New("missing required field: hook_event_name")
 	}
 	if event.CWD == "" {
-		return nil, fmt.Errorf("missing required field: cwd")
+		return nil, errors.New("missing required field: cwd")
 	}
 	return &event, nil
 }
