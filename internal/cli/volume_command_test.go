@@ -239,82 +239,48 @@ func TestVolumeCommand_RejectsNegative(t *testing.T) {
 	}
 }
 
-func TestVolumeCommand_RejectsNaN(t *testing.T) {
-	testenv.IsolateXDG(t)
-	tmp := t.TempDir()
-	configPath := filepath.Join(tmp, "config.json")
+// TestVolumeCommand_RejectsNonFinite guards the math.IsNaN and math.IsInf
+// branches: strconv.ParseFloat accepts "NaN" and "Inf" as valid floats, so
+// the parse step succeeds and those branches are the only thing rejecting
+// them. A refactor that drops either would silently allow it through.
+func TestVolumeCommand_RejectsNonFinite(t *testing.T) {
+	for _, arg := range []string{"NaN", "Inf"} {
+		t.Run(arg, func(t *testing.T) {
+			testenv.IsolateXDG(t)
+			tmp := t.TempDir()
+			configPath := filepath.Join(tmp, "config.json")
 
-	startVol := 0.2
-	writeSeedConfig(t, configPath, &config.Config{
-		Volume:           &startVol,
-		DefaultSoundpack: "x",
-		Enabled:          true,
-		LogLevel:         "warn",
-		AudioBackend:     "auto",
-	})
+			startVol := 0.2
+			writeSeedConfig(t, configPath, &config.Config{
+				Volume:           &startVol,
+				DefaultSoundpack: "x",
+				Enabled:          true,
+				LogLevel:         "warn",
+				AudioBackend:     "auto",
+			})
 
-	cli := NewCLI()
-	stdin := strings.NewReader("")
-	stdout := &bytes.Buffer{}
-	stderr := &bytes.Buffer{}
+			cli := NewCLI()
+			stdin := strings.NewReader("")
+			stdout := &bytes.Buffer{}
+			stderr := &bytes.Buffer{}
 
-	// strconv.ParseFloat accepts "NaN" as a valid float, so the parse step
-	// succeeds and the math.IsNaN branch is the only thing rejecting this.
-	// A refactor that drops that branch would silently allow NaN through.
-	code := cli.Run([]string{"claudio", "volume", "NaN", "--config", configPath}, stdin, stdout, stderr)
-	if code == 0 {
-		t.Fatalf("expected non-zero exit code for NaN; stdout=%q stderr=%q",
-			stdout.String(), stderr.String())
-	}
-	combined := stderr.String() + stdout.String()
-	if !strings.Contains(combined, "finite") {
-		t.Errorf("expected error mentioning 'finite' for NaN, got: stderr=%q stdout=%q",
-			stderr.String(), stdout.String())
-	}
+			code := cli.Run([]string{"claudio", "volume", arg, "--config", configPath}, stdin, stdout, stderr)
+			if code == 0 {
+				t.Fatalf("expected non-zero exit code for %s; stdout=%q stderr=%q",
+					arg, stdout.String(), stderr.String())
+			}
+			combined := stderr.String() + stdout.String()
+			if !strings.Contains(combined, "finite") {
+				t.Errorf("expected error mentioning 'finite' for %s, got: stderr=%q stdout=%q",
+					arg, stderr.String(), stdout.String())
+			}
 
-	// Persisted value must not have been overwritten.
-	persisted := readPersistedConfig(t, configPath)
-	if persisted.Volume == nil || *persisted.Volume != 0.2 {
-		t.Errorf("Volume should be unchanged after NaN rejection, got %v", persisted.Volume)
-	}
-}
-
-func TestVolumeCommand_RejectsInf(t *testing.T) {
-	testenv.IsolateXDG(t)
-	tmp := t.TempDir()
-	configPath := filepath.Join(tmp, "config.json")
-
-	startVol := 0.2
-	writeSeedConfig(t, configPath, &config.Config{
-		Volume:           &startVol,
-		DefaultSoundpack: "x",
-		Enabled:          true,
-		LogLevel:         "warn",
-		AudioBackend:     "auto",
-	})
-
-	cli := NewCLI()
-	stdin := strings.NewReader("")
-	stdout := &bytes.Buffer{}
-	stderr := &bytes.Buffer{}
-
-	// Same shape as NaN: ParseFloat accepts "Inf"; the math.IsInf branch
-	// is what rejects it. Guard that branch from accidental removal.
-	code := cli.Run([]string{"claudio", "volume", "Inf", "--config", configPath}, stdin, stdout, stderr)
-	if code == 0 {
-		t.Fatalf("expected non-zero exit code for Inf; stdout=%q stderr=%q",
-			stdout.String(), stderr.String())
-	}
-	combined := stderr.String() + stdout.String()
-	if !strings.Contains(combined, "finite") {
-		t.Errorf("expected error mentioning 'finite' for Inf, got: stderr=%q stdout=%q",
-			stderr.String(), stdout.String())
-	}
-
-	// Persisted value must not have been overwritten.
-	persisted := readPersistedConfig(t, configPath)
-	if persisted.Volume == nil || *persisted.Volume != 0.2 {
-		t.Errorf("Volume should be unchanged after Inf rejection, got %v", persisted.Volume)
+			// Persisted value must not have been overwritten.
+			persisted := readPersistedConfig(t, configPath)
+			if persisted.Volume == nil || *persisted.Volume != 0.2 {
+				t.Errorf("Volume should be unchanged after %s rejection, got %v", arg, persisted.Volume)
+			}
+		})
 	}
 }
 

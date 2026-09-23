@@ -9,7 +9,10 @@ linters:
     - perfsprint
     - gocritic
     - unparam
+    - dupl
   settings:
+    dupl:
+      threshold: 150
     staticcheck:
       checks:
         - all
