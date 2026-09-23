@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"claudio.click/internal/safeio"
+	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 )
 
@@ -368,26 +370,8 @@ func installCommandArtifact(artifact commandArtifact) error {
 // replaceCommandArtifact swaps in the current content via a temp file and
 // rename, so an interrupted upgrade never leaves a truncated artifact behind.
 func replaceCommandArtifact(artifact commandArtifact) error {
-	tmp, err := os.CreateTemp(artifact.Directory, filepath.Base(artifact.Path)+".*.tmp")
-	if err != nil {
-		return fmt.Errorf("failed to create temporary command artifact: %w", err)
-	}
-	tmpPath := tmp.Name()
-	_, writeErr := tmp.WriteString(artifact.Content)
-	closeErr := tmp.Close()
-	if writeErr != nil || closeErr != nil {
-		_ = os.Remove(tmpPath)
-		if writeErr != nil {
-			return fmt.Errorf("failed to write command artifact: %w", writeErr)
-		}
-		return fmt.Errorf("failed to close command artifact: %w", closeErr)
-	}
-	if err := os.Chmod(tmpPath, 0644); err != nil {
-		_ = os.Remove(tmpPath)
-		return fmt.Errorf("failed to set command artifact permissions: %w", err)
-	}
-	if err := os.Rename(tmpPath, artifact.Path); err != nil {
-		_ = os.Remove(tmpPath)
+	tempPattern := filepath.Base(artifact.Path) + ".*.tmp"
+	if err := safeio.WriteFileAtomic(afero.NewOsFs(), artifact.Path, []byte(artifact.Content), 0644, tempPattern); err != nil {
 		return fmt.Errorf("failed to replace command artifact: %w", err)
 	}
 

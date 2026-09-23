@@ -18,6 +18,7 @@ import (
 	"claudio.click/internal/soundpack"
 	"claudio.click/internal/sounds"
 	"claudio.click/internal/tracking"
+	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
@@ -1034,23 +1035,6 @@ func writeCachedSoundIfMissing(path string, data []byte) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(dir, ".sound-*.tmp")
-	if err != nil {
-		return err
-	}
-	tmpName := tmp.Name()
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		os.Remove(tmpName)
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		os.Remove(tmpName)
-		return err
-	}
-	if err := os.Rename(tmpName, path); err != nil {
-		os.Remove(tmpName)
-		return err
-	}
-	return nil
+	// 0600 matches the os.CreateTemp default these cached sounds always had.
+	return safeio.WriteFileAtomic(afero.NewOsFs(), path, data, 0o600, ".sound-*.tmp")
 }

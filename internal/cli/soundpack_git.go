@@ -19,6 +19,7 @@ import (
 	"claudio.click/internal/soundpack"
 	"github.com/adrg/xdg"
 	"github.com/gofrs/flock"
+	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 )
 
@@ -709,46 +710,8 @@ func saveSoundpackRegistry(registry *soundpackRegistry) error {
 	if registry.Packs == nil {
 		registry.Packs = make(map[string]gitSoundpackRecord)
 	}
-	data, err := json.MarshalIndent(registry, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal soundpack registry: %w", err)
-	}
-	path := soundpackRegistryPath()
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return fmt.Errorf("failed to create soundpack registry directory: %w", err)
-	}
-	mode := os.FileMode(0644)
-	if info, err := os.Stat(path); err == nil {
-		mode = info.Mode() & os.ModePerm
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".soundpacks-*.tmp")
-	if err != nil {
-		return fmt.Errorf("failed to create temporary soundpack registry: %w", err)
-	}
-	tmpPath := tmp.Name()
-	cleanup := func() {
-		_ = tmp.Close()
-		_ = os.Remove(tmpPath)
-	}
-	if _, err := tmp.Write(data); err != nil {
-		cleanup()
-		return fmt.Errorf("failed to write temporary soundpack registry: %w", err)
-	}
-	if err := tmp.Sync(); err != nil {
-		cleanup()
-		return fmt.Errorf("failed to sync temporary soundpack registry: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		_ = os.Remove(tmpPath)
-		return fmt.Errorf("failed to close temporary soundpack registry: %w", err)
-	}
-	if err := os.Chmod(tmpPath, mode); err != nil {
-		_ = os.Remove(tmpPath)
-		return fmt.Errorf("failed to set soundpack registry permissions: %w", err)
-	}
-	if err := os.Rename(tmpPath, path); err != nil {
-		_ = os.Remove(tmpPath)
-		return fmt.Errorf("failed to replace soundpack registry: %w", err)
+	if err := safeio.WriteJSONFile(afero.NewOsFs(), soundpackRegistryPath(), registry, ".soundpacks-*.tmp"); err != nil {
+		return fmt.Errorf("failed to save soundpack registry: %w", err)
 	}
 	return nil
 }
