@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"slices"
+	"strings"
 
 	"claudio.click/internal/hooks"
 )
@@ -135,63 +136,17 @@ func GetMissingSoundsSummary(db *sql.DB, filter QueryFilter) (map[string]interfa
 	return summary, nil
 }
 
-// parseCommaSeparated splits a comma-separated string and trims whitespace
+// parseCommaSeparated splits a comma-separated string, trims whitespace and
+// drops empty parts.
 func parseCommaSeparated(s string) []string {
-	if s == "" {
-		return nil
-	}
-
 	var result []string
-	for _, part := range splitString(s, ",") {
-		trimmed := trimString(part)
+	for part := range strings.SplitSeq(s, ",") {
+		trimmed := strings.TrimSpace(part)
 		if trimmed != "" {
 			result = append(result, trimmed)
 		}
 	}
 	return result
-}
-
-// splitString splits a string by delimiter (avoiding strings package dependency)
-func splitString(s, delimiter string) []string {
-	if s == "" {
-		return nil
-	}
-
-	var result []string
-	start := 0
-
-	for i := 0; i <= len(s)-len(delimiter); i++ {
-		if s[i:i+len(delimiter)] == delimiter {
-			result = append(result, s[start:i])
-			start = i + len(delimiter)
-		}
-	}
-	result = append(result, s[start:])
-
-	return result
-}
-
-// trimString removes leading and trailing whitespace (avoiding strings package dependency)
-func trimString(s string) string {
-	start := 0
-	end := len(s)
-
-	// Trim leading whitespace
-	for start < end && isWhitespace(s[start]) {
-		start++
-	}
-
-	// Trim trailing whitespace
-	for end > start && isWhitespace(s[end-1]) {
-		end--
-	}
-
-	return s[start:end]
-}
-
-// isWhitespace checks if a character is whitespace
-func isWhitespace(c byte) bool {
-	return c == ' ' || c == '\t' || c == '\n' || c == '\r'
 }
 
 // categoryName turns a scanned categorySQL value into a category name;
