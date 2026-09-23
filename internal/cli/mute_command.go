@@ -80,7 +80,7 @@ func setEnabledAndPersist(cmd *cobra.Command, enabled bool, successMsg string) e
 		}
 	}()
 
-	cfg, err := loadConfigForVerb(cmd, cli, configPath)
+	cfg, err := loadConfigForVerb(cmd, cli)
 	if err != nil {
 		return err
 	}

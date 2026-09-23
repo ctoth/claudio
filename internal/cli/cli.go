@@ -150,7 +150,6 @@ func hasVersionFlag(args []string) bool {
 // loadAndValidateConfig loads configuration from flags and files, applies overrides, and validates
 func loadAndValidateConfig(cmd *cobra.Command, cli *CLI) (*config.Config, error) {
 	// Get flag values
-	configFile, _ := cmd.Flags().GetString("config")
 	volumeStr, _ := cmd.Flags().GetString("volume")
 	soundpackFlag, _ := cmd.Flags().GetString("soundpack")
 	silent, _ := cmd.Flags().GetBool("silent")
@@ -170,24 +169,10 @@ func loadAndValidateConfig(cmd *cobra.Command, cli *CLI) (*config.Config, error)
 		}
 	}
 
-	// Load configuration
-	var cfg *config.Config
-	var err error
-	if configFile != "" {
-		cfg, err = cli.configManager.LoadFromFile(configFile)
-		if err != nil {
-			// If config file doesn't exist, use defaults
-			slog.Warn("config file not found, using defaults", "file", configFile, "error", err)
-			cfg = cli.configManager.GetDefaultConfig()
-		}
-	} else {
-		cfg, err = cli.configManager.LoadConfig()
-		if err != nil {
-			cmd.PrintErrf("Error loading config: %v\n", err)
-			slog.Error("config load failed", "error", err)
-			return nil, fmt.Errorf("error loading config: %w", err)
-		}
-	}
+	// Load configuration. An unusable file is a warning, never a failed hook.
+	loaded := loadConfig(cmd, cli)
+	loaded.warnIgnored(cmd)
+	cfg := loaded.Config
 
 	// Apply environment overrides
 	cfg = cli.configManager.ApplyEnvironmentOverrides(cfg)
@@ -211,8 +196,7 @@ func loadAndValidateConfig(cmd *cobra.Command, cli *CLI) (*config.Config, error)
 	}
 
 	// Validate final configuration
-	err = cli.configManager.ValidateConfig(cfg)
-	if err != nil {
+	if err := cli.configManager.ValidateConfig(cfg); err != nil {
 		cmd.PrintErrf("Error: invalid configuration: %v\n", err)
 		slog.Error("config validation failed", "error", err)
 		return nil, fmt.Errorf("invalid configuration: %w", err)

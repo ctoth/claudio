@@ -39,6 +39,17 @@ or to the `--config` file if given. When the user file does not exist yet, they
 seed it from the effective configuration (a system-wide file if one exists,
 otherwise the defaults).
 
+### Missing, Empty, or Broken Files
+
+A missing config file, or an empty one such as `--config /dev/null` (`NUL` on
+Windows), means defaults. A file that cannot be parsed or fails validation is
+reported once on stderr as a `Warning:` line (and in the log file), and hook
+mode, `claudio analyze`, and `claudio status` carry on with the defaults, so a
+typo never breaks your agent's hooks. `claudio status` marks such a file as
+`invalid, ignored`. Commands that write the config (`volume`, `mute`, `unmute`,
+`soundpack use`) refuse instead, so they never overwrite a file you may still
+want to fix.
+
 ### Partial Files
 
 Every field is optional. A config file is read on top of the defaults, so a

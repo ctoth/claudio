@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -152,10 +153,18 @@ func (cm *ConfigManager) GetDefaultConfig() *Config {
 func (cm *ConfigManager) LoadFromFile(filePath string) (*Config, error) {
 	slog.Debug("loading config from file", "file_path", filePath)
 
+	// Failures are returned, not logged: callers decide whether a bad file
+	// is fatal (write paths) or a warning (hook mode), and log it once.
 	data, err := afero.ReadFile(cm.fs, filePath)
 	if err != nil {
-		slog.Error("failed to read config file", "file_path", filePath, "error", err)
 		return nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	// An empty file (including --config NUL or /dev/null) holds no
+	// settings, so it means defaults rather than a JSON syntax error.
+	if len(bytes.TrimSpace(data)) == 0 {
+		slog.Debug("config file is empty; using defaults", "file_path", filePath)
+		data = []byte("{}")
 	}
 
 	// Decode on top of the defaults so keys the file omits keep their default
@@ -165,18 +174,14 @@ func (cm *ConfigManager) LoadFromFile(filePath string) (*Config, error) {
 	// lets `claudio volume` report that no volume is persisted.
 	config := *cm.GetDefaultConfig()
 	config.Volume = nil
-	err = json.Unmarshal(data, &config)
-	if err != nil {
-		slog.Error("failed to parse config JSON", "file_path", filePath, "error", err)
+	if err := json.Unmarshal(data, &config); err != nil {
 		return nil, fmt.Errorf("failed to parse config JSON: %w", err)
 	}
 
 	config.AudioBackend = migrateLegacyAudioBackend(config.AudioBackend, filePath)
 
-	err = cm.ValidateConfig(&config)
-	if err != nil {
-		slog.Error("config validation failed", "file_path", filePath, "error", err)
-		return nil, fmt.Errorf("config validation failed: %w", err)
+	if err := cm.ValidateConfig(&config); err != nil {
+		return nil, err
 	}
 
 	slog.Debug("config loaded successfully",
@@ -230,26 +235,24 @@ func (cm *ConfigManager) WriteConfig(filePath string, config *Config) error {
 
 // LoadConfig loads configuration using XDG path discovery
 func (cm *ConfigManager) LoadConfig() (*Config, error) {
-	slog.Debug("loading config using XDG path discovery")
+	path := cm.FindConfigFile()
+	if path == "" {
+		slog.Debug("no config file found, using defaults")
+		return cm.GetDefaultConfig(), nil
+	}
+	return cm.LoadFromFile(path)
+}
 
-	configPaths := cm.xdg.GetConfigPaths("config.json")
-
-	slog.Debug("searching for config file", "paths", configPaths)
-
-	// Try to load from each path in priority order
-	for i, configPath := range configPaths {
-		slog.Debug("checking config path", "path_index", i, "path", configPath)
-
+// FindConfigFile returns the first XDG config.json that exists, in search
+// order, or "" when there is none.
+func (cm *ConfigManager) FindConfigFile() string {
+	for _, configPath := range cm.xdg.GetConfigPaths("config.json") {
 		if _, err := cm.fs.Stat(configPath); err == nil {
 			slog.Debug("found config file", "path", configPath)
-			return cm.LoadFromFile(configPath)
-		} else {
-			slog.Debug("config file not found", "path", configPath, "error", err)
+			return configPath
 		}
 	}
-
-	slog.Debug("no config file found, using defaults")
-	return cm.GetDefaultConfig(), nil
+	return ""
 }
 
 // ValidateConfig validates configuration values
@@ -317,7 +320,7 @@ func (cm *ConfigManager) ValidateConfig(config *Config) error {
 
 	if len(errors) > 0 {
 		errMsg := strings.Join(errors, "; ")
-		slog.Error("config validation failed", "errors", errMsg)
+		slog.Debug("config validation failed", "errors", errMsg)
 		return fmt.Errorf("config validation failed: %s", errMsg)
 	}
 
