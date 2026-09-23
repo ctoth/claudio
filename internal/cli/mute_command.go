@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 
 	"claudio.click/internal/config"
@@ -55,42 +54,17 @@ func runUnmuteE(cmd *cobra.Command, _ []string) error {
 	return setEnabledAndPersist(cmd, true, "audio unmuted")
 }
 
-// setEnabledAndPersist is the shared core for mute/unmute. Acquires
-// the config lock, loads existing config, flips Enabled, writes
-// atomically.
+// setEnabledAndPersist is the shared core for mute/unmute: one locked,
+// validated read-modify-write through mutateConfigForCommand.
 func setEnabledAndPersist(cmd *cobra.Command, enabled bool, successMsg string) error {
-	cli := cliFromContext(cmd.Context())
-	if cli == nil {
-		return fmt.Errorf("CLI instance not found in context")
-	}
-	cli.initializeConfigManager()
-
-	configPath, err := resolveWritableConfigPath(cmd, cli)
-	if err != nil {
-		return err
-	}
-
-	lock, err := config.LockConfigDir(configPath)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err := lock.Unlock(); err != nil {
-			slog.Warn("failed to release config lock", "err", err)
-		}
-	}()
-
-	cfg, err := loadConfigForVerb(cmd, cli)
-	if err != nil {
-		return err
-	}
-
-	cfg.Enabled = enabled
-	if err := config.WriteConfigFile(afero.NewOsFs(), configPath, cfg); err != nil {
-		return fmt.Errorf("save config: %w", err)
+	if err := mutateConfigForCommand(cmd, func(cfg *config.Config) error {
+		cfg.Enabled = enabled
+		return nil
+	}); err != nil {
+		return fmt.Errorf("failed to update config: %w", err)
 	}
 
 	fmt.Fprintln(cmd.OutOrStdout(), successMsg)
-	slog.Info("enabled persisted", "path", configPath, "enabled", enabled)
+	slog.Info("enabled persisted", "enabled", enabled)
 	return nil
 }

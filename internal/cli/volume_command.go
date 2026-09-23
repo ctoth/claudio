@@ -7,7 +7,6 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 
 	"claudio.click/internal/config"
@@ -48,11 +47,6 @@ func runVolumeE(cmd *cobra.Command, args []string) error {
 	}
 	cli.initializeConfigManager()
 
-	configPath, err := resolveWritableConfigPath(cmd, cli)
-	if err != nil {
-		return err
-	}
-
 	// Read-only path: print and return.
 	if len(args) == 0 {
 		cfg, err := loadConfigForVerb(cmd, cli)
@@ -86,34 +80,18 @@ func runVolumeE(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("volume must be between 0.0 and 1.0, got %f", v)
 	}
 
-	lock, err := config.LockConfigDir(configPath)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err := lock.Unlock(); err != nil {
-			slog.Warn("failed to release config lock", "err", err)
+	previous := "default"
+	if err := mutateConfigForCommand(cmd, func(cfg *config.Config) error {
+		if cfg.Volume != nil {
+			previous = fmt.Sprintf("%.2f", *cfg.Volume)
 		}
-	}()
-
-	cfg, err := loadConfigForVerb(cmd, cli)
-	if err != nil {
-		return err
-	}
-
-	var previous string
-	if cfg.Volume == nil {
-		previous = "default"
-	} else {
-		previous = fmt.Sprintf("%.2f", *cfg.Volume)
-	}
-
-	cfg.Volume = &v
-	if err := config.WriteConfigFile(afero.NewOsFs(), configPath, cfg); err != nil {
-		return fmt.Errorf("save config: %w", err)
+		cfg.Volume = &v
+		return nil
+	}); err != nil {
+		return fmt.Errorf("failed to update config: %w", err)
 	}
 
 	fmt.Fprintf(cmd.OutOrStdout(), "volume: %s -> %.2f\n", previous, v)
-	slog.Info("volume persisted", "path", configPath, "previous", previous, "value", v)
+	slog.Info("volume persisted", "previous", previous, "value", v)
 	return nil
 }
