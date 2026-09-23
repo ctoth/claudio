@@ -10,6 +10,7 @@ import (
 // old approach of splitting SoundHint on '-', which broke on hyphenated
 // commands (docker-compose) and subcommands (kubectl port-forward).
 func TestGetContextTypedCommandFields(t *testing.T) {
+	t.Parallel()
 	bash := func(cmd string) string {
 		data, _ := json.Marshal(map[string]string{"command": cmd})
 		return string(data)

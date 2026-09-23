@@ -6,6 +6,7 @@ import (
 )
 
 func TestValidate(t *testing.T) {
+	t.Parallel()
 	for _, v := range []float64{0, 0.25, 1} {
 		if err := Validate(v); err != nil {
 			t.Errorf("Validate(%v) = %v, want nil", v, err)

@@ -453,6 +453,9 @@ func TestSoundpackStatus_ShowsManagedGitPack(t *testing.T) {
 
 func createTestGitSoundpackRepo(t *testing.T) string {
 	t.Helper()
+	if testing.Short() {
+		t.Skip("skipping git soundpack test in -short mode")
+	}
 	if err := gitpack.RequireGit(); err != nil {
 		t.Skipf("git is required for git soundpack tests: %v", err)
 	}

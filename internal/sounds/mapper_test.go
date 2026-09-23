@@ -25,6 +25,7 @@ func newTestResolver(mappings map[string]string) soundpack.SoundpackResolver {
 }
 
 func TestSoundMapper(t *testing.T) {
+	t.Parallel()
 	mapper := NewSoundMapper()
 
 	if mapper == nil {
@@ -33,6 +34,7 @@ func TestSoundMapper(t *testing.T) {
 }
 
 func TestMapSoundSilentContextReturnsNil(t *testing.T) {
+	t.Parallel()
 	mapper := NewSoundMapper()
 	result := mapper.MapSound(context.Background(), &hooks.EventContext{
 		Category:  hooks.Silent,
@@ -44,6 +46,7 @@ func TestMapSoundSilentContextReturnsNil(t *testing.T) {
 }
 
 func TestMapSoundEventSpecificFallback(t *testing.T) {
+	t.Parallel()
 	mapper := NewSoundMapper()
 
 	testCases := []struct {
@@ -184,6 +187,7 @@ func TestMapSoundEventSpecificFallback(t *testing.T) {
 }
 
 func TestMapSoundPathNormalization(t *testing.T) {
+	t.Parallel()
 	mapper := NewSoundMapper()
 
 	testCases := []struct {
@@ -224,6 +228,7 @@ func TestMapSoundPathNormalization(t *testing.T) {
 }
 
 func TestMapSoundFallbackSelection(t *testing.T) {
+	t.Parallel()
 	mapper := NewSoundMapper()
 
 	// Test fallback path generation - updated for event-specific architecture
@@ -309,6 +314,7 @@ func TestMapSoundFallbackSelection(t *testing.T) {
 }
 
 func TestMapSoundEdgeCases(t *testing.T) {
+	t.Parallel()
 	mapper := NewSoundMapper()
 
 	t.Run("nil context", func(t *testing.T) {
@@ -380,6 +386,7 @@ func TestMapSoundEdgeCases(t *testing.T) {
 }
 
 func TestMapSoundResultMetadata(t *testing.T) {
+	t.Parallel()
 	mapper := NewSoundMapper()
 
 	eventCtx := &hooks.EventContext{
@@ -415,6 +422,7 @@ func TestMapSoundResultMetadata(t *testing.T) {
 }
 
 func TestMapSoundWithOriginalToolFallback(t *testing.T) {
+	t.Parallel()
 	mapper := NewSoundMapper()
 
 	// Test context with extracted command but original tool for fallback
@@ -461,6 +469,7 @@ func TestMapSoundWithOriginalToolFallback(t *testing.T) {
 
 // TDD Phase 2.1 RED: Event-specific fallback chain differentiation tests
 func TestEventSpecificFallbackChains(t *testing.T) {
+	t.Parallel()
 	mapper := NewSoundMapper()
 
 	tests := []struct {
@@ -610,6 +619,7 @@ func TestEventSpecificFallbackChains(t *testing.T) {
 
 // TDD Phase 2.1 RED: PreToolUse enhanced 9-level fallback chain test
 func TestPreToolUse9LevelEnhancedFallback(t *testing.T) {
+	t.Parallel()
 	mapper := NewSoundMapper()
 
 	eventCtx := &hooks.EventContext{
@@ -654,6 +664,7 @@ func TestPreToolUse9LevelEnhancedFallback(t *testing.T) {
 
 // TDD Phase 2.1 RED: PostToolUse 6-level fallback chain test (skip command-only sounds)
 func TestPostToolUse6LevelFallback(t *testing.T) {
+	t.Parallel()
 	mapper := NewSoundMapper()
 
 	tests := []struct {
@@ -727,6 +738,7 @@ func TestPostToolUse6LevelFallback(t *testing.T) {
 
 // TDD Phase 2.1 RED: Simple event 4-level fallback chain test
 func TestSimpleEvent4LevelFallback(t *testing.T) {
+	t.Parallel()
 	mapper := NewSoundMapper()
 
 	tests := []struct {
@@ -837,6 +849,7 @@ func TestSimpleEvent4LevelFallback(t *testing.T) {
 // TestResolveWithObserver_* in soundpack and TestLookupBuffer_* in tracking.
 
 func TestSoundMapper_BugReproduction_AllPathsFallbackToDefault(t *testing.T) {
+	t.Parallel()
 	// This test reproduces the original bug where all sounds fallback to default.wav
 	// because SoundChecker can't find logical paths
 
@@ -884,6 +897,7 @@ func TestSoundMapper_BugReproduction_AllPathsFallbackToDefault(t *testing.T) {
 }
 
 func TestSoundMapper_BugReproduction_NoSpecificSoundFallsToDefault(t *testing.T) {
+	t.Parallel()
 	// Test case where specific sound doesn't exist, should fallback properly
 
 	tempDir := t.TempDir()
@@ -947,6 +961,7 @@ func captureObserver(mu *sync.Mutex, calls *[]observerCall) soundpack.PathObserv
 // guard against streaming-style observation that would fire partial state
 // during resolution.
 func TestMapSound_ObserverFiresOncePerChainCandidate(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 	defaultFile := filepath.Join(tempDir, "default.wav")
 	if err := os.WriteFile(defaultFile, []byte("test"), 0644); err != nil {
@@ -1075,6 +1090,7 @@ func TestMapSound_ObserverFiresOncePerChainCandidate(t *testing.T) {
 // configured (WithObserver not used) never panics and resolves normally.
 // Observation is optional.
 func TestMapSound_NilObserver_NoPanic(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 	defaultFile := filepath.Join(tempDir, "default.wav")
 	if err := os.WriteFile(defaultFile, []byte("test"), 0644); err != nil {

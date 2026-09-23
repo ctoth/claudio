@@ -6,6 +6,7 @@ import (
 )
 
 func TestEventCategoryStringAll(t *testing.T) {
+	t.Parallel()
 	cases := map[EventCategory]string{
 		Loading:            "loading",
 		Success:            "success",
@@ -23,6 +24,7 @@ func TestEventCategoryStringAll(t *testing.T) {
 }
 
 func TestExtractFileExtensionCoverage(t *testing.T) {
+	t.Parallel()
 	cases := map[string]string{
 		"/a/b/main.go":     "go",
 		"/a/b/file.TXT":    "txt",
@@ -42,6 +44,7 @@ func TestExtractFileExtensionCoverage(t *testing.T) {
 }
 
 func TestIsValidSubcommandCoverage(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		command, word string
 		want          bool
@@ -69,6 +72,7 @@ func postToolUseContext(t *testing.T, tool string, response string) *EventContex
 }
 
 func TestAnalyzeToolResponseBranches(t *testing.T) {
+	t.Parallel()
 	// MCP-style isError on a non-Bash tool
 	if ctx := postToolUseContext(t, "apply_patch", `{"isError":true}`); !ctx.HasError {
 		t.Error("expected HasError for isError=true")
@@ -104,6 +108,7 @@ func TestAnalyzeToolResponseBranches(t *testing.T) {
 }
 
 func TestDetectNotificationTypeCoverage(t *testing.T) {
+	t.Parallel()
 	mk := func(msg string) *EventContext {
 		m := msg
 		e := &HookEvent{SessionID: "a", CWD: "/tmp", EventName: "Notification", Message: &m}
@@ -126,6 +131,7 @@ func TestDetectNotificationTypeCoverage(t *testing.T) {
 }
 
 func TestParseCompatibilityAliasBranches(t *testing.T) {
+	t.Parallel()
 	_, err := ParseHookEvent([]byte(`{
 		"session_id": "snake-session",
 		"cwd": "/tmp",
@@ -177,6 +183,7 @@ func TestParseCompatibilityAliasBranches(t *testing.T) {
 }
 
 func TestAdditionalEventContextBranches(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name      string
 		event     HookEvent
@@ -229,6 +236,7 @@ func TestAdditionalEventContextBranches(t *testing.T) {
 }
 
 func TestPostToolFallbackHintBranches(t *testing.T) {
+	t.Parallel()
 	t.Run("success without tool name uses generic success hint", func(t *testing.T) {
 		event := &HookEvent{SessionID: "a", CWD: "/tmp", EventName: "PostToolUse"}
 		ctx := event.GetContext()
@@ -264,6 +272,7 @@ func TestPostToolFallbackHintBranches(t *testing.T) {
 }
 
 func TestNormalizeToolNameAliases(t *testing.T) {
+	t.Parallel()
 	cases := map[string]string{
 		"":                           "",
 		"writefile":                  "Write",
@@ -289,6 +298,7 @@ func TestNormalizeToolNameAliases(t *testing.T) {
 }
 
 func TestAnalyzeToolResponseAdditionalBranches(t *testing.T) {
+	t.Parallel()
 	t.Run("non-string error value is an error", func(t *testing.T) {
 		ctx := postToolUseContext(t, "apply_patch", `{"error":{"message":"boom"}}`)
 		if ctx.Category != Error {
@@ -313,6 +323,7 @@ func TestAnalyzeToolResponseAdditionalBranches(t *testing.T) {
 }
 
 func TestParseExitCodeBranches(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		text string
 		code int
@@ -333,6 +344,7 @@ func TestParseExitCodeBranches(t *testing.T) {
 }
 
 func TestToolInputParseFallbackBranches(t *testing.T) {
+	t.Parallel()
 	bad := json.RawMessage(`not json`)
 	event := HookEvent{ToolInput: &bad}
 	if got := event.extractFileType(); got != "" {

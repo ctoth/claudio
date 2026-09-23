@@ -16,6 +16,9 @@ import (
 // Exercise the real parent process: in-process tests disable detachment and
 // cannot catch diagnostics lost when the worker's stderr goes to the null device.
 func TestNoCGOBinaryAudioAvailability(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping go build test in -short mode")
+	}
 	binary := filepath.Join(t.TempDir(), "claudio.exe")
 	build := exec.Command("go", "build", "-o", binary, "../../cmd/claudio")
 	build.Env = append(os.Environ(), "CGO_ENABLED=0")

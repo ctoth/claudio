@@ -78,6 +78,7 @@ const (
 )
 
 func TestEventCategory_String_NewCategories(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		category EventCategory
@@ -103,6 +104,7 @@ func TestEventCategory_String_NewCategories(t *testing.T) {
 }
 
 func TestGeminiNoSoundEventsAreSilent(t *testing.T) {
+	t.Parallel()
 	for _, eventName := range []string{"BeforeModel", "AfterModel", "BeforeToolSelection"} {
 		t.Run(eventName, func(t *testing.T) {
 			event := &HookEvent{
@@ -124,6 +126,7 @@ func TestGeminiNoSoundEventsAreSilent(t *testing.T) {
 }
 
 func TestParseUserPromptSubmit(t *testing.T) {
+	t.Parallel()
 	event, err := ParseHookEvent([]byte(realUserPromptSubmitJSON))
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
@@ -166,6 +169,7 @@ func TestParseUserPromptSubmit(t *testing.T) {
 }
 
 func TestParsePreToolUse(t *testing.T) {
+	t.Parallel()
 	event, err := ParseHookEvent([]byte(realPreToolUseJSON))
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
@@ -211,6 +215,7 @@ func TestParsePreToolUse(t *testing.T) {
 }
 
 func TestParsePostToolUseBash(t *testing.T) {
+	t.Parallel()
 	event, err := ParseHookEvent([]byte(realPostToolUseBashJSON))
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
@@ -253,6 +258,7 @@ func TestParsePostToolUseBash(t *testing.T) {
 }
 
 func TestParsePostToolUseGrep(t *testing.T) {
+	t.Parallel()
 	event, err := ParseHookEvent([]byte(realPostToolUseGrepJSON))
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
@@ -285,6 +291,7 @@ func TestParsePostToolUseGrep(t *testing.T) {
 }
 
 func TestParseNotification(t *testing.T) {
+	t.Parallel()
 	event, err := ParseHookEvent([]byte(realNotificationJSON))
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
@@ -315,6 +322,7 @@ func TestParseNotification(t *testing.T) {
 }
 
 func TestParseInvalidJSON(t *testing.T) {
+	t.Parallel()
 	testCases := []struct {
 		name string
 		json string
@@ -342,6 +350,7 @@ func TestParseInvalidJSON(t *testing.T) {
 }
 
 func TestEventContext(t *testing.T) {
+	t.Parallel()
 	t.Run("UserPromptSubmit context", func(t *testing.T) {
 		event, _ := ParseHookEvent([]byte(realUserPromptSubmitJSON))
 		context := event.GetContext()
@@ -518,6 +527,7 @@ func TestEventContext(t *testing.T) {
 }
 
 func TestEventCategorization_All7Events(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name        string
 		eventName   string
@@ -635,6 +645,7 @@ func TestEventCategorization_All7Events(t *testing.T) {
 }
 
 func TestExtractCommandInfo(t *testing.T) {
+	t.Parallel()
 	testJSON := `{
 		"session_id": "test",
 		"transcript_path": "/test",
@@ -668,6 +679,7 @@ func TestExtractCommandInfo(t *testing.T) {
 }
 
 func TestExtractCommandInfoVariants(t *testing.T) {
+	t.Parallel()
 	testCases := []struct {
 		name        string
 		command     string
@@ -716,6 +728,7 @@ func TestExtractCommandInfoVariants(t *testing.T) {
 }
 
 func TestNotificationTypeDetection(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name         string
 		message      string
@@ -789,6 +802,7 @@ func TestNotificationTypeDetection(t *testing.T) {
 }
 
 func TestEnhancedEventContextExtraction(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name             string
 		eventName        string
@@ -874,6 +888,7 @@ func TestEnhancedEventContextExtraction(t *testing.T) {
 }
 
 func TestParseEdgeCases(t *testing.T) {
+	t.Parallel()
 	t.Run("tool response with error", func(t *testing.T) {
 		errorJSON := `{
 			"session_id": "test",
@@ -939,6 +954,7 @@ func TestParseEdgeCases(t *testing.T) {
 
 // TDD Phase 2.5 RED: Test PreToolUse suffix change from '-thinking' to '-start'
 func TestPreToolUseStartSuffixInsteadOfThinking(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name         string
 		command      string
@@ -1042,6 +1058,7 @@ func TestPreToolUseStartSuffixInsteadOfThinking(t *testing.T) {
 
 // TDD Phase 2.5 RED: Test that existing PostToolUse events still work correctly
 func TestPostToolUseSuffixesUnchanged(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name         string
 		command      string
@@ -1114,6 +1131,7 @@ func TestPostToolUseSuffixesUnchanged(t *testing.T) {
 // for sound mapping, making all MCP servers produce the same generic mcp sounds
 // regardless of which server or tool is called.
 func TestMCPToolNormalization(t *testing.T) {
+	t.Parallel()
 	t.Run("PreToolUse mcp__context7__query-docs normalizes to mcp", func(t *testing.T) {
 		data := `{
 			"session_id": "test",
@@ -1347,6 +1365,7 @@ func TestMCPToolNormalization(t *testing.T) {
 
 // Codex sends transcript_path as null or omits it entirely.
 func TestParseCodexNullTranscriptPathSucceeds(t *testing.T) {
+	t.Parallel()
 	data := []byte(`{"session_id":"abc","cwd":"/tmp","hook_event_name":"SessionStart","transcript_path":null}`)
 	event, err := ParseHookEvent(data)
 	if err != nil {
@@ -1358,6 +1377,7 @@ func TestParseCodexNullTranscriptPathSucceeds(t *testing.T) {
 }
 
 func TestParseCodexOmittedTranscriptPathSucceeds(t *testing.T) {
+	t.Parallel()
 	data := []byte(`{"session_id":"abc","cwd":"/tmp","hook_event_name":"Stop"}`)
 	_, err := ParseHookEvent(data)
 	if err != nil {
@@ -1366,6 +1386,7 @@ func TestParseCodexOmittedTranscriptPathSucceeds(t *testing.T) {
 }
 
 func TestParseStillRequiresSessionIDAndEventAndCwd(t *testing.T) {
+	t.Parallel()
 	cases := map[string][]byte{
 		"missing session_id": []byte(`{"cwd":"/tmp","hook_event_name":"Stop"}`),
 		"missing event":      []byte(`{"session_id":"a","cwd":"/tmp"}`),
@@ -1381,6 +1402,7 @@ func TestParseStillRequiresSessionIDAndEventAndCwd(t *testing.T) {
 }
 
 func TestGetContextSubagentStart(t *testing.T) {
+	t.Parallel()
 	event := &HookEvent{SessionID: "a", CWD: "/tmp", EventName: "SubagentStart"}
 	ctx := event.GetContext()
 	if ctx.Category != Loading {
@@ -1395,6 +1417,7 @@ func TestGetContextSubagentStart(t *testing.T) {
 }
 
 func TestGetContextPostCompact(t *testing.T) {
+	t.Parallel()
 	event := &HookEvent{SessionID: "a", CWD: "/tmp", EventName: "PostCompact"}
 	ctx := event.GetContext()
 	if ctx.Category != System {
@@ -1409,6 +1432,7 @@ func TestGetContextPostCompact(t *testing.T) {
 }
 
 func TestGetContextCodexApplyPatchPreToolUse(t *testing.T) {
+	t.Parallel()
 	tool := "apply_patch"
 	event := &HookEvent{SessionID: "a", CWD: "/tmp", EventName: "PreToolUse", ToolName: &tool}
 	ctx := event.GetContext()
@@ -1421,6 +1445,7 @@ func TestGetContextCodexApplyPatchPreToolUse(t *testing.T) {
 }
 
 func TestGetContextCodexApplyPatchPostToolUseSuccess(t *testing.T) {
+	t.Parallel()
 	tool := "apply_patch"
 	resp := json.RawMessage(`{"output":"done"}`)
 	event := &HookEvent{SessionID: "a", CWD: "/tmp", EventName: "PostToolUse", ToolName: &tool, ToolResponse: &resp}
@@ -1434,6 +1459,7 @@ func TestGetContextCodexApplyPatchPostToolUseSuccess(t *testing.T) {
 }
 
 func TestGetContextCodexStringToolResponseIsSuccess(t *testing.T) {
+	t.Parallel()
 	tool := "Bash"
 	input := json.RawMessage(`{"command":"git status --short"}`)
 	resp := json.RawMessage(`"Exit code: 0\nWall time: 0.1 seconds\nOutput:\nclean"`)
@@ -1455,6 +1481,7 @@ func TestGetContextCodexStringToolResponseIsSuccess(t *testing.T) {
 }
 
 func TestGetContextCodexStringToolResponseWithNonzeroExitCodeIsError(t *testing.T) {
+	t.Parallel()
 	tool := "Bash"
 	input := json.RawMessage(`{"command":"git status --short"}`)
 	resp := json.RawMessage(`"Exit code: 1\nWall time: 0.1 seconds\nOutput:\nfatal: not a git repository"`)
@@ -1476,6 +1503,7 @@ func TestGetContextCodexStringToolResponseWithNonzeroExitCodeIsError(t *testing.
 }
 
 func TestGetContextCodexMcpToolNormalized(t *testing.T) {
+	t.Parallel()
 	tool := "mcp__filesystem__read_file"
 	event := &HookEvent{SessionID: "a", CWD: "/tmp", EventName: "PreToolUse", ToolName: &tool}
 	ctx := event.GetContext()
@@ -1488,6 +1516,7 @@ func TestGetContextCodexMcpToolNormalized(t *testing.T) {
 }
 
 func TestGetContextGeminiBeforeToolShellCommand(t *testing.T) {
+	t.Parallel()
 	tool := "run_shell_command"
 	input := json.RawMessage(`{"command":"git status --short"}`)
 	event := &HookEvent{SessionID: "a", CWD: "/tmp", EventName: "BeforeTool", ToolName: &tool, ToolInput: &input}
@@ -1504,6 +1533,7 @@ func TestGetContextGeminiBeforeToolShellCommand(t *testing.T) {
 }
 
 func TestGetContextGeminiAfterToolWriteFileSuccess(t *testing.T) {
+	t.Parallel()
 	tool := "write_file"
 	resp := json.RawMessage(`{"success":true}`)
 	event := &HookEvent{SessionID: "a", CWD: "/tmp", EventName: "AfterTool", ToolName: &tool, ToolResponse: &resp}
@@ -1520,6 +1550,7 @@ func TestGetContextGeminiAfterToolWriteFileSuccess(t *testing.T) {
 }
 
 func TestGetContextGeminiAgentAndCompressEvents(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		eventName string
 		category  EventCategory
@@ -1548,6 +1579,7 @@ func TestGetContextGeminiAgentAndCompressEvents(t *testing.T) {
 }
 
 func TestGetContextQwenFailureEvents(t *testing.T) {
+	t.Parallel()
 	tool := "run_shell_command"
 	input := json.RawMessage(`{"command":"git status"}`)
 	resp := json.RawMessage(`{"stderr":"fatal: not a git repository"}`)
@@ -1571,6 +1603,7 @@ func TestGetContextQwenFailureEvents(t *testing.T) {
 }
 
 func TestGetContextCopilotToolNames(t *testing.T) {
+	t.Parallel()
 	tool := "powershell"
 	input := json.RawMessage(`{"command":"git status"}`)
 	event := &HookEvent{SessionID: "a", CWD: "/tmp", EventName: "PreToolUse", ToolName: &tool, ToolInput: &input}
@@ -1594,6 +1627,7 @@ func TestGetContextCopilotToolNames(t *testing.T) {
 }
 
 func TestParseCopilotResultAliases(t *testing.T) {
+	t.Parallel()
 	payload := []byte(`{
 		"sessionId": "copilot-session",
 		"hook_event_name": "PostToolUse",
@@ -1620,6 +1654,7 @@ func TestParseCopilotResultAliases(t *testing.T) {
 }
 
 func TestParseCopilotNotificationSessionAlias(t *testing.T) {
+	t.Parallel()
 	payload := []byte(`{
 		"sessionId": "copilot-session",
 		"hook_event_name": "Notification",
@@ -1639,6 +1674,7 @@ func TestParseCopilotNotificationSessionAlias(t *testing.T) {
 }
 
 func TestParseHookEventWithDefaultNormalizesCopilotSubagentStart(t *testing.T) {
+	t.Parallel()
 	payload := []byte(`{
 		"sessionId": "copilot-session",
 		"cwd": "/tmp"
@@ -1659,6 +1695,7 @@ func TestParseHookEventWithDefaultNormalizesCopilotSubagentStart(t *testing.T) {
 }
 
 func TestGetContextCurrentLifecycleEvents(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		eventName string
 		category  EventCategory

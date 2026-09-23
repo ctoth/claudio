@@ -213,6 +213,7 @@ func mapGoldenEvent(t *testing.T, g goldenEvent) goldenChain {
 // produce for every event above. Any refactor of GetContext or the mapper
 // chains must keep this table green.
 func TestMapperGoldenChains(t *testing.T) {
+	t.Parallel()
 	if len(goldenChains) != len(goldenEvents) {
 		t.Fatalf("golden table has %d entries for %d events", len(goldenChains), len(goldenEvents))
 	}
@@ -352,6 +353,7 @@ var goldenChains = map[string]goldenChain{
 // TestCommandSubcommandLevelUsesParsedCommand checks the #8 cases directly:
 // hyphenated commands and subcommands reach the command-subcommand level.
 func TestCommandSubcommandLevelUsesParsedCommand(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ cmd, want, notWant string }{
 		{"docker compose up", "loading/docker-compose.wav", ""},
 		{"docker-compose up", "loading/docker-compose-up.wav", ""},
@@ -374,6 +376,7 @@ func TestCommandSubcommandLevelUsesParsedCommand(t *testing.T) {
 // nothing (shell punctuation) never yields names like "loading/.wav" or
 // "loading/-start.wav".
 func TestNoEmptyCandidateNames(t *testing.T) {
+	t.Parallel()
 	for _, g := range []goldenEvent{
 		{name: "pre punctuation", event: "PreToolUse", tool: "Bash", input: bashCmd("&& ls")},
 		{name: "post punctuation", event: "PostToolUse", tool: "Bash", input: bashCmd("| grep x"), response: okResp},
