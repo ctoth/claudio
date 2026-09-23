@@ -6,9 +6,12 @@
 // These are synthesized tones (no licensing, tiny on disk) rather than
 // system sounds, because a bare Linux box has no guaranteed set of WAV
 // files the way Windows (C:\Windows\Media) and macOS (/System/Library/
-// Sounds) do. Run from this directory to regenerate:
+// Sounds) do. Regenerate from the repository root with
 //
-//	go run generate.go
+//	go generate ./internal/config/...
+//
+// (the directive in config.go runs `go run generate.go` in this
+// directory). CI does the same and fails if the committed WAVs differ.
 //
 // Output: default-success.wav, default-error.wav, default-loading.wav,
 // default-interactive.wav, default.wav — 16-bit mono PCM at 44.1 kHz.
