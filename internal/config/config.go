@@ -19,7 +19,9 @@ import (
 	"claudio.click/internal/platform"
 )
 
-//go:embed windows.json wsl.json darwin.json linux.json
+// wsl.json is not embedded: it is derived from windows.json (wsl_pack.go).
+//
+//go:embed windows.json darwin.json linux.json
 var platformSoundpacks embed.FS
 
 // embeddedSounds holds the synthesized default WAV tones that back the
@@ -511,13 +513,17 @@ func (cm *ConfigManager) IsValidAudioBackend(backend string) bool {
 
 // hasEmbeddedPlatformFile checks if an embedded platform soundpack file exists
 func hasEmbeddedPlatformFile(filename string) bool {
-	_, err := platformSoundpacks.Open(filename)
+	_, err := GetEmbeddedPlatformSoundpackData(filename)
 	return err == nil
 }
 
 // GetEmbeddedPlatformSoundpackData reads embedded platform soundpack data
 func GetEmbeddedPlatformSoundpackData(filename string) ([]byte, error) {
-	data, err := platformSoundpacks.ReadFile(filename)
+	read := platformSoundpacks.ReadFile
+	if filename == wslPackFile {
+		read = func(string) ([]byte, error) { return wslPackData() }
+	}
+	data, err := read(filename)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read embedded platform soundpack file '%s': %w", filename, err)
 	}
