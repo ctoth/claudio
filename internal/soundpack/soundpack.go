@@ -79,9 +79,6 @@ type UnifiedSoundpackResolver struct {
 
 // NewSoundpackResolver creates a new unified soundpack resolver
 func NewSoundpackResolver(mapper PathMapper) SoundpackResolver {
-	slog.Debug("creating unified soundpack resolver",
-		"mapper_name", mapper.GetName(),
-		"mapper_type", mapper.GetType())
 
 	return &UnifiedSoundpackResolver{
 		mapper: mapper,
@@ -289,9 +286,6 @@ func LoadJSONSoundpack(filePath string) (PathMapper, error) {
 //
 // For trusted go:embed bytes use LoadEmbeddedPlatformSoundpack.
 func LoadJSONSoundpackFromBytes(data []byte, baseDir string) (PathMapper, error) {
-	slog.Debug("loading untrusted JSON soundpack from bytes",
-		"data_size", len(data),
-		"base_dir", baseDir)
 	return loadJSONSoundpackUntrusted(data, baseDir)
 }
 
@@ -310,7 +304,6 @@ func LoadJSONSoundpackFromBytes(data []byte, baseDir string) (PathMapper, error)
 // are DoS guards, not trust checks. The byte-size cap is the caller's
 // responsibility (embedded bytes are usually trusted to be small).
 func LoadEmbeddedPlatformSoundpack(data []byte, basePaths ...string) (PathMapper, error) {
-	slog.Debug("loading trusted embedded platform soundpack", "data_size", len(data))
 	return loadJSONSoundpackTrusted(data, basePaths)
 }
 

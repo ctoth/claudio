@@ -31,7 +31,6 @@ type SystemCommandBackend struct {
 // shape; multiple commands enable best-effort fallback when the primary command
 // fails or cannot handle the file format.
 func NewSystemCommandBackend(commands ...string) *SystemCommandBackend {
-	slog.Debug("creating new SystemCommandBackend", "commands", commands)
 	return &SystemCommandBackend{
 		commands: append([]string(nil), commands...),
 		volume:   1.0, // Default full volume
@@ -44,7 +43,6 @@ func (scb *SystemCommandBackend) Close() error {
 	defer scb.mutex.Unlock()
 
 	scb.closed = true
-	slog.Debug("SystemCommandBackend closed")
 	return nil
 }
 

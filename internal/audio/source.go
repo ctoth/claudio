@@ -50,7 +50,6 @@ type FileSource struct {
 
 // NewFileSource creates a new FileSource for the given file path.
 func NewFileSource(path string) *FileSource {
-	slog.Debug("creating new FileSource", "path", path)
 	return &FileSource{path: path}
 }
 
@@ -61,7 +60,6 @@ func (fs *FileSource) FilePath() (string, error) {
 		slog.Error("FileSource has empty path")
 		return "", fmt.Errorf("file path is empty")
 	}
-	slog.Debug("FileSource providing file path", "path", fs.path)
 	return fs.path, nil
 }
 
@@ -82,7 +80,6 @@ func (fs *FileSource) Reader() (io.ReadCloser, string, error) {
 	}
 
 	format := fs.FormatHint()
-	slog.Debug("FileSource providing reader", "path", fs.path, "format", format)
 	return file, format, nil
 }
 
@@ -110,7 +107,6 @@ type ReaderSource struct {
 
 // NewReaderSource creates a new ReaderSource with the given reader and format.
 func NewReaderSource(reader io.ReadCloser, format string) *ReaderSource {
-	slog.Debug("creating new ReaderSource", "format", format)
 	return &ReaderSource{
 		reader: reader,
 		format: format,
@@ -124,6 +120,5 @@ func (rs *ReaderSource) Reader() (io.ReadCloser, string, error) {
 		return nil, "", ErrSourceClosed
 	}
 
-	slog.Debug("ReaderSource providing reader", "format", rs.format)
 	return rs.reader, rs.format, nil
 }

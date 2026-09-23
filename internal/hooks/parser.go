@@ -42,7 +42,6 @@ func (c EventCategory) valid() bool {
 
 func (c EventCategory) String() string {
 	if !c.valid() {
-		slog.Warn("EventCategory.String() received unknown category", "category", int(c))
 		return "unknown"
 	}
 	return categoryNames[c]

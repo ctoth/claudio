@@ -26,10 +26,6 @@ type DirectoryMapper struct {
 
 // NewDirectoryMapper creates a new directory-based path mapper
 func NewDirectoryMapper(name string, basePaths []string) PathMapper {
-	slog.Debug("creating directory mapper",
-		"name", name,
-		"base_paths", basePaths,
-		"base_paths_count", len(basePaths))
 
 	return &DirectoryMapper{
 		name:      name,

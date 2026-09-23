@@ -112,14 +112,11 @@ func NewConfigManagerWithFilesystem(fs afero.Fs) *ConfigManager {
 
 // GetDefaultConfig returns the default configuration
 func (cm *ConfigManager) GetDefaultConfig() *Config {
-	slog.Debug("GetDefaultConfig called - starting platform detection")
 	// Use platform-specific soundpack if it exists, otherwise default.
 	// getExecutableDirectoryForDefault is a method so the test-context CWD
 	// recheck honors cm.fs.
 	executableDir := cm.getExecutableDirectoryForDefault()
-	slog.Debug("GetDefaultConfig got executable directory", "executableDir", executableDir)
 	defaultSoundpack := cm.GetPlatformSoundpack(executableDir)
-	slog.Debug("GetDefaultConfig platform detection result", "defaultSoundpack", defaultSoundpack)
 
 	defaultVolume := DefaultVolume
 	defaultConfig := &Config{
@@ -139,14 +136,6 @@ func (cm *ConfigManager) GetDefaultConfig() *Config {
 		},
 		SoundTracking: GetDefaultSoundTrackingConfig(),
 	}
-
-	slog.Debug("generated default config",
-		"volume", *defaultConfig.Volume,
-		"default_soundpack", defaultConfig.DefaultSoundpack,
-		"enabled", defaultConfig.Enabled,
-		"log_level", defaultConfig.LogLevel,
-		"audio_backend", defaultConfig.AudioBackend,
-		"file_logging_enabled", defaultConfig.FileLogging.Enabled)
 
 	return defaultConfig
 }
@@ -210,7 +199,6 @@ func (cm *ConfigManager) LoadConfig() (*Config, error) {
 func (cm *ConfigManager) FindConfigFile() string {
 	for _, configPath := range cm.configPaths() {
 		if _, err := cm.fs.Stat(configPath); err == nil {
-			slog.Debug("found config file", "path", configPath)
 			return configPath
 		}
 	}
@@ -443,11 +431,9 @@ func (cm *ConfigManager) checkPlatformFile(dir, filename string) string {
 	fullPath := filepath.Join(dir, filename)
 
 	if info, err := cm.fs.Stat(fullPath); err == nil && !info.IsDir() {
-		slog.Debug("platform file found", "path", fullPath, "size", info.Size())
 		return fullPath
 	}
 
-	slog.Debug("platform file not found", "path", fullPath)
 	return ""
 }
 
