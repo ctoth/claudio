@@ -516,3 +516,17 @@ func getMapKeys(m map[string]interface{}) []string {
 	}
 	return keys
 }
+
+// statFailFs fails every Stat, standing in for an unreadable settings dir
+// on any OS (the chmod-based case above cannot run on Windows).
+type statFailFs struct{ afero.Fs }
+
+func (statFailFs) Stat(string) (os.FileInfo, error) { return nil, os.ErrPermission }
+
+func TestRunUninstallWorkflowReportsUncheckableSettingsPath(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	err := RunUninstallWorkflow(statFailFs{afero.NewMemMapFs()}, AgentTarget{Agent: AgentClaude, ConfigPath: path})
+	if err == nil || !strings.Contains(err.Error(), "failed to check settings path") {
+		t.Fatalf("err = %v, want a settings-path check failure", err)
+	}
+}

@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 
-	"claudio.click/internal/fs"
 	captainhook "github.com/ctoth/captain-hook"
 )
 
@@ -380,7 +380,13 @@ func commandBasename(cmdStr string) string {
 	return cmdStr
 }
 
-// GetExecutablePath returns the current executable path using filesystem abstraction.
+// GetExecutablePath returns the running executable's path with forward
+// slashes, so the path works in bash (Claude Code passes hook commands
+// through /usr/bin/bash on all platforms).
 func GetExecutablePath() (string, error) {
-	return fs.ExecutablePath()
+	p, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	return filepath.ToSlash(p), nil
 }
