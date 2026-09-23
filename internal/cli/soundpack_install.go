@@ -9,7 +9,6 @@ import (
 
 	"claudio.click/internal/config"
 	"claudio.click/internal/soundpack"
-	"github.com/adrg/xdg"
 	"github.com/spf13/cobra"
 )
 
@@ -113,7 +112,7 @@ func runSoundpackInstall(cmd *cobra.Command, srcPath string, setDefault, skipVal
 // directory and updates config. The caller holds the per-name lock.
 func installSoundpackFiles(cmd *cobra.Command, srcPath, name string, isDir, setDefault bool) error {
 	// Determine install target
-	installDir := filepath.Join(xdg.DataHome, "claudio", "soundpacks", name)
+	installDir := config.UserDataPath("soundpacks", name)
 	installPath := installDir
 	if !isDir {
 		installPath = filepath.Join(installDir, "soundpack.json")

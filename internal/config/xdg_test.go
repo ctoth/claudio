@@ -7,17 +7,7 @@ import (
 	"testing"
 )
 
-func TestXDGDirectories(t *testing.T) {
-	xdg := NewXDGDirs()
-
-	if xdg == nil {
-		t.Fatal("NewXDGDirs returned nil")
-	}
-}
-
 func TestXDGSoundpackPaths(t *testing.T) {
-	xdg := NewXDGDirs()
-
 	testCases := []struct {
 		name         string
 		soundpackID  string
@@ -50,7 +40,7 @@ func TestXDGSoundpackPaths(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			paths := xdg.GetSoundpackPaths(tc.soundpackID)
+			paths := SoundpackPaths(tc.soundpackID)
 
 			if len(paths) == 0 {
 				t.Error("GetSoundpackPaths returned empty slice")
@@ -85,8 +75,6 @@ func TestXDGSoundpackPaths(t *testing.T) {
 }
 
 func TestXDGCachePaths(t *testing.T) {
-	xdg := NewXDGDirs()
-
 	testCases := []struct {
 		name     string
 		purpose  string
@@ -111,7 +99,7 @@ func TestXDGCachePaths(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			path := xdg.GetCachePath(tc.purpose)
+			path := CachePath(tc.purpose)
 
 			if path == "" {
 				t.Error("GetCachePath returned empty string")
@@ -134,8 +122,6 @@ func TestXDGCachePaths(t *testing.T) {
 }
 
 func TestXDGConfigPaths(t *testing.T) {
-	xdg := NewXDGDirs()
-
 	testCases := []struct {
 		name         string
 		filename     string
@@ -160,7 +146,7 @@ func TestXDGConfigPaths(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			paths := xdg.GetConfigPaths(tc.filename)
+			paths := ConfigPaths(tc.filename)
 
 			if len(paths) == 0 {
 				t.Error("GetConfigPaths returned empty slice")
@@ -191,10 +177,8 @@ func TestXDGConfigPaths(t *testing.T) {
 }
 
 func TestXDGCreateCacheDir(t *testing.T) {
-	xdg := NewXDGDirs()
-
 	// Use a test-specific subdirectory to avoid conflicts
-	testCacheDir := xdg.GetCachePath("test-create")
+	testCacheDir := CachePath("test-create")
 
 	// Clean up before and after test
 	defer os.RemoveAll(testCacheDir)
@@ -206,7 +190,7 @@ func TestXDGCreateCacheDir(t *testing.T) {
 	}
 
 	// Create the directory
-	err := xdg.CreateCacheDir("test-create")
+	err := CreateCacheDir("test-create")
 	if err != nil {
 		t.Fatalf("CreateCacheDir failed: %v", err)
 	}
@@ -222,15 +206,13 @@ func TestXDGCreateCacheDir(t *testing.T) {
 	}
 
 	// Test creating again (should not error)
-	err = xdg.CreateCacheDir("test-create")
+	err = CreateCacheDir("test-create")
 	if err != nil {
 		t.Errorf("CreateCacheDir failed on existing directory: %v", err)
 	}
 }
 
 func TestXDGFindSoundFile(t *testing.T) {
-	xdg := NewXDGDirs()
-
 	testCases := []struct {
 		name         string
 		soundpackID  string
@@ -274,7 +256,7 @@ func TestXDGFindSoundFile(t *testing.T) {
 
 			if tc.createFile && tc.soundpackID != "" && tc.relativePath != "" {
 				// Create a test file in the first soundpack path
-				soundpackPaths := xdg.GetSoundpackPaths(tc.soundpackID)
+				soundpackPaths := SoundpackPaths(tc.soundpackID)
 				if len(soundpackPaths) > 0 {
 					testFilePath = filepath.Join(soundpackPaths[0], tc.relativePath)
 
@@ -297,7 +279,7 @@ func TestXDGFindSoundFile(t *testing.T) {
 			}
 
 			// Test finding the file
-			foundPath := xdg.FindSoundFile(tc.soundpackID, tc.relativePath)
+			foundPath := FindSoundFile(tc.soundpackID, tc.relativePath)
 
 			if tc.shouldFind {
 				if foundPath == "" {
@@ -322,11 +304,9 @@ func TestXDGFindSoundFile(t *testing.T) {
 }
 
 func TestXDGCrossPlatform(t *testing.T) {
-	xdg := NewXDGDirs()
-
 	// These tests verify the package works across platforms
 	t.Run("cache paths exist", func(t *testing.T) {
-		cachePath := xdg.GetCachePath("test")
+		cachePath := CachePath("test")
 		if cachePath == "" {
 			t.Error("Cache path is empty")
 		}
@@ -334,7 +314,7 @@ func TestXDGCrossPlatform(t *testing.T) {
 	})
 
 	t.Run("config paths exist", func(t *testing.T) {
-		configPaths := xdg.GetConfigPaths("test.yaml")
+		configPaths := ConfigPaths("test.yaml")
 		if len(configPaths) == 0 {
 			t.Error("No config paths returned")
 		}
@@ -342,7 +322,7 @@ func TestXDGCrossPlatform(t *testing.T) {
 	})
 
 	t.Run("soundpack paths exist", func(t *testing.T) {
-		soundpackPaths := xdg.GetSoundpackPaths("test")
+		soundpackPaths := SoundpackPaths("test")
 		if len(soundpackPaths) == 0 {
 			t.Error("No soundpack paths returned")
 		}
@@ -351,8 +331,6 @@ func TestXDGCrossPlatform(t *testing.T) {
 }
 
 func TestXDGErrorHandling(t *testing.T) {
-	xdg := NewXDGDirs()
-
 	t.Run("invalid characters in paths", func(t *testing.T) {
 		// Test with various invalid characters
 		invalidPaths := []string{
@@ -364,7 +342,7 @@ func TestXDGErrorHandling(t *testing.T) {
 		}
 
 		for _, invalidPath := range invalidPaths {
-			result := xdg.FindSoundFile("test", invalidPath)
+			result := FindSoundFile("test", invalidPath)
 			// Should handle gracefully (either find nothing or sanitize)
 			t.Logf("FindSoundFile with invalid path %q: %s", invalidPath, result)
 		}
@@ -376,7 +354,7 @@ func TestXDGErrorHandling(t *testing.T) {
 			longName += "a"
 		}
 
-		result := xdg.FindSoundFile(longName, "test.wav")
+		result := FindSoundFile(longName, "test.wav")
 		// Should handle gracefully
 		t.Logf("FindSoundFile with long name: %s", result)
 	})

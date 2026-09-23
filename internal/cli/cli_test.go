@@ -819,8 +819,7 @@ func TestHookProcessingLoggingIsolated(t *testing.T) {
 	}
 
 	// Initialize audio and soundpack systems for processing
-	xdgDirs := config.NewXDGDirs()
-	soundpackPaths := xdgDirs.GetSoundpackPaths(cfg.DefaultSoundpack)
+	soundpackPaths := config.SoundpackPaths(cfg.DefaultSoundpack)
 	soundpackPaths = append(soundpackPaths, cfg.SoundpackPaths...)
 
 	mapper, err := soundpack.CreateSoundpackMapperWithBasePaths(

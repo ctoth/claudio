@@ -130,9 +130,8 @@ func discoverEmbeddedSoundpacks() ([]soundpackInfo, error) {
 
 // discoverXDGSoundpacks scans XDG data directories for installed soundpacks
 func discoverXDGSoundpacks() []soundpackInfo {
-	xdg := config.NewXDGDirs()
-	// GetSoundpackPaths("") returns the base soundpack directories
-	basePaths := xdg.GetSoundpackPaths("")
+	// SoundpackPaths("") returns the base soundpack directories
+	basePaths := config.SoundpackPaths("")
 
 	var packs []soundpackInfo
 
@@ -188,7 +187,7 @@ func discoverXDGSoundpacks() []soundpackInfo {
 	}
 
 	// Also check the parent claudio data directory for JSON files
-	parentPaths := xdg.GetSoundpackPaths("")
+	parentPaths := config.SoundpackPaths("")
 	for _, basePath := range parentPaths {
 		parentDir := filepath.Dir(basePath) // claudio/ directory
 		slog.Debug("scanning parent claudio directory for JSON soundpacks", "path", parentDir)

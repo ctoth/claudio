@@ -27,7 +27,7 @@ func writeMalformedConfig(t *testing.T, path string) {
 // userConfigPath is where XDG discovery looks first inside IsolateXDG.
 func userConfigPath(t *testing.T) string {
 	t.Helper()
-	return config.NewXDGDirs().GetConfigPaths("config.json")[0]
+	return config.ConfigPaths("config.json")[0]
 }
 
 func runPolicy(t *testing.T, stdin string, args ...string) (int, string, string) {

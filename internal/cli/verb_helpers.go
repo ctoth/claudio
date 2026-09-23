@@ -23,7 +23,7 @@ func resolveWritableConfigPath(cmd *cobra.Command, _ *CLI) (string, error) {
 	if flag, _ := cmd.Flags().GetString("config"); flag != "" {
 		return flag, nil
 	}
-	paths := config.NewXDGDirs().GetConfigPaths("config.json")
+	paths := config.ConfigPaths("config.json")
 	if len(paths) == 0 {
 		return "", fmt.Errorf("no XDG config path available")
 	}

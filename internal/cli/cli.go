@@ -214,8 +214,7 @@ func initializeAudioSystem(cmd *cobra.Command, cli *CLI, cfg *config.Config) err
 		"enabled", cfg.Enabled)
 
 	// Initialize unified soundpack resolver with auto-detection
-	xdgDirs := config.NewXDGDirs()
-	soundpackPaths := xdgDirs.GetSoundpackPaths(cfg.DefaultSoundpack)
+	soundpackPaths := config.SoundpackPaths(cfg.DefaultSoundpack)
 	soundpackPaths = append(soundpackPaths, cfg.SoundpackPaths...)
 
 	// Check if configured soundpack exists before trying to create mapper
@@ -916,7 +915,6 @@ func loadEmbeddedPlatformSoundpack(identifier string) (soundpack.PathMapper, err
 }
 
 func embeddedPlatformSoundpackBasePaths(filename string, data []byte) []string {
-	xdgDirs := config.NewXDGDirs()
 	ids := []string{}
 
 	if spFile, err := soundpack.PeekJSONSoundpackFromBytes(data); err == nil {
@@ -932,7 +930,7 @@ func embeddedPlatformSoundpackBasePaths(filename string, data []byte) []string {
 	seen := make(map[string]struct{})
 	var paths []string
 	for _, id := range ids {
-		for _, path := range xdgDirs.GetSoundpackPaths(id) {
+		for _, path := range config.SoundpackPaths(id) {
 			cleaned := filepath.Clean(path)
 			if _, exists := seen[cleaned]; exists {
 				continue
@@ -971,7 +969,7 @@ func ensureEmbeddedDefaultSoundsExtracted(data []byte) string {
 		return ""
 	}
 
-	destDir := config.NewXDGDirs().GetCachePath(filepath.Join("embedded-soundpacks", spFile.Name))
+	destDir := config.CachePath("embedded-soundpacks", spFile.Name)
 	var wrote bool
 	for _, value := range spFile.Mappings {
 		soundBytes, err := config.GetEmbeddedSoundData(value)

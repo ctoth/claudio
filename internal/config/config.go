@@ -77,36 +77,25 @@ func (c *Config) Clone() *Config {
 	return &clone
 }
 
-// XDGInterface defines the interface for XDG directory operations
-type XDGInterface interface {
-	GetConfigPaths(filename string) []string
-	GetSoundpackPaths(soundpackID string) []string
-	GetCachePath(purpose string) string
-	CreateCacheDir(purpose string) error
-	FindSoundFile(soundpackID, relativePath string) string
-}
-
 // ConfigManager handles loading, saving, and validating configuration
 type ConfigManager struct {
-	xdg XDGInterface
-	fs  afero.Fs
+	// configPaths lists config files in search order; tests replace it.
+	configPaths func() []string
+	fs          afero.Fs
 }
+
+func defaultConfigPaths() []string { return ConfigPaths("config.json") }
 
 // NewConfigManager creates a new configuration manager
 func NewConfigManager() *ConfigManager {
-	slog.Debug("creating new config manager")
-	return &ConfigManager{
-		xdg: NewXDGDirs(),
-		fs:  afero.NewOsFs(), // Production uses real filesystem
-	}
+	return NewConfigManagerWithFilesystem(afero.NewOsFs()) // Production uses real filesystem
 }
 
 // NewConfigManagerWithFilesystem creates a new configuration manager with custom filesystem
 func NewConfigManagerWithFilesystem(fs afero.Fs) *ConfigManager {
-	slog.Debug("creating new config manager with custom filesystem")
 	return &ConfigManager{
-		xdg: NewXDGDirs(),
-		fs:  fs,
+		configPaths: defaultConfigPaths,
+		fs:          fs,
 	}
 }
 
@@ -248,7 +237,7 @@ func (cm *ConfigManager) LoadConfig() (*Config, error) {
 // FindConfigFile returns the first XDG config.json that exists, in search
 // order, or "" when there is none.
 func (cm *ConfigManager) FindConfigFile() string {
-	for _, configPath := range cm.xdg.GetConfigPaths("config.json") {
+	for _, configPath := range cm.configPaths() {
 		if _, err := cm.fs.Stat(configPath); err == nil {
 			slog.Debug("found config file", "path", configPath)
 			return configPath
@@ -434,7 +423,7 @@ func (cm *ConfigManager) ResolveLogFilePath(filename string) string {
 	}
 
 	// Use XDG cache directory for log files
-	return filepath.Join(cm.xdg.GetCachePath("logs"), "claudio.log")
+	return CachePath("logs", "claudio.log")
 }
 
 // ApplyLogLevelWithWriter configures slog with the specified log level and custom writer (for testing)

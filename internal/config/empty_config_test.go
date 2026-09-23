@@ -37,18 +37,10 @@ func TestLoadFromFile_EmptyFileIsDefaults(t *testing.T) {
 	}
 }
 
-// stubConfigPaths is an XDGInterface whose config search list is fixed.
-type stubConfigPaths struct {
-	XDGInterface
-	paths []string
-}
-
-func (s stubConfigPaths) GetConfigPaths(string) []string { return s.paths }
-
 func TestFindConfigFile_ReturnsFirstExisting(t *testing.T) {
 	fs := afero.NewMemMapFs()
 	cm := NewConfigManagerWithFilesystem(fs)
-	cm.xdg = stubConfigPaths{paths: []string{"/user/config.json", "/sys1/config.json", "/sys2/config.json"}}
+	cm.configPaths = func() []string { return []string{"/user/config.json", "/sys1/config.json", "/sys2/config.json"} }
 
 	if got := cm.FindConfigFile(); got != "" {
 		t.Fatalf("FindConfigFile() = %q with no config files", got)

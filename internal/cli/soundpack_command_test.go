@@ -297,7 +297,7 @@ func TestSoundpackList_ExitsCleanly(t *testing.T) {
 func TestLoadEmbeddedLinuxSoundpackResolvesRelativeMappingsAgainstXDG(t *testing.T) {
 	testenv.IsolateXDG(t)
 
-	linuxPaths := config.NewXDGDirs().GetSoundpackPaths("linux-default")
+	linuxPaths := config.SoundpackPaths("linux-default")
 	if len(linuxPaths) == 0 {
 		t.Fatal("expected at least one XDG soundpack path for linux-default")
 	}

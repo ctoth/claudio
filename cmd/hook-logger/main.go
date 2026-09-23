@@ -7,12 +7,12 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 	"unicode"
 
+	"claudio.click/internal/config"
 	"claudio.click/internal/safeio"
 )
 
@@ -75,12 +75,8 @@ func run(stdin io.Reader, stderr io.Writer) int {
 }
 
 func saveHookData(data []byte, eventName string) (string, error) {
-	cacheDir, err := os.UserCacheDir()
-	if err != nil {
-		return "", fmt.Errorf("find user cache directory: %w", err)
-	}
-
-	logsDir := filepath.Join(cacheDir, "claudio", "hook-logs")
+	// Same XDG cache root as claudio's own logs and tracking database.
+	logsDir := config.CachePath("hook-logs")
 	if err := os.MkdirAll(logsDir, 0o700); err != nil {
 		return "", fmt.Errorf("create hook log directory: %w", err)
 	}
