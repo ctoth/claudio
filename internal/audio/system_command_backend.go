@@ -90,7 +90,6 @@ func (scb *SystemCommandBackend) Play(ctx context.Context, source AudioSource) e
 	// Fall back to reader via temporary file.
 	reader, format, err := source.Reader()
 	if err != nil {
-		slog.Error("failed to get reader from source", "error", err)
 		return fmt.Errorf("failed to get audio data from source: %w", err)
 	}
 	defer reader.Close()
@@ -203,7 +202,6 @@ func (scb *SystemCommandBackend) playFile(ctx context.Context, filePath string) 
 	if lastErr == nil {
 		return fmt.Errorf("no audio commands support format %q", ext)
 	}
-	slog.Error("all audio commands failed", "file", filePath, "commands_tried", attempted, "error", lastErr)
 	return fmt.Errorf("all audio commands failed for %s: %w", filepath.Base(filePath), lastErr)
 }
 
@@ -214,7 +212,6 @@ func (scb *SystemCommandBackend) playReaderViaTempFile(ctx context.Context, read
 	// Create temporary file with appropriate extension
 	tempFile, err := os.CreateTemp("", "claudio-*."+format)
 	if err != nil {
-		slog.Error("failed to create temporary file", "format", format, "error", err)
 		return fmt.Errorf("failed to create temporary file: %w", err)
 	}
 
@@ -229,14 +226,12 @@ func (scb *SystemCommandBackend) playReaderViaTempFile(ctx context.Context, read
 	_, err = io.Copy(tempFile, reader)
 	if err != nil {
 		tempFile.Close()
-		slog.Error("failed to write audio data to temporary file", "path", tempPath, "error", err)
 		return fmt.Errorf("failed to write audio data to temporary file: %w", err)
 	}
 
 	// Close file before playing
 	err = tempFile.Close()
 	if err != nil {
-		slog.Error("failed to close temporary file", "path", tempPath, "error", err)
 		return fmt.Errorf("failed to close temporary file: %w", err)
 	}
 

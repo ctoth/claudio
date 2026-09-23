@@ -88,9 +88,7 @@ func NewSoundpackResolver(mapper PathMapper) SoundpackResolver {
 // ResolveSound resolves a single sound path using the configured mapper
 func (u *UnifiedSoundpackResolver) ResolveSound(relativePath string) (string, error) {
 	if relativePath == "" {
-		err := fmt.Errorf("sound path cannot be empty")
-		slog.Error("resolve sound failed", "error", err)
-		return "", err
+		return "", fmt.Errorf("sound path cannot be empty")
 	}
 
 	slog.Debug("resolving sound path",
@@ -101,7 +99,6 @@ func (u *UnifiedSoundpackResolver) ResolveSound(relativePath string) (string, er
 	// Get candidate paths from mapper
 	candidates, err := u.mapper.MapPath(relativePath)
 	if err != nil {
-		slog.Error("path mapping failed", "relative_path", relativePath, "error", err)
 		return "", fmt.Errorf("path mapping failed: %w", err)
 	}
 
@@ -154,9 +151,7 @@ func (u *UnifiedSoundpackResolver) ResolveSoundWithFallback(paths []string, opts
 	cfg := buildResolveConfig(opts)
 
 	if len(paths) == 0 {
-		err := fmt.Errorf("no fallback paths provided")
-		slog.Error("fallback resolution failed", "error", err)
-		return "", err
+		return "", fmt.Errorf("no fallback paths provided")
 	}
 
 	slog.Debug("resolving sound with fallback",
@@ -253,7 +248,6 @@ func LoadJSONSoundpack(filePath string) (PathMapper, error) {
 	// Open and read the JSON file
 	file, err := os.Open(filePath)
 	if err != nil {
-		slog.Error("failed to open JSON soundpack file", "file_path", filePath, "error", err)
 		return nil, fmt.Errorf("failed to open JSON soundpack file: %w", err)
 	}
 	defer file.Close()
@@ -261,14 +255,12 @@ func LoadJSONSoundpack(filePath string) (PathMapper, error) {
 	// Read file contents
 	fileData, err := safeio.ReadAllCapped(file, safeio.MaxSoundpackJSONBytes, "soundpack JSON")
 	if err != nil {
-		slog.Error("failed to read JSON soundpack file", "file_path", filePath, "error", err)
 		return nil, fmt.Errorf("failed to read JSON soundpack file: %w", err)
 	}
 
 	mapper, err := loadJSONSoundpackUntrusted(fileData, filepath.Dir(filePath))
 	if err != nil {
-		slog.Error("JSON soundpack load failed", "file_path", filePath, "error", err)
-		return nil, err
+		return nil, fmt.Errorf("JSON soundpack %s: %w", filePath, err)
 	}
 
 	slog.Debug("JSON soundpack loaded successfully",
@@ -315,7 +307,6 @@ func LoadEmbeddedPlatformSoundpack(data []byte, basePaths ...string) (PathMapper
 func loadJSONSoundpackUntrusted(data []byte, baseDir string) (PathMapper, error) {
 	var soundpack JSONSoundpackFile
 	if err := json.Unmarshal(data, &soundpack); err != nil {
-		slog.Error("failed to parse untrusted JSON soundpack", "error", err)
 		return nil, fmt.Errorf("failed to parse JSON soundpack: %w", err)
 	}
 
@@ -334,11 +325,6 @@ func loadJSONSoundpackUntrusted(data []byte, baseDir string) (PathMapper, error)
 		}
 		abs, err := validateMappingValue(value, baseDir)
 		if err != nil {
-			slog.Error("mapping value rejected",
-				"key", key,
-				"value", value,
-				"base_dir", baseDir,
-				"error", err)
 			return nil, fmt.Errorf("invalid mapping %q: %w", key, err)
 		}
 		resolved[key] = abs
@@ -359,7 +345,6 @@ func loadJSONSoundpackUntrusted(data []byte, baseDir string) (PathMapper, error)
 func loadJSONSoundpackTrusted(data []byte, basePaths []string) (PathMapper, error) {
 	var soundpack JSONSoundpackFile
 	if err := json.Unmarshal(data, &soundpack); err != nil {
-		slog.Error("failed to parse trusted JSON soundpack", "error", err)
 		return nil, fmt.Errorf("failed to parse JSON soundpack: %w", err)
 	}
 
@@ -537,7 +522,6 @@ func CreateSoundpackMapper(name, path string) (PathMapper, error) {
 	// Check if path exists
 	info, err := os.Stat(path)
 	if err != nil {
-		slog.Error("soundpack path does not exist", "path", path, "error", err)
 		return nil, fmt.Errorf("soundpack path does not exist: %w", err)
 	}
 
@@ -560,7 +544,6 @@ func CreateSoundpackMapper(name, path string) (PathMapper, error) {
 	}
 
 	// For non-JSON files, treat as an error for now
-	slog.Error("unsupported soundpack type", "path", path, "is_dir", info.IsDir())
 	return nil, fmt.Errorf("unsupported soundpack type: %s (must be directory or .json file)", path)
 }
 
@@ -587,7 +570,6 @@ func CreateSoundpackMapperWithBasePaths(name, primaryPath string, basePaths []st
 	// If primary path fails, create directory mapper with base paths
 	// This allows searching for soundpack in multiple directories
 	if len(basePaths) == 0 {
-		slog.Error("no base paths provided for fallback", "primary_path", primaryPath)
 		return nil, fmt.Errorf("primary path failed and no base paths provided: %w", err)
 	}
 

@@ -67,7 +67,6 @@ func resolveBackendWithChecker(backendType string, isWSL bool, commandExists fun
 func newBackendWithChecker(backendType string, isWSL func() bool, commandExists func(string) bool) (AudioBackend, error) {
 	name, construct, err := planBackend(backendType, isWSL(), commandExists)
 	if err != nil {
-		slog.Debug("audio backend unavailable", "requested", backendType, "resolved", name, "error", err)
 		return nil, err
 	}
 	slog.Debug("creating audio backend", "requested", backendType, "resolved", name)

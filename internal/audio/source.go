@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -57,7 +56,6 @@ func NewFileSource(path string) *FileSource {
 // backends can skip the open-read-temp dance.
 func (fs *FileSource) FilePath() (string, error) {
 	if fs.path == "" {
-		slog.Error("FileSource has empty path")
 		return "", fmt.Errorf("file path is empty")
 	}
 	return fs.path, nil
@@ -69,13 +67,11 @@ func (fs *FileSource) FilePath() (string, error) {
 // against the full filename.
 func (fs *FileSource) Reader() (io.ReadCloser, string, error) {
 	if fs.path == "" {
-		slog.Error("FileSource has empty path for reader")
 		return nil, "", fmt.Errorf("file path is empty")
 	}
 
 	file, err := os.Open(fs.path)
 	if err != nil {
-		slog.Error("failed to open file", "path", fs.path, "error", err)
 		return nil, "", fmt.Errorf("failed to open file: %w", err)
 	}
 
@@ -116,7 +112,6 @@ func NewReaderSource(reader io.ReadCloser, format string) *ReaderSource {
 // Reader returns the stored reader and format.
 func (rs *ReaderSource) Reader() (io.ReadCloser, string, error) {
 	if rs.reader == nil {
-		slog.Error("ReaderSource has nil reader")
 		return nil, "", ErrSourceClosed
 	}
 

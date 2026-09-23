@@ -263,7 +263,6 @@ func (cm *ConfigManager) ValidateConfig(config *Config) error {
 
 	if len(errors) > 0 {
 		errMsg := strings.Join(errors, "; ")
-		slog.Debug("config validation failed", "errors", errMsg)
 		return fmt.Errorf("config validation failed: %s", errMsg)
 	}
 
