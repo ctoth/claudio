@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"claudio.click/internal/hooks"
 	"claudio.click/internal/tracking"
 	"github.com/spf13/cobra"
 )
@@ -649,8 +650,18 @@ func outputUsageStatistics(w io.Writer, usage []tracking.SoundUsage, filter trac
 	return nil
 }
 
-// analyzeCategories lists the sound categories --category accepts.
-var analyzeCategories = []string{"loading", "success", "error", "interactive", "completion", "system"}
+// analyzeCategories lists the sound categories --category accepts: every
+// hooks category except Silent, whose events play nothing and are never
+// recorded, so filtering on it could only ever match nothing.
+var analyzeCategories = func() []string {
+	var names []string
+	for _, c := range hooks.Categories() {
+		if c != hooks.Silent {
+			names = append(names, c.String())
+		}
+	}
+	return names
+}()
 
 func validateAnalyzeFilterValues(category, preset string) error {
 	if category != "" && !slices.Contains(analyzeCategories, category) {

@@ -109,7 +109,7 @@ func TestQueryFilter_BuildWhereClause(t *testing.T) {
 				Tool:     "git",
 				Category: "success",
 			},
-			wantClause:   "tool_name = ? AND JSON_EXTRACT(context, '$.Category') = ?",
+			wantClause:   "tool_name = ? AND " + categorySQL("context") + " = ?",
 			wantArgCount: 2,
 		},
 		{
@@ -138,7 +138,7 @@ func TestQueryFilter_BuildWhereClause(t *testing.T) {
 				Category:  "error",
 				SessionID: "session-456",
 			},
-			wantClause:   "timestamp >= ? AND timestamp <= ? AND tool_name = ? AND JSON_EXTRACT(context, '$.Category') = ? AND session_id = ?",
+			wantClause:   "timestamp >= ? AND timestamp <= ? AND tool_name = ? AND " + categorySQL("context") + " = ? AND session_id = ?",
 			wantArgCount: 5,
 		},
 	}
@@ -146,7 +146,8 @@ func TestQueryFilter_BuildWhereClause(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// TDD RED: This method doesn't exist yet
-			gotClause, gotArgs := tt.filter.BuildWhereClause()
+			gotClause, gotArgs, err := tt.filter.BuildWhereClause()
+			assert.NoError(t, err)
 			assert.Equal(t, tt.wantClause, gotClause, "WHERE clause mismatch")
 			assert.Len(t, gotArgs, tt.wantArgCount, "Argument count mismatch")
 		})

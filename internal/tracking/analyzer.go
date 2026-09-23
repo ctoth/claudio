@@ -3,6 +3,9 @@ package tracking
 import (
 	"database/sql"
 	"fmt"
+	"slices"
+
+	"claudio.click/internal/hooks"
 )
 
 // MissingSound represents a sound that was requested but not found
@@ -26,14 +29,17 @@ func GetMissingSounds(db *sql.DB, filter QueryFilter) ([]MissingSound, error) {
 			pl.path,
 			COUNT(*) as request_count,
 			GROUP_CONCAT(DISTINCT he.tool_name) as tools,
-			JSON_EXTRACT(he.context, '$.Category') as category,
+			` + categorySQL("he.context") + ` as category,
 			JSON_EXTRACT(he.context, '$.ToolName') as context_tool
 		FROM path_lookups pl
 		JOIN hook_events he ON pl.event_id = he.id
 		WHERE pl.found = 0`
 
 	// Use QueryFilter to build WHERE clause
-	whereClause, args := filter.BuildWhereClause()
+	whereClause, args, err := filter.BuildWhereClause()
+	if err != nil {
+		return nil, err
+	}
 	if whereClause != "" {
 		baseQuery += " AND " + whereClause
 	}
@@ -59,10 +65,10 @@ func GetMissingSounds(db *sql.DB, filter QueryFilter) ([]MissingSound, error) {
 	for rows.Next() {
 		var sound MissingSound
 		var toolsStr sql.NullString
-		var categoryInt sql.NullFloat64
+		var category sql.NullString
 		var contextTool sql.NullString
 
-		err := rows.Scan(&sound.Path, &sound.RequestCount, &toolsStr, &categoryInt, &contextTool)
+		err := rows.Scan(&sound.Path, &sound.RequestCount, &toolsStr, &category, &contextTool)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan missing sound row: %w", err)
 		}
@@ -83,9 +89,7 @@ func GetMissingSounds(db *sql.DB, filter QueryFilter) ([]MissingSound, error) {
 			}
 		}
 
-		if categoryInt.Valid {
-			sound.Category = categoryToString(int(categoryInt.Float64))
-		}
+		sound.Category = categoryName(category)
 		if contextTool.Valid {
 			sound.ToolName = contextTool.String
 		}
@@ -117,13 +121,16 @@ func GetMissingSoundsSummary(db *sql.DB, filter QueryFilter) (map[string]interfa
 		WHERE pl.found = 0`
 
 	// Use QueryFilter to build WHERE clause
-	whereClause, args := filter.BuildWhereClause()
+	whereClause, args, err := filter.BuildWhereClause()
+	if err != nil {
+		return nil, err
+	}
 	if whereClause != "" {
 		summaryQuery += " AND " + whereClause
 	}
 
 	var uniqueSounds, totalRequests, toolsWithMissing int
-	err := db.QueryRow(summaryQuery, args...).Scan(&uniqueSounds, &totalRequests, &toolsWithMissing)
+	err = db.QueryRow(summaryQuery, args...).Scan(&uniqueSounds, &totalRequests, &toolsWithMissing)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query missing sounds summary: %w", err)
 	}
@@ -198,24 +205,16 @@ func isWhitespace(c byte) bool {
 	return c == ' ' || c == '\t' || c == '\n' || c == '\r'
 }
 
-// categoryToString converts category integer to string representation
-func categoryToString(categoryInt int) string {
-	switch categoryInt {
-	case 0:
-		return "loading"
-	case 1:
-		return "success"
-	case 2:
-		return "error"
-	case 3:
-		return "interactive"
-	case 4:
-		return "completion"
-	case 5:
-		return "system"
-	default:
+// categoryName turns a scanned categorySQL value into a category name;
+// NULL or unrecognised values read back as "unknown" (or "" for NULL).
+func categoryName(v sql.NullString) string {
+	if !v.Valid {
+		return ""
+	}
+	if _, err := hooks.ParseEventCategory(v.String); err != nil {
 		return "unknown"
 	}
+	return v.String
 }
 
 // TDD GREEN: New usage analysis data structures
@@ -283,9 +282,9 @@ func GetSoundUsage(db *sql.DB, filter QueryFilter) ([]SoundUsage, error) {
 			COUNT(*) as play_count,
 			MAX(he.timestamp) as last_played,
 			CASE
-				WHEN COUNT(*) = COUNT(JSON_EXTRACT(he.context, '$.Category'))
-					AND COUNT(DISTINCT JSON_EXTRACT(he.context, '$.Category')) = 1
-				THEN MAX(JSON_EXTRACT(he.context, '$.Category'))
+				WHEN COUNT(*) = COUNT(` + categorySQL("he.context") + `)
+					AND COUNT(DISTINCT ` + categorySQL("he.context") + `) = 1
+				THEN MAX(` + categorySQL("he.context") + `)
 			END as category,
 			CASE
 				WHEN COUNT(*) = COUNT(JSON_EXTRACT(he.context, '$.ToolName'))
@@ -296,7 +295,10 @@ func GetSoundUsage(db *sql.DB, filter QueryFilter) ([]SoundUsage, error) {
 		WHERE he.selected_path != ''`
 
 	// Apply filters using common QueryFilter
-	whereClause, args := filter.BuildWhereClause()
+	whereClause, args, err := filter.BuildWhereClause()
+	if err != nil {
+		return nil, err
+	}
 	if whereClause != "" {
 		baseQuery += " AND " + whereClause
 	}
@@ -319,17 +321,15 @@ func GetSoundUsage(db *sql.DB, filter QueryFilter) ([]SoundUsage, error) {
 	var results []SoundUsage
 	for rows.Next() {
 		var usage SoundUsage
-		var categoryInt sql.NullFloat64
+		var category sql.NullString
 		var contextTool sql.NullString
 
-		err := rows.Scan(&usage.Path, &usage.PlayCount, &usage.LastPlayed, &categoryInt, &contextTool)
+		err := rows.Scan(&usage.Path, &usage.PlayCount, &usage.LastPlayed, &category, &contextTool)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan sound usage row: %w", err)
 		}
 
-		if categoryInt.Valid {
-			usage.Category = categoryToString(int(categoryInt.Float64))
-		}
+		usage.Category = categoryName(category)
 		if contextTool.Valid {
 			usage.ToolName = contextTool.String
 		}
@@ -359,13 +359,16 @@ func GetUsageSummary(db *sql.DB, filter QueryFilter) (*UsageSummary, error) {
 		WHERE he.selected_path != ''`
 
 	// Apply filters using common QueryFilter
-	whereClause, args := filter.BuildWhereClause()
+	whereClause, args, err := filter.BuildWhereClause()
+	if err != nil {
+		return nil, err
+	}
 	if whereClause != "" {
 		summaryQuery += " AND " + whereClause
 	}
 
 	var summary UsageSummary
-	err := db.QueryRow(summaryQuery, args...).Scan(&summary.TotalEvents, &summary.UniqueSounds)
+	err = db.QueryRow(summaryQuery, args...).Scan(&summary.TotalEvents, &summary.UniqueSounds)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query usage summary: %w", err)
 	}
@@ -385,12 +388,15 @@ func GetToolUsageStats(db *sql.DB, filter QueryFilter) ([]ToolUsageStats, error)
 			JSON_EXTRACT(he.context, '$.ToolName') as tool_name,
 			COUNT(*) as usage_count,
 			MAX(he.timestamp) as last_used,
-			GROUP_CONCAT(DISTINCT JSON_EXTRACT(he.context, '$.Category')) as categories
+			GROUP_CONCAT(DISTINCT ` + categorySQL("he.context") + `) as categories
 		FROM hook_events he
 		WHERE he.context != '' AND JSON_EXTRACT(he.context, '$.ToolName') IS NOT NULL`
 
 	// Apply filters using common QueryFilter
-	whereClause, args := filter.BuildWhereClause()
+	whereClause, args, err := filter.BuildWhereClause()
+	if err != nil {
+		return nil, err
+	}
 	if whereClause != "" {
 		baseQuery += " AND " + whereClause
 	}
@@ -424,27 +430,12 @@ func GetToolUsageStats(db *sql.DB, filter QueryFilter) ([]ToolUsageStats, error)
 			stats.ToolName = toolName.String
 		}
 
-		// Parse categories (comma-separated category integers)
-		if categoriesStr.Valid && categoriesStr.String != "" {
-			categoryMap := make(map[string]bool)
-			for _, categoryStr := range parseCommaSeparated(categoriesStr.String) {
-				// Convert category integer strings to category names
-				if categoryStr != "" && categoryStr != "null" {
-					// Parse the integer string to int
-					var categoryInt int
-					_, err := fmt.Sscanf(categoryStr, "%d", &categoryInt)
-					if err == nil {
-						categoryName := categoryToString(categoryInt)
-						if categoryName != "unknown" {
-							categoryMap[categoryName] = true
-						}
-					}
+		// Parse categories (comma-separated names), dropping unknown values
+		if categoriesStr.Valid {
+			for _, name := range parseCommaSeparated(categoriesStr.String) {
+				if _, err := hooks.ParseEventCategory(name); err == nil && !slices.Contains(stats.Categories, name) {
+					stats.Categories = append(stats.Categories, name)
 				}
-			}
-
-			// Convert map to slice
-			for category := range categoryMap {
-				stats.Categories = append(stats.Categories, category)
 			}
 		}
 
@@ -482,7 +473,10 @@ func GetChainTypeStatistics(db *sql.DB, filter QueryFilter) ([]ChainTypeStatisti
 			ON pl.event_id = he.id AND pl.path = he.selected_path
 		WHERE he.selected_path != ''`
 
-	whereClause, args := filter.BuildWhereClause()
+	whereClause, args, err := filter.BuildWhereClause()
+	if err != nil {
+		return nil, err
+	}
 	if whereClause != "" {
 		baseQuery += " AND " + whereClause
 	}
@@ -531,19 +525,22 @@ func GetCategoryDistribution(db *sql.DB, filter QueryFilter) ([]CategoryDistribu
 	// Build query to get category distribution
 	baseQuery := `
 		SELECT 
-			JSON_EXTRACT(he.context, '$.Category') as category_int,
+			` + categorySQL("he.context") + ` as category,
 			COUNT(*) as count
 		FROM hook_events he
 		WHERE he.context != '' AND JSON_EXTRACT(he.context, '$.Category') IS NOT NULL`
 
 	// Apply filters using common QueryFilter
-	whereClause, args := filter.BuildWhereClause()
+	whereClause, args, err := filter.BuildWhereClause()
+	if err != nil {
+		return nil, err
+	}
 	if whereClause != "" {
 		baseQuery += " AND " + whereClause
 	}
 
 	baseQuery += `
-		GROUP BY JSON_EXTRACT(he.context, '$.Category')
+		GROUP BY category
 		ORDER BY count DESC`
 
 	rows, err := db.Query(baseQuery, args...)
@@ -557,17 +554,16 @@ func GetCategoryDistribution(db *sql.DB, filter QueryFilter) ([]CategoryDistribu
 
 	// First pass: collect data and calculate total
 	for rows.Next() {
-		var categoryInt sql.NullFloat64
+		var category sql.NullString
 		var count int
 
-		if err := rows.Scan(&categoryInt, &count); err != nil {
+		if err := rows.Scan(&category, &count); err != nil {
 			return nil, fmt.Errorf("failed to scan category distribution row: %w", err)
 		}
 
-		if categoryInt.Valid {
-			categoryName := categoryToString(int(categoryInt.Float64))
+		if category.Valid {
 			results = append(results, CategoryDistribution{
-				Category: categoryName,
+				Category: categoryName(category),
 				Count:    count,
 			})
 			totalCount += count

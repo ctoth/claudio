@@ -40,7 +40,10 @@ func TestQueryFilter_ContentFiltersHitRecordedData(t *testing.T) {
 			}
 			reflect.ValueOf(&q).Elem().Field(i).SetString(v)
 
-			clause, _ := q.BuildWhereClause()
+			clause, _, err := q.BuildWhereClause()
+			if err != nil {
+				t.Fatalf("BuildWhereClause: %v", err)
+			}
 			if clause == "" {
 				t.Fatalf("filter %s set but produced no WHERE clause", f.Name)
 			}
