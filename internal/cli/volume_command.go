@@ -17,7 +17,8 @@ import (
 //
 // Zero args  : prints the current persisted volume (or "default" if unset).
 // One arg    : parses as float64 in [0.0, 1.0], persists to config.json
-//              using the atomic write primitives + advisory lock.
+//
+//	using the atomic write primitives + advisory lock.
 //
 // Note: the persistent `--volume` flag is for transient overrides on
 // the hook/stdin path; this subcommand persists the value.

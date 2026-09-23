@@ -7,8 +7,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	"claudio.click/internal/soundpack"
+	"github.com/stretchr/testify/require"
 )
 
 // MockSoundpackResolver and TestSoundChecker_WithResolver were deleted along

@@ -44,7 +44,7 @@ func GetMissingSounds(db *sql.DB, filter QueryFilter) ([]MissingSound, error) {
 		GROUP BY pl.path, category, context_tool
 		ORDER BY request_count DESC`
 
-	// Add limit if specified  
+	// Add limit if specified
 	if filter.Limit > 0 {
 		baseQuery += fmt.Sprintf(" LIMIT %d", filter.Limit)
 	}
@@ -76,7 +76,7 @@ func GetMissingSounds(db *sql.DB, filter QueryFilter) ([]MissingSound, error) {
 					toolMap[tool] = true
 				}
 			}
-			
+
 			// Convert back to slice
 			for tool := range toolMap {
 				sound.Tools = append(sound.Tools, tool)
@@ -144,7 +144,7 @@ func parseCommaSeparated(s string) []string {
 	if s == "" {
 		return nil
 	}
-	
+
 	var result []string
 	for _, part := range splitString(s, ",") {
 		trimmed := trimString(part)
@@ -160,10 +160,10 @@ func splitString(s, delimiter string) []string {
 	if s == "" {
 		return nil
 	}
-	
+
 	var result []string
 	start := 0
-	
+
 	for i := 0; i <= len(s)-len(delimiter); i++ {
 		if s[i:i+len(delimiter)] == delimiter {
 			result = append(result, s[start:i])
@@ -171,7 +171,7 @@ func splitString(s, delimiter string) []string {
 		}
 	}
 	result = append(result, s[start:])
-	
+
 	return result
 }
 
@@ -179,17 +179,17 @@ func splitString(s, delimiter string) []string {
 func trimString(s string) string {
 	start := 0
 	end := len(s)
-	
+
 	// Trim leading whitespace
 	for start < end && isWhitespace(s[start]) {
 		start++
 	}
-	
+
 	// Trim trailing whitespace
 	for end > start && isWhitespace(s[end-1]) {
 		end--
 	}
-	
+
 	return s[start:end]
 }
 

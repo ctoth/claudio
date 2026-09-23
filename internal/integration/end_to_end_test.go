@@ -13,7 +13,7 @@ import (
 // TestEndToEndAIFFSupport validates the complete user journey for AIFF support
 func TestEndToEndAIFFSupport(t *testing.T) {
 	// This test validates the complete unified audio system from user perspective
-	
+
 	// Step 1: Verify NewBackend supports AIFF through all backends
 	// Test OtoBackend (primary backend for AIFF support)
 	nativeBackend, err := audio.NewBackend("oto")
@@ -21,26 +21,26 @@ func TestEndToEndAIFFSupport(t *testing.T) {
 		t.Fatalf("Failed to create oto backend: %v", err)
 	}
 	defer nativeBackend.Close()
-	
+
 	// Step 2: Verify direct backend usage (CLI integration tested elsewhere)
 	// The CLI layer is tested in internal/cli package tests
-	
+
 	// Step 3: End-to-end file path processing for AIFF files
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	
+
 	// Test various AIFF file extensions
 	aiffPaths := []string{
 		"/test/sound.aiff",
-		"/test/sound.aif", 
+		"/test/sound.aif",
 		"/test/sound.AIFF",
 		"/test/sound.AIF",
 	}
-	
+
 	for _, path := range aiffPaths {
 		t.Run("aiff_path_"+path, func(t *testing.T) {
 			source := audio.NewFileSource(path)
-			
+
 			err := nativeBackend.Play(ctx, source)
 			if err != nil {
 				// Verify we get file not found errors, NOT format unsupported errors
@@ -54,7 +54,7 @@ func TestEndToEndAIFFSupport(t *testing.T) {
 			}
 		})
 	}
-	
+
 	t.Log("✅ End-to-end AIFF support validation completed successfully")
 	t.Log("✅ Unified audio system recognizes AIFF files across all extensions")
 	t.Log("✅ Backend factory creates AIFF-enabled backends successfully")
@@ -77,11 +77,11 @@ func TestEndToEndUnifiedSystemPerformance(t *testing.T) {
 	}
 	defer testBackend.Close()
 	creationTime := time.Since(start)
-	
+
 	if creationTime > 100*time.Millisecond {
 		t.Errorf("Backend creation too slow: %v (expected < 100ms)", creationTime)
 	}
-	
+
 	t.Logf("✅ Backend creation performance: %v", creationTime)
 	t.Log("✅ Unified system performance characteristics validated")
 }
@@ -94,7 +94,7 @@ func TestEndToEndSystemResourceCleanup(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create backend %d: %v", i, err)
 		}
-		
+
 		// Test lifecycle (Start was dropped in finding #44; both Stop and Close
 		// must succeed)
 		err = backend.Stop()
@@ -107,7 +107,7 @@ func TestEndToEndSystemResourceCleanup(t *testing.T) {
 			t.Errorf("Failed to close backend %d: %v", i, err)
 		}
 	}
-	
+
 	t.Log("✅ Resource cleanup validation completed")
 	t.Log("✅ Multiple backend lifecycle operations successful")
 }

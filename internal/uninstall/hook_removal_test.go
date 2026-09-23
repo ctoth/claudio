@@ -903,7 +903,7 @@ func TestRemoveClaudioHooks_NoClaudioHooksRemain(t *testing.T) {
 			name: "mixed string and array claudio hooks",
 			input: &install.SettingsMap{
 				"hooks": map[string]interface{}{
-					"PreToolUse":  "claudio",
+					"PreToolUse": "claudio",
 					"PostToolUse": []interface{}{
 						map[string]interface{}{
 							"matcher": ".*",

@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"math"
 	"os"
-	"runtime"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -109,7 +109,6 @@ func TestLoadConfigAutoDiscovery(t *testing.T) {
 
 	t.Logf("Auto-discovery test passed: loaded config %+v", loadedConfig)
 }
-
 
 // MockXDGDirs is a mock implementation for testing
 type MockXDGDirs struct {
@@ -660,7 +659,6 @@ func TestConfigLoggingLevels(t *testing.T) {
 	}
 }
 
-
 // TDD RED: Test file logging configuration fields parsing
 func TestConfig_FileLoggingFields(t *testing.T) {
 	mgr := NewConfigManager()
@@ -901,7 +899,7 @@ func TestConfigMerging_VolumeZero(t *testing.T) {
 	zeroVolume := 0.0
 	overrideConfig := &Config{
 		Volume:           &zeroVolume,
-		DefaultSoundpack: "",  // Don't override soundpack
+		DefaultSoundpack: "", // Don't override soundpack
 	}
 
 	merged := mgr.MergeConfigs(baseConfig, overrideConfig)
@@ -932,7 +930,7 @@ func TestConfigMerging_VolumeNilDoesNotOverride(t *testing.T) {
 
 	// Override config doesn't specify volume
 	overrideConfig := &Config{
-		Volume:           nil,  // Not set
+		Volume:           nil, // Not set
 		DefaultSoundpack: "override",
 	}
 

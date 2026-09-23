@@ -277,11 +277,11 @@ func TestCLIAIFFSupportViaUnifiedSystem(t *testing.T) {
 	// We can't directly access private fields, but we can test via the documented interface
 	// The logs should show AIFF support is available
 	t.Logf("CLI successfully initialized with unified audio system supporting AIFF")
-	
+
 	// Test that an AIFF file path would be processed (even if file doesn't exist)
 	ctx := context.Background()
 	source := audio.NewFileSource("/test/nonexistent.aiff")
-	
+
 	err = nativeBackend.Play(ctx, source)
 	if err != nil {
 		// We expect file not found error, NOT unsupported format error

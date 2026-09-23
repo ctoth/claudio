@@ -47,7 +47,7 @@ func newAnalyzeCommand() *cobra.Command {
 
 	// Add missing subcommand
 	analyzeCmd.AddCommand(newAnalyzeMissingCommand())
-	
+
 	// Add usage subcommand
 	analyzeCmd.AddCommand(newAnalyzeUsageCommand())
 
@@ -155,7 +155,7 @@ func runAnalyzeMissing(cmd *cobra.Command, days int, tool, category string, limi
 func groupByTool(missingSounds []tracking.MissingSound) Analysis {
 	toolMap := make(map[string]map[string][]tracking.MissingSound) // tool -> category -> sounds
 	otherMap := make(map[string][]tracking.MissingSound)           // category -> sounds (for non-tool sounds)
-	
+
 	// Group sounds by tool and category
 	for _, sound := range missingSounds {
 		if sound.ToolName != "" {
@@ -169,31 +169,31 @@ func groupByTool(missingSounds []tracking.MissingSound) Analysis {
 			otherMap[sound.Category] = append(otherMap[sound.Category], sound)
 		}
 	}
-	
+
 	// Build tool groups
 	var tools []ToolGroup
 	for toolName, categoryMap := range toolMap {
 		var categories []CategoryGroup
 		toolTotal := 0
 		toolCount := 0
-		
+
 		for categoryName, sounds := range categoryMap {
 			categoryTotal := 0
 			for _, sound := range sounds {
 				categoryTotal += sound.RequestCount
 			}
-			
+
 			categories = append(categories, CategoryGroup{
 				Name:   categoryName,
 				Total:  categoryTotal,
 				Count:  len(sounds),
 				Sounds: sounds,
 			})
-			
+
 			toolTotal += categoryTotal
 			toolCount += len(sounds)
 		}
-		
+
 		tools = append(tools, ToolGroup{
 			Name:       toolName,
 			Total:      toolTotal,
@@ -201,7 +201,7 @@ func groupByTool(missingSounds []tracking.MissingSound) Analysis {
 			Categories: categories,
 		})
 	}
-	
+
 	// Build other groups
 	var other []CategoryGroup
 	for categoryName, sounds := range otherMap {
@@ -209,7 +209,7 @@ func groupByTool(missingSounds []tracking.MissingSound) Analysis {
 		for _, sound := range sounds {
 			categoryTotal += sound.RequestCount
 		}
-		
+
 		other = append(other, CategoryGroup{
 			Name:   categoryName,
 			Total:  categoryTotal,
@@ -217,7 +217,7 @@ func groupByTool(missingSounds []tracking.MissingSound) Analysis {
 			Sounds: sounds,
 		})
 	}
-	
+
 	// Sort tools by total requests (descending)
 	for i := 0; i < len(tools); i++ {
 		for j := i + 1; j < len(tools); j++ {
@@ -226,7 +226,7 @@ func groupByTool(missingSounds []tracking.MissingSound) Analysis {
 			}
 		}
 	}
-	
+
 	return Analysis{
 		Tools: tools,
 		Other: other,
@@ -273,7 +273,7 @@ func outputMissingSoundsHierarchical(w io.Writer, sounds []tracking.MissingSound
 		if uniqueCount, ok := summary["unique_missing_sounds"].(int); ok && uniqueCount > 0 {
 			totalRequests := summary["total_missing_requests"].(int)
 			fmt.Fprintf(w, "Found %d unique missing sounds with %d total requests\n", uniqueCount, totalRequests)
-			
+
 			if toolCount, ok := summary["tools_with_missing_sounds"].(int); ok && toolCount > 0 {
 				fmt.Fprintf(w, "Across %d different tools\n", toolCount)
 			}
@@ -287,29 +287,29 @@ func outputMissingSoundsHierarchical(w io.Writer, sounds []tracking.MissingSound
 		if tool.Count == 0 {
 			continue
 		}
-		
+
 		fmt.Fprintf(w, "%s (total: %d requests, %d sounds):\n", tool.Name, tool.Total, tool.Count)
-		
+
 		// Sort categories for consistent output (success, error, loading, etc.)
 		sortedCategories := sortCategories(tool.Categories)
-		
+
 		for _, category := range sortedCategories {
 			fmt.Fprintf(w, "  %s (%d requests):\n", category.Name, category.Total)
-			
+
 			// Sort sounds by request count (descending)
 			sortedSounds := sortSoundsByRequestCount(category.Sounds)
-			
+
 			for _, sound := range sortedSounds {
 				// Handle edge case: truncate very long paths for better formatting
 				displayPath := sound.Path
 				if len(displayPath) > 35 {
 					displayPath = "..." + displayPath[len(displayPath)-32:]
 				}
-				
+
 				// Better alignment: path padded to 35 chars, right-aligned request count
 				fmt.Fprintf(w, "    %-35s %3d requests\n", displayPath, sound.RequestCount)
 			}
-			
+
 			if len(sortedCategories) > 1 {
 				fmt.Fprintln(w) // Space between categories only if multiple categories
 			}
@@ -320,24 +320,24 @@ func outputMissingSoundsHierarchical(w io.Writer, sounds []tracking.MissingSound
 	// Display Other section if present with consistent formatting
 	if len(analysis.Other) > 0 {
 		fmt.Fprintln(w, "Other (non-tool sounds):")
-		
+
 		sortedOtherCategories := sortCategories(analysis.Other)
-		
+
 		for _, category := range sortedOtherCategories {
 			fmt.Fprintf(w, "  %s (%d requests):\n", category.Name, category.Total)
-			
+
 			sortedOtherSounds := sortSoundsByRequestCount(category.Sounds)
-			
+
 			for _, sound := range sortedOtherSounds {
 				// Handle edge case: truncate very long paths for better formatting
 				displayPath := sound.Path
 				if len(displayPath) > 35 {
 					displayPath = "..." + displayPath[len(displayPath)-32:]
 				}
-				
+
 				fmt.Fprintf(w, "    %-35s %3d requests\n", displayPath, sound.RequestCount)
 			}
-			
+
 			if len(sortedOtherCategories) > 1 {
 				fmt.Fprintln(w) // Space between categories only if multiple
 			}
@@ -365,23 +365,23 @@ func sortCategories(categories []CategoryGroup) []CategoryGroup {
 	// Create a copy to avoid modifying original
 	sorted := make([]CategoryGroup, len(categories))
 	copy(sorted, categories)
-	
+
 	// Define preferred order: success, error, loading, interactive, completion, system, others
 	categoryOrder := map[string]int{
 		"success":     1,
-		"error":       2, 
+		"error":       2,
 		"loading":     3,
 		"interactive": 4,
 		"completion":  5,
 		"system":      6,
 	}
-	
+
 	// Sort by preferred order, then by total requests (descending), then by name
 	for i := 0; i < len(sorted); i++ {
 		for j := i + 1; j < len(sorted); j++ {
 			orderI := categoryOrder[sorted[i].Name]
 			orderJ := categoryOrder[sorted[j].Name]
-			
+
 			// If both have defined order, use it
 			if orderI > 0 && orderJ > 0 {
 				if orderI > orderJ {
@@ -403,7 +403,7 @@ func sortCategories(categories []CategoryGroup) []CategoryGroup {
 			}
 		}
 	}
-	
+
 	return sorted
 }
 
@@ -412,7 +412,7 @@ func sortSoundsByRequestCount(sounds []tracking.MissingSound) []tracking.Missing
 	// Create a copy to avoid modifying original
 	sorted := make([]tracking.MissingSound, len(sounds))
 	copy(sorted, sounds)
-	
+
 	// Sort by request count (descending), then by path (ascending) for tie-breaking
 	for i := 0; i < len(sorted); i++ {
 		for j := i + 1; j < len(sorted); j++ {
@@ -423,7 +423,7 @@ func sortSoundsByRequestCount(sounds []tracking.MissingSound) []tracking.Missing
 			}
 		}
 	}
-	
+
 	return sorted
 }
 
@@ -537,7 +537,7 @@ func runAnalyzeUsage(cmd *cobra.Command, days int, tool, category string, limit 
 func outputUsageStatistics(w io.Writer, usage []tracking.SoundUsage, filter tracking.QueryFilter, showChains, showSummary bool, db interface{}) error {
 	if len(usage) == 0 {
 		fmt.Fprintln(w, "No sound usage data found for the specified criteria.")
-		
+
 		// Provide helpful suggestions
 		if filter.Days > 0 {
 			fmt.Fprintf(w, "Try expanding the time range with --days 0 (all time) or --preset all-time\n")
@@ -548,14 +548,14 @@ func outputUsageStatistics(w io.Writer, usage []tracking.SoundUsage, filter trac
 		if filter.Category != "" {
 			fmt.Fprintf(w, "Try removing the --category filter to see all categories\n")
 		}
-		
+
 		return nil
 	}
 
 	// Show header with filter info
 	fmt.Fprintln(w, "Sound Usage Statistics")
 	fmt.Fprintln(w, "=====================")
-	
+
 	// Show filter details
 	if filter.DatePreset != "" {
 		fmt.Fprintf(w, "Time Range: %s\n", filter.DatePreset)
@@ -564,7 +564,7 @@ func outputUsageStatistics(w io.Writer, usage []tracking.SoundUsage, filter trac
 	} else {
 		fmt.Fprintln(w, "Time Range: All time")
 	}
-	
+
 	if filter.Tool != "" {
 		fmt.Fprintf(w, "Tool Filter: %s\n", filter.Tool)
 	}
@@ -598,7 +598,7 @@ func outputUsageStatistics(w io.Writer, usage []tracking.SoundUsage, filter trac
 
 		fmt.Fprintf(w, "%2d. %s (%d times)",
 			rank, sound.Path, sound.PlayCount)
-		
+
 		// Add tool/category info if available
 		if sound.ToolName != "" || sound.Category != "" {
 			fmt.Fprintf(w, " - ")
@@ -648,6 +648,7 @@ func outputUsageStatistics(w io.Writer, usage []tracking.SoundUsage, filter trac
 
 	return nil
 }
+
 // analyzeCategories lists the sound categories --category accepts.
 var analyzeCategories = []string{"loading", "success", "error", "interactive", "completion", "system"}
 

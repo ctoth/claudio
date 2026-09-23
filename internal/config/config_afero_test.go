@@ -22,7 +22,7 @@ func TestConfigManagerWithMemoryFilesystem(t *testing.T) {
 
 	// This constructor doesn't exist yet - will fail until we implement it
 	cm := NewConfigManagerWithFilesystem(memFS)
-	
+
 	if cm == nil {
 		t.Fatal("Expected ConfigManager with filesystem support")
 	}
@@ -31,7 +31,7 @@ func TestConfigManagerWithMemoryFilesystem(t *testing.T) {
 func TestLoadFromFileWithMemoryFilesystem(t *testing.T) {
 	// TDD RED: Test loading config from memory filesystem
 	memFS := afero.NewMemMapFs()
-	
+
 	// Create test config in memory filesystem
 	configPath := "/test/config.json"
 	testConfig := `{
@@ -40,34 +40,34 @@ func TestLoadFromFileWithMemoryFilesystem(t *testing.T) {
 		"enabled": true,
 		"log_level": "debug"
 	}`
-	
+
 	// Create directory and file in memory
 	err := memFS.MkdirAll(filepath.Dir(configPath), 0755)
 	if err != nil {
 		t.Fatalf("Failed to create directory in memory fs: %v", err)
 	}
-	
+
 	err = afero.WriteFile(memFS, configPath, []byte(testConfig), 0644)
 	if err != nil {
 		t.Fatalf("Failed to write test config to memory fs: %v", err)
 	}
-	
+
 	// This will fail until we implement filesystem abstraction
 	cm := NewConfigManagerWithFilesystem(memFS)
 	config, err := cm.LoadFromFile(configPath)
-	
+
 	if err != nil {
 		t.Errorf("Expected successful config loading from memory fs, got error: %v", err)
 	}
-	
+
 	if config == nil {
 		t.Fatal("Expected config to be loaded")
 	}
-	
+
 	if config.Volume == nil || *config.Volume != 0.8 {
 		t.Errorf("Expected volume 0.8, got %v", config.Volume)
 	}
-	
+
 	if config.DefaultSoundpack != "test" {
 		t.Errorf("Expected default_soundpack 'test', got %s", config.DefaultSoundpack)
 	}
@@ -76,7 +76,7 @@ func TestLoadFromFileWithMemoryFilesystem(t *testing.T) {
 func TestWriteConfigWithMemoryFilesystem(t *testing.T) {
 	// TDD RED: Test writing config to memory filesystem
 	memFS := afero.NewMemMapFs()
-	
+
 	cm := NewConfigManagerWithFilesystem(memFS)
 	config := &Config{
 		Volume:           ptrFloat(0.3),
@@ -85,21 +85,21 @@ func TestWriteConfigWithMemoryFilesystem(t *testing.T) {
 		LogLevel:         "info",
 		AudioBackend:     "oto",
 	}
-	
+
 	configPath := "/test/output.json"
-	
+
 	// Create directory in memory
 	err := memFS.MkdirAll(filepath.Dir(configPath), 0755)
 	if err != nil {
 		t.Fatalf("Failed to create directory: %v", err)
 	}
-	
+
 	// This will fail until we implement WriteConfig with filesystem abstraction
 	err = cm.WriteConfig(configPath, config)
 	if err != nil {
 		t.Errorf("Expected successful config writing to memory fs, got error: %v", err)
 	}
-	
+
 	// Verify file exists in memory filesystem
 	exists, err := afero.Exists(memFS, configPath)
 	if err != nil {
@@ -108,13 +108,13 @@ func TestWriteConfigWithMemoryFilesystem(t *testing.T) {
 	if !exists {
 		t.Error("Expected config file to exist in memory filesystem")
 	}
-	
+
 	// Verify contents
 	data, err := afero.ReadFile(memFS, configPath)
 	if err != nil {
 		t.Errorf("Error reading config from memory fs: %v", err)
 	}
-	
+
 	configContent := string(data)
 	if !containsAfero(configContent, "memory-test") {
 		t.Error("Expected config content to contain 'memory-test'")
@@ -124,23 +124,23 @@ func TestWriteConfigWithMemoryFilesystem(t *testing.T) {
 func TestConfigManagerIsolationFromRealFilesystem(t *testing.T) {
 	// TDD RED: Verify memory filesystem doesn't touch real filesystem
 	memFS := afero.NewMemMapFs()
-	
+
 	cm := NewConfigManagerWithFilesystem(memFS)
-	
+
 	// Write to memory filesystem path that could exist on real filesystem
 	dangerousPath := "/tmp/claudio-test-isolation.json"
 	config := cm.GetDefaultConfig()
-	
+
 	err := cm.WriteConfig(dangerousPath, config)
 	if err != nil {
 		t.Errorf("Failed to write to memory filesystem: %v", err)
 	}
-	
+
 	// Verify file does NOT exist on real filesystem (only in memory)
 	if _, err := os.Stat(dangerousPath); err == nil {
 		t.Error("Config was written to REAL filesystem instead of memory - isolation broken!")
 	}
-	
+
 	// But should exist in memory filesystem
 	exists, err := afero.Exists(memFS, dangerousPath)
 	if err != nil {

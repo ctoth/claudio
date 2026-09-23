@@ -40,6 +40,15 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Check gofmt
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "The following files are not gofmt-clean:"
+            echo "$unformatted"
+            exit 1
+          fi
+
       - uses: golangci/golangci-lint-action@v9
         with:
           version: v2.12.2
