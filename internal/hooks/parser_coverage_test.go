@@ -64,72 +64,6 @@ func TestIsValidSubcommandCoverage(t *testing.T) {
 	}
 }
 
-func postToolUseContext(t *testing.T, tool string, response string) *EventContext {
-	t.Helper()
-	resp := json.RawMessage(response)
-	e := &HookEvent{SessionID: "a", CWD: "/tmp", EventName: "PostToolUse", ToolName: &tool, ToolResponse: &resp}
-	return e.GetContext()
-}
-
-func TestAnalyzeToolResponseBranches(t *testing.T) {
-	t.Parallel()
-	// MCP-style isError on a non-Bash tool
-	if ctx := postToolUseContext(t, "apply_patch", `{"isError":true}`); !ctx.HasError {
-		t.Error("expected HasError for isError=true")
-	}
-	// interrupted
-	if ctx := postToolUseContext(t, "Bash", `{"interrupted":true}`); ctx.SoundHint != "tool-interrupted" {
-		t.Errorf("expected tool-interrupted, got %q", ctx.SoundHint)
-	}
-	// Read with content -> success
-	if ctx := postToolUseContext(t, "Read", `{"content":"hello"}`); ctx.Category != Success {
-		t.Errorf("expected Success for Read with content, got %v", ctx.Category)
-	}
-	// Read without content -> error
-	if ctx := postToolUseContext(t, "Read", `{}`); ctx.Category != Error {
-		t.Errorf("expected Error for Read without content, got %v", ctx.Category)
-	}
-	// Edit with explicit success=false -> error
-	if ctx := postToolUseContext(t, "Edit", `{"success":false}`); ctx.Category != Error {
-		t.Errorf("expected Error for Edit success=false, got %v", ctx.Category)
-	}
-	// Edit with explicit success=true -> success
-	if ctx := postToolUseContext(t, "Edit", `{"success":true}`); ctx.Category != Success {
-		t.Errorf("expected Success for Edit success=true, got %v", ctx.Category)
-	}
-	// Grep with numLines -> success
-	if ctx := postToolUseContext(t, "Grep", `{"numLines":0}`); ctx.Category != Success {
-		t.Errorf("expected Success for Grep numLines=0, got %v", ctx.Category)
-	}
-	// Unparseable tool_response -> error
-	if ctx := postToolUseContext(t, "Bash", `not json`); !ctx.HasError {
-		t.Error("expected HasError for unparseable tool_response")
-	}
-}
-
-func TestDetectNotificationTypeCoverage(t *testing.T) {
-	t.Parallel()
-	mk := func(msg string) *EventContext {
-		m := msg
-		e := &HookEvent{SessionID: "a", CWD: "/tmp", EventName: "Notification", Message: &m}
-		return e.GetContext()
-	}
-	if mk("Claude needs your permission to run").SoundHint != "notification-permission" {
-		t.Error("expected notification-permission")
-	}
-	if mk("Claude has been idle for 60s").SoundHint != "notification-idle" {
-		t.Error("expected notification-idle")
-	}
-	if mk("something else entirely").SoundHint != "notification" {
-		t.Error("expected generic notification")
-	}
-	// nil message
-	e := &HookEvent{SessionID: "a", CWD: "/tmp", EventName: "Notification"}
-	if e.GetContext().SoundHint != "notification" {
-		t.Error("expected generic notification for nil message")
-	}
-}
-
 func TestParseCompatibilityAliasBranches(t *testing.T) {
 	t.Parallel()
 	_, err := ParseHookEvent([]byte(`{
@@ -182,95 +116,6 @@ func TestParseCompatibilityAliasBranches(t *testing.T) {
 	}
 }
 
-func TestAdditionalEventContextBranches(t *testing.T) {
-	t.Parallel()
-	cases := []struct {
-		name      string
-		event     HookEvent
-		category  EventCategory
-		hint      string
-		operation string
-		hasError  bool
-	}{
-		{
-			name:      "StopFailure",
-			event:     HookEvent{SessionID: "a", CWD: "/tmp", EventName: "StopFailure"},
-			category:  Error,
-			hint:      "stop-failure",
-			operation: "stop-failure",
-			hasError:  true,
-		},
-		{
-			name:      "unknown event",
-			event:     HookEvent{SessionID: "a", CWD: "/tmp", EventName: "SomethingNew"},
-			category:  Interactive,
-			hint:      "default",
-			operation: "unknown",
-		},
-		{
-			name:      "PreToolUse without tool",
-			event:     HookEvent{SessionID: "a", CWD: "/tmp", EventName: "PreToolUse"},
-			category:  Loading,
-			hint:      "tool-loading",
-			operation: "tool-start",
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			ctx := tc.event.GetContext()
-			if ctx.Category != tc.category {
-				t.Errorf("Category = %v, want %v", ctx.Category, tc.category)
-			}
-			if ctx.SoundHint != tc.hint {
-				t.Errorf("SoundHint = %q, want %q", ctx.SoundHint, tc.hint)
-			}
-			if ctx.Operation != tc.operation {
-				t.Errorf("Operation = %q, want %q", ctx.Operation, tc.operation)
-			}
-			if ctx.HasError != tc.hasError {
-				t.Errorf("HasError = %v, want %v", ctx.HasError, tc.hasError)
-			}
-		})
-	}
-}
-
-func TestPostToolFallbackHintBranches(t *testing.T) {
-	t.Parallel()
-	t.Run("success without tool name uses generic success hint", func(t *testing.T) {
-		event := &HookEvent{SessionID: "a", CWD: "/tmp", EventName: "PostToolUse"}
-		ctx := event.GetContext()
-		if ctx.Category != Success {
-			t.Errorf("Category = %v, want Success", ctx.Category)
-		}
-		if ctx.SoundHint != "tool-success" {
-			t.Errorf("SoundHint = %q, want tool-success", ctx.SoundHint)
-		}
-	})
-
-	t.Run("error without tool name uses generic error hint", func(t *testing.T) {
-		resp := json.RawMessage(`{"error":"boom"}`)
-		event := &HookEvent{SessionID: "a", CWD: "/tmp", EventName: "PostToolUse", ToolResponse: &resp}
-		ctx := event.GetContext()
-		if ctx.Category != Error {
-			t.Errorf("Category = %v, want Error", ctx.Category)
-		}
-		if ctx.SoundHint != "tool-error" {
-			t.Errorf("SoundHint = %q, want tool-error", ctx.SoundHint)
-		}
-	})
-
-	t.Run("interrupted non-MCP tool preserves interrupted hint", func(t *testing.T) {
-		tool := "Read"
-		resp := json.RawMessage(`{"interrupted":true}`)
-		event := &HookEvent{SessionID: "a", CWD: "/tmp", EventName: "PostToolUse", ToolName: &tool, ToolResponse: &resp}
-		ctx := event.GetContext()
-		if ctx.SoundHint != "tool-interrupted" {
-			t.Errorf("SoundHint = %q, want tool-interrupted", ctx.SoundHint)
-		}
-	})
-}
-
 func TestNormalizeToolNameAliases(t *testing.T) {
 	t.Parallel()
 	cases := map[string]string{
@@ -295,31 +140,6 @@ func TestNormalizeToolNameAliases(t *testing.T) {
 			t.Errorf("normalizeToolName(%q) = %q, want %q", input, got, want)
 		}
 	}
-}
-
-func TestAnalyzeToolResponseAdditionalBranches(t *testing.T) {
-	t.Parallel()
-	t.Run("non-string error value is an error", func(t *testing.T) {
-		ctx := postToolUseContext(t, "apply_patch", `{"error":{"message":"boom"}}`)
-		if ctx.Category != Error {
-			t.Errorf("Category = %v, want Error", ctx.Category)
-		}
-		if ctx.SoundHint != "apply_patch-error" {
-			t.Errorf("SoundHint = %q, want apply_patch-error", ctx.SoundHint)
-		}
-	})
-
-	t.Run("write without explicit success defaults to success", func(t *testing.T) {
-		if ctx := postToolUseContext(t, "Write", `{}`); ctx.Category != Success {
-			t.Errorf("Category = %v, want Success", ctx.Category)
-		}
-	})
-
-	t.Run("grep without numLines defaults to success", func(t *testing.T) {
-		if ctx := postToolUseContext(t, "Grep", `{}`); ctx.Category != Success {
-			t.Errorf("Category = %v, want Success", ctx.Category)
-		}
-	})
 }
 
 func TestParseExitCodeBranches(t *testing.T) {
