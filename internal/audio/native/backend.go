@@ -35,7 +35,6 @@ type Backend struct {
 	closed     bool
 	volume     float32
 	plays      map[*playback]struct{}
-	registry   *DecoderRegistry
 	openOutput func(context.Context) (outputContext, error)
 
 	// startTimeout bounds device initialization; stallGrace is how long
@@ -51,7 +50,7 @@ type playback struct {
 
 func NewBackend() *Backend {
 	return &Backend{
-		volume: 1, plays: make(map[*playback]struct{}), registry: NewDefaultRegistry(), openOutput: openOutput,
+		volume: 1, plays: make(map[*playback]struct{}), openOutput: openOutput,
 		startTimeout: defaultStartTimeout, stallGrace: defaultStallGrace,
 	}
 }
@@ -160,14 +159,11 @@ func (b *Backend) Play(ctx context.Context, source audio.AudioSource) (err error
 			filename = path
 		}
 	}
-	data, err := b.registry.DecodeFile(playCtx, filename, reader)
+	snd, err := decodeSound(playCtx, filename, reader)
 	if err != nil {
 		return fmt.Errorf("decode audio: %w", err)
 	}
-	pcm, err := newPCMReader(playCtx, data)
-	if err != nil {
-		return err
-	}
+	pcm := newPCMReader(playCtx, snd)
 	startCtx, cancelStart := context.WithTimeout(playCtx, b.startTimeout)
 	output, err := b.openOutput(startCtx)
 	cancelStart()
@@ -193,9 +189,9 @@ func (b *Backend) Play(ctx context.Context, source audio.AudioSource) (err error
 	p.player.SetVolume(float64(b.volume))
 	p.player.Play()
 	b.mu.Unlock()
-	slog.Debug("Oto playback started", "sample_rate", data.SampleRate, "channels", data.Channels)
+	slog.Debug("Oto playback started", "sample_rate", int(snd.rate), "frames", snd.frames)
 
-	limit := b.playbackDeadline(data)
+	limit := b.playbackDeadline(snd)
 	deadline := time.NewTimer(limit)
 	defer deadline.Stop()
 	ticker := time.NewTicker(5 * time.Millisecond)
@@ -226,10 +222,6 @@ func (b *Backend) Play(ctx context.Context, source audio.AudioSource) (err error
 
 // playbackDeadline is the longest a healthy device needs: the sound, the
 // trailing silence drain, and a grace period for scheduling jitter.
-// data has already been validated by newPCMReader.
-func (b *Backend) playbackDeadline(data *AudioData) time.Duration {
-	width, _ := getBytesPerSample(data.Format)
-	frames := len(data.Samples) / (width * int(data.Channels))
-	sound := time.Duration(frames) * time.Second / time.Duration(data.SampleRate)
-	return sound + 2*outputBufferSize + b.stallGrace
+func (b *Backend) playbackDeadline(s sound) time.Duration {
+	return s.duration() + 2*outputBufferSize + b.stallGrace
 }

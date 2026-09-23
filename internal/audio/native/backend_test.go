@@ -58,7 +58,7 @@ func testBackend() (*Backend, *testOutput) {
 }
 
 func testSource() audio.AudioSource {
-	return audio.NewReaderSource(io.NopCloser(bytes.NewReader(generateTestWAV())), "wav")
+	return audio.NewReaderSource(io.NopCloser(bytes.NewReader(buildWAV(wavTagPCM, 16, 44100, sineFrames(2, 2, 0.1)))), "wav")
 }
 func waitPlayer(t *testing.T, o *testOutput) *testPlayer {
 	t.Helper()

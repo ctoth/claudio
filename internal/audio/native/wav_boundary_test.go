@@ -1,8 +1,6 @@
 package native
 
 import (
-	"bytes"
-	"context"
 	"encoding/binary"
 	"testing"
 )
@@ -24,11 +22,11 @@ func TestWAVRejectsUnsupportedOrInconsistentFrameLayout(t *testing.T) {
 					t.Errorf("Decode panicked instead of rejecting header: %v", p)
 				}
 			}()
-			data := generateTestWAV()
+			data := buildWAV(wavTagPCM, 16, 44100, sineFrames(2, 2, 0.1))
 			binary.LittleEndian.PutUint16(data[20:22], tc.format)
 			binary.LittleEndian.PutUint16(data[22:24], tc.channels)
 			binary.LittleEndian.PutUint16(data[32:34], tc.alignment)
-			if _, err := NewWavDecoder().Decode(context.Background(), bytes.NewReader(data)); err == nil {
+			if _, _, err := decodeAll(t, "x.wav", data); err == nil {
 				t.Fatal("unsupported frame layout accepted")
 			}
 		})

@@ -168,7 +168,7 @@ rm -f claudio
 3. **Audio System** (`internal/audio/`)
    - Uses Oto for compiler-free native audio on Windows, macOS, and Linux
    - One process-wide 48 kHz stereo output; decoder PCM is streamed through Beep's resampler
-   - Each play decodes the whole file into memory (size-capped), then streams the PCM to the shared output
+   - Each play reads the whole file into memory once (size-capped), sniffs its magic bytes, and streams it through Beep's WAV/MP3 decoders or a small AIFF adapter to the shared output
    - Supports WAV, MP3, and AIFF decoding with comprehensive format detection
    - AIFF support includes 16/24/32-bit depths and magic byte detection; more than two channels are downmixed to stereo
    - Volume is applied per player through Oto
@@ -202,7 +202,7 @@ rm -f claudio
 
 1. **TDD Approach**: All components have comprehensive tests written first
 2. **slog Logging**: Extensive structured logging throughout for debugging
-3. **Decode-then-stream Audio**: Decodes each sound fully into memory, then streams it through one shared Oto output
+3. **Buffer-then-stream Audio**: Reads each sound file into memory once, then decodes it while streaming through one shared Oto output
 
 ## Configuration
 

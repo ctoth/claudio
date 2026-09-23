@@ -45,7 +45,7 @@ func TestBackendAbandonsDeviceThatNeverStarts(t *testing.T) {
 func TestPlaybackDeadlineCoversSoundAndDrain(t *testing.T) {
 	b := NewBackend()
 	b.stallGrace = time.Second
-	oneSecond := &AudioData{Samples: make([]byte, 44100*2*2), Channels: 2, SampleRate: 44100, Format: FormatS16}
+	oneSecond := sound{rate: 44100, frames: 44100}
 	got := b.playbackDeadline(oneSecond)
 	want := time.Second + 2*outputBufferSize + time.Second
 	if got != want {
