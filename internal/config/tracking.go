@@ -2,8 +2,6 @@ package config
 
 import (
 	"log/slog"
-	"os"
-	"strconv"
 )
 
 // SoundTrackingConfig represents sound tracking configuration
@@ -24,24 +22,8 @@ func GetDefaultSoundTrackingConfig() *SoundTrackingConfig {
 func ApplySoundTrackingEnvironmentOverrides(config *SoundTrackingConfig) *SoundTrackingConfig {
 	slog.Debug("applying sound tracking environment variable overrides")
 
-	// Create a copy to modify
 	result := *config
-
-	// CLAUDIO_SOUND_TRACKING
-	if trackingStr := os.Getenv("CLAUDIO_SOUND_TRACKING"); trackingStr != "" {
-		if enabled, err := strconv.ParseBool(trackingStr); err == nil {
-			result.Enabled = enabled
-			slog.Debug("applied sound tracking override from environment", "value", enabled)
-		} else {
-			slog.Warn("invalid CLAUDIO_SOUND_TRACKING environment variable", "value", trackingStr, "error", err)
-		}
-	}
-
-	// CLAUDIO_SOUND_TRACKING_DB
-	if dbPath := os.Getenv("CLAUDIO_SOUND_TRACKING_DB"); dbPath != "" {
-		result.DatabasePath = dbPath
-		slog.Debug("applied sound tracking database path override from environment", "value", dbPath)
-	}
+	applyEnvVars(&result, soundTrackingEnvVars)
 
 	slog.Debug("sound tracking environment overrides applied")
 	return &result

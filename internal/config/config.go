@@ -10,7 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strconv"
+	"slices"
 	"strings"
 
 	"github.com/spf13/afero"
@@ -371,67 +371,8 @@ func (cm *ConfigManager) ApplyEnvironmentOverrides(config *Config) *Config {
 	slog.Debug("applying environment variable overrides")
 
 	// Deep copy so overrides never write through into the caller's config.
-	result := *config.Clone()
-
-	// CLAUDIO_VOLUME
-	if volStr := os.Getenv("CLAUDIO_VOLUME"); volStr != "" {
-		if vol, err := strconv.ParseFloat(volStr, 64); err == nil {
-			result.Volume = &vol
-			slog.Debug("applied volume override from environment", "value", vol)
-		} else {
-			slog.Warn("invalid CLAUDIO_VOLUME environment variable", "value", volStr, "error", err)
-		}
-	}
-
-	// CLAUDIO_SOUNDPACK
-	if soundpack := os.Getenv("CLAUDIO_SOUNDPACK"); soundpack != "" {
-		result.DefaultSoundpack = soundpack
-		slog.Debug("applied soundpack override from environment", "value", soundpack)
-	}
-
-	// CLAUDIO_ENABLED
-	if enabledStr := os.Getenv("CLAUDIO_ENABLED"); enabledStr != "" {
-		if enabled, err := strconv.ParseBool(enabledStr); err == nil {
-			result.Enabled = enabled
-			slog.Debug("applied enabled override from environment", "value", enabled)
-		} else {
-			slog.Warn("invalid CLAUDIO_ENABLED environment variable", "value", enabledStr, "error", err)
-		}
-	}
-
-	// CLAUDIO_LOG_LEVEL
-	if logLevel := os.Getenv("CLAUDIO_LOG_LEVEL"); logLevel != "" {
-		result.LogLevel = logLevel
-		slog.Debug("applied log level override from environment", "value", logLevel)
-	}
-
-	// CLAUDIO_AUDIO_BACKEND
-	if audioBackend := os.Getenv("CLAUDIO_AUDIO_BACKEND"); audioBackend != "" {
-		audioBackend = migrateLegacyAudioBackend(audioBackend, "CLAUDIO_AUDIO_BACKEND")
-		// Validate the backend before applying
-		if cm.IsValidAudioBackend(audioBackend) {
-			result.AudioBackend = audioBackend
-			slog.Debug("applied audio backend override from environment", "value", audioBackend)
-		} else {
-			slog.Warn("invalid CLAUDIO_AUDIO_BACKEND environment variable", "value", audioBackend)
-		}
-	}
-
-	// CLAUDIO_FILE_LOGGING — opt-out switch so test environments can
-	// disable the lumberjack file handle that would otherwise block
-	// t.TempDir() cleanup on Windows. Recognised values match
-	// strconv.ParseBool ("1"/"0", "true"/"false", etc.).
-	if fileLoggingStr := os.Getenv("CLAUDIO_FILE_LOGGING"); fileLoggingStr != "" {
-		if enabled, err := strconv.ParseBool(fileLoggingStr); err == nil {
-			if result.FileLogging == nil {
-				result.FileLogging = &FileLoggingConfig{}
-			}
-			result.FileLogging.Enabled = enabled
-			slog.Debug("applied file_logging override from environment", "value", enabled)
-		} else {
-			slog.Warn("invalid CLAUDIO_FILE_LOGGING environment variable", "value", fileLoggingStr, "error", err)
-		}
-	}
+	result := config.Clone()
+	applyEnvVars(result, configEnvVars)
 
 	// Apply sound tracking environment overrides
 	if result.SoundTracking == nil {
@@ -440,7 +381,7 @@ func (cm *ConfigManager) ApplyEnvironmentOverrides(config *Config) *Config {
 	result.SoundTracking = ApplySoundTrackingEnvironmentOverrides(result.SoundTracking)
 
 	slog.Debug("environment overrides applied")
-	return &result
+	return result
 }
 
 // ApplyLogLevel configures slog with the specified log level
@@ -534,7 +475,15 @@ func (cm *ConfigManager) ApplyLogLevelWithWriter(logLevel string, writer io.Writ
 // it is listed here so cli tests can set cfg.AudioBackend = "fake" without
 // tripping ConfigManager.ValidateConfig.
 func (cm *ConfigManager) GetSupportedAudioBackends() []string {
-	return []string{"auto", "system_command", "oto", "fake"}
+	return slices.Clone(supportedAudioBackends)
+}
+
+var supportedAudioBackends = []string{"auto", "system_command", "oto", "fake"}
+
+// isSupportedAudioBackend reports whether backend is one of the
+// GetSupportedAudioBackends names (empty means auto and is accepted).
+func isSupportedAudioBackend(backend string) bool {
+	return backend == "" || slices.Contains(supportedAudioBackends, backend)
 }
 
 // legacyAudioBackends maps removed backend names to their replacements so a
@@ -554,18 +503,7 @@ func migrateLegacyAudioBackend(backend, source string) string {
 
 // IsValidAudioBackend checks if an audio backend type is supported
 func (cm *ConfigManager) IsValidAudioBackend(backend string) bool {
-	// Empty string is valid (defaults to auto)
-	if backend == "" {
-		return true
-	}
-
-	supported := cm.GetSupportedAudioBackends()
-	for _, supportedBackend := range supported {
-		if backend == supportedBackend {
-			return true
-		}
-	}
-	return false
+	return isSupportedAudioBackend(backend)
 }
 
 // hasEmbeddedPlatformFile checks if an embedded platform soundpack file exists
