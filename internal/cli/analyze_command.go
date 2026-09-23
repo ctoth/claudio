@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"cmp"
 	"database/sql"
 	"fmt"
 	"io"
@@ -163,89 +164,54 @@ func (c *CLI) runAnalyzeMissing(cmd *cobra.Command, flags *analyzeFilterFlags) e
 	return outputMissingSoundsHierarchical(cmd.OutOrStdout(), missingSounds, summary, filter)
 }
 
-// TDD Step 3 GREEN: groupByTool groups missing sounds by tool and category
+// groupByTool groups missing sounds by tool and category. Everything comes
+// back in display order: tools by total requests (descending) then name,
+// categories as sortCategories orders them, sounds by sortSoundsByRequestCount.
 func groupByTool(missingSounds []tracking.MissingSound) Analysis {
 	toolMap := make(map[string]map[string][]tracking.MissingSound) // tool -> category -> sounds
 	otherMap := make(map[string][]tracking.MissingSound)           // category -> sounds (for non-tool sounds)
 
-	// Group sounds by tool and category
 	for _, sound := range missingSounds {
-		if sound.ToolName != "" {
-			// Tool-specific sound
-			if toolMap[sound.ToolName] == nil {
-				toolMap[sound.ToolName] = make(map[string][]tracking.MissingSound)
-			}
-			toolMap[sound.ToolName][sound.Category] = append(toolMap[sound.ToolName][sound.Category], sound)
-		} else {
-			// Non-tool sound (goes to Other section)
+		if sound.ToolName == "" {
 			otherMap[sound.Category] = append(otherMap[sound.Category], sound)
+			continue
 		}
+		if toolMap[sound.ToolName] == nil {
+			toolMap[sound.ToolName] = make(map[string][]tracking.MissingSound)
+		}
+		toolMap[sound.ToolName][sound.Category] = append(toolMap[sound.ToolName][sound.Category], sound)
 	}
 
-	// Build tool groups
-	var tools []ToolGroup
+	tools := make([]ToolGroup, 0, len(toolMap))
 	for toolName, categoryMap := range toolMap {
-		var categories []CategoryGroup
-		toolTotal := 0
-		toolCount := 0
-
-		for categoryName, sounds := range categoryMap {
-			categoryTotal := 0
-			for _, sound := range sounds {
-				categoryTotal += sound.RequestCount
-			}
-
-			categories = append(categories, CategoryGroup{
-				Name:   categoryName,
-				Total:  categoryTotal,
-				Count:  len(sounds),
-				Sounds: sounds,
-			})
-
-			toolTotal += categoryTotal
-			toolCount += len(sounds)
+		tool := ToolGroup{Name: toolName, Categories: categoryGroups(categoryMap)}
+		for _, category := range tool.Categories {
+			tool.Total += category.Total
+			tool.Count += category.Count
 		}
-
-		tools = append(tools, ToolGroup{
-			Name:       toolName,
-			Total:      toolTotal,
-			Count:      toolCount,
-			Categories: categories,
-		})
+		tools = append(tools, tool)
 	}
+	slices.SortFunc(tools, func(a, b ToolGroup) int {
+		return cmp.Or(cmp.Compare(b.Total, a.Total), cmp.Compare(a.Name, b.Name))
+	})
 
-	// Build other groups
-	var other []CategoryGroup
-	for categoryName, sounds := range otherMap {
-		categoryTotal := 0
-		for _, sound := range sounds {
-			categoryTotal += sound.RequestCount
-		}
-
-		other = append(other, CategoryGroup{
-			Name:   categoryName,
-			Total:  categoryTotal,
-			Count:  len(sounds),
-			Sounds: sounds,
-		})
-	}
-
-	// Sort tools by total requests (descending)
-	for i := 0; i < len(tools); i++ {
-		for j := i + 1; j < len(tools); j++ {
-			if tools[j].Total > tools[i].Total {
-				tools[i], tools[j] = tools[j], tools[i]
-			}
-		}
-	}
-
-	return Analysis{
-		Tools: tools,
-		Other: other,
-	}
+	return Analysis{Tools: tools, Other: categoryGroups(otherMap)}
 }
 
-// TDD Step 3 GREEN: outputMissingSoundsHierarchical displays missing sounds grouped by tool
+// categoryGroups turns category -> sounds into sorted CategoryGroups.
+func categoryGroups(byCategory map[string][]tracking.MissingSound) []CategoryGroup {
+	groups := make([]CategoryGroup, 0, len(byCategory))
+	for name, sounds := range byCategory {
+		group := CategoryGroup{Name: name, Count: len(sounds), Sounds: sortSoundsByRequestCount(sounds)}
+		for _, sound := range sounds {
+			group.Total += sound.RequestCount
+		}
+		groups = append(groups, group)
+	}
+	return sortCategories(groups)
+}
+
+// outputMissingSoundsHierarchical displays missing sounds grouped by tool
 func outputMissingSoundsHierarchical(w io.Writer, sounds []tracking.MissingSound, summary map[string]interface{}, filter tracking.QueryFilter) error {
 	if len(sounds) == 0 {
 		// No missing sounds found
@@ -280,80 +246,27 @@ func outputMissingSoundsHierarchical(w io.Writer, sounds []tracking.MissingSound
 
 	fmt.Fprintf(w, "Missing Sounds by Tool (%s):\n\n", timeContext)
 
-	// Summary statistics if available
-	if summary != nil {
-		if uniqueCount, ok := summary["unique_missing_sounds"].(int); ok && uniqueCount > 0 {
-			totalRequests := summary["total_missing_requests"].(int)
+	// Summary statistics if available. Each key is checked: a missing or
+	// mistyped one skips its line instead of panicking.
+	if uniqueCount, ok := summary["unique_missing_sounds"].(int); ok && uniqueCount > 0 {
+		if totalRequests, ok := summary["total_missing_requests"].(int); ok {
 			fmt.Fprintf(w, "Found %d unique missing sounds with %d total requests\n", uniqueCount, totalRequests)
-
-			if toolCount, ok := summary["tools_with_missing_sounds"].(int); ok && toolCount > 0 {
-				fmt.Fprintf(w, "Across %d different tools\n", toolCount)
-			}
-			fmt.Fprintln(w)
 		}
+		if toolCount, ok := summary["tools_with_missing_sounds"].(int); ok && toolCount > 0 {
+			fmt.Fprintf(w, "Across %d different tools\n", toolCount)
+		}
+		fmt.Fprintln(w)
 	}
 
-	// Display tools grouped hierarchically with improved formatting
 	for _, tool := range analysis.Tools {
-		// Handle edge case: skip tools with no sounds (shouldn't happen, but defensive)
-		if tool.Count == 0 {
-			continue
-		}
-
 		fmt.Fprintf(w, "%s (total: %d requests, %d sounds):\n", tool.Name, tool.Total, tool.Count)
-
-		// Sort categories for consistent output (success, error, loading, etc.)
-		sortedCategories := sortCategories(tool.Categories)
-
-		for _, category := range sortedCategories {
-			fmt.Fprintf(w, "  %s (%d requests):\n", category.Name, category.Total)
-
-			// Sort sounds by request count (descending)
-			sortedSounds := sortSoundsByRequestCount(category.Sounds)
-
-			for _, sound := range sortedSounds {
-				// Handle edge case: truncate very long paths for better formatting
-				displayPath := sound.Path
-				if len(displayPath) > 35 {
-					displayPath = "..." + displayPath[len(displayPath)-32:]
-				}
-
-				// Better alignment: path padded to 35 chars, right-aligned request count
-				fmt.Fprintf(w, "    %-35s %3d requests\n", displayPath, sound.RequestCount)
-			}
-
-			if len(sortedCategories) > 1 {
-				fmt.Fprintln(w) // Space between categories only if multiple categories
-			}
-		}
+		printCategoryGroups(w, tool.Categories)
 		fmt.Fprintln(w) // Space between tools
 	}
 
-	// Display Other section if present with consistent formatting
 	if len(analysis.Other) > 0 {
 		fmt.Fprintln(w, "Other (non-tool sounds):")
-
-		sortedOtherCategories := sortCategories(analysis.Other)
-
-		for _, category := range sortedOtherCategories {
-			fmt.Fprintf(w, "  %s (%d requests):\n", category.Name, category.Total)
-
-			sortedOtherSounds := sortSoundsByRequestCount(category.Sounds)
-
-			for _, sound := range sortedOtherSounds {
-				// Handle edge case: truncate very long paths for better formatting
-				displayPath := sound.Path
-				if len(displayPath) > 35 {
-					displayPath = "..." + displayPath[len(displayPath)-32:]
-				}
-
-				fmt.Fprintf(w, "    %-35s %3d requests\n", displayPath, sound.RequestCount)
-			}
-
-			if len(sortedOtherCategories) > 1 {
-				fmt.Fprintln(w) // Space between categories only if multiple
-			}
-		}
+		printCategoryGroups(w, analysis.Other)
 		fmt.Fprintln(w) // Space after Other section
 	}
 
@@ -370,72 +283,56 @@ func outputMissingSoundsHierarchical(w io.Writer, sounds []tracking.MissingSound
 	return nil
 }
 
-// TDD Step 3 REFACTOR: Helper functions for consistent sorting and formatting
-
-// sortCategories sorts categories in a logical order for display
-func sortCategories(categories []CategoryGroup) []CategoryGroup {
-	// Create a copy to avoid modifying original
-	sorted := make([]CategoryGroup, len(categories))
-	copy(sorted, categories)
-
-	// Define preferred order: success, error, loading, interactive, completion, system, others
-	categoryOrder := map[string]int{
-		"success":     1,
-		"error":       2,
-		"loading":     3,
-		"interactive": 4,
-		"completion":  5,
-		"system":      6,
-	}
-
-	// Sort by preferred order, then by total requests (descending), then by name
-	for i := 0; i < len(sorted); i++ {
-		for j := i + 1; j < len(sorted); j++ {
-			orderI := categoryOrder[sorted[i].Name]
-			orderJ := categoryOrder[sorted[j].Name]
-
-			// If both have defined order, use it
-			if orderI > 0 && orderJ > 0 {
-				if orderI > orderJ {
-					sorted[i], sorted[j] = sorted[j], sorted[i]
-				}
-			} else if orderI > 0 && orderJ == 0 {
-				// I has order, J doesn't - I comes first
-				continue
-			} else if orderI == 0 && orderJ > 0 {
-				// J has order, I doesn't - swap
-				sorted[i], sorted[j] = sorted[j], sorted[i]
-			} else {
-				// Neither has defined order - sort by total requests (desc), then by name
-				if sorted[j].Total > sorted[i].Total {
-					sorted[i], sorted[j] = sorted[j], sorted[i]
-				} else if sorted[j].Total == sorted[i].Total && sorted[j].Name < sorted[i].Name {
-					sorted[i], sorted[j] = sorted[j], sorted[i]
-				}
+// printCategoryGroups prints each category with its sounds, paths
+// truncated to 35 characters so the request counts line up.
+func printCategoryGroups(w io.Writer, categories []CategoryGroup) {
+	for _, category := range categories {
+		fmt.Fprintf(w, "  %s (%d requests):\n", category.Name, category.Total)
+		for _, sound := range category.Sounds {
+			displayPath := sound.Path
+			if len(displayPath) > 35 {
+				displayPath = "..." + displayPath[len(displayPath)-32:]
 			}
+			fmt.Fprintf(w, "    %-35s %3d requests\n", displayPath, sound.RequestCount)
+		}
+		if len(categories) > 1 {
+			fmt.Fprintln(w) // Space between categories only if multiple
 		}
 	}
+}
 
+// categoryDisplayOrder is the preferred category order; categories not
+// listed follow it.
+var categoryDisplayOrder = []string{"success", "error", "loading", "interactive", "completion", "system"}
+
+// sortCategories returns categories in display order: known categories in
+// categoryDisplayOrder, then the rest by total requests (descending) and
+// name.
+func sortCategories(categories []CategoryGroup) []CategoryGroup {
+	rank := func(name string) int {
+		if i := slices.Index(categoryDisplayOrder, name); i >= 0 {
+			return i
+		}
+		return len(categoryDisplayOrder)
+	}
+	sorted := slices.Clone(categories)
+	slices.SortFunc(sorted, func(a, b CategoryGroup) int {
+		return cmp.Or(
+			cmp.Compare(rank(a.Name), rank(b.Name)),
+			cmp.Compare(b.Total, a.Total),
+			cmp.Compare(a.Name, b.Name),
+		)
+	})
 	return sorted
 }
 
-// sortSoundsByRequestCount sorts sounds by request count (descending), then by path
+// sortSoundsByRequestCount returns sounds by request count (descending),
+// then by path.
 func sortSoundsByRequestCount(sounds []tracking.MissingSound) []tracking.MissingSound {
-	// Create a copy to avoid modifying original
-	sorted := make([]tracking.MissingSound, len(sounds))
-	copy(sorted, sounds)
-
-	// Sort by request count (descending), then by path (ascending) for tie-breaking
-	for i := 0; i < len(sorted); i++ {
-		for j := i + 1; j < len(sorted); j++ {
-			if sorted[j].RequestCount > sorted[i].RequestCount {
-				sorted[i], sorted[j] = sorted[j], sorted[i]
-			} else if sorted[j].RequestCount == sorted[i].RequestCount && sorted[j].Path < sorted[i].Path {
-				sorted[i], sorted[j] = sorted[j], sorted[i]
-			}
-		}
-	}
-
+	sorted := slices.Clone(sounds)
+	slices.SortFunc(sorted, func(a, b tracking.MissingSound) int {
+		return cmp.Or(cmp.Compare(b.RequestCount, a.RequestCount), cmp.Compare(a.Path, b.Path))
+	})
 	return sorted
 }
 
@@ -494,7 +391,7 @@ func (c *CLI) runAnalyzeUsage(cmd *cobra.Command, flags *analyzeFilterFlags, sho
 }
 
 // outputUsageStatistics formats and outputs usage statistics
-func outputUsageStatistics(w io.Writer, usage []tracking.SoundUsage, filter tracking.QueryFilter, showChains, showSummary bool, db interface{}) error {
+func outputUsageStatistics(w io.Writer, usage []tracking.SoundUsage, filter tracking.QueryFilter, showChains, showSummary bool, db *sql.DB) error {
 	if len(usage) == 0 {
 		fmt.Fprintln(w, "No sound usage data found for the specified criteria.")
 
@@ -535,13 +432,12 @@ func outputUsageStatistics(w io.Writer, usage []tracking.SoundUsage, filter trac
 
 	// Show summary if requested
 	if showSummary {
-		if dbConn, ok := db.(*sql.DB); ok {
-			summary, err := tracking.GetUsageSummary(dbConn, filter)
-			if err == nil {
-				fmt.Fprintf(w, "Summary: %d total events, %d unique sounds\n\n",
-					summary.TotalEvents, summary.UniqueSounds)
-			}
+		summary, err := tracking.GetUsageSummary(db, filter)
+		if err != nil {
+			return fmt.Errorf("failed to get usage summary: %w", err)
 		}
+		fmt.Fprintf(w, "Summary: %d total events, %d unique sounds\n\n",
+			summary.TotalEvents, summary.UniqueSounds)
 	}
 
 	// Show most used sounds
@@ -578,21 +474,19 @@ func outputUsageStatistics(w io.Writer, usage []tracking.SoundUsage, filter trac
 
 	// Show per-chain-type statistics if requested
 	if showChains {
-		if dbConn, ok := db.(*sql.DB); ok {
-			fmt.Fprintln(w, "\nChain Type Statistics:")
-			fmt.Fprintln(w, "----------------------")
-
-			chainStats, err := tracking.GetChainTypeStatistics(dbConn, filter)
-			if err == nil {
-				for _, stat := range chainStats {
-					label := stat.ChainType
-					if label == "" {
-						label = "(unrecorded)"
-					}
-					fmt.Fprintf(w, "%s: %d events (%.1f%%), avg depth %.1f\n",
-						label, stat.EventCount, stat.Percentage, stat.AvgDepth)
-				}
+		chainStats, err := tracking.GetChainTypeStatistics(db, filter)
+		if err != nil {
+			return fmt.Errorf("failed to get chain type statistics: %w", err)
+		}
+		fmt.Fprintln(w, "\nChain Type Statistics:")
+		fmt.Fprintln(w, "----------------------")
+		for _, stat := range chainStats {
+			label := stat.ChainType
+			if label == "" {
+				label = "(unrecorded)"
 			}
+			fmt.Fprintf(w, "%s: %d events (%.1f%%), avg depth %.1f\n",
+				label, stat.EventCount, stat.Percentage, stat.AvgDepth)
 		}
 	}
 
