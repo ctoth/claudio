@@ -28,12 +28,7 @@ Shows name, type (embedded/json/directory), sound count, and path for each pack.
 func runSoundpackList(cmd *cobra.Command) error {
 	slog.Debug("running soundpack list")
 
-	packs, err := discoverSoundpacks()
-	if err != nil {
-		return fmt.Errorf("failed to discover soundpacks: %w", err)
-	}
-
-	packs = withSoundCounts(packs)
+	packs := withSoundCounts(discoverSoundpacks())
 	slog.Info("discovered soundpacks", "count", len(packs))
 
 	// Calculate column widths for tabular formatting

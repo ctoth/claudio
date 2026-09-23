@@ -1059,7 +1059,7 @@ func TestProcessHookEventRecordsToolNameAsString(t *testing.T) {
 		EventName:    "PostToolUse",
 		ToolName:     stringPtr("Bash"),
 		ToolResponse: &resp,
-	}, cfg, &bytes.Buffer{}, &bytes.Buffer{})
+	}, cfg)
 
 	var toolName string
 	if err := db.QueryRow("SELECT tool_name FROM hook_events WHERE session_id = ?", "tool-name-string").Scan(&toolName); err != nil {

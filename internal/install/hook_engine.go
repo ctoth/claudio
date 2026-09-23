@@ -122,11 +122,10 @@ func ClaudioHookNames(settings *SettingsMap) []string {
 
 // removeClaudioHooks strips every claudio command from settings in place,
 // deleting events that become empty and the hooks section if it empties.
-// It returns the sorted names of the events it changed.
-func removeClaudioHooks(settings *SettingsMap) []string {
+func removeClaudioHooks(settings *SettingsMap) {
 	hooks, ok := hooksSection(settings)
 	if !ok {
-		return nil
+		return
 	}
 	var names []string
 	for name, value := range hooks {
@@ -146,5 +145,4 @@ func removeClaudioHooks(settings *SettingsMap) []string {
 	}
 	sort.Strings(names)
 	slog.Debug("removed claudio hooks", "hooks", names, "remaining_hooks", len(hooks))
-	return names
 }

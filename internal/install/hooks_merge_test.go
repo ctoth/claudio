@@ -778,16 +778,19 @@ func claudioArrayEntry(cmd string) map[string]any {
 	}
 }
 
-// customArrayEntry returns a hook array element with a single non-claudio
-// command. The matcher value is parametrised so callers can distinguish their
-// entries when asserting preservation.
-func customArrayEntry(matcher, cmd string) map[string]any {
+// customHookCommand is the non-claudio command the merge tests must preserve.
+const customHookCommand = "/usr/local/bin/custom"
+
+// customArrayEntry returns a hook array element with the single non-claudio
+// command customHookCommand. The matcher value is parametrised so callers can
+// distinguish their entries when asserting preservation.
+func customArrayEntry(matcher string) map[string]any {
 	return map[string]any{
 		"matcher": matcher,
 		"hooks": []any{
 			map[string]any{
 				"type":    "command",
-				"command": cmd,
+				"command": customHookCommand,
 			},
 		},
 	}
@@ -820,7 +823,7 @@ func countCommandsInHookValue(t *testing.T, v any) int {
 // a second claudio block.
 func TestIsClaudioHookMultiMatcherArray(t *testing.T) {
 	value := []any{
-		customArrayEntry(".*", "/usr/local/bin/custom"),
+		customArrayEntry(".*"),
 		claudioArrayEntry("/usr/local/bin/claudio"),
 	}
 	if !IsClaudioHook(value) {
@@ -835,7 +838,7 @@ func TestIsClaudioHookMultiHookInsideMatcher(t *testing.T) {
 		map[string]any{
 			"matcher": ".*",
 			"hooks": []any{
-				map[string]any{"type": "command", "command": "/usr/local/bin/custom"},
+				map[string]any{"type": "command", "command": customHookCommand},
 				map[string]any{"type": "command", "command": "/usr/local/bin/claudio"},
 			},
 		},
@@ -855,7 +858,7 @@ func TestMergeHooksIdempotent_CustomThenClaudio(t *testing.T) {
 	existing := &SettingsMap{
 		"hooks": map[string]any{
 			"PostToolUse": []any{
-				customArrayEntry(".*", "/usr/local/bin/custom"),
+				customArrayEntry(".*"),
 				claudioArrayEntry(claudioCmd),
 			},
 		},
@@ -899,13 +902,12 @@ func TestMergeHooksIdempotent_CustomThenClaudio(t *testing.T) {
 // claudio-only value, deleting the user's custom hook.
 func TestMergeHooksIdempotent_ClaudioThenCustom(t *testing.T) {
 	const claudioCmd = "/test/mock/claudio"
-	const customCmd = "/usr/local/bin/custom"
 
 	existing := &SettingsMap{
 		"hooks": map[string]any{
 			"PostToolUse": []any{
 				claudioArrayEntry(claudioCmd),
-				customArrayEntry("custom-matcher", customCmd),
+				customArrayEntry("custom-matcher"),
 			},
 		},
 	}
@@ -942,13 +944,13 @@ func TestMergeHooksIdempotent_ClaudioThenCustom(t *testing.T) {
 			if !ok {
 				continue
 			}
-			if cmd, _ := hm["command"].(string); cmd == customCmd {
+			if cmd, _ := hm["command"].(string); cmd == customHookCommand {
 				foundCustom = true
 			}
 		}
 	}
 	if !foundCustom {
-		t.Errorf("custom hook %q was silently deleted by merge — data-loss bug regressed. Got: %v", customCmd, arr)
+		t.Errorf("custom hook %q was silently deleted by merge — data-loss bug regressed. Got: %v", customHookCommand, arr)
 	}
 
 	// Exactly one claudio entry.
@@ -963,14 +965,13 @@ func TestMergeHooksIdempotent_ClaudioThenCustom(t *testing.T) {
 // corrupted by the pre-fix code.
 func TestMergeHooksIdempotent_MultipleClaudio(t *testing.T) {
 	const claudioCmd = "/test/mock/claudio"
-	const customCmd = "/usr/local/bin/custom"
 
 	existing := &SettingsMap{
 		"hooks": map[string]any{
 			"PostToolUse": []any{
 				claudioArrayEntry(claudioCmd),
 				claudioArrayEntry(claudioCmd),
-				customArrayEntry("custom-matcher", customCmd),
+				customArrayEntry("custom-matcher"),
 			},
 		},
 	}
@@ -1012,7 +1013,7 @@ func TestMergeHooksIdempotent_MultipleClaudio(t *testing.T) {
 			if cmd == claudioCmd {
 				claudioCommands++
 			}
-			if cmd == customCmd {
+			if cmd == customHookCommand {
 				customFound = true
 			}
 		}
@@ -1021,7 +1022,7 @@ func TestMergeHooksIdempotent_MultipleClaudio(t *testing.T) {
 		t.Errorf("expected exactly 1 claudio command after collapse, got %d", claudioCommands)
 	}
 	if !customFound {
-		t.Errorf("custom command %q was lost during multi-claudio collapse", customCmd)
+		t.Errorf("custom command %q was lost during multi-claudio collapse", customHookCommand)
 	}
 }
 

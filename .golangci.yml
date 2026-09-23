@@ -8,6 +8,7 @@ linters:
     - intrange
     - perfsprint
     - gocritic
+    - unparam
   settings:
     staticcheck:
       checks:

@@ -111,11 +111,7 @@ func TestCLIPlaySoundWithBackend(t *testing.T) {
 	defer cli.audioBackend.Close()
 
 	// Test that playSound uses backend instead of hardcoded paplay
-	volume := 0.5
-	if cfg.Volume != nil {
-		volume = *cfg.Volume
-	}
-	err = cli.playSoundWithBackend("/test/nonexistent.wav", volume)
+	err = cli.playSoundWithBackend("/test/nonexistent.wav")
 
 	// We should get a "file not found" type error, but no panic
 	// The important thing is that it doesn't crash and uses the backend system

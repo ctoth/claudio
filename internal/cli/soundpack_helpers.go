@@ -34,8 +34,8 @@ var embeddedPlatformSoundpackFiles = []string{"windows.json", "wsl.json", "darwi
 // discoverSoundpacks lists every soundpack reachable by name, using the
 // soundpack_paths of the effective XDG config. See
 // discoverSoundpacksWithPaths for the order.
-func discoverSoundpacks() ([]soundpackInfo, error) {
-	return discoverSoundpacksWithPaths(configuredSoundpackPaths()), nil
+func discoverSoundpacks() []soundpackInfo {
+	return discoverSoundpacksWithPaths(configuredSoundpackPaths())
 }
 
 // discoverSoundpacksWithPaths lists every soundpack reachable by name, in
