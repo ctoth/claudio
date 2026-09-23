@@ -247,35 +247,21 @@ func initializeAudioSystem(cmd *cobra.Command, cli *CLI, cfg *config.Config) err
 			slog.Warn("failed to load embedded platform soundpack from config",
 				"identifier", cfg.DefaultSoundpack, "error", err)
 		}
-	} else if embeddedIdentifier, ok := embeddedPlatformSoundpackIdentifier(cfg.DefaultSoundpack); ok {
-		mapper, err = loadEmbeddedPlatformSoundpack(embeddedIdentifier)
+	} else if pack, ok := lookupSoundpack(cfg.DefaultSoundpack, cfg.SoundpackPaths); ok && pack.Type == soundpackTypeEmbedded {
+		mapper, err = loadEmbeddedPlatformSoundpack(pack.Identifier)
 		if err != nil {
 			slog.Warn("failed to load embedded platform soundpack from config name",
-				"name", cfg.DefaultSoundpack, "identifier", embeddedIdentifier, "error", err)
+				"name", cfg.DefaultSoundpack, "identifier", pack.Identifier, "error", err)
 		}
 	} else {
-		// Resolve soundpack name to path: if default_soundpack is a name (not a path),
-		// search soundpack_paths for a matching entry
+		// A name resolves exactly as `soundpack list` shows it (the same
+		// lookup `soundpack use` validates against). Only a value that is
+		// not a known name is treated as a direct path.
 		resolvedPath := cfg.DefaultSoundpack
-		if _, statErr := os.Stat(resolvedPath); statErr != nil {
-			if managedPath := findManagedGitSoundpackPath(cfg.DefaultSoundpack); managedPath != "" {
-				slog.Info("resolved managed git soundpack name to path",
-					"name", cfg.DefaultSoundpack, "path", managedPath)
-				resolvedPath = managedPath
-			}
-		}
-		if _, statErr := os.Stat(resolvedPath); statErr != nil {
-			// Not a direct path. Search both canonical XDG candidates and
-			// configured paths; JSON metadata is authoritative when the
-			// installed canonical filename is soundpack.json.
-			for _, candidate := range soundpackPaths {
-				if soundpackPathMatchesName(candidate, cfg.DefaultSoundpack) {
-					slog.Debug("resolved soundpack name to path",
-						"name", cfg.DefaultSoundpack, "path", candidate)
-					resolvedPath = candidate
-					break
-				}
-			}
+		if ok {
+			slog.Debug("resolved soundpack name to path",
+				"name", cfg.DefaultSoundpack, "type", pack.Type, "path", pack.Path)
+			resolvedPath = pack.Path
 		}
 
 		// Check if resolved soundpack path exists

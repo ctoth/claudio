@@ -19,65 +19,47 @@ import (
 // the list subcommand and the soundpack_git.go discovery paths.
 type soundpackInfo struct {
 	Name       string
-	Type       string // "embedded", "json", "directory"
+	Type       string // "embedded", "git", "json", "directory"
 	SoundCount int
 	Path       string
+	Identifier string // "embedded:<file>" for embedded packs, empty otherwise
 }
 
-func soundpackPathMatchesName(candidate, name string) bool {
-	info, err := os.Stat(candidate)
-	if err != nil {
-		return false
-	}
-	if info.IsDir() {
-		return filepath.Base(filepath.Clean(candidate)) == name
-	}
-	if !strings.EqualFold(filepath.Ext(candidate), ".json") {
-		return false
-	}
-	metadata, err := soundpack.PeekJSONSoundpackMetadataFromFile(candidate)
-	if err == nil && metadata.Name != "" {
-		return metadata.Name == name
-	}
-	base := filepath.Base(candidate)
-	return strings.TrimSuffix(base, filepath.Ext(base)) == name
-}
+const soundpackTypeEmbedded = "embedded"
 
 var embeddedPlatformSoundpackFiles = []string{"windows.json", "wsl.json", "darwin.json", "linux.json"}
 
-func embeddedPlatformSoundpackIdentifier(name string) (string, bool) {
-	if name == "" || strings.ContainsAny(name, `/\`) || filepath.Ext(name) != "" {
-		return "", false
-	}
-
-	filename := name + ".json"
-	for _, embedded := range embeddedPlatformSoundpackFiles {
-		if filename == embedded {
-			return "embedded:" + filename, true
-		}
-	}
-
-	if _, err := config.GetEmbeddedPlatformSoundpackData(filename); err == nil {
-		return "embedded:" + filename, true
-	}
-
-	return "", false
+// discoverSoundpacks lists every soundpack reachable by name, using the
+// soundpack_paths of the effective XDG config. See
+// discoverSoundpacksWithPaths for the order.
+func discoverSoundpacks() ([]soundpackInfo, error) {
+	return discoverSoundpacksWithPaths(configuredSoundpackPaths()), nil
 }
 
-// discoverSoundpacks finds all available soundpacks from embedded, XDG, and config sources.
-// Returns a deduplicated list of soundpack info structs.
-func discoverSoundpacks() ([]soundpackInfo, error) {
+// discoverSoundpacksWithPaths lists every soundpack reachable by name, in
+// resolution precedence order: embedded platform packs, managed git packs,
+// XDG data directory packs, then configPaths (config soundpack_paths).
+// Entries with the same name and path are listed once. `soundpack list`
+// prints this list, `soundpack use` accepts its names, and the runtime
+// resolves a name to the first entry with that name (lookupSoundpack), so
+// all three agree.
+func discoverSoundpacksWithPaths(configPaths []string) []soundpackInfo {
 	slog.Debug("discovering soundpacks")
 
-	var packs []soundpackInfo
-	seen := make(map[string]struct{}) // Deduplicate by name+path
-
-	// 1. Embedded platform packs (always present)
 	embeddedPacks, err := discoverEmbeddedSoundpacks()
 	if err != nil {
 		slog.Warn("failed to discover embedded soundpacks", "error", err)
-	} else {
-		for _, p := range embeddedPacks {
+	}
+
+	var packs []soundpackInfo
+	seen := make(map[string]struct{}) // Deduplicate by name+path
+	for _, source := range [][]soundpackInfo{
+		embeddedPacks,
+		discoverManagedGitSoundpacks(),
+		discoverXDGSoundpacks(),
+		discoverConfigSoundpacks(configPaths),
+	} {
+		for _, p := range source {
 			key := p.Name + "|" + p.Path
 			if _, exists := seen[key]; !exists {
 				seen[key] = struct{}{}
@@ -86,38 +68,33 @@ func discoverSoundpacks() ([]soundpackInfo, error) {
 		}
 	}
 
-	// 2. XDG data directory packs
-	xdgPacks := discoverXDGSoundpacks()
-	for _, p := range xdgPacks {
-		key := p.Name + "|" + p.Path
-		if _, exists := seen[key]; !exists {
-			seen[key] = struct{}{}
-			packs = append(packs, p)
-		}
-	}
-
-	// 3. Managed git soundpacks
-	gitPacks := discoverManagedGitSoundpacks()
-	for _, p := range gitPacks {
-		key := p.Name + "|" + p.Path
-		if _, exists := seen[key]; !exists {
-			seen[key] = struct{}{}
-			packs = append(packs, p)
-		}
-	}
-
-	// 4. Config soundpack_paths entries
-	configPacks := discoverConfigSoundpacks()
-	for _, p := range configPacks {
-		key := p.Name + "|" + p.Path
-		if _, exists := seen[key]; !exists {
-			seen[key] = struct{}{}
-			packs = append(packs, p)
-		}
-	}
-
 	slog.Info("total soundpacks discovered", "count", len(packs))
-	return packs, nil
+	return packs
+}
+
+// lookupSoundpack returns the soundpack a name resolves to: the first
+// entry named name in discoverSoundpacksWithPaths(configPaths).
+func lookupSoundpack(name string, configPaths []string) (soundpackInfo, bool) {
+	if name == "" {
+		return soundpackInfo{}, false
+	}
+	for _, p := range discoverSoundpacksWithPaths(configPaths) {
+		if p.Name == name {
+			return p, true
+		}
+	}
+	return soundpackInfo{}, false
+}
+
+// configuredSoundpackPaths returns soundpack_paths from the effective XDG
+// config, or nil when it cannot be loaded.
+func configuredSoundpackPaths() []string {
+	cfg, err := config.NewConfigManager().LoadConfig()
+	if err != nil {
+		slog.Debug("could not load config for soundpack path discovery", "error", err)
+		return nil
+	}
+	return cfg.SoundpackPaths
 }
 
 // discoverEmbeddedSoundpacks returns info for embedded platform packs.
@@ -150,9 +127,10 @@ func discoverEmbeddedSoundpacks() ([]soundpackInfo, error) {
 
 		packs = append(packs, soundpackInfo{
 			Name:       name,
-			Type:       "embedded",
+			Type:       soundpackTypeEmbedded,
 			SoundCount: soundCount,
 			Path:       "(built-in)",
+			Identifier: "embedded:" + file,
 		})
 	}
 
@@ -266,18 +244,11 @@ func discoverXDGSoundpacks() []soundpackInfo {
 	return packs
 }
 
-// discoverConfigSoundpacks checks paths from config soundpack_paths
-func discoverConfigSoundpacks() []soundpackInfo {
-	cm := config.NewConfigManager()
-	cfg, err := cm.LoadConfig()
-	if err != nil {
-		slog.Debug("could not load config for soundpack path discovery", "error", err)
-		return nil
-	}
-
+// discoverConfigSoundpacks lists the packs at config soundpack_paths entries.
+func discoverConfigSoundpacks(configPaths []string) []soundpackInfo {
 	var packs []soundpackInfo
 
-	for _, path := range cfg.SoundpackPaths {
+	for _, path := range configPaths {
 		slog.Debug("checking config soundpack_path", "path", path)
 
 		info, err := os.Stat(path)

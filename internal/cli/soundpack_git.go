@@ -656,22 +656,6 @@ func discoverManagedGitSoundpacks() []soundpackInfo {
 	return packs
 }
 
-func findManagedGitSoundpackPath(name string) string {
-	registry, err := loadSoundpackRegistry()
-	if err != nil {
-		return ""
-	}
-	record, exists := registry.Packs[name]
-	if !exists {
-		return ""
-	}
-	playablePath := playablePathForRecord(record)
-	if _, err := os.Stat(playablePath); err != nil {
-		return ""
-	}
-	return playablePath
-}
-
 func loadSoundpackRegistry() (*soundpackRegistry, error) {
 	registry := &soundpackRegistry{
 		Version: gitSoundpackRegistryVersion,

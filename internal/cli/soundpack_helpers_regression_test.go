@@ -34,10 +34,10 @@ func TestCanonicalInstalledManifestUsesMetadataNameWithoutPhantomAlias(t *testin
 		t.Fatal(err)
 	}
 
-	if !soundpackPathMatchesName(manifestPath, "portable-pack") {
-		t.Fatal("metadata name did not match canonical manifest")
+	if pack, ok := lookupSoundpack("portable-pack", cfg.SoundpackPaths); !ok || pack.Path != manifestPath {
+		t.Fatalf("metadata name did not resolve to canonical manifest: %#v", pack)
 	}
-	if soundpackPathMatchesName(manifestPath, "soundpack") {
+	if _, ok := lookupSoundpack("soundpack", cfg.SoundpackPaths); ok {
 		t.Fatal("canonical manifest basename created phantom soundpack alias")
 	}
 	packs, err := discoverSoundpacks()
