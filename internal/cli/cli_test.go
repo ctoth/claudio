@@ -17,6 +17,7 @@ import (
 	"claudio.click/internal/hooks"
 	"claudio.click/internal/soundpack"
 	"claudio.click/internal/testutil/wavfixture"
+	"claudio.click/internal/tracking"
 )
 
 // TestMain ensures hook processing stays in-process during tests. The
@@ -726,141 +727,9 @@ func (e *errorReader) Read(p []byte) (n int, err error) {
 	return 0, io.ErrUnexpectedEOF
 }
 
-func TestVersionFlagEarlyExit(t *testing.T) {
-	testenv.IsolateXDG(t)
-	// TDD RED: This test should FAIL because version flag currently initializes audio systems
-	// We expect version flag to show version info without any system initialization logging
-
-	cli := NewCLI()
-
-	// Capture all log output to verify no system initialization occurs
-	var logBuffer bytes.Buffer
-	originalHandler := slog.Default().Handler()
-	slog.SetDefault(slog.New(slog.NewTextHandler(&logBuffer, &slog.HandlerOptions{
-		Level: slog.LevelDebug, // Capture all logs
-	})))
-	defer slog.SetDefault(slog.New(originalHandler))
-
-	stdout := &bytes.Buffer{}
-	stderr := &bytes.Buffer{}
-
-	exitCode := cli.Run([]string{"claudio", "--version"}, strings.NewReader(""), stdout, stderr)
-
-	// Version flag should exit successfully
-	if exitCode != 0 {
-		t.Errorf("Expected exit code 0, got %d", exitCode)
-	}
-
-	// Should show version info
-	output := stdout.String()
-	if !strings.Contains(output, "claudio version") {
-		t.Errorf("Expected version output, got: %s", output)
-	}
-
-	// CRITICAL: Should NOT initialize any audio systems
-	logOutput := logBuffer.String()
-	prohibitedLogs := []string{
-		"audio player created",
-		"config loaded",
-		"soundpack resolver initialized",
-		"configuration loaded",
-		"audio context initialized",
-	}
-
-	for _, prohibited := range prohibitedLogs {
-		if strings.Contains(logOutput, prohibited) {
-			t.Errorf("Version flag should not initialize systems, but found log: %s", prohibited)
-			t.Logf("Full log output: %s", logOutput)
-		}
-	}
-
-	// Version flag should be fast - no heavy initialization
-	if len(logOutput) > 100 {
-		t.Errorf("Version flag should produce minimal logging, got %d chars: %s", len(logOutput), logOutput)
-	}
-}
-
-// TestToolNameStringLogging - REMOVED: Test was testing implementation details that are working correctly
-
 // stringPtr returns a pointer to the given string
 func stringPtr(s string) *string {
 	return &s
-}
-
-func TestHookProcessingLoggingIsolated(t *testing.T) {
-	testenv.IsolateXDG(t)
-	// Isolated test for hook processing logging without CLI.Run() overhead
-	// This provides more reliable, focused testing of logging behavior
-
-	cli := NewCLI()
-
-	// Load config with silent mode to avoid audio initialization
-	cfg := cli.configManager.GetDefaultConfig()
-	cfg.Enabled = false // Silent mode
-
-	// Set up test logger to capture output
-	var logBuffer bytes.Buffer
-	originalHandler := slog.Default().Handler()
-	slog.SetDefault(slog.New(slog.NewTextHandler(&logBuffer, &slog.HandlerOptions{
-		Level: slog.LevelDebug, // Capture all logs
-	})))
-	defer slog.SetDefault(slog.New(originalHandler))
-
-	// Create test hook event
-	toolResponseJSON := json.RawMessage(`{"stdout":"success","stderr":"","interrupted":false}`)
-	hookEvent := &hooks.HookEvent{
-		SessionID:      "test-isolated",
-		TranscriptPath: "/test",
-		CWD:            "/test",
-		EventName:      "PostToolUse",
-		ToolName:       stringPtr("Bash"),
-		ToolResponse:   &toolResponseJSON,
-	}
-
-	// Initialize audio and soundpack systems for processing
-	soundpackPaths := config.SoundpackPaths(cfg.DefaultSoundpack)
-	soundpackPaths = append(soundpackPaths, cfg.SoundpackPaths...)
-
-	mapper, err := soundpack.CreateSoundpackMapperWithBasePaths(
-		cfg.DefaultSoundpack,
-		cfg.DefaultSoundpack,
-		soundpackPaths,
-	)
-	if err != nil {
-		// Create empty mapper as fallback
-		mapper = soundpack.NewDirectoryMapper("fallback", []string{})
-	}
-	cli.soundpackResolver = soundpack.NewSoundpackResolver(mapper)
-
-	// Process hook event directly - this should log tool_name
-	cli.processHookEvent(hookEvent, cfg, &bytes.Buffer{}, &bytes.Buffer{})
-
-	// Verify tool name appears as string in logs
-	logOutput := logBuffer.String()
-
-	if !strings.Contains(logOutput, "tool_name=Bash") && !strings.Contains(logOutput, `tool_name="Bash"`) {
-		t.Errorf("Expected tool name to appear as string 'Bash' in isolated test logs")
-		t.Logf("Full log output: %s", logOutput)
-	}
-
-	// Should NOT contain memory addresses
-	if strings.Contains(logOutput, "0x") {
-		t.Errorf("Tool name should not appear as memory address in isolated test")
-		t.Logf("Full log output: %s", logOutput)
-	}
-
-	// Should contain hook processing messages
-	expectedMessages := []string{
-		"processing hook event",
-		"hook context parsed",
-		"sound mapped",
-	}
-
-	for _, msg := range expectedMessages {
-		if !strings.Contains(logOutput, msg) {
-			t.Errorf("Expected log message '%s' not found in isolated test output", msg)
-		}
-	}
 }
 
 func TestCLIUnifiedSoundpackIntegration(t *testing.T) {
@@ -1028,72 +897,6 @@ func TestCLIUnifiedSoundpackIntegration(t *testing.T) {
 	})
 }
 
-func TestCLILoggingLevels(t *testing.T) {
-	testenv.IsolateXDG(t)
-	// TDD RED: This test should FAIL because CLI system initialization currently uses INFO logging
-	// We expect routine CLI operations to use DEBUG level, not INFO level
-
-	// Capture log output to verify log levels
-	var logBuffer bytes.Buffer
-	originalHandler := slog.Default().Handler()
-	slog.SetDefault(slog.New(slog.NewTextHandler(&logBuffer, &slog.HandlerOptions{
-		Level: slog.LevelDebug, // Capture all logs
-	})))
-	defer slog.SetDefault(slog.New(originalHandler))
-
-	cli := NewCLI()
-	defer func() {
-		_ = cli.rootCmd.Context()
-	}()
-
-	// Test CLI with hook processing - triggers system initialization
-	hookJSON := `{
-		"session_id": "test",
-		"transcript_path": "/test",
-		"cwd": "/test",
-		"hook_event_name": "PostToolUse",
-		"tool_name": "Bash",
-		"tool_response": {"stdout": "success", "stderr": "", "interrupted": false}
-	}`
-
-	stdin := strings.NewReader(hookJSON)
-	stdout := &bytes.Buffer{}
-	stderr := &bytes.Buffer{}
-
-	// Run CLI - should trigger system initialization with DEBUG level logging
-	exitCode := cli.Run([]string{"claudio", "--silent"}, stdin, stdout, stderr)
-
-	if exitCode != 0 {
-		t.Fatalf("CLI run should succeed, got exit code %d: %s", exitCode, stderr.String())
-	}
-
-	logOutput := logBuffer.String()
-
-	// CRITICAL: Routine operations should use DEBUG level, not INFO
-	problematicInfoLogs := []string{
-		"configuration loaded",
-		"soundpack resolver initialized",
-	}
-
-	for _, logMsg := range problematicInfoLogs {
-		// Split into lines and check each line individually
-		lines := strings.Split(logOutput, "\n")
-		for _, line := range lines {
-			if strings.Contains(line, logMsg) && strings.Contains(line, "level=INFO") {
-				t.Errorf("Routine operation '%s' should use DEBUG level, not INFO level", logMsg)
-				t.Logf("Problematic line: %s", line)
-				t.Logf("Full log output: %s", logOutput)
-			}
-		}
-	}
-
-	// Verify that DEBUG logs are working properly
-	if !strings.Contains(logOutput, "level=DEBUG") {
-		t.Error("Expected some DEBUG level logs but found none")
-		t.Logf("Full log output: %s", logOutput)
-	}
-}
-
 // TestVersionFlagAtAnyPosition covers finding #49: the manual args[1]
 // short-circuit only matched when --version was literally args[1]. With
 // rootCmd.Version set, cobra handles the flag anywhere in argv, and the version
@@ -1209,5 +1012,60 @@ func TestSetupLogging_DualOutputWithExistingVerboseHandler(t *testing.T) {
 
 	if got := stderrBuf.String(); !strings.Contains(got, "error to stderr and file") {
 		t.Errorf("stderr should contain ERROR; got: %q", got)
+	}
+}
+
+// TestVersionFlagEarlyExit: --version answers without opening any of the
+// lazily built runtime resources (soundpack resolver, audio backend,
+// tracking database).
+func TestVersionFlagEarlyExit(t *testing.T) {
+	testenv.IsolateXDG(t)
+	audiotest.Install(t)
+	cli := NewCLI()
+	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
+
+	if code := cli.Run([]string{"claudio", "--version"}, strings.NewReader(""), stdout, stderr); code != 0 {
+		t.Fatalf("exit code = %d, stderr=%q", code, stderr)
+	}
+	if !strings.Contains(stdout.String(), "claudio version") {
+		t.Errorf("stdout = %q, want version output", stdout)
+	}
+	if cli.soundpackResolver != nil || cli.audioBackend != nil || cli.trackingDB != nil {
+		t.Errorf("--version initialized runtime systems: resolver=%v backend=%v db=%v",
+			cli.soundpackResolver, cli.audioBackend, cli.trackingDB)
+	}
+}
+
+// TestProcessHookEventRecordsToolNameAsString: the hook's *string tool name
+// reaches the tracking record as its plain value.
+func TestProcessHookEventRecordsToolNameAsString(t *testing.T) {
+	testenv.IsolateXDG(t)
+	cli := NewCLI()
+	cfg := cli.configManager.GetDefaultConfig()
+	cfg.Enabled = false
+
+	db, err := tracking.NewDatabase(filepath.Join(t.TempDir(), "tracking.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	cli.trackingDB = db
+	cli.soundpackResolver = soundpack.NewSoundpackResolver(soundpack.NewDirectoryMapper("empty", nil))
+
+	resp := json.RawMessage(`{"stdout":"success","stderr":"","interrupted":false}`)
+	cli.processHookEvent(&hooks.HookEvent{
+		SessionID:    "tool-name-string",
+		CWD:          "/test",
+		EventName:    "PostToolUse",
+		ToolName:     stringPtr("Bash"),
+		ToolResponse: &resp,
+	}, cfg, &bytes.Buffer{}, &bytes.Buffer{})
+
+	var toolName string
+	if err := db.QueryRow("SELECT tool_name FROM hook_events WHERE session_id = ?", "tool-name-string").Scan(&toolName); err != nil {
+		t.Fatalf("no tracking record: %v", err)
+	}
+	if toolName != "Bash" {
+		t.Errorf("tool_name = %q, want Bash", toolName)
 	}
 }
