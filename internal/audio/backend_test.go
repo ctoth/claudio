@@ -4,16 +4,26 @@ import (
 	"context"
 	"errors"
 	"io"
+	"reflect"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 )
 
-// TestAudioBackendInterface tests that AudioBackend interface is properly defined
+// AudioBackend is only what production calls: play, set the volume, close.
+// Nothing else (no Stop, IsPlaying or GetVolume) is part of the contract.
 func TestAudioBackendInterface(t *testing.T) {
-	// This test ensures the interface compiles and has expected methods
 	var _ AudioBackend = (*mockAudioBackend)(nil)
+	typ := reflect.TypeFor[AudioBackend]()
+	var got []string
+	for i := range typ.NumMethod() {
+		got = append(got, typ.Method(i).Name)
+	}
+	if want := []string{"Close", "Play", "SetVolume"}; !slices.Equal(got, want) {
+		t.Errorf("AudioBackend methods = %v, want %v", got, want)
+	}
 }
 
 // mockAudioBackend is a test implementation of AudioBackend
@@ -139,11 +149,6 @@ func successfulNoopCommand() string {
 func TestSystemCommandBackend_Lifecycle(t *testing.T) {
 	backend := NewSystemCommandBackend("paplay")
 
-	// Test Stop
-	if err := backend.Stop(); err != nil {
-		t.Errorf("Stop() failed: %v", err)
-	}
-
 	// Test Close
 	if err := backend.Close(); err != nil {
 		t.Errorf("Close() failed: %v", err)
@@ -165,7 +170,7 @@ func TestSystemCommandBackend_VolumeControl(t *testing.T) {
 		t.Errorf("SetVolume(0.5) failed: %v", err)
 	}
 
-	volume := backend.GetVolume()
+	volume := backend.loadVolume()
 	if volume != 0.5 {
 		t.Errorf("expected volume 0.5, got %f", volume)
 	}

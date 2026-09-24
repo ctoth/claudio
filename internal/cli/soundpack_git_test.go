@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"claudio.click/internal/config"
+	"github.com/spf13/afero"
 )
 
 func TestExpandGitSoundpackSource_GitHubAlias(t *testing.T) {
@@ -140,7 +141,7 @@ func TestSoundpackAddRetryRepairsConfigForMatchingManagedRecord(t *testing.T) {
 	clonePath := registry.Packs["retry-add"].Path
 	cfg := config.NewConfigManager().GetDefaultConfig()
 	cfg.SoundpackPaths = []string{filepath.Join(clonePath, "obsolete-layout.json")}
-	if err := config.NewConfigManager().SaveToFile(cfg, configPath); err != nil {
+	if err := config.WriteConfigFile(afero.NewOsFs(), configPath, cfg); err != nil {
 		t.Fatal(err)
 	}
 

@@ -239,12 +239,6 @@ func migrateToV2(ctx context.Context, db schemaConnection) error {
 	return nil
 }
 
-// hookEventsColumns reports which of the schema-migration-relevant columns
-// exist on hook_events today.
-func hookEventsColumns(db *sql.DB) (hasFallback, hasChainType bool, err error) {
-	return hookEventsColumnsContext(context.Background(), db)
-}
-
 func hookEventsColumnsContext(ctx context.Context, db schemaConnection) (hasFallback, hasChainType bool, err error) {
 	rows, err := db.QueryContext(ctx, "PRAGMA table_info(hook_events)")
 	if err != nil {

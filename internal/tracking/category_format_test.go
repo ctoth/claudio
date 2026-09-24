@@ -71,22 +71,6 @@ func TestAnalyze_OldAndNewCategoryRowsAgree(t *testing.T) {
 		t.Errorf("GetMissingSounds = %+v, want one success row with 2 requests", missing)
 	}
 
-	dist, err := GetCategoryDistribution(db, QueryFilter{})
-	if err != nil {
-		t.Fatalf("GetCategoryDistribution: %v", err)
-	}
-	if len(dist) != 1 || dist[0].Category != "success" || dist[0].Count != 2 {
-		t.Errorf("GetCategoryDistribution = %+v, want success x2 in one group", dist)
-	}
-
-	tools, err := GetToolUsageStats(db, QueryFilter{})
-	if err != nil {
-		t.Fatalf("GetToolUsageStats: %v", err)
-	}
-	if len(tools) != 1 || len(tools[0].Categories) != 1 || tools[0].Categories[0] != "success" {
-		t.Errorf("GetToolUsageStats = %+v, want Bash with categories [success]", tools)
-	}
-
 	loading, err := GetSoundUsage(db, QueryFilter{Category: "loading"})
 	if err != nil {
 		t.Fatalf("GetSoundUsage(loading): %v", err)
@@ -108,12 +92,12 @@ func TestAnalyze_SilentCategoryReadsBack(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	dist, err := GetCategoryDistribution(db, QueryFilter{Category: "silent"})
+	usage, err := GetSoundUsage(db, QueryFilter{Category: "silent"})
 	if err != nil {
-		t.Fatalf("GetCategoryDistribution: %v", err)
+		t.Fatalf("GetSoundUsage: %v", err)
 	}
-	if len(dist) != 1 || dist[0].Category != "silent" || dist[0].Count != 2 {
-		t.Errorf("distribution = %+v, want silent x2", dist)
+	if len(usage) != 1 || usage[0].Category != "silent" || usage[0].PlayCount != 2 {
+		t.Errorf("usage = %+v, want silent x2", usage)
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"claudio.click/internal/audio"
+	"claudio.click/internal/audio/audiotest"
 	nativebackend "claudio.click/internal/audio/native"
 )
 
@@ -122,11 +123,6 @@ func TestCLIPlaySoundWithBackend(t *testing.T) {
 }
 
 func TestCLIBackendFactoryIntegration(t *testing.T) {
-	// Test supported backends via package-level SupportedBackendTypes
-	if len(audio.SupportedBackendTypes) == 0 {
-		t.Error("audio.SupportedBackendTypes should be non-empty")
-	}
-
 	// Test backend creation via package-level NewBackend
 	backend, err := audio.NewBackend("oto")
 	if err != nil {
@@ -159,12 +155,7 @@ func TestCLIBackendLifecycleManagement(t *testing.T) {
 		t.Error("backend should be initialized")
 	}
 
-	// Test that Stop and Close lifecycle calls succeed.
-	err = cli.audioBackend.Stop()
-	if err != nil {
-		t.Errorf("backend stop failed: %v", err)
-	}
-
+	// Close is the only lifecycle call production makes.
 	err = cli.audioBackend.Close()
 	if err != nil {
 		t.Errorf("backend close failed: %v", err)
@@ -172,6 +163,8 @@ func TestCLIBackendLifecycleManagement(t *testing.T) {
 }
 
 func TestCLIVolumeControlWithBackend(t *testing.T) {
+	// The fake stands in for "oto" so the stored volume can be read back.
+	audiotest.Install(t)
 	cli := NewCLI()
 
 	cfg := cli.configManager.GetDefaultConfig()
@@ -184,9 +177,13 @@ func TestCLIVolumeControlWithBackend(t *testing.T) {
 		t.Fatalf("failed to initialize backend: %v", err)
 	}
 	defer cli.audioBackend.Close()
+	backend, ok := cli.audioBackend.(interface{ GetVolume() float32 })
+	if !ok {
+		t.Fatalf("%T does not report its volume", cli.audioBackend)
+	}
 
 	// Test that volume is set on backend
-	volume := cli.audioBackend.GetVolume()
+	volume := backend.GetVolume()
 	if volume != float32(*cfg.Volume) {
 		t.Errorf("expected volume %f, got %f", *cfg.Volume, volume)
 	}
@@ -198,7 +195,7 @@ func TestCLIVolumeControlWithBackend(t *testing.T) {
 		t.Errorf("failed to set volume: %v", err)
 	}
 
-	actualVolume := cli.audioBackend.GetVolume()
+	actualVolume := backend.GetVolume()
 	if actualVolume != newVolume {
 		t.Errorf("expected updated volume %f, got %f", newVolume, actualVolume)
 	}

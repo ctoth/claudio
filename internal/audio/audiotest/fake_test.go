@@ -1,14 +1,18 @@
-package audio
+package audiotest
 
 import (
 	"context"
 	"errors"
+	"math"
 	"testing"
+
+	"claudio.click/internal/audio"
 )
 
-func TestFakeBackend_RegisteredAsFake(t *testing.T) {
+func TestInstallReplacesOto(t *testing.T) {
+	Install(t)
 	ResetLastFakeBackend()
-	be, err := NewBackend("fake")
+	be, err := audio.NewBackend("oto")
 	if err != nil {
 		t.Fatalf("NewBackend(\"fake\"): unexpected error: %v", err)
 	}
@@ -21,13 +25,14 @@ func TestFakeBackend_RegisteredAsFake(t *testing.T) {
 }
 
 func TestFakeBackend_RecordsPlay(t *testing.T) {
+	Install(t)
 	ResetLastFakeBackend()
-	be, err := NewBackend("fake")
+	be, err := audio.NewBackend("oto")
 	if err != nil {
 		t.Fatalf("NewBackend(\"fake\"): %v", err)
 	}
 
-	src := NewFileSource("/some/test/sound.wav")
+	src := audio.NewFileSource("/some/test/sound.wav")
 	if err := be.Play(context.Background(), src); err != nil {
 		t.Fatalf("Play: %v", err)
 	}
@@ -51,19 +56,20 @@ func TestFakeBackend_RecordsPlay(t *testing.T) {
 }
 
 func TestFakeBackend_VolumeAffectsRecordedPlays(t *testing.T) {
+	Install(t)
 	ResetLastFakeBackend()
-	be, err := NewBackend("fake")
+	be, err := audio.NewBackend("oto")
 	if err != nil {
 		t.Fatalf("NewBackend(\"fake\"): %v", err)
 	}
 	if err := be.SetVolume(0.5); err != nil {
 		t.Fatalf("SetVolume: %v", err)
 	}
-	if got := be.GetVolume(); got != 0.5 {
+	if got := be.(*FakeBackend).GetVolume(); got != 0.5 {
 		t.Errorf("GetVolume=%v, want 0.5", got)
 	}
 
-	src := NewFileSource("/x.wav")
+	src := audio.NewFileSource("/x.wav")
 	if err := be.Play(context.Background(), src); err != nil {
 		t.Fatalf("Play: %v", err)
 	}
@@ -91,22 +97,23 @@ func TestFakeBackend_CloseRejectsPlay(t *testing.T) {
 	if !be.Closed() {
 		t.Error("Closed() should return true after Close")
 	}
-	err := be.Play(context.Background(), NewFileSource("/x.wav"))
-	if !errors.Is(err, ErrBackendClosed) {
-		t.Errorf("expected ErrBackendClosed after Close, got %v", err)
+	err := be.Play(context.Background(), audio.NewFileSource("/x.wav"))
+	if !errors.Is(err, audio.ErrBackendClosed) {
+		t.Errorf("expected audio.ErrBackendClosed after Close, got %v", err)
 	}
 }
 
 func TestLastFakeBackend_TracksMostRecent(t *testing.T) {
+	Install(t)
 	ResetLastFakeBackend()
-	first, err := NewBackend("fake")
+	first, err := audio.NewBackend("oto")
 	if err != nil {
 		t.Fatalf("first NewBackend(\"fake\"): %v", err)
 	}
 	if LastFakeBackend() != first.(*FakeBackend) {
 		t.Error("LastFakeBackend did not return the first construction")
 	}
-	second, err := NewBackend("fake")
+	second, err := audio.NewBackend("oto")
 	if err != nil {
 		t.Fatalf("second NewBackend(\"fake\"): %v", err)
 	}
@@ -118,25 +125,29 @@ func TestLastFakeBackend_TracksMostRecent(t *testing.T) {
 	}
 }
 
-func TestFakeBackend_StopFlipsIsPlaying(t *testing.T) {
+func TestFakeBackend_RejectsNonFiniteVolume(t *testing.T) {
 	be := NewFakeBackend()
-	src := NewFileSource("/x.wav")
-	if err := be.Play(context.Background(), src); err != nil {
-		t.Fatalf("Play: %v", err)
-	}
-	if !be.IsPlaying() {
-		t.Error("expected IsPlaying after Play")
-	}
-	if err := be.Stop(); err != nil {
-		t.Fatalf("Stop: %v", err)
-	}
-	if be.IsPlaying() {
-		t.Error("expected !IsPlaying after Stop")
+	for _, v := range []float32{float32(math.NaN()), float32(math.Inf(1)), -1, 2} {
+		if err := be.SetVolume(v); err == nil {
+			t.Errorf("SetVolume(%v) = nil, want error", v)
+		}
 	}
 }
 
-func TestFakeBackend_IsValidBackendType(t *testing.T) {
-	if !IsValidBackendType("fake") {
-		t.Error("IsValidBackendType(\"fake\") should return true")
+// Cleanup puts the previous "oto" registration back.
+func TestInstallRestoresPreviousOto(t *testing.T) {
+	sentinel := audio.RegisterBackend("oto", func() (audio.AudioBackend, error) { return nil, errSentinel })
+	t.Cleanup(func() { audio.RegisterBackend("oto", sentinel) })
+
+	t.Run("installed", func(t *testing.T) {
+		Install(t)
+		if _, err := audio.NewBackend("oto"); err != nil {
+			t.Fatalf("installed fake: %v", err)
+		}
+	})
+	if _, err := audio.NewBackend("oto"); !errors.Is(err, errSentinel) {
+		t.Fatalf("after cleanup NewBackend(oto) = %v, want the previous constructor", err)
 	}
 }
+
+var errSentinel = errors.New("previous oto constructor")

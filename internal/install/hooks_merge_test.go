@@ -9,7 +9,7 @@ import (
 func generateTestHooksForMerge() (interface{}, error) {
 	// Use mock executable path to prevent config corruption during tests
 	mockExecPath := "/test/mock/claudio"
-	return GenerateClaudioHooks(mockExecPath)
+	return GenerateClaudioHooksForAgent(mockExecPath, AgentClaude)
 }
 
 func TestMergeHooksIdempotent(t *testing.T) {

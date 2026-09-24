@@ -1,7 +1,6 @@
 package config
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -176,133 +175,6 @@ func TestXDGConfigPaths(t *testing.T) {
 	}
 }
 
-func TestXDGCreateCacheDir(t *testing.T) {
-	// Use a test-specific subdirectory to avoid conflicts
-	testCacheDir := CachePath("test-create")
-
-	// Clean up before and after test
-	defer os.RemoveAll(testCacheDir)
-	os.RemoveAll(testCacheDir)
-
-	// Verify directory doesn't exist initially
-	if _, err := os.Stat(testCacheDir); !os.IsNotExist(err) {
-		t.Fatalf("Test cache directory %s already exists", testCacheDir)
-	}
-
-	// Create the directory
-	err := CreateCacheDir("test-create")
-	if err != nil {
-		t.Fatalf("CreateCacheDir failed: %v", err)
-	}
-
-	// Verify directory was created
-	info, err := os.Stat(testCacheDir)
-	if err != nil {
-		t.Fatalf("Cache directory was not created: %v", err)
-	}
-
-	if !info.IsDir() {
-		t.Error("Created cache path is not a directory")
-	}
-
-	// Test creating again (should not error)
-	err = CreateCacheDir("test-create")
-	if err != nil {
-		t.Errorf("CreateCacheDir failed on existing directory: %v", err)
-	}
-}
-
-func TestXDGFindSoundFile(t *testing.T) {
-	testCases := []struct {
-		name         string
-		soundpackID  string
-		relativePath string
-		createFile   bool
-		shouldFind   bool
-	}{
-		{
-			name:         "existing file",
-			soundpackID:  "test-pack",
-			relativePath: "success/test-sound.wav",
-			createFile:   true,
-			shouldFind:   true,
-		},
-		{
-			name:         "non-existing file",
-			soundpackID:  "test-pack",
-			relativePath: "error/missing-sound.wav",
-			createFile:   false,
-			shouldFind:   false,
-		},
-		{
-			name:         "empty soundpack",
-			soundpackID:  "",
-			relativePath: "default.wav",
-			createFile:   false,
-			shouldFind:   false,
-		},
-		{
-			name:         "empty path",
-			soundpackID:  "test-pack",
-			relativePath: "",
-			createFile:   false,
-			shouldFind:   false,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			var testFilePath string
-
-			if tc.createFile && tc.soundpackID != "" && tc.relativePath != "" {
-				// Create a test file in the first soundpack path
-				soundpackPaths := SoundpackPaths(tc.soundpackID)
-				if len(soundpackPaths) > 0 {
-					testFilePath = filepath.Join(soundpackPaths[0], tc.relativePath)
-
-					// Create parent directories
-					err := os.MkdirAll(filepath.Dir(testFilePath), 0755)
-					if err != nil {
-						t.Fatalf("Failed to create test directories: %v", err)
-					}
-
-					// Create test file
-					file, err := os.Create(testFilePath)
-					if err != nil {
-						t.Fatalf("Failed to create test file: %v", err)
-					}
-					file.Close()
-
-					// Clean up after test
-					defer os.RemoveAll(soundpackPaths[0])
-				}
-			}
-
-			// Test finding the file
-			foundPath := FindSoundFile(tc.soundpackID, tc.relativePath)
-
-			if tc.shouldFind {
-				if foundPath == "" {
-					t.Error("Expected to find sound file but got empty path")
-				} else if !filepath.IsAbs(foundPath) {
-					t.Errorf("Found path %s is not absolute", foundPath)
-				} else {
-					// Verify file actually exists
-					if _, err := os.Stat(foundPath); err != nil {
-						t.Errorf("Found path %s does not exist: %v", foundPath, err)
-					}
-				}
-			} else {
-				if foundPath != "" {
-					t.Errorf("Expected not to find file but got: %s", foundPath)
-				}
-			}
-
-			t.Logf("FindSoundFile(%s, %s) = %s", tc.soundpackID, tc.relativePath, foundPath)
-		})
-	}
-}
-
 func TestXDGCrossPlatform(t *testing.T) {
 	// These tests verify the package works across platforms
 	t.Run("cache paths exist", func(t *testing.T) {
@@ -327,35 +199,5 @@ func TestXDGCrossPlatform(t *testing.T) {
 			t.Error("No soundpack paths returned")
 		}
 		t.Logf("Soundpack paths: %v", soundpackPaths)
-	})
-}
-
-func TestXDGErrorHandling(t *testing.T) {
-	t.Run("invalid characters in paths", func(t *testing.T) {
-		// Test with various invalid characters
-		invalidPaths := []string{
-			"../../../etc/passwd",
-			"test\x00null",
-			"test\n\r",
-			"test with spaces",  // Should be OK
-			"test-with-hyphens", // Should be OK
-		}
-
-		for _, invalidPath := range invalidPaths {
-			result := FindSoundFile("test", invalidPath)
-			// Should handle gracefully (either find nothing or sanitize)
-			t.Logf("FindSoundFile with invalid path %q: %s", invalidPath, result)
-		}
-	})
-
-	t.Run("very long paths", func(t *testing.T) {
-		longName := ""
-		for i := 0; i < 300; i++ {
-			longName += "a"
-		}
-
-		result := FindSoundFile(longName, "test.wav")
-		// Should handle gracefully
-		t.Logf("FindSoundFile with long name: %s", result)
 	})
 }

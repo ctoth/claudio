@@ -17,15 +17,16 @@ which you only need when debugging or naming files precisely.
 
 Claudio's native player decodes:
 
-- **WAV**: mono or stereo; 16-, 24-, or 32-bit PCM, or 32-bit float. Files
-  with more than two channels are rejected.
+- **WAV**: mono or stereo; 8-, 16-, 24-, or 32-bit PCM, or 32-bit float
+  (float samples beyond full scale are clipped). Files with more than two
+  channels are rejected.
 - **MP3**
-- **AIFF**: 16-, 24-, or 32-bit. Files with more than two channels are
+- **AIFF** (and uncompressed AIFC): 16-, 24-, or 32-bit. Files with more than two channels are
   downmixed to stereo.
 
-Playback reads at most 100 MiB from any audio file. MP3 decoding also stops
-once the decoded PCM passes 100 MiB, so an MP3 well under that size on disk
-can still hit the limit after decoding.
+Playback reads at most 100 MiB from any audio file. An MP3 whose decoded
+PCM would exceed 100 MiB is rejected, so an MP3 well under that size on disk
+can still hit the limit.
 
 ## Categories
 

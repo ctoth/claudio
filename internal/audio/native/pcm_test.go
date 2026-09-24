@@ -1,97 +1,107 @@
 package native
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
 	"io"
 	"math"
 	"testing"
+
+	"github.com/gopxl/beep/v2"
 )
 
-func TestPCMReaderConvertsDepthAndDuplicatesMono(t *testing.T) {
-	for _, tc := range []struct {
-		name   string
-		format PCMFormat
-		input  []byte
-	}{
-		{"16 bit", FormatS16, []byte{0, 64, 0, 192}},
-		{"24 bit", FormatS24, []byte{0, 0, 64, 0, 0, 192}},
-		{"32 bit", FormatS32, []byte{0, 0, 0, 64, 0, 0, 0, 192}},
-		{"float", FormatF32, []byte{0, 0, 0, 63, 0, 0, 0, 191}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			r, err := newPCMReader(context.Background(), &AudioData{Samples: tc.input, Channels: 1, SampleRate: 48000, Format: tc.format})
-			if err != nil {
-				t.Fatal(err)
+// constSound is n frames of one stereo value at rate.
+func constSound(rate, n int, l, r float64) sound {
+	return sound{
+		Streamer: &interleaved{channels: 2, frames: n, sample: func(i int) float64 {
+			if i%2 == 0 {
+				return l
 			}
-			// Odd read sizes must not lose partial output frames.
-			var out []byte
-			buf := make([]byte, 3)
-			for {
-				n, err := r.Read(buf)
-				out = append(out, buf[:n]...)
-				if err == io.EOF {
-					break
-				}
-				if err != nil {
-					t.Fatal(err)
-				}
-			}
-			if len(out) != 16 {
-				t.Fatalf("output bytes=%d, want 16", len(out))
-			}
-			for i, want := range []float32{0.5, 0.5, -0.5, -0.5} {
-				got := math.Float32frombits(binary.LittleEndian.Uint32(out[i*4:]))
-				if got != want {
-					t.Errorf("sample %d=%v, want %v", i, got, want)
-				}
-			}
-		})
+			return r
+		}},
+		rate:   beep.SampleRate(rate),
+		frames: n,
 	}
 }
 
-func TestPCMReaderPreservesRateAndStereo(t *testing.T) {
-	for _, rate := range []uint32{8000, 22050, 44100, 48000, 96000} {
-		data := make([]byte, int(rate)*4/10)
-		for i := 0; i < len(data); i += 4 {
-			binary.LittleEndian.PutUint16(data[i:], 8192)
-			binary.LittleEndian.PutUint16(data[i+2:], uint16(49152))
+func readFloats(t *testing.T, r io.Reader, chunk int) []float32 {
+	t.Helper()
+	var out []byte
+	buf := make([]byte, chunk)
+	for {
+		n, err := r.Read(buf)
+		out = append(out, buf[:n]...)
+		if err == io.EOF {
+			break
 		}
-		r, err := newPCMReader(context.Background(), &AudioData{Samples: data, Channels: 2, SampleRate: rate, Format: FormatS16})
 		if err != nil {
 			t.Fatal(err)
 		}
-		out, err := io.ReadAll(r)
-		if err != nil {
-			t.Fatal(err)
+	}
+	if len(out)%4 != 0 {
+		t.Fatalf("output %d bytes is not whole float32 samples", len(out))
+	}
+	floats := make([]float32, len(out)/4)
+	for i := range floats {
+		floats[i] = math.Float32frombits(binary.LittleEndian.Uint32(out[i*4:]))
+	}
+	return floats
+}
+
+// Odd read sizes must not lose partial output frames.
+func TestPCMReaderOddReadSizes(t *testing.T) {
+	got := readFloats(t, newPCMReader(context.Background(), constSound(48000, 3, 0.5, -0.5)), 3)
+	want := []float32{0.5, -0.5, 0.5, -0.5, 0.5, -0.5}
+	if len(got) != len(want) {
+		t.Fatalf("got %d samples, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("sample %d = %v, want %v", i, got[i], want[i])
 		}
-		if len(out) != 4800*8 {
-			t.Errorf("rate %d: got %d output bytes, want %d", rate, len(out), 4800*8)
+	}
+}
+
+func TestPCMReaderResamplesTo48kAndKeepsChannels(t *testing.T) {
+	for _, rate := range []int{8000, 22050, 44100, 48000, 96000} {
+		got := readFloats(t, newPCMReader(context.Background(), constSound(rate, rate/10, 0.25, -0.5)), 4096)
+		if len(got) != 4800*2 {
+			t.Errorf("rate %d: got %d output samples, want %d", rate, len(got), 4800*2)
 		}
-		for i := 0; i < len(out); i += 8 {
-			left := math.Float32frombits(binary.LittleEndian.Uint32(out[i:]))
-			right := math.Float32frombits(binary.LittleEndian.Uint32(out[i+4:]))
-			if math.Abs(float64(left)-0.25) > 1e-5 || math.Abs(float64(right)+0.5) > 1e-5 {
-				t.Fatalf("rate %d: swapped or distorted channels %v,%v", rate, left, right)
+		for i := 0; i < len(got); i += 2 {
+			if math.Abs(float64(got[i])-0.25) > 1e-5 || math.Abs(float64(got[i+1])+0.5) > 1e-5 {
+				t.Fatalf("rate %d: swapped or distorted channels %v,%v", rate, got[i], got[i+1])
 			}
 		}
 	}
 }
 
-func TestPCMReaderRejectsInvalidFramesAndCancellation(t *testing.T) {
-	for _, data := range []*AudioData{nil, {}, {Samples: []byte{1}, Channels: 1, SampleRate: 48000, Format: FormatS16}, {Samples: []byte{0, 0}, Channels: 0, SampleRate: 48000, Format: FormatS16}, {Samples: []byte{0, 0}, Channels: 1, SampleRate: 0, Format: FormatS16}} {
-		if _, err := newPCMReader(context.Background(), data); err == nil {
-			t.Errorf("accepted invalid data %#v", data)
+// Whatever the source, the device never sees samples beyond full scale.
+func TestPCMReaderClipsOutput(t *testing.T) {
+	got := readFloats(t, newPCMReader(context.Background(), constSound(48000, 2, 3, math.Inf(-1))), 64)
+	for i := 0; i < len(got); i += 2 {
+		if got[i] != 1 || got[i+1] != -1 {
+			t.Fatalf("frame %d = %v,%v, want 1,-1", i/2, got[i], got[i+1])
 		}
 	}
+}
+
+func TestPCMReaderStopsOnCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	r, err := newPCMReader(ctx, &AudioData{Samples: make([]byte, 100), Channels: 1, SampleRate: 8000, Format: FormatS16})
-	if err != nil {
-		t.Fatal(err)
-	}
+	r := newPCMReader(ctx, constSound(8000, 100, 0, 0))
 	cancel()
-	if _, err = r.Read(make([]byte, 8)); !errors.Is(err, context.Canceled) {
+	if _, err := r.Read(make([]byte, 8)); !errors.Is(err, context.Canceled) {
 		t.Fatalf("got %v, want cancellation", err)
+	}
+}
+
+func TestDecodeSoundRespectsCancelledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	data := buildWAV(wavTagPCM, 16, 44100, sineFrames(10, 2, 0.1))
+	if _, err := decodeSound(ctx, "x.wav", bytes.NewReader(data)); !errors.Is(err, context.Canceled) {
+		t.Fatalf("got %v, want context.Canceled", err)
 	}
 }

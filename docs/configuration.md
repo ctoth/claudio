@@ -107,7 +107,7 @@ Files that Claudio writes use the `embedded:` form.
 | `soundpack_paths` | `[]` | Extra JSON files or directories to search in addition to XDG soundpack paths. |
 | `enabled` | `true` | When false, Claudio processes hooks but plays no audio. |
 | `log_level` | `warn` | `debug`, `info`, `warn`, or `error`. Controls the log file only. |
-| `audio_backend` | `auto` | `auto`, `oto`, or `system_command`. `fake` exists for tests. |
+| `audio_backend` | `auto` | `auto`, `oto`, or `system_command`. |
 | `file_logging` | enabled | Rotated file logging. See [Logging](#logging). |
 | `sound_tracking` | enabled | SQLite tracking for usage and missing-sound analysis. See [Tracking](#tracking). |
 

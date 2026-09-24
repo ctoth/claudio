@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"claudio.click/internal/audio"
+	"claudio.click/internal/audio/audiotest"
 	"claudio.click/internal/cli/testenv"
 	"claudio.click/internal/config"
 	"claudio.click/internal/hooks"
@@ -49,7 +49,7 @@ func TestCLI(t *testing.T) {
 
 func TestCLIBasicUsage(t *testing.T) {
 	testenv.IsolateXDG(t)
-	audio.ResetLastFakeBackend()
+	audiotest.ResetLastFakeBackend()
 	cli := NewCLI()
 
 	// Test basic hook processing from stdin
@@ -94,9 +94,9 @@ func TestCLIBasicUsage(t *testing.T) {
 	// with default.wav-equivalent fallbacks that resolve under the
 	// sandboxed XDG layout, so a PostToolUse/Bash event reliably
 	// produces a Play call across platforms.
-	fake := audio.LastFakeBackend()
+	fake := audiotest.LastFakeBackend()
 	if fake == nil {
-		t.Fatal("expected fake audio backend to be constructed via CLAUDIO_AUDIO_BACKEND=fake")
+		t.Fatal("expected fake audio backend to be constructed via CLAUDIO_AUDIO_BACKEND=oto + audiotest.Install")
 	}
 	plays := fake.Plays()
 	t.Logf("recorded plays: %+v", plays)
@@ -437,7 +437,7 @@ func TestCLIConfigOverrides(t *testing.T) {
 
 func TestCLISilentMode(t *testing.T) {
 	testenv.IsolateXDG(t)
-	audio.ResetLastFakeBackend()
+	audiotest.ResetLastFakeBackend()
 	cli := NewCLI()
 
 	hookJSON := `{
@@ -453,7 +453,7 @@ func TestCLISilentMode(t *testing.T) {
 	stderr := &bytes.Buffer{}
 
 	// Baseline: stash was just reset to nil.
-	if pre := audio.LastFakeBackend(); pre != nil {
+	if pre := audiotest.LastFakeBackend(); pre != nil {
 		t.Fatalf("precondition: ResetLastFakeBackend should clear the stash; got %p", pre)
 	}
 
@@ -482,7 +482,7 @@ func TestCLISilentMode(t *testing.T) {
 	// audio init. We now require exit 0 (above) AND, if a backend was
 	// constructed, zero plays. The exit-0 + stash-still-nil
 	// combination is the tight contract for silent mode today.
-	fake := audio.LastFakeBackend()
+	fake := audiotest.LastFakeBackend()
 	if fake == nil {
 		// Case 1: audio init was skipped. Combined with the exit==0
 		// check above this proves cli.Run completed without

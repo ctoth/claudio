@@ -6,10 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestNewSystemCommandBackendStoresFallbackChain(t *testing.T) {
@@ -17,37 +15,6 @@ func TestNewSystemCommandBackendStoresFallbackChain(t *testing.T) {
 	want := []string{"paplay", "ffplay", "aplay"}
 	if !reflect.DeepEqual(scb.commands, want) {
 		t.Fatalf("commands = %v, want %v", scb.commands, want)
-	}
-}
-
-func TestSystemCommandBackend_IsPlayingTracksConcurrentCommands(t *testing.T) {
-	command := "sleep"
-	longArg := "2"
-	if runtime.GOOS == "windows" {
-		command = "ping.exe"
-		longArg = "127.0.0.1"
-	}
-
-	backend := NewSystemCommandBackend(command)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	longDone := make(chan error, 1)
-	go func() { longDone <- backend.Play(ctx, NewFileSource(longArg)) }()
-	deadline := time.Now().Add(time.Second)
-	for !backend.IsPlaying() && time.Now().Before(deadline) {
-		time.Sleep(time.Millisecond)
-	}
-	if !backend.IsPlaying() {
-		t.Fatal("long command did not start")
-	}
-	shortCtx, cancelShort := context.WithCancel(context.Background())
-	cancelShort()
-	_ = backend.Play(shortCtx, NewFileSource("unused"))
-	if !backend.IsPlaying() {
-		t.Error("IsPlaying became false while the long command was still running")
-	}
-	if err := <-longDone; err != nil {
-		t.Fatalf("long command: %v", err)
 	}
 }
 
@@ -125,7 +92,7 @@ func TestBuildPlayerArgv_Paplay(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			scb := NewSystemCommandBackend(tc.cmd)
-			got := scb.buildPlayerArgv("/tmp/s.wav", tc.volume)
+			got := scb.buildPlayerArgvForCommand(scb.commands[0], "/tmp/s.wav", tc.volume)
 			if !reflect.DeepEqual(got, tc.want) {
 				t.Errorf("got %v, want %v", got, tc.want)
 			}
@@ -137,7 +104,7 @@ func TestBuildPlayerArgv_Paplay(t *testing.T) {
 // round(0.07 * 65536) = 4588, not 4587 (which truncation would give).
 func TestBuildPlayerArgv_PaplayRoundsCorrectly(t *testing.T) {
 	scb := NewSystemCommandBackend("paplay")
-	argv := scb.buildPlayerArgv("/tmp/s.wav", 0.07)
+	argv := scb.buildPlayerArgvForCommand(scb.commands[0], "/tmp/s.wav", 0.07)
 	want := []string{"--volume=4588", "/tmp/s.wav"}
 	if !reflect.DeepEqual(argv, want) {
 		t.Errorf("got %v, want %v", argv, want)
@@ -148,7 +115,7 @@ func TestBuildPlayerArgv_PaplayRoundsCorrectly(t *testing.T) {
 // -volume N integer mapping plus -nodisp -autoexit flags.
 func TestBuildPlayerArgv_FfplayIncludesNodispAutoexit(t *testing.T) {
 	scb := NewSystemCommandBackend("ffplay")
-	argv := scb.buildPlayerArgv("/tmp/s.wav", 0.7)
+	argv := scb.buildPlayerArgvForCommand(scb.commands[0], "/tmp/s.wav", 0.7)
 	want := []string{"-nodisp", "-autoexit", "-volume", "70", "/tmp/s.wav"}
 	if !reflect.DeepEqual(argv, want) {
 		t.Errorf("got %v, want %v", argv, want)
@@ -164,7 +131,7 @@ func TestBuildPlayerArgv_FfplayIncludesNodispAutoexit(t *testing.T) {
 // 1.0 = 100%. The mapping [0,1] -> afplay -v is identity.
 func TestBuildPlayerArgv_AfplayIdentityNotScaled(t *testing.T) {
 	scb := NewSystemCommandBackend("afplay")
-	argv := scb.buildPlayerArgv("/tmp/sound.aiff", 0.5)
+	argv := scb.buildPlayerArgvForCommand(scb.commands[0], "/tmp/sound.aiff", 0.5)
 	want := []string{"-v", "0.50", "/tmp/sound.aiff"}
 	if !reflect.DeepEqual(argv, want) {
 		t.Errorf("afplay@0.5 should produce identity '-v 0.50' (not '-v 127' or '-v 255*0.5'), got %v", argv)
@@ -173,7 +140,7 @@ func TestBuildPlayerArgv_AfplayIdentityNotScaled(t *testing.T) {
 
 func TestBuildPlayerArgv_AfplayMax(t *testing.T) {
 	scb := NewSystemCommandBackend("afplay")
-	argv := scb.buildPlayerArgv("/tmp/x.aiff", 1.0)
+	argv := scb.buildPlayerArgvForCommand(scb.commands[0], "/tmp/x.aiff", 1.0)
 	want := []string{"-v", "1.00", "/tmp/x.aiff"}
 	if !reflect.DeepEqual(argv, want) {
 		t.Errorf("afplay@1.0 should produce '-v 1.00', got %v", argv)
@@ -187,13 +154,13 @@ func TestBuildPlayerArgv_AfplayMax(t *testing.T) {
 func TestBuildPlayerArgv_AplayDropsVolume(t *testing.T) {
 	scb := NewSystemCommandBackend("aplay")
 	// First call at v != 1.0 -- should produce just the file path, no volume flag.
-	argv := scb.buildPlayerArgv("/tmp/x.wav", 0.3)
+	argv := scb.buildPlayerArgvForCommand(scb.commands[0], "/tmp/x.wav", 0.3)
 	want := []string{"/tmp/x.wav"}
 	if !reflect.DeepEqual(argv, want) {
 		t.Errorf("aplay argv should be [filePath] only, got %v", argv)
 	}
 	// Second call -- still just the file path; idempotent.
-	argv2 := scb.buildPlayerArgv("/tmp/y.wav", 0.7)
+	argv2 := scb.buildPlayerArgvForCommand(scb.commands[0], "/tmp/y.wav", 0.7)
 	want2 := []string{"/tmp/y.wav"}
 	if !reflect.DeepEqual(argv2, want2) {
 		t.Errorf("aplay argv on second call should still be [filePath], got %v", argv2)
@@ -205,7 +172,7 @@ func TestBuildPlayerArgv_AplayDropsVolume(t *testing.T) {
 // unchanged.
 func TestBuildPlayerArgv_AplayFullVolumeNoWarn(t *testing.T) {
 	scb := NewSystemCommandBackend("aplay")
-	argv := scb.buildPlayerArgv("/tmp/x.wav", 1.0)
+	argv := scb.buildPlayerArgvForCommand(scb.commands[0], "/tmp/x.wav", 1.0)
 	want := []string{"/tmp/x.wav"}
 	if !reflect.DeepEqual(argv, want) {
 		t.Errorf("aplay@1.0 argv should be [filePath], got %v", argv)
@@ -217,7 +184,7 @@ func TestBuildPlayerArgv_AplayFullVolumeNoWarn(t *testing.T) {
 // platform command, but echo still exercises the default argv branch here.
 func TestBuildPlayerArgv_UnknownCommandFallsBack(t *testing.T) {
 	scb := NewSystemCommandBackend("echo")
-	argv := scb.buildPlayerArgv("/tmp/x.wav", 0.5)
+	argv := scb.buildPlayerArgvForCommand(scb.commands[0], "/tmp/x.wav", 0.5)
 	want := []string{"/tmp/x.wav"}
 	if !reflect.DeepEqual(argv, want) {
 		t.Errorf("default branch should pass only filePath, got %v", argv)
@@ -245,7 +212,7 @@ func TestBuildPlayerArgv_VolumeReachesArgv(t *testing.T) {
 		t.Fatalf("SetVolume(0.25) failed: %v", err)
 	}
 	v := scb.loadVolume()
-	argv := scb.buildPlayerArgv("/tmp/s.wav", float64(v))
+	argv := scb.buildPlayerArgvForCommand(scb.commands[0], "/tmp/s.wav", float64(v))
 	want := []string{"--volume=16384", "/tmp/s.wav"}
 	if !reflect.DeepEqual(argv, want) {
 		t.Errorf("volume set via SetVolume should reach argv as --volume=16384; got %v", argv)

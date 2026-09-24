@@ -1,8 +1,6 @@
 package install
 
 import (
-	"log/slog"
-
 	"claudio.click/internal/hooks"
 )
 
@@ -268,57 +266,4 @@ var CopilotHooks = []HookDefinition{
 	{Name: "Notification", Category: hooks.Interactive, Description: "Play sounds for Copilot notifications", DefaultEnabled: true},
 	{Name: "PermissionRequest", Category: hooks.Interactive, Description: "Play sounds for Copilot permission requests", DefaultEnabled: true},
 	{Name: "ErrorOccurred", Category: hooks.Error, Description: "Play sounds for Copilot execution errors", DefaultEnabled: true},
-}
-
-// GetAllHooks returns all hooks defined in the registry
-func GetAllHooks() []HookDefinition {
-	slog.Debug("retrieving all hooks from registry", "total_hooks", len(AllHooks))
-	return AllHooks
-}
-
-// GetEnabledHooks returns only hooks that are enabled by default
-func GetEnabledHooks() []HookDefinition {
-	var enabled []HookDefinition
-
-	for _, hook := range AllHooks {
-		if hook.DefaultEnabled {
-			enabled = append(enabled, hook)
-		}
-	}
-
-	slog.Debug("retrieved enabled hooks from registry",
-		"enabled_count", len(enabled),
-		"total_count", len(AllHooks))
-
-	return enabled
-}
-
-// GetHookByName looks up a hook by name and returns it with a found flag
-func GetHookByName(name string) (HookDefinition, bool) {
-	slog.Debug("looking up hook by name", "hook_name", name)
-
-	for _, hook := range AllHooks {
-		if hook.Name == name {
-			slog.Debug("found hook in registry", "hook_name", name, "category", hook.Category)
-			return hook, true
-		}
-	}
-
-	slog.Debug("hook not found in registry", "hook_name", name)
-	return HookDefinition{}, false
-}
-
-// GetHookNames returns a slice of all hook names from the registry
-func GetHookNames() []string {
-	names := make([]string, len(AllHooks))
-
-	for i, hook := range AllHooks {
-		names[i] = hook.Name
-	}
-
-	slog.Debug("retrieved hook names from registry",
-		"hook_count", len(names),
-		"names", names)
-
-	return names
 }

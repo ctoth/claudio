@@ -332,9 +332,6 @@ echo '{"session_id":"debug","cwd":".","hook_event_name":"Stop"}' | CLAUDIO_AUDIO
 install `pulseaudio-utils` (`paplay`) or FFmpeg (`ffplay`). On Windows only
 `ffplay` applies. `aplay` plays WAV only and ignores the volume setting.
 
-The `fake` backend is for tests. It accepts playback calls but produces no
-audio.
-
 If the agent runs on a remote machine over SSH, that box usually has no audio
 device at all. Forward a PulseAudio socket instead; see
 [Remote Audio Over SSH](remote-audio-ssh).

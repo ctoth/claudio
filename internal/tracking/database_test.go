@@ -1,6 +1,7 @@
 package tracking
 
 import (
+	"context"
 	"database/sql"
 	"os"
 	"path/filepath"
@@ -257,7 +258,7 @@ PRAGMA user_version = 1;
 	}
 
 	// fallback_level column is gone, chain_type column is present.
-	hasFallback, hasChainType, err := hookEventsColumns(db)
+	hasFallback, hasChainType, err := hookEventsColumnsContext(context.Background(), db)
 	if err != nil {
 		t.Fatalf("inspect columns: %v", err)
 	}
@@ -344,7 +345,7 @@ CREATE TABLE hook_events (
 		t.Fatalf("reopen migrated database: %v", err)
 	}
 	defer db.Close()
-	hasFallback, hasChainType, err := hookEventsColumns(db)
+	hasFallback, hasChainType, err := hookEventsColumnsContext(context.Background(), db)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -440,7 +441,7 @@ PRAGMA user_version = 1;`
 func TestFreshDatabase_NoFallbackLevelColumn(t *testing.T) {
 	db := setupTestDB(t)
 
-	hasFallback, hasChainType, err := hookEventsColumns(db)
+	hasFallback, hasChainType, err := hookEventsColumnsContext(context.Background(), db)
 	if err != nil {
 		t.Fatalf("inspect columns: %v", err)
 	}

@@ -66,9 +66,9 @@ func TestInstallCommandsCreatesDirectory(t *testing.T) {
 	commandsDir := filepath.Join(tmpHome, ".claude", "commands")
 	claudioMdPath := filepath.Join(commandsDir, "claudio.md")
 
-	err = installCommandsToPath(commandsDir, claudioMdPath)
+	err = installClaudeCommandAt(commandsDir, claudioMdPath)
 	if err != nil {
-		t.Fatalf("installCommandsToPath failed: %v", err)
+		t.Fatalf("installClaudeCommandAt failed: %v", err)
 	}
 
 	// Check directory was created
@@ -95,9 +95,9 @@ func TestInstallCommandsFileContent(t *testing.T) {
 	commandsDir := filepath.Join(tmpHome, ".claude", "commands")
 	claudioMdPath := filepath.Join(commandsDir, "claudio.md")
 
-	err = installCommandsToPath(commandsDir, claudioMdPath)
+	err = installClaudeCommandAt(commandsDir, claudioMdPath)
 	if err != nil {
-		t.Fatalf("installCommandsToPath failed: %v", err)
+		t.Fatalf("installClaudeCommandAt failed: %v", err)
 	}
 
 	// Read the created file
@@ -302,13 +302,13 @@ func TestInstallCommandsIdempotent(t *testing.T) {
 	claudioMdPath := filepath.Join(commandsDir, "claudio.md")
 
 	// First install
-	err = installCommandsToPath(commandsDir, claudioMdPath)
+	err = installClaudeCommandAt(commandsDir, claudioMdPath)
 	if err != nil {
-		t.Fatalf("first installCommandsToPath failed: %v", err)
+		t.Fatalf("first installClaudeCommandAt failed: %v", err)
 	}
 
 	// Second install (should succeed without error)
-	err = installCommandsToPath(commandsDir, claudioMdPath)
+	err = installClaudeCommandAt(commandsDir, claudioMdPath)
 	if err != nil {
 		t.Fatalf("second installCommandsToPath should be idempotent: %v", err)
 	}
@@ -361,8 +361,8 @@ func TestUninstallCommandsRemovesClaudeSlashCommand(t *testing.T) {
 
 	commandsDir := filepath.Join(tmpHome, ".claude", "commands")
 	claudioMdPath := filepath.Join(commandsDir, "claudio.md")
-	if err := installCommandsToPath(commandsDir, claudioMdPath); err != nil {
-		t.Fatalf("installCommandsToPath failed: %v", err)
+	if err := installClaudeCommandAt(commandsDir, claudioMdPath); err != nil {
+		t.Fatalf("installClaudeCommandAt failed: %v", err)
 	}
 
 	cmd := newUninstallCommandsCommand()
@@ -486,4 +486,17 @@ func TestUninstallCommandsMissingArtifactIsIdempotent(t *testing.T) {
 	if !strings.Contains(stdout.String(), "No skill for codex found") {
 		t.Errorf("expected missing artifact output, got: %s", stdout.String())
 	}
+}
+
+// installClaudeCommandAt installs the Claude slash command into an arbitrary
+// directory, the same artifact install-commands writes under ~/.claude.
+func installClaudeCommandAt(commandsDir, claudioMdPath string) error {
+	return installCommandArtifact(commandArtifact{
+		Agent:     commandArtifactAgentClaude,
+		Kind:      "slash command",
+		Directory: commandsDir,
+		Path:      claudioMdPath,
+		Content:   claudioCommandContent,
+		Retired:   retiredClaudioCommandContents,
+	})
 }

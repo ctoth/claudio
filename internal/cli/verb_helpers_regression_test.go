@@ -9,6 +9,7 @@ import (
 
 	"claudio.click/internal/config"
 	"github.com/adrg/xdg"
+	"github.com/spf13/afero"
 )
 
 func TestSoundpackMutationPreservesEffectiveConfig(t *testing.T) {
@@ -29,7 +30,7 @@ func TestSoundpackMutationPreservesEffectiveConfig(t *testing.T) {
 				system.FileLogging.MaxBackups = 17
 				system.SoundpackPaths = []string{filepath.Join(systemDir, "shared-packs")}
 				systemPath := filepath.Join(systemDir, "claudio", "config.json")
-				if err := manager.SaveToFile(system, systemPath); err != nil {
+				if err := config.WriteConfigFile(afero.NewOsFs(), systemPath, system); err != nil {
 					t.Fatal(err)
 				}
 				before, err := os.ReadFile(systemPath)
@@ -44,7 +45,7 @@ func TestSoundpackMutationPreservesEffectiveConfig(t *testing.T) {
 				case "implicit existing":
 					want = manager.GetDefaultConfig()
 					want.LogLevel = "error"
-					if err := manager.SaveToFile(want, userPath); err != nil {
+					if err := config.WriteConfigFile(afero.NewOsFs(), userPath, want); err != nil {
 						t.Fatal(err)
 					}
 				case "explicit missing", "explicit user path":

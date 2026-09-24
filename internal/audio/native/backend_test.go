@@ -58,7 +58,7 @@ func testBackend() (*Backend, *testOutput) {
 }
 
 func testSource() audio.AudioSource {
-	return audio.NewReaderSource(io.NopCloser(bytes.NewReader(generateTestWAV())), "wav")
+	return audio.NewReaderSource(io.NopCloser(bytes.NewReader(buildWAV(wavTagPCM, 16, 44100, sineFrames(2, 2, 0.1)))), "wav")
 }
 func waitPlayer(t *testing.T, o *testOutput) *testPlayer {
 	t.Helper()
@@ -86,18 +86,17 @@ func waitPlay(t *testing.T, done <-chan error) error {
 	return nil
 }
 
-func TestBackendStopConcurrentIdenticalSounds(t *testing.T) {
+func TestBackendCloseStopsConcurrentIdenticalSounds(t *testing.T) {
 	b, o := testBackend()
-	defer b.Close()
 	done := make(chan error, 2)
 	for range 2 {
 		go func() { done <- b.Play(context.Background(), testSource()) }()
 	}
 	p1, p2 := waitPlayer(t, o), waitPlayer(t, o)
-	if !b.IsPlaying() {
+	if !isPlaying(b) {
 		t.Fatal("not playing")
 	}
-	if err := b.Stop(); err != nil {
+	if err := b.Close(); err != nil {
 		t.Fatal(err)
 	}
 	for range 2 {
@@ -105,15 +104,8 @@ func TestBackendStopConcurrentIdenticalSounds(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if b.IsPlaying() || !p1.paused || !p2.paused {
-		t.Fatal("Stop left a player active")
-	}
-	// Stop leaves the backend reusable; Close does not.
-	go func() { done <- b.Play(context.Background(), testSource()) }()
-	p3 := waitPlayer(t, o)
-	p3.finish(nil)
-	if err := waitPlay(t, done); err != nil {
-		t.Fatal(err)
+	if isPlaying(b) || !p1.paused || !p2.paused {
+		t.Fatal("Close left a player active")
 	}
 }
 
@@ -158,7 +150,7 @@ func TestBackendCancellationAndCompletion(t *testing.T) {
 		p.mu.Lock()
 		volume := p.volume
 		p.mu.Unlock()
-		if volume != 0.25 || b.GetVolume() != 0.25 {
+		if volume != 0.25 || backendVolume(b) != 0.25 {
 			t.Fatalf("volume=%v", volume)
 		}
 		for _, v := range []float32{-1, 2, float32(math.NaN()), float32(math.Inf(1))} {
@@ -178,7 +170,7 @@ func TestBackendCancellationAndCompletion(t *testing.T) {
 		if !cancelPlayback && err != nil {
 			t.Fatalf("completion: %v", err)
 		}
-		if !p.paused || b.IsPlaying() {
+		if !p.paused || isPlaying(b) {
 			t.Fatal("player was not released")
 		}
 		cancel()
@@ -269,4 +261,23 @@ func TestBackendFlushesDeviceBufferWithSilenceBeforeReturning(t *testing.T) {
 	if bytes.Equal(data[:len(data)-len(tail)], make([]byte, len(data)-len(tail))) {
 		t.Fatal("no audio before the drain")
 	}
+}
+
+// isPlaying reports whether any admitted playback has a live player.
+func isPlaying(b *Backend) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for p := range b.plays {
+		if p.player != nil && p.player.IsPlaying() {
+			return true
+		}
+	}
+	return false
+}
+
+// backendVolume reads the volume new players start at.
+func backendVolume(b *Backend) float32 {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.volume
 }

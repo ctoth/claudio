@@ -4,32 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"slices"
 	"sync"
 
 	"claudio.click/internal/platform"
 )
 
-// Factory errors
-var (
-	ErrInvalidBackendType    = errors.New("invalid backend type")
-	ErrBackendCreationFailed = errors.New("backend creation failed")
-)
-
-// SupportedBackendTypes lists every backend type accepted by NewBackend and
-// is the single source of truth for which types are valid: NewBackend rejects
-// anything not in this list, and IsValidBackendType reports membership.
-// Empty string is a synonym for "auto". "fake" is a test-only backend
-// included unconditionally so cross-package tests (notably internal/cli)
-// can configure cfg.AudioBackend = "fake" without rebuilding under a
-// special tag.
-var SupportedBackendTypes = []string{"auto", "system_command", "oto", "fake"}
-
-// IsValidBackendType reports whether the given backend type string is
-// accepted by NewBackend. Empty string is treated as "auto".
-func IsValidBackendType(backendType string) bool {
-	return backendType == "" || slices.Contains(SupportedBackendTypes, backendType)
-}
+// ErrInvalidBackendType reports a backend name the factory does not know.
+var ErrInvalidBackendType = errors.New("invalid backend type")
 
 // BackendConstructor builds an AudioBackend instance.
 type BackendConstructor func() (AudioBackend, error)
@@ -39,14 +20,22 @@ var (
 	backendCtors  = map[string]BackendConstructor{}
 )
 
-// RegisterBackend registers a constructor for the given backend type. It
-// is intended to be called from an init() in a backend's subpackage so
-// the top-level audio package does not need to import the backend's
-// implementation. The native subpackage registers "oto" in every build.
-func RegisterBackend(name string, ctor BackendConstructor) {
+// RegisterBackend registers a constructor for the given backend type and
+// returns the one it replaced (nil if none); registering nil removes the
+// entry. It is called from an init() in a backend's subpackage so the
+// top-level audio package does not need to import the implementation: the
+// native subpackage registers "oto" in every build. Tests swap in a fake
+// the same way (internal/audio/audiotest).
+func RegisterBackend(name string, ctor BackendConstructor) (previous BackendConstructor) {
 	backendCtorMu.Lock()
 	defer backendCtorMu.Unlock()
-	backendCtors[name] = ctor
+	previous = backendCtors[name]
+	if ctor == nil {
+		delete(backendCtors, name)
+	} else {
+		backendCtors[name] = ctor
+	}
+	return previous
 }
 
 func lookupBackendConstructor(name string) (BackendConstructor, bool) {
@@ -56,12 +45,8 @@ func lookupBackendConstructor(name string) (BackendConstructor, bool) {
 	return ctor, ok
 }
 
-// NewBackend constructs an audio backend by name. "auto" (or empty) delegates
-// to platform-aware selection via platform.go.
-//
-// The previous BackendFactory + DefaultBackendFactory + DI pattern existed to
-// select between two concrete backends; three types and one constructor for
-// what is now a switch statement.
+// NewBackend constructs an audio backend by name. "auto" (or empty) picks
+// one for the platform (platform.go).
 func NewBackend(backendType string) (AudioBackend, error) {
 	return newBackendWithChecker(backendType, platform.IsWSL, CommandExists)
 }
@@ -74,85 +59,42 @@ func ResolveBackend(backendType string) (string, error) {
 }
 
 func resolveBackendWithChecker(backendType string, isWSL bool, commandExists func(string) bool) (string, error) {
+	name, _, err := planBackend(backendType, isWSL, commandExists)
+	return name, err
+}
+
+// newBackendWithChecker is the test seam for NewBackend.
+func newBackendWithChecker(backendType string, isWSL func() bool, commandExists func(string) bool) (AudioBackend, error) {
+	name, construct, err := planBackend(backendType, isWSL(), commandExists)
+	if err != nil {
+		slog.Debug("audio backend unavailable", "requested", backendType, "resolved", name, "error", err)
+		return nil, err
+	}
+	slog.Debug("creating audio backend", "requested", backendType, "resolved", name)
+	return construct()
+}
+
+// planBackend is the one place that knows the backend names: it resolves
+// "auto", checks availability, and returns the constructor to call.
+func planBackend(backendType string, isWSL bool, commandExists func(string) bool) (string, BackendConstructor, error) {
 	if backendType == "" || backendType == "auto" {
 		backendType = detectOptimalBackendWithChecker(isWSL, commandExists)
 	}
 	switch backendType {
 	case "system_command":
-		if len(getAvailableSystemCommandsWithChecker(commandExists)) == 0 {
-			return backendType, fmt.Errorf("%w: no system audio commands found", ErrBackendNotAvailable)
+		// Every available command, in priority order, so playback can fall
+		// back when the first cannot handle a file.
+		commands := getAvailableSystemCommandsWithChecker(commandExists)
+		if len(commands) == 0 {
+			return backendType, nil, fmt.Errorf("%w: no system audio commands found", ErrBackendNotAvailable)
 		}
-	case "oto", "fake":
-		if _, ok := lookupBackendConstructor(backendType); !ok {
-			return backendType, missingBackendError(backendType)
+		return backendType, func() (AudioBackend, error) { return NewSystemCommandBackend(commands...), nil }, nil
+	case "oto":
+		ctor, ok := lookupBackendConstructor(backendType)
+		if !ok {
+			return backendType, nil, fmt.Errorf("%w: %s backend not registered", ErrBackendNotAvailable, backendType)
 		}
-	default:
-		return backendType, fmt.Errorf("%w: %s", ErrInvalidBackendType, backendType)
+		return backendType, ctor, nil
 	}
-	return backendType, nil
-}
-
-// newBackendWithChecker is the seam used by tests to inject platform detection
-// without rebuilding the whole factory-with-dependencies dance. Production code
-// goes through NewBackend.
-func newBackendWithChecker(backendType string, isWSLFunc func() bool, commandExists func(string) bool) (AudioBackend, error) {
-	if backendType == "" {
-		backendType = "auto"
-	}
-
-	slog.Debug("creating audio backend", "type", backendType)
-
-	if !IsValidBackendType(backendType) {
-		slog.Error("invalid backend type requested", "type", backendType)
-		return nil, fmt.Errorf("%w: %s", ErrInvalidBackendType, backendType)
-	}
-
-	switch backendType {
-	case "auto":
-		optimal := detectOptimalBackendWithChecker(isWSLFunc(), commandExists)
-		slog.Debug("auto-detection result", "selected_type", optimal)
-		switch optimal {
-		case "system_command":
-			return createSystemCommandBackendWithChecker(commandExists)
-		case "oto":
-			return createRegisteredBackend("oto")
-		default:
-			slog.Error("auto-detection returned invalid backend type", "type", optimal)
-			return nil, fmt.Errorf("%w: auto-detection failed", ErrBackendCreationFailed)
-		}
-	case "system_command":
-		return createSystemCommandBackendWithChecker(commandExists)
-	}
-
-	// Every remaining supported type ("oto", "fake") is built by the
-	// constructor its own package registered via RegisterBackend.
-	return createRegisteredBackend(backendType)
-}
-
-// createSystemCommandBackendWithChecker captures every available system audio
-// command in priority order so playback can fall back when the primary command
-// fails or cannot handle a file format.
-func createSystemCommandBackendWithChecker(commandExists func(string) bool) (AudioBackend, error) {
-	commands := getAvailableSystemCommandsWithChecker(commandExists)
-	if len(commands) == 0 {
-		slog.Error("no system audio commands available")
-		return nil, fmt.Errorf("%w: no system audio commands found", ErrBackendNotAvailable)
-	}
-	slog.Debug("system command backend created", "commands", commands)
-	return NewSystemCommandBackend(commands...), nil
-}
-
-// createRegisteredBackend instantiates a backend whose constructor was
-// registered via RegisterBackend. Returns ErrBackendNotAvailable if the
-// application has not imported the implementation that registers it.
-func createRegisteredBackend(name string) (AudioBackend, error) {
-	ctor, ok := lookupBackendConstructor(name)
-	if !ok {
-		return nil, missingBackendError(name)
-	}
-	return ctor()
-}
-
-func missingBackendError(name string) error {
-	return fmt.Errorf("%w: %s backend not registered", ErrBackendNotAvailable, name)
+	return backendType, nil, fmt.Errorf("%w: %s", ErrInvalidBackendType, backendType)
 }

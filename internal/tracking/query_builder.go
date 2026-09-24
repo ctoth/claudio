@@ -6,8 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tj/go-naturaldate"
-
 	"claudio.click/internal/hooks"
 )
 
@@ -180,21 +178,6 @@ func ParseDatePreset(preset string, now time.Time) (start, end time.Time, err er
 
 	slog.Debug("parsed date preset", "preset", preset, "start", start, "end", end)
 	return
-}
-
-// ParseNaturalDate parses natural language dates using go-naturaldate
-func ParseNaturalDate(naturalDate string) (time.Time, error) {
-	slog.Debug("parsing natural language date", "input", naturalDate)
-
-	// Use go-naturaldate to parse natural language dates
-	result, err := naturaldate.Parse(naturalDate, time.Now())
-	if err != nil {
-		slog.Warn("failed to parse natural language date", "input", naturalDate, "error", err)
-		return time.Time{}, fmt.Errorf("failed to parse natural date '%s': %w", naturalDate, err)
-	}
-
-	slog.Debug("parsed natural language date", "input", naturalDate, "result", result)
-	return result, nil
 }
 
 // Helper functions for date manipulation

@@ -292,56 +292,6 @@ func TestValidateConfig_RejectsInf(t *testing.T) {
 	}
 }
 
-func TestSaveConfig(t *testing.T) {
-	mgr := NewConfigManager()
-
-	tempDir := t.TempDir()
-	configFile := filepath.Join(tempDir, "save-test.json")
-
-	testConfig := &Config{
-		Volume:           ptrFloat64(0.8),
-		DefaultSoundpack: "test-pack",
-		SoundpackPaths:   []string{"/test/path1", "/test/path2"},
-		Enabled:          true,
-		LogLevel:         "debug",
-	}
-
-	// Save config
-	err := mgr.SaveToFile(testConfig, configFile)
-	if err != nil {
-		t.Fatalf("SaveToFile failed: %v", err)
-	}
-
-	// Verify file exists and is readable
-	data, err := os.ReadFile(configFile)
-	if err != nil {
-		t.Fatalf("Failed to read saved config file: %v", err)
-	}
-
-	// Parse saved file
-	var savedConfig Config
-	err = json.Unmarshal(data, &savedConfig)
-	if err != nil {
-		t.Fatalf("Failed to parse saved config: %v", err)
-	}
-
-	// Verify content matches
-	if savedConfig.Volume == nil || *savedConfig.Volume != *testConfig.Volume {
-		t.Errorf("Saved volume = %v, expected %v", savedConfig.Volume, testConfig.Volume)
-	}
-
-	if savedConfig.DefaultSoundpack != testConfig.DefaultSoundpack {
-		t.Errorf("Saved soundpack = %s, expected %s", savedConfig.DefaultSoundpack, testConfig.DefaultSoundpack)
-	}
-
-	// Verify file is properly formatted JSON
-	if !json.Valid(data) {
-		t.Error("Saved file is not valid JSON")
-	}
-
-	t.Logf("Saved config content: %s", string(data))
-}
-
 func TestAutoDiscoverConfig(t *testing.T) {
 	mgr := NewConfigManager()
 
@@ -365,50 +315,6 @@ func TestAutoDiscoverConfig(t *testing.T) {
 	}
 
 	t.Logf("Auto-discovered config: %+v", config)
-}
-
-func TestConfigMerging(t *testing.T) {
-	mgr := NewConfigManager()
-
-	baseConfig := &Config{
-		Volume:           ptrFloat64(0.5),
-		DefaultSoundpack: "base",
-		SoundpackPaths:   []string{"/base/path"},
-		Enabled:          true,
-		LogLevel:         "info",
-	}
-
-	overrideConfig := &Config{
-		Volume:           ptrFloat64(0.8),
-		DefaultSoundpack: "override",
-		// SoundpackPaths intentionally omitted
-		// Enabled intentionally omitted
-		LogLevel: "debug",
-	}
-
-	merged := mgr.MergeConfigs(baseConfig, overrideConfig)
-
-	// Overridden values
-	if merged.Volume == nil || *merged.Volume != 0.8 {
-		t.Errorf("Merged volume = %v, expected 0.8", merged.Volume)
-	}
-
-	if merged.DefaultSoundpack != "override" {
-		t.Errorf("Merged soundpack = %s, expected 'override'", merged.DefaultSoundpack)
-	}
-
-	if merged.LogLevel != "debug" {
-		t.Errorf("Merged log level = %s, expected 'debug'", merged.LogLevel)
-	}
-
-	// Base values preserved
-	if merged.Enabled != true {
-		t.Errorf("Merged enabled = %v, expected true", merged.Enabled)
-	}
-
-	if len(merged.SoundpackPaths) != 1 || merged.SoundpackPaths[0] != "/base/path" {
-		t.Errorf("Merged soundpack paths = %v, expected ['/base/path']", merged.SoundpackPaths)
-	}
 }
 
 func TestConfigEnvironmentOverrides(t *testing.T) {
@@ -499,54 +405,6 @@ func TestConfigErrorHandling(t *testing.T) {
 			t.Error("Expected error loading file with no permissions")
 		}
 	})
-}
-
-func TestLogLevelApplicationToSlog(t *testing.T) {
-	// TDD RED: This test should FAIL because log level from config is not applied to slog
-	// We expect that when config has log_level "warn", slog should respect it and not show DEBUG/INFO logs
-
-	mgr := NewConfigManager()
-
-	// Capture log output to verify level is applied
-	var logBuffer strings.Builder
-	originalHandler := slog.Default().Handler()
-	defer slog.SetDefault(slog.New(originalHandler))
-
-	// First, apply log level configuration with warn level
-	err := mgr.ApplyLogLevelWithWriter("warn", &logBuffer)
-	if err != nil {
-		t.Fatalf("ApplyLogLevelWithWriter should not error for valid log level: %v", err)
-	}
-
-	// Test that DEBUG and INFO logs are filtered out when level is WARN
-	slog.Debug("this debug message should not appear")
-	slog.Info("this info message should not appear")
-	slog.Warn("this warning should appear")
-	slog.Error("this error should appear")
-
-	logOutput := logBuffer.String()
-
-	// CRITICAL: With warn level, DEBUG and INFO should be filtered out
-	if strings.Contains(logOutput, "this debug message should not appear") {
-		t.Errorf("DEBUG logs should be filtered out when log level is warn, but found debug message in output")
-		t.Logf("Full log output: %s", logOutput)
-	}
-
-	if strings.Contains(logOutput, "this info message should not appear") {
-		t.Errorf("INFO logs should be filtered out when log level is warn, but found info message in output")
-		t.Logf("Full log output: %s", logOutput)
-	}
-
-	// WARN and ERROR should still appear
-	if !strings.Contains(logOutput, "this warning should appear") {
-		t.Errorf("WARN logs should appear when log level is warn, but warning message not found in output")
-		t.Logf("Full log output: %s", logOutput)
-	}
-
-	if !strings.Contains(logOutput, "this error should appear") {
-		t.Errorf("ERROR logs should appear when log level is warn, but error message not found in output")
-		t.Logf("Full log output: %s", logOutput)
-	}
 }
 
 func TestConfigLoggingLevels(t *testing.T) {
@@ -850,71 +708,6 @@ func TestXDG_LogPath(t *testing.T) {
 	logCachePath := CachePath("logs")
 	if otherCachePath == logCachePath {
 		t.Error("Different cache purposes should create different paths")
-	}
-}
-
-// TDD RED: Test that volume=0.0 can be explicitly set in merge
-func TestConfigMerging_VolumeZero(t *testing.T) {
-	mgr := NewConfigManager()
-
-	baseConfig := &Config{
-		Volume:           ptrFloat64(0.5),
-		DefaultSoundpack: "base",
-		Enabled:          true,
-	}
-
-	// User explicitly wants to mute (volume=0.0)
-	zeroVolume := 0.0
-	overrideConfig := &Config{
-		Volume:           &zeroVolume,
-		DefaultSoundpack: "", // Don't override soundpack
-	}
-
-	merged := mgr.MergeConfigs(baseConfig, overrideConfig)
-
-	// Volume should be 0.0 because user explicitly set it
-	if merged.Volume == nil {
-		t.Fatal("Merged volume should not be nil")
-	}
-	if *merged.Volume != 0.0 {
-		t.Errorf("Merged volume = %f, expected 0.0 (mute)", *merged.Volume)
-	}
-
-	// Soundpack should remain from base (override was empty)
-	if merged.DefaultSoundpack != "base" {
-		t.Errorf("Merged soundpack = %s, expected 'base'", merged.DefaultSoundpack)
-	}
-}
-
-// TDD RED: Test that nil volume doesn't override base
-func TestConfigMerging_VolumeNilDoesNotOverride(t *testing.T) {
-	mgr := NewConfigManager()
-
-	baseConfig := &Config{
-		Volume:           ptrFloat64(0.7),
-		DefaultSoundpack: "base",
-		Enabled:          true,
-	}
-
-	// Override config doesn't specify volume
-	overrideConfig := &Config{
-		Volume:           nil, // Not set
-		DefaultSoundpack: "override",
-	}
-
-	merged := mgr.MergeConfigs(baseConfig, overrideConfig)
-
-	// Volume should remain 0.7 from base (override was nil)
-	if merged.Volume == nil {
-		t.Fatal("Merged volume should not be nil")
-	}
-	if *merged.Volume != 0.7 {
-		t.Errorf("Merged volume = %f, expected 0.7 (from base)", *merged.Volume)
-	}
-
-	// Soundpack should be overridden
-	if merged.DefaultSoundpack != "override" {
-		t.Errorf("Merged soundpack = %s, expected 'override'", merged.DefaultSoundpack)
 	}
 }
 

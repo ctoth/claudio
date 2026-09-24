@@ -6,109 +6,8 @@ import (
 	"claudio.click/internal/hooks"
 )
 
-func TestGetAllHooks(t *testing.T) {
-	allHooks := GetAllHooks()
-
-	expectedCount := len(expectedClaudeHookNames())
-	if len(allHooks) != expectedCount {
-		t.Errorf("Expected %d hooks, got %d", expectedCount, len(allHooks))
-	}
-
-	// Verify all expected hook names are present
-	expectedNames := expectedClaudeHookNames()
-
-	hookMap := make(map[string]bool)
-	for _, hook := range allHooks {
-		hookMap[hook.Name] = true
-	}
-
-	for _, expectedName := range expectedNames {
-		if !hookMap[expectedName] {
-			t.Errorf("Expected hook '%s' not found in registry", expectedName)
-		}
-	}
-}
-
-func TestGetEnabledHooks(t *testing.T) {
-	enabledHooks := GetEnabledHooks()
-
-	expectedCount := len(expectedClaudeHookNames()) - len(defaultDisabledClaudeHookNames())
-	if len(enabledHooks) != expectedCount {
-		t.Errorf("Expected %d enabled hooks, got %d", expectedCount, len(enabledHooks))
-	}
-
-	// Verify all returned hooks have DefaultEnabled = true
-	for _, hook := range enabledHooks {
-		if !hook.DefaultEnabled {
-			t.Errorf("Hook '%s' returned by GetEnabledHooks but DefaultEnabled is false", hook.Name)
-		}
-	}
-}
-
-func TestGetHookByName(t *testing.T) {
-	// TDD RED: Test hook lookup functionality
-	testCases := []struct {
-		name        string
-		shouldExist bool
-	}{
-		{"PreToolUse", true},
-		{"PostToolUse", true},
-		{"UserPromptSubmit", true},
-		{"Notification", true},
-		{"Stop", true},
-		{"SubagentStop", true},
-		{"PreCompact", true},
-		{"SessionStart", true},
-		{"SessionEnd", true},
-		{"PostToolUseFailure", true},
-		{"PostToolBatch", true},
-		{"PermissionRequest", true},
-		{"PermissionDenied", true},
-		{"PostCompact", true},
-		{"NonExistentHook", false},
-	}
-
-	for _, tc := range testCases {
-		hook, found := GetHookByName(tc.name)
-
-		if tc.shouldExist {
-			if !found {
-				t.Errorf("Expected to find hook '%s' but it was not found", tc.name)
-			}
-			if hook.Name != tc.name {
-				t.Errorf("Expected hook name '%s', got '%s'", tc.name, hook.Name)
-			}
-		} else {
-			if found {
-				t.Errorf("Expected hook '%s' to not exist, but it was found", tc.name)
-			}
-		}
-	}
-}
-
-func TestGetHookNames(t *testing.T) {
-	hookNames := GetHookNames()
-
-	expectedNames := expectedClaudeHookNames()
-
-	if len(hookNames) != len(expectedNames) {
-		t.Errorf("Expected %d hook names, got %d", len(expectedNames), len(hookNames))
-	}
-
-	nameMap := make(map[string]bool)
-	for _, name := range hookNames {
-		nameMap[name] = true
-	}
-
-	for _, expectedName := range expectedNames {
-		if !nameMap[expectedName] {
-			t.Errorf("Expected hook name '%s' not found", expectedName)
-		}
-	}
-}
-
 func TestHookCategoriesMatchParser(t *testing.T) {
-	allHooks := GetAllHooks()
+	allHooks := AllHooks
 
 	expectedCategories := map[string]hooks.EventCategory{
 		"PreToolUse":          hooks.Loading,
@@ -159,7 +58,7 @@ func TestHookCategoriesMatchParser(t *testing.T) {
 
 func TestHookDescriptionsNonEmpty(t *testing.T) {
 	// TDD RED: Test that all hook descriptions are non-empty
-	allHooks := GetAllHooks()
+	allHooks := AllHooks
 
 	for _, hook := range allHooks {
 		if hook.Description == "" {
@@ -169,7 +68,7 @@ func TestHookDescriptionsNonEmpty(t *testing.T) {
 }
 
 func TestDefaultEnabledStatus(t *testing.T) {
-	allHooks := GetAllHooks()
+	allHooks := AllHooks
 	disabled := defaultDisabledClaudeHookNames()
 
 	for _, hook := range allHooks {
@@ -340,4 +239,9 @@ func TestAgentEnabledHooksAndNames(t *testing.T) {
 	if len(AgentCopilot.HookNames()) != len(CopilotHooks) {
 		t.Errorf("copilot hook names mismatch")
 	}
+}
+
+// enabledClaudeHookCount is the number of Claude hooks installed by default.
+func enabledClaudeHookCount() int {
+	return len(expectedClaudeHookNames()) - len(defaultDisabledClaudeHookNames())
 }

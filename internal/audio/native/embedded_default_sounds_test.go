@@ -1,8 +1,6 @@
 package native
 
 import (
-	"bytes"
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -23,7 +21,6 @@ func TestEmbeddedDefaultSoundsDecode(t *testing.T) {
 		"default.wav",
 	}
 
-	decoder := NewWavDecoder()
 	for _, name := range names {
 		t.Run(name, func(t *testing.T) {
 			data, err := os.ReadFile(filepath.Join(soundsDir, name))
@@ -31,16 +28,12 @@ func TestEmbeddedDefaultSoundsDecode(t *testing.T) {
 				t.Fatalf("read embedded sound: %v", err)
 			}
 
-			audioData, err := decoder.Decode(context.Background(), bytes.NewReader(data))
+			frames, rate, err := decodeAll(t, name, data)
 			if err != nil {
 				t.Fatalf("decode %s: %v", name, err)
 			}
-			if len(audioData.Samples) == 0 {
-				t.Errorf("%s decoded to zero samples", name)
-			}
-			if audioData.SampleRate == 0 || audioData.Channels == 0 {
-				t.Errorf("%s decoded with invalid format: rate=%d channels=%d",
-					name, audioData.SampleRate, audioData.Channels)
+			if len(frames) == 0 || rate == 0 {
+				t.Errorf("%s decoded to %d frames at %d Hz", name, len(frames), rate)
 			}
 		})
 	}
