@@ -163,11 +163,15 @@ claudio soundpack remove my-pack --force        # drop registry and config entri
 active pack, resets `default_soundpack` to the platform default.
 
 Packs installed with `soundpack install` have no remove command. Delete the
-directory and remove its entry from `soundpack_paths` in `config.json`:
+directory:
 
 ```bash
 rm -rf "$XDG_DATA_HOME/claudio/soundpacks/my-pack"   # adjust for your platform
 ```
+
+Hooks skip a `soundpack_paths` entry that no longer exists. The next
+`soundpack install`, `add`, `remove`, or `use` drops it from `config.json` and
+prints the path it dropped; you can also delete the entry by hand.
 
 If it was the active pack, pick another with `claudio soundpack use <name>`.
 Until you do, Claudio logs an error on each event and uses the platform pack.

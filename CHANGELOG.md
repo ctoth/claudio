@@ -49,6 +49,9 @@ release tags and current checkout history.
 - `soundpack install` and `soundpack validate` accept a manifest path
   relative to the working directory instead of reporting every mapping as
   a symlink escaping the soundpack root (#86).
+- `soundpack install`, `add`, `remove`, and `use` drop `soundpack_paths`
+  entries that no longer exist and print each one they drop. Hooks skip such
+  entries quietly and never rewrite the config (#87).
 - Read config files on top of the defaults. A partial `config.json` that
   left out `enabled` muted Claudio, one without `default_soundpack` made
   every hook fail, and one without `file_logging` disabled file logging.

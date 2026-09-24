@@ -29,7 +29,12 @@ func TestSoundpackMutationPreservesEffectiveConfig(t *testing.T) {
 				system.Volume = &volume
 				system.LogLevel = "debug"
 				system.FileLogging.MaxBackups = 17
-				system.SoundpackPaths = []string{filepath.Join(systemDir, "shared-packs")}
+				// The shared pack must exist: soundpack commands prune missing entries.
+				sharedPacks := filepath.Join(systemDir, "shared-packs")
+				if err := os.MkdirAll(sharedPacks, 0755); err != nil {
+					t.Fatal(err)
+				}
+				system.SoundpackPaths = []string{sharedPacks}
 				systemPath := filepath.Join(systemDir, "claudio", "config.json")
 				if err := config.WriteConfigFile(afero.NewOsFs(), systemPath, system); err != nil {
 					t.Fatal(err)
