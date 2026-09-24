@@ -1119,6 +1119,50 @@ func TestSoundpackInstallCopiesRelativeAssetsAndHonorsExplicitConfig(t *testing.
 	}
 }
 
+// Issue #86: `claudio soundpack install pack.json`, run from the pack's
+// own directory with validation on, must install the pack with its audio
+// and the installed pack must resolve its sounds at hook time.
+func TestSoundpackInstallRelativeManifestPathPlaysInstalledAssets(t *testing.T) {
+	dataDir, _, cleanup := setupInstallTestEnv(t)
+	defer cleanup()
+
+	srcDir := t.TempDir()
+	wavfixture.Write(t, filepath.Join(srcDir, "success", "git-success.wav"))
+	manifest := soundpack.JSONSoundpackFile{
+		Name:     "relative-pack",
+		Mappings: map[string]string{"success/git-success.wav": "success/git-success.wav"},
+	}
+	data, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(srcDir, "pack.json"), data, 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(srcDir)
+
+	cli := NewCLI()
+	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
+	if code := cli.Run([]string{"claudio", "soundpack", "install", "pack.json", "--default"}, nil, stdout, stderr); code != 0 {
+		t.Fatalf("install failed: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+
+	installedDir := filepath.Join(dataDir, "claudio", "soundpacks", "relative-pack")
+	cfg, err := config.NewConfigManager().LoadConfig()
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	cfg.Enabled = false
+	runtimeCLI := NewCLI()
+	if err := runtimeCLI.initializeAudioSystem(cfg); err != nil {
+		t.Fatalf("installed pack did not initialize: %v", err)
+	}
+	resolved, err := runtimeCLI.soundpackResolver.ResolveSound("success/git-success.wav")
+	if err != nil || filepath.Clean(resolved) != filepath.Join(installedDir, "success", "git-success.wav") {
+		t.Fatalf("installed sound resolution: path=%q err=%v", resolved, err)
+	}
+}
+
 func TestSoundpackInstallRejectsNonPortableMappingPaths(t *testing.T) {
 	dataDir, _, cleanup := setupInstallTestEnv(t)
 	defer cleanup()
