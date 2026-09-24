@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -120,5 +121,57 @@ func TestValidateJSONSoundpackRejectsMalformedFile(t *testing.T) {
 	}
 	if _, err := ValidateJSONSoundpack(path); err == nil {
 		t.Fatal("expected parse error")
+	}
+}
+
+// TestValidateAndLoaderAgreeOnAbsolutePaths pins issue #85: validate must
+// reject every absolute mapping value the runtime loader rejects, with the
+// same reason, for POSIX, Windows drive-letter, UNC and rooted forms on
+// every host OS. The host-native absolute path points at a real file so the
+// rejection cannot be a missing-file verdict in disguise.
+func TestValidateAndLoaderAgreeOnAbsolutePaths(t *testing.T) {
+	root := t.TempDir()
+	real := filepath.Join(root, "real.wav")
+	touch(t, real)
+
+	values := map[string]string{
+		"host-native":      real,
+		"posix":            "/etc/sounds/x.wav",
+		"drive-backslash":  `C:\Windows\Media\chimes.wav`,
+		"drive-slash":      "C:/Windows/Media/chimes.wav",
+		"drive-relative":   "c:chimes.wav",
+		"unc-backslash":    `\\server\share\x.wav`,
+		"unc-slash":        "//server/share/x.wav",
+		"rooted-backslash": `\Windows\Media\chimes.wav`,
+	}
+	for name, value := range values {
+		t.Run(name, func(t *testing.T) {
+			packDir := t.TempDir()
+			const key = "loading/git-start.wav"
+			path := writeValidateFixture(t, packDir, map[string]string{key: value})
+
+			v, err := ValidateJSONSoundpack(path)
+			if err != nil {
+				t.Fatalf("ValidateJSONSoundpack: %v", err)
+			}
+			reason, ok := v.Unsafe[key]
+			if !ok {
+				t.Fatalf("validate accepted %q (resolved=%v broken=%v)", value, v.Resolved, v.Broken)
+			}
+			if v.Err() == nil {
+				t.Error("Err() must report the unsafe mapping")
+			}
+
+			_, loadErr := LoadJSONSoundpack(path)
+			if loadErr == nil {
+				t.Fatalf("loader accepted %q that validate rejected", value)
+			}
+			if !strings.Contains(loadErr.Error(), reason) {
+				t.Errorf("validate reason %q and loader error %q disagree", reason, loadErr)
+			}
+			if !strings.Contains(reason, "absolute paths not allowed") {
+				t.Errorf("reason %q should say absolute paths are not allowed", reason)
+			}
+		})
 	}
 }
