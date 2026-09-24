@@ -7,6 +7,7 @@ import (
 )
 
 func TestCategories_ListsEveryCategoryIncludingSilent(t *testing.T) {
+	t.Parallel()
 	want := []EventCategory{Loading, Success, Error, Interactive, Completion, System, Silent}
 	got := Categories()
 	if len(got) != len(want) {
@@ -20,6 +21,7 @@ func TestCategories_ListsEveryCategoryIncludingSilent(t *testing.T) {
 }
 
 func TestEventCategory_JSONRoundTripsAsString(t *testing.T) {
+	t.Parallel()
 	for _, c := range Categories() {
 		data, err := json.Marshal(c)
 		if err != nil {
@@ -40,6 +42,7 @@ func TestEventCategory_JSONRoundTripsAsString(t *testing.T) {
 
 // Rows written before categories were strings hold the iota int.
 func TestEventCategory_UnmarshalsLegacyInt(t *testing.T) {
+	t.Parallel()
 	var ctx EventContext
 	if err := json.Unmarshal([]byte(`{"Category":6,"ToolName":"Bash"}`), &ctx); err != nil {
 		t.Fatalf("unmarshal legacy: %v", err)
@@ -50,6 +53,7 @@ func TestEventCategory_UnmarshalsLegacyInt(t *testing.T) {
 }
 
 func TestEventCategory_RejectsUnknown(t *testing.T) {
+	t.Parallel()
 	var c EventCategory
 	for _, in := range []string{`"nope"`, `99`, `-1`, `true`} {
 		if err := json.Unmarshal([]byte(in), &c); err == nil {
@@ -65,6 +69,7 @@ func TestEventCategory_RejectsUnknown(t *testing.T) {
 }
 
 func TestParseEventCategory_AcceptsEveryName(t *testing.T) {
+	t.Parallel()
 	for _, c := range Categories() {
 		got, err := ParseEventCategory(c.String())
 		if err != nil || got != c {
@@ -76,6 +81,7 @@ func TestParseEventCategory_AcceptsEveryName(t *testing.T) {
 // The recorder stores EventContext as JSON; the key names are part of the
 // on-disk format and the category value is its stable name.
 func TestEventContext_JSONKeysAreStable(t *testing.T) {
+	t.Parallel()
 	data, err := json.Marshal(&EventContext{Category: Success, ToolName: "Bash"})
 	if err != nil {
 		t.Fatal(err)

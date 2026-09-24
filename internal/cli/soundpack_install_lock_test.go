@@ -8,13 +8,14 @@ import (
 	"testing"
 
 	"claudio.click/internal/soundpack/gitpack"
+	"claudio.click/internal/testutil/wavfixture"
 )
 
 func TestSoundpackInstallRespectsNameLock(t *testing.T) {
 	dataDir, _, cleanup := setupInstallTestEnv(t)
 	defer cleanup()
 	source := filepath.Join(t.TempDir(), "locked-pack")
-	createDummyWAV(t, filepath.Join(source, "default.wav"))
+	wavfixture.Write(t, filepath.Join(source, "default.wav"))
 	lock, err := gitpack.LockName("locked-pack")
 	if err != nil {
 		t.Fatal(err)

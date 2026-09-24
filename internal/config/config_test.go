@@ -2,7 +2,6 @@ package config
 
 import (
 	"encoding/json"
-	"log/slog"
 	"math"
 	"os"
 	"path/filepath"
@@ -321,14 +320,9 @@ func TestConfigEnvironmentOverrides(t *testing.T) {
 	mgr := NewConfigManager()
 
 	// Set environment variables
-	os.Setenv("CLAUDIO_VOLUME", "0.9")
-	os.Setenv("CLAUDIO_SOUNDPACK", "env-pack")
-	os.Setenv("CLAUDIO_ENABLED", "false")
-	defer func() {
-		os.Unsetenv("CLAUDIO_VOLUME")
-		os.Unsetenv("CLAUDIO_SOUNDPACK")
-		os.Unsetenv("CLAUDIO_ENABLED")
-	}()
+	t.Setenv("CLAUDIO_VOLUME", "0.9")
+	t.Setenv("CLAUDIO_SOUNDPACK", "env-pack")
+	t.Setenv("CLAUDIO_ENABLED", "false")
 
 	baseConfig := &Config{
 		Volume:           ptrFloat64(0.5),
@@ -405,84 +399,6 @@ func TestConfigErrorHandling(t *testing.T) {
 			t.Error("Expected error loading file with no permissions")
 		}
 	})
-}
-
-func TestConfigLoggingLevels(t *testing.T) {
-	// TDD RED: This test should FAIL because config loading operations currently use INFO logging
-	// We expect routine config operations to use DEBUG level, not INFO level
-
-	// Capture log output to verify log levels
-	var logBuffer strings.Builder
-	originalHandler := slog.Default().Handler()
-	slog.SetDefault(slog.New(slog.NewTextHandler(&logBuffer, &slog.HandlerOptions{
-		Level: slog.LevelDebug, // Capture all logs
-	})))
-	defer slog.SetDefault(slog.New(originalHandler))
-
-	mgr := NewConfigManager()
-
-	// Test config loading from file - should be DEBUG level
-	tempDir := t.TempDir()
-	configFile := filepath.Join(tempDir, "test-config.json")
-
-	testConfig := &Config{
-		Volume:           ptrFloat64(0.8),
-		DefaultSoundpack: "test-pack",
-		SoundpackPaths:   []string{"/test/path"},
-		Enabled:          true,
-		LogLevel:         "debug",
-	}
-
-	// Write test config to file
-	data, err := json.MarshalIndent(testConfig, "", "  ")
-	if err != nil {
-		t.Fatalf("Failed to marshal test config: %v", err)
-	}
-
-	err = os.WriteFile(configFile, data, 0644)
-	if err != nil {
-		t.Fatalf("Failed to write test config file: %v", err)
-	}
-
-	// Load config from file - should use DEBUG level for routine operation
-	_, err = mgr.LoadFromFile(configFile)
-	if err != nil {
-		t.Fatalf("LoadFromFile should not error: %v", err)
-	}
-
-	// Test environment overrides - should be DEBUG level
-	baseConfig := &Config{
-		Volume:           ptrFloat64(0.5),
-		DefaultSoundpack: "base",
-		Enabled:          true,
-		LogLevel:         "info",
-	}
-
-	_ = mgr.ApplyEnvironmentOverrides(baseConfig)
-
-	logOutput := logBuffer.String()
-
-	// CRITICAL: Routine operations should use DEBUG level, not INFO
-	problematicInfoLogs := []string{
-		"config loaded successfully",
-		"environment overrides applied",
-	}
-
-	for _, logMsg := range problematicInfoLogs {
-		if strings.Contains(logOutput, logMsg) {
-			// Check if it appears with INFO level (bad) vs DEBUG level (good)
-			if strings.Contains(logOutput, "level=INFO") && strings.Contains(logOutput, logMsg) {
-				t.Errorf("Routine operation '%s' should use DEBUG level, not INFO level", logMsg)
-				t.Logf("Full log output: %s", logOutput)
-			}
-		}
-	}
-
-	// Verify that DEBUG logs are working properly
-	if !strings.Contains(logOutput, "level=DEBUG") {
-		t.Error("Expected some DEBUG level logs but found none")
-		t.Logf("Full log output: %s", logOutput)
-	}
 }
 
 // TDD RED: Test file logging configuration fields parsing

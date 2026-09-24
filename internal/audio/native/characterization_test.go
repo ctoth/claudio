@@ -15,6 +15,7 @@ import (
 	"github.com/hajimehoshi/go-mp3"
 
 	"claudio.click/internal/safeio"
+	"claudio.click/internal/testutil/wavfixture"
 )
 
 // These tests pin what the decoders produce, independent of which library
@@ -53,19 +54,19 @@ func TestCharacterizeWAV(t *testing.T) {
 		name            string
 		tag, depth, chs int
 	}{
-		{"16-bit mono", wavTagPCM, 16, 1},
-		{"16-bit stereo", wavTagPCM, 16, 2},
-		{"8-bit stereo", wavTagPCM, 8, 2},
-		{"24-bit mono", wavTagPCM, 24, 1},
-		{"24-bit stereo", wavTagPCM, 24, 2},
-		{"32-bit mono", wavTagPCM, 32, 1},
-		{"32-bit stereo", wavTagPCM, 32, 2},
-		{"float32 mono", wavTagFloat, 32, 1},
-		{"float32 stereo", wavTagFloat, 32, 2},
+		{"16-bit mono", wavfixture.TagPCM, 16, 1},
+		{"16-bit stereo", wavfixture.TagPCM, 16, 2},
+		{"8-bit stereo", wavfixture.TagPCM, 8, 2},
+		{"24-bit mono", wavfixture.TagPCM, 24, 1},
+		{"24-bit stereo", wavfixture.TagPCM, 24, 2},
+		{"32-bit mono", wavfixture.TagPCM, 32, 1},
+		{"32-bit stereo", wavfixture.TagPCM, 32, 2},
+		{"float32 mono", wavfixture.TagFloat, 32, 1},
+		{"float32 stereo", wavfixture.TagFloat, 32, 2},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			want := sineFrames(1000, tc.chs, 0.8)
-			got, rate, err := decodeAll(t, "tone.wav", buildWAV(tc.tag, tc.depth, 44100, want))
+			want := wavfixture.SineFrames(1000, tc.chs, 0.8)
+			got, rate, err := decodeAll(t, "tone.wav", wavfixture.WAV(tc.tag, tc.depth, 44100, want))
 			if err != nil {
 				t.Fatalf("decode: %v", err)
 			}
@@ -73,7 +74,7 @@ func TestCharacterizeWAV(t *testing.T) {
 				t.Errorf("rate = %d, want 44100", rate)
 			}
 			tolerance := step(tc.depth)
-			if tc.tag == wavTagFloat {
+			if tc.tag == wavfixture.TagFloat {
 				tolerance = 1e-6
 			}
 			assertFrames(t, got, want, tolerance)
@@ -95,8 +96,8 @@ func TestCharacterizeAIFF(t *testing.T) {
 		{"AIFC NONE 16-bit stereo", "AIFC", 16, 2},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			want := sineFrames(1000, tc.chs, 0.8)
-			got, rate, err := decodeAll(t, "tone.aiff", buildAIFF(tc.form, tc.depth, 22050, want))
+			want := wavfixture.SineFrames(1000, tc.chs, 0.8)
+			got, rate, err := decodeAll(t, "tone.aiff", wavfixture.AIFF(tc.form, tc.depth, 22050, want))
 			if err != nil {
 				t.Fatalf("decode: %v", err)
 			}
@@ -110,8 +111,8 @@ func TestCharacterizeAIFF(t *testing.T) {
 
 // Content, not the extension, picks the decoder.
 func TestCharacterizeSniffsContentOverExtension(t *testing.T) {
-	want := sineFrames(100, 2, 0.5)
-	got, _, err := decodeAll(t, "mislabelled.mp3", buildWAV(wavTagPCM, 16, 44100, want))
+	want := wavfixture.SineFrames(100, 2, 0.5)
+	got, _, err := decodeAll(t, "mislabelled.mp3", wavfixture.WAV(wavfixture.TagPCM, 16, 44100, want))
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}
@@ -178,7 +179,7 @@ func TestCharacterizeRejectsCorruptInput(t *testing.T) {
 // A data chunk that claims more bytes than the file holds is rejected as
 // invalid rather than played short.
 func TestCharacterizeTruncatedWAVIsInvalid(t *testing.T) {
-	data := buildWAV(wavTagPCM, 16, 44100, sineFrames(1000, 2, 0.5))
+	data := wavfixture.WAV(wavfixture.TagPCM, 16, 44100, wavfixture.SineFrames(1000, 2, 0.5))
 	data = data[:len(data)-400*4] // drop the last 400 frames
 	if _, _, err := decodeAll(t, "cut.wav", data); !errors.Is(err, ErrInvalidData) {
 		t.Fatalf("truncated WAV: err = %v, want ErrInvalidData", err)

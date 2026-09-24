@@ -18,8 +18,7 @@ func TestSoundTrackingConfig_DefaultValues(t *testing.T) {
 }
 
 func TestApplySoundTrackingEnvironmentOverrides_EnabledTrue(t *testing.T) {
-	os.Setenv("CLAUDIO_SOUND_TRACKING", "true")
-	defer os.Unsetenv("CLAUDIO_SOUND_TRACKING")
+	t.Setenv("CLAUDIO_SOUND_TRACKING", "true")
 
 	config := &SoundTrackingConfig{
 		Enabled:      false,
@@ -34,8 +33,7 @@ func TestApplySoundTrackingEnvironmentOverrides_EnabledTrue(t *testing.T) {
 }
 
 func TestApplySoundTrackingEnvironmentOverrides_EnabledFalse(t *testing.T) {
-	os.Setenv("CLAUDIO_SOUND_TRACKING", "false")
-	defer os.Unsetenv("CLAUDIO_SOUND_TRACKING")
+	t.Setenv("CLAUDIO_SOUND_TRACKING", "false")
 
 	config := &SoundTrackingConfig{
 		Enabled:      true,
@@ -50,8 +48,7 @@ func TestApplySoundTrackingEnvironmentOverrides_EnabledFalse(t *testing.T) {
 }
 
 func TestApplySoundTrackingEnvironmentOverrides_Enabled1(t *testing.T) {
-	os.Setenv("CLAUDIO_SOUND_TRACKING", "1")
-	defer os.Unsetenv("CLAUDIO_SOUND_TRACKING")
+	t.Setenv("CLAUDIO_SOUND_TRACKING", "1")
 
 	config := &SoundTrackingConfig{
 		Enabled:      false,
@@ -66,8 +63,7 @@ func TestApplySoundTrackingEnvironmentOverrides_Enabled1(t *testing.T) {
 }
 
 func TestApplySoundTrackingEnvironmentOverrides_Enabled0(t *testing.T) {
-	os.Setenv("CLAUDIO_SOUND_TRACKING", "0")
-	defer os.Unsetenv("CLAUDIO_SOUND_TRACKING")
+	t.Setenv("CLAUDIO_SOUND_TRACKING", "0")
 
 	config := &SoundTrackingConfig{
 		Enabled:      true,
@@ -82,8 +78,7 @@ func TestApplySoundTrackingEnvironmentOverrides_Enabled0(t *testing.T) {
 }
 
 func TestApplySoundTrackingEnvironmentOverrides_InvalidValue(t *testing.T) {
-	os.Setenv("CLAUDIO_SOUND_TRACKING", "maybe")
-	defer os.Unsetenv("CLAUDIO_SOUND_TRACKING")
+	t.Setenv("CLAUDIO_SOUND_TRACKING", "maybe")
 
 	config := &SoundTrackingConfig{
 		Enabled:      true,
@@ -99,8 +94,7 @@ func TestApplySoundTrackingEnvironmentOverrides_InvalidValue(t *testing.T) {
 }
 
 func TestApplySoundTrackingEnvironmentOverrides_EmptyValue(t *testing.T) {
-	os.Setenv("CLAUDIO_SOUND_TRACKING", "")
-	defer os.Unsetenv("CLAUDIO_SOUND_TRACKING")
+	t.Setenv("CLAUDIO_SOUND_TRACKING", "")
 
 	config := &SoundTrackingConfig{
 		Enabled:      true,
@@ -117,6 +111,7 @@ func TestApplySoundTrackingEnvironmentOverrides_EmptyValue(t *testing.T) {
 
 func TestApplySoundTrackingEnvironmentOverrides_NoEnvironmentVariable(t *testing.T) {
 	// Ensure the environment variable is not set
+	t.Setenv("CLAUDIO_SOUND_TRACKING", "")
 	os.Unsetenv("CLAUDIO_SOUND_TRACKING")
 
 	config := &SoundTrackingConfig{
@@ -152,8 +147,7 @@ func TestConfigWithSoundTracking_Integration(t *testing.T) {
 }
 
 func TestApplyEnvironmentOverrides_IncludesSoundTracking(t *testing.T) {
-	os.Setenv("CLAUDIO_SOUND_TRACKING", "false")
-	defer os.Unsetenv("CLAUDIO_SOUND_TRACKING")
+	t.Setenv("CLAUDIO_SOUND_TRACKING", "false")
 
 	cm := NewConfigManager()
 	config := cm.GetDefaultConfig()

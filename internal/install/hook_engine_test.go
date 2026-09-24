@@ -74,3 +74,149 @@ func TestClaudioHookNamesIsSortedAndIgnoresUserHooks(t *testing.T) {
 		}
 	}
 }
+
+func TestIsClaudioHookFormats(t *testing.T) {
+	if !IsClaudioHook("/usr/local/bin/claudio") {
+		t.Error("expected string claudio command recognized")
+	}
+	if !IsClaudioHook(`"/usr/local/bin/claudio.exe"`) {
+		t.Error("expected quoted windows claudio recognized")
+	}
+	if !IsClaudioHook(`/usr/local/bin/claudio --hook-agent gemini`) {
+		t.Error("expected claudio command with arguments recognized")
+	}
+	if !IsClaudioHook(`"C:\Program Files\claudio.exe" --hook-agent gemini`) {
+		t.Error("expected quoted claudio command with arguments recognized")
+	}
+	if IsClaudioHook("/usr/bin/other") {
+		t.Error("non-claudio command must not be recognized")
+	}
+	arr := []interface{}{
+		map[string]interface{}{
+			"hooks": []interface{}{
+				map[string]interface{}{"command": "/opt/claudio"},
+			},
+		},
+	}
+	if !IsClaudioHook(arr) {
+		t.Error("expected array-format claudio recognized")
+	}
+}
+
+func TestIsClaudioHookFindsClaudioInMergedHookArrays(t *testing.T) {
+	cases := []struct {
+		name string
+		arr  []interface{}
+	}{
+		{
+			name: "claudio after existing hook",
+			arr: []interface{}{
+				map[string]interface{}{
+					"matcher": ".*",
+					"hooks": []interface{}{
+						map[string]interface{}{"command": "/usr/bin/logger"},
+					},
+				},
+				map[string]interface{}{
+					"matcher": "*",
+					"hooks": []interface{}{
+						map[string]interface{}{"command": "/usr/local/bin/claudio"},
+					},
+				},
+			},
+		},
+		{
+			name: "claudio before existing hook",
+			arr: []interface{}{
+				map[string]interface{}{
+					"matcher": "*",
+					"hooks": []interface{}{
+						map[string]interface{}{"command": `C:\tools\claudio.exe`},
+					},
+				},
+				map[string]interface{}{
+					"matcher": ".*",
+					"hooks": []interface{}{
+						map[string]interface{}{"command": "/usr/bin/logger"},
+					},
+				},
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if !IsClaudioHook(tc.arr) {
+				t.Error("expected merged hook array to be recognized when any entry is claudio")
+			}
+		})
+	}
+}
+
+func TestHookCommandQuotingAndRecognitionBranches(t *testing.T) {
+	if got := mustSpec(t, AgentClaude).hookCommand("/usr/local/bin/claudio", "PreToolUse"); got != "/usr/local/bin/claudio" {
+		t.Errorf("claude hook command = %q", got)
+	}
+	if got := mustSpec(t, AgentGemini).hookCommand(`/opt/Claudio Tools/claudio`, "PreToolUse"); got != `"/opt/Claudio Tools/claudio" --hook-agent gemini` {
+		t.Errorf("gemini hook command = %q", got)
+	}
+	if got := mustSpec(t, AgentQwen).hookCommand(`/opt/cla"udio`, "PreToolUse"); got != `"/opt/cla\"udio" --hook-agent qwen` {
+		t.Errorf("qwen hook command = %q", got)
+	}
+	if got := quoteCommandArg("plain"); got != "plain" {
+		t.Errorf("plain arg quoted as %q", got)
+	}
+
+	if IsClaudioCommandString("") {
+		t.Error("empty command must not be recognized as claudio")
+	}
+	if IsClaudioCommandString("/usr/bin/other --flag") {
+		t.Error("other command must not be recognized as claudio")
+	}
+	if !IsClaudioCommandString(`"/usr/local/bin/claudio" --silent`) {
+		t.Error("quoted executable with arguments should be recognized")
+	}
+	if !IsClaudioCommandString(`'/usr/local/bin/claudio' --silent`) {
+		t.Error("single-quoted executable with arguments should be recognized")
+	}
+	if !IsClaudioCommandString(`C:\Program Files\claudio.exe`) {
+		t.Error("legacy unquoted Windows path with spaces should be recognized")
+	}
+	if IsClaudioCommandString(`"/usr/local/bin/other --silent`) {
+		t.Error("unclosed quoted non-claudio command must not be recognized")
+	}
+
+	if token, ok := leadingCommandToken("  "); ok || token != "" {
+		t.Errorf("blank leading token = %q, %v; want empty false", token, ok)
+	}
+	if token, ok := leadingCommandToken(`"/usr/local/bin/claudio --silent`); !ok || token != `"/usr/local/bin/claudio --silent` {
+		t.Errorf("unclosed quoted leading token = %q, %v", token, ok)
+	}
+}
+
+func TestHookArrayDetectionAdditionalBranches(t *testing.T) {
+	if IsClaudioHook([]interface{}{}) {
+		t.Error("empty hook array must not be recognized")
+	}
+	if IsClaudioHook([]interface{}{"raw", map[string]interface{}{"hooks": []interface{}{}}}) {
+		t.Error("array without claudio command must not be recognized")
+	}
+
+	directCommand := map[string]interface{}{"command": "/opt/claudio"}
+	if !IsClaudioHook([]interface{}{directCommand}) {
+		t.Error("direct command item should be recognized")
+	}
+	noHookArray := map[string]interface{}{"matcher": "*"}
+	if IsClaudioHook([]interface{}{noHookArray}) {
+		t.Error("item without hooks array must not be recognized")
+	}
+	nestedCommand := map[string]interface{}{
+		"hooks": []interface{}{
+			"raw-hook",
+			map[string]interface{}{"command": 42},
+			map[string]interface{}{"command": "/opt/claudio"},
+		},
+	}
+	if !IsClaudioHook([]interface{}{nestedCommand}) {
+		t.Error("nested claudio command should be recognized")
+	}
+}

@@ -31,12 +31,8 @@ func TestEndToEndHookEventProcessing(t *testing.T) {
 	dbPath := filepath.Join(tempDir, "end_to_end.db")
 
 	// Enable tracking with custom database path
-	os.Setenv("CLAUDIO_SOUND_TRACKING", "true")
-	os.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
-	defer func() {
-		os.Unsetenv("CLAUDIO_SOUND_TRACKING")
-		os.Unsetenv("CLAUDIO_SOUND_TRACKING_DB")
-	}()
+	t.Setenv("CLAUDIO_SOUND_TRACKING", "true")
+	t.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
 
 	// Create comprehensive hook event that exercises the full pipeline
 	toolResponse := json.RawMessage(`{
@@ -209,12 +205,8 @@ func TestEndToEndSoundPathTracking(t *testing.T) {
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "sound_paths.db")
 
-	os.Setenv("CLAUDIO_SOUND_TRACKING", "true")
-	os.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
-	defer func() {
-		os.Unsetenv("CLAUDIO_SOUND_TRACKING")
-		os.Unsetenv("CLAUDIO_SOUND_TRACKING_DB")
-	}()
+	t.Setenv("CLAUDIO_SOUND_TRACKING", "true")
+	t.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
 
 	// Test different event types that should generate different sound paths
 	testEvents := []struct {
@@ -328,12 +320,8 @@ func TestEndToEndFallbackLevelRecording(t *testing.T) {
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "fallback_levels.db")
 
-	os.Setenv("CLAUDIO_SOUND_TRACKING", "true")
-	os.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
-	defer func() {
-		os.Unsetenv("CLAUDIO_SOUND_TRACKING")
-		os.Unsetenv("CLAUDIO_SOUND_TRACKING_DB")
-	}()
+	t.Setenv("CLAUDIO_SOUND_TRACKING", "true")
+	t.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
 
 	// Process an event to understand current fallback behavior
 	toolResponse := json.RawMessage(`{"stdout":"Test","stderr":"","interrupted":false}`)
@@ -435,12 +423,8 @@ func TestEndToEndTrackingDisabled(t *testing.T) {
 	dbPath := filepath.Join(tempDir, "should_not_exist.db")
 
 	// Explicitly disable tracking
-	os.Setenv("CLAUDIO_SOUND_TRACKING", "false")
-	os.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
-	defer func() {
-		os.Unsetenv("CLAUDIO_SOUND_TRACKING")
-		os.Unsetenv("CLAUDIO_SOUND_TRACKING_DB")
-	}()
+	t.Setenv("CLAUDIO_SOUND_TRACKING", "false")
+	t.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
 
 	// Process a hook event
 	toolResponse := json.RawMessage(`{"stdout":"Test","stderr":"","interrupted":false}`)

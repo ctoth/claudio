@@ -3,6 +3,8 @@ package native
 import (
 	"encoding/binary"
 	"testing"
+
+	"claudio.click/internal/testutil/wavfixture"
 )
 
 func TestWAVRejectsUnsupportedOrInconsistentFrameLayout(t *testing.T) {
@@ -22,7 +24,7 @@ func TestWAVRejectsUnsupportedOrInconsistentFrameLayout(t *testing.T) {
 					t.Errorf("Decode panicked instead of rejecting header: %v", p)
 				}
 			}()
-			data := buildWAV(wavTagPCM, 16, 44100, sineFrames(2, 2, 0.1))
+			data := wavfixture.WAV(wavfixture.TagPCM, 16, 44100, wavfixture.SineFrames(2, 2, 0.1))
 			binary.LittleEndian.PutUint16(data[20:22], tc.format)
 			binary.LittleEndian.PutUint16(data[22:24], tc.channels)
 			binary.LittleEndian.PutUint16(data[32:34], tc.alignment)

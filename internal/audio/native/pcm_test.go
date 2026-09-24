@@ -9,6 +9,7 @@ import (
 	"math"
 	"testing"
 
+	"claudio.click/internal/testutil/wavfixture"
 	"github.com/gopxl/beep/v2"
 )
 
@@ -100,7 +101,7 @@ func TestPCMReaderStopsOnCancellation(t *testing.T) {
 func TestDecodeSoundRespectsCancelledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	data := buildWAV(wavTagPCM, 16, 44100, sineFrames(10, 2, 0.1))
+	data := wavfixture.WAV(wavfixture.TagPCM, 16, 44100, wavfixture.SineFrames(10, 2, 0.1))
 	if _, err := decodeSound(ctx, "x.wav", bytes.NewReader(data)); !errors.Is(err, context.Canceled) {
 		t.Fatalf("got %v, want context.Canceled", err)
 	}

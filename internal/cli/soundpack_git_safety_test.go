@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"claudio.click/internal/soundpack/gitpack"
+	"claudio.click/internal/testutil/wavfixture"
 )
 
 func TestSoundpackAddRejectsOptionLikeRefBeforeCloning(t *testing.T) {
@@ -94,7 +95,7 @@ func TestSoundpackBranchRefTracksRemoteOnUpdate(t *testing.T) {
 	if _, err := testGit(ctx, repo, "checkout", "-b", "dev"); err != nil {
 		t.Fatal(err)
 	}
-	createDummyWAV(t, filepath.Join(repo, "error", "error.wav"))
+	wavfixture.Write(t, filepath.Join(repo, "error", "error.wav"))
 	commitTestGitRepo(t, repo, "dev sound")
 	if _, err := testGit(ctx, repo, "checkout", defaultBranch); err != nil {
 		t.Fatal(err)
@@ -113,7 +114,7 @@ func TestSoundpackBranchRefTracksRemoteOnUpdate(t *testing.T) {
 	if _, err := testGit(ctx, repo, "checkout", "dev"); err != nil {
 		t.Fatal(err)
 	}
-	createDummyWAV(t, filepath.Join(repo, "interactive", "interactive.wav"))
+	wavfixture.Write(t, filepath.Join(repo, "interactive", "interactive.wav"))
 	commitTestGitRepo(t, repo, "second dev sound")
 
 	stdout.Reset()

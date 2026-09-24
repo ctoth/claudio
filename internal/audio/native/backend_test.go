@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"claudio.click/internal/audio"
+	"claudio.click/internal/testutil/wavfixture"
 )
 
 type testPlayer struct {
@@ -58,7 +59,7 @@ func testBackend() (*Backend, *testOutput) {
 }
 
 func testSource() audio.AudioSource {
-	return audio.NewReaderSource(io.NopCloser(bytes.NewReader(buildWAV(wavTagPCM, 16, 44100, sineFrames(2, 2, 0.1)))), "wav")
+	return audio.NewReaderSource(io.NopCloser(bytes.NewReader(wavfixture.WAV(wavfixture.TagPCM, 16, 44100, wavfixture.SineFrames(2, 2, 0.1)))), "wav")
 }
 func waitPlayer(t *testing.T, o *testOutput) *testPlayer {
 	t.Helper()

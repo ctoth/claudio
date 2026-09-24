@@ -36,6 +36,9 @@ func TestCurrentGitBranchDetachedHeadIsNotAnError(t *testing.T) {
 // createTestRepo makes a one-commit git repository.
 func createTestRepo(t *testing.T) string {
 	t.Helper()
+	if testing.Short() {
+		t.Skip("skipping git test in -short mode")
+	}
 	if err := RequireGit(); err != nil {
 		t.Skipf("git is required: %v", err)
 	}

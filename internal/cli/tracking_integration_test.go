@@ -24,12 +24,8 @@ func TestCLIWithTrackingEnabled(t *testing.T) {
 
 	// Set environment variable to enable tracking with custom database path
 	dbPath := filepath.Join(tempDir, "claudio.db")
-	os.Setenv("CLAUDIO_SOUND_TRACKING", "true")
-	os.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
-	defer func() {
-		os.Unsetenv("CLAUDIO_SOUND_TRACKING")
-		os.Unsetenv("CLAUDIO_SOUND_TRACKING_DB")
-	}()
+	t.Setenv("CLAUDIO_SOUND_TRACKING", "true")
+	t.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
 
 	// Create CLI instance
 	cli := NewCLI()
@@ -104,8 +100,7 @@ func TestCLIWithTrackingDisabled(t *testing.T) {
 	tempDir := t.TempDir()
 
 	// Set environment variable to disable tracking
-	os.Setenv("CLAUDIO_SOUND_TRACKING", "false")
-	defer os.Unsetenv("CLAUDIO_SOUND_TRACKING")
+	t.Setenv("CLAUDIO_SOUND_TRACKING", "false")
 
 	// Create CLI instance
 	cli := NewCLI()
@@ -159,12 +154,8 @@ func TestCLITrackingEnvironmentVariableOverride(t *testing.T) {
 	dbPath := filepath.Join(tempDir, "override.db")
 
 	// Test that environment variable properly overrides default config
-	os.Setenv("CLAUDIO_SOUND_TRACKING", "true")
-	os.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
-	defer func() {
-		os.Unsetenv("CLAUDIO_SOUND_TRACKING")
-		os.Unsetenv("CLAUDIO_SOUND_TRACKING_DB")
-	}()
+	t.Setenv("CLAUDIO_SOUND_TRACKING", "true")
+	t.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
 
 	// Create CLI with default config (tracking should be overridden by env var)
 	cli := NewCLI()
@@ -204,12 +195,8 @@ func TestCLIGracefulDegradationOnDBFailures(t *testing.T) {
 	// Test that CLI continues to work even if database operations fail
 
 	// Set environment to enable tracking but use invalid database path
-	os.Setenv("CLAUDIO_SOUND_TRACKING", "true")
-	os.Setenv("CLAUDIO_SOUND_TRACKING_DB", "/invalid/readonly/path/test.db")
-	defer func() {
-		os.Unsetenv("CLAUDIO_SOUND_TRACKING")
-		os.Unsetenv("CLAUDIO_SOUND_TRACKING_DB")
-	}()
+	t.Setenv("CLAUDIO_SOUND_TRACKING", "true")
+	t.Setenv("CLAUDIO_SOUND_TRACKING_DB", "/invalid/readonly/path/test.db")
 
 	// Create CLI instance
 	cli := NewCLI()
@@ -254,12 +241,8 @@ func TestCLIProperCleanup(t *testing.T) {
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "cleanup.db")
 
-	os.Setenv("CLAUDIO_SOUND_TRACKING", "true")
-	os.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
-	defer func() {
-		os.Unsetenv("CLAUDIO_SOUND_TRACKING")
-		os.Unsetenv("CLAUDIO_SOUND_TRACKING_DB")
-	}()
+	t.Setenv("CLAUDIO_SOUND_TRACKING", "true")
+	t.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
 
 	events := []hooks.HookEvent{
 		{
@@ -329,12 +312,8 @@ func TestSessionIDPropagationToDatabase(t *testing.T) {
 	dbPath := filepath.Join(tempDir, "session_test.db")
 
 	// Enable tracking
-	os.Setenv("CLAUDIO_SOUND_TRACKING", "true")
-	os.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
-	defer func() {
-		os.Unsetenv("CLAUDIO_SOUND_TRACKING")
-		os.Unsetenv("CLAUDIO_SOUND_TRACKING_DB")
-	}()
+	t.Setenv("CLAUDIO_SOUND_TRACKING", "true")
+	t.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
 
 	// Create CLI instance
 	cli := NewCLI()
@@ -394,12 +373,8 @@ func TestMultipleSessionsCreateSeparateEntries(t *testing.T) {
 	dbPath := filepath.Join(tempDir, "multi_session_test.db")
 
 	// Enable tracking
-	os.Setenv("CLAUDIO_SOUND_TRACKING", "true")
-	os.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
-	defer func() {
-		os.Unsetenv("CLAUDIO_SOUND_TRACKING")
-		os.Unsetenv("CLAUDIO_SOUND_TRACKING_DB")
-	}()
+	t.Setenv("CLAUDIO_SOUND_TRACKING", "true")
+	t.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
 
 	// Define different session IDs
 	sessionIDs := []string{"session-a", "session-b", "session-c"}
@@ -480,12 +455,8 @@ func TestPerRequestEventRecorderInitialization(t *testing.T) {
 	dbPath := filepath.Join(tempDir, "per_request_test.db")
 
 	// Enable tracking
-	os.Setenv("CLAUDIO_SOUND_TRACKING", "true")
-	os.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
-	defer func() {
-		os.Unsetenv("CLAUDIO_SOUND_TRACKING")
-		os.Unsetenv("CLAUDIO_SOUND_TRACKING_DB")
-	}()
+	t.Setenv("CLAUDIO_SOUND_TRACKING", "true")
+	t.Setenv("CLAUDIO_SOUND_TRACKING_DB", dbPath)
 
 	// Process two events with different session IDs using separate CLI instances
 	sessions := []struct {
@@ -584,7 +555,9 @@ func TestCLITrackingHonorsConfigFlag(t *testing.T) {
 
 	// Ensure no env override masks the test — we explicitly want to prove
 	// the --config flag is what drove the database path.
+	t.Setenv("CLAUDIO_SOUND_TRACKING", "")
 	os.Unsetenv("CLAUDIO_SOUND_TRACKING")
+	t.Setenv("CLAUDIO_SOUND_TRACKING_DB", "")
 	os.Unsetenv("CLAUDIO_SOUND_TRACKING_DB")
 
 	cli := NewCLI()

@@ -7,19 +7,21 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"claudio.click/internal/testutil/wavfixture"
 )
 
 func TestDirectoryCoverageCountsOnlyResolvableKnownKeys(t *testing.T) {
 	packDir := filepath.Join(t.TempDir(), "pack")
-	createDummyWAV(t, filepath.Join(packDir, "default.aif"))
-	createDummyWAV(t, filepath.Join(packDir, "success", "bash-success.mp3"))
+	wavfixture.Write(t, filepath.Join(packDir, "default.aif"))
+	wavfixture.Write(t, filepath.Join(packDir, "success", "bash-success.mp3"))
 	keys, err := ExtractAllSoundKeys()
 	if err != nil {
 		t.Fatal(err)
 	}
 	// More stray audio files than there are known keys.
 	for i := 0; i < len(keys)+10; i++ {
-		createDummyWAV(t, filepath.Join(packDir, "extra", fmt.Sprintf("stray-%d.wav", i)))
+		wavfixture.Write(t, filepath.Join(packDir, "extra", fmt.Sprintf("stray-%d.wav", i)))
 	}
 
 	result, err := validateDirectorySoundpack(packDir)
@@ -50,7 +52,7 @@ func TestDirectoryCoverageCountsOnlyResolvableKnownKeys(t *testing.T) {
 
 func TestJSONValidateAcceptsAifWithoutFormatWarning(t *testing.T) {
 	dir := t.TempDir()
-	createDummyWAV(t, filepath.Join(dir, "tone.aif"))
+	wavfixture.Write(t, filepath.Join(dir, "tone.aif"))
 	path := writeJSONPack(t, dir, map[string]string{"default.wav": "tone.aif"})
 	result, err := validateJSONSoundpackFile(path)
 	if err != nil {
@@ -63,8 +65,8 @@ func TestJSONValidateAcceptsAifWithoutFormatWarning(t *testing.T) {
 
 func TestCountAudioFilesCountsAif(t *testing.T) {
 	dir := t.TempDir()
-	createDummyWAV(t, filepath.Join(dir, "a.aif"))
-	createDummyWAV(t, filepath.Join(dir, "b.wav"))
+	wavfixture.Write(t, filepath.Join(dir, "a.aif"))
+	wavfixture.Write(t, filepath.Join(dir, "b.wav"))
 	if err := os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("x"), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +77,7 @@ func TestCountAudioFilesCountsAif(t *testing.T) {
 
 func TestJSONCoverageIgnoresUnknownKeys(t *testing.T) {
 	dir := t.TempDir()
-	createDummyWAV(t, filepath.Join(dir, "tone.wav"))
+	wavfixture.Write(t, filepath.Join(dir, "tone.wav"))
 	path := writeJSONPack(t, dir, map[string]string{"default.wav": "tone.wav", "custom/extra.wav": "tone.wav"})
 	keys, err := ExtractAllSoundKeys()
 	if err != nil {

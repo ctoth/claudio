@@ -15,6 +15,7 @@ import (
 	"claudio.click/internal/cli/testenv"
 	"claudio.click/internal/config"
 	"claudio.click/internal/soundpack"
+	"claudio.click/internal/testutil/wavfixture"
 )
 
 func TestSoundpackInit_CreatesValidJSON(t *testing.T) {
@@ -309,7 +310,7 @@ func TestLoadEmbeddedLinuxSoundpackResolvesRelativeMappingsAgainstXDG(t *testing
 		"default-interactive.wav",
 		"default.wav",
 	} {
-		createDummyWAV(t, filepath.Join(basePath, name))
+		wavfixture.Write(t, filepath.Join(basePath, name))
 	}
 
 	mapper, err := loadEmbeddedPlatformSoundpack("embedded:linux.json")
@@ -327,27 +328,14 @@ func TestLoadEmbeddedLinuxSoundpackResolvesRelativeMappingsAgainstXDG(t *testing
 	}
 }
 
-// createDummyWAV creates a minimal non-empty file with .wav extension for testing
-func createDummyWAV(t *testing.T, path string) {
-	t.Helper()
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		t.Fatalf("failed to create directory %s: %v", dir, err)
-	}
-	// Write minimal data - just needs to be non-empty with .wav extension
-	if err := os.WriteFile(path, []byte("RIFF\x00\x00\x00\x00WAVEfmt "), 0644); err != nil {
-		t.Fatalf("failed to create dummy WAV %s: %v", path, err)
-	}
-}
-
 func TestSoundpackValidate_ValidJSON(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create a few dummy WAV files
 	wav1 := filepath.Join(tmpDir, "sounds", "click.wav")
 	wav2 := filepath.Join(tmpDir, "sounds", "beep.wav")
-	createDummyWAV(t, wav1)
-	createDummyWAV(t, wav2)
+	wavfixture.Write(t, wav1)
+	wavfixture.Write(t, wav2)
 
 	// Create a valid JSON soundpack with some mappings pointing to real files
 	spFile := soundpack.JSONSoundpackFile{
@@ -404,7 +392,7 @@ func TestSoundpackValidate_ValidJSON(t *testing.T) {
 func TestSoundpackValidate_RelativeJSONMappings(t *testing.T) {
 	tmpDir := t.TempDir()
 	wavPath := filepath.Join(tmpDir, "sounds", "click.wav")
-	createDummyWAV(t, wavPath)
+	wavfixture.Write(t, wavPath)
 
 	spFile := soundpack.JSONSoundpackFile{
 		Name:        "relative-valid",
@@ -531,7 +519,7 @@ func TestSoundpackValidate_CoverageCalculation(t *testing.T) {
 	wavFiles := make([]string, 10)
 	for i := 0; i < 10; i++ {
 		wavFiles[i] = filepath.Join(tmpDir, "sounds", fmt.Sprintf("sound%d.wav", i))
-		createDummyWAV(t, wavFiles[i])
+		wavfixture.Write(t, wavFiles[i])
 	}
 
 	// Get all keys and fill exactly 10
@@ -594,8 +582,8 @@ func TestSoundpackValidate_DirectorySoundpack(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create directory structure with some audio files
-	createDummyWAV(t, filepath.Join(tmpDir, "mypack", "loading", "loading.wav"))
-	createDummyWAV(t, filepath.Join(tmpDir, "mypack", "success", "success.wav"))
+	wavfixture.Write(t, filepath.Join(tmpDir, "mypack", "loading", "loading.wav"))
+	wavfixture.Write(t, filepath.Join(tmpDir, "mypack", "success", "success.wav"))
 
 	cli := NewCLI()
 	stdout := &bytes.Buffer{}
@@ -627,7 +615,7 @@ func TestSoundpackValidate_DirectorySoundpackRejectsSymlinkedAudio(t *testing.T)
 	}
 
 	outside := filepath.Join(t.TempDir(), "outside.wav")
-	createDummyWAV(t, outside)
+	wavfixture.Write(t, outside)
 	link := filepath.Join(packDir, "default.wav")
 	if err := os.Symlink(outside, link); err != nil {
 		t.Skipf("symlink unsupported on this platform: %v", err)
@@ -648,8 +636,8 @@ func TestSoundpackValidate_DirectorySoundpackSkipsGitMetadata(t *testing.T) {
 	if err := os.MkdirAll(gitObjects, 0755); err != nil {
 		t.Fatalf("failed to create .git dir: %v", err)
 	}
-	createDummyWAV(t, filepath.Join(packDir, "default.wav"))
-	createDummyWAV(t, filepath.Join(gitObjects, "stray.wav"))
+	wavfixture.Write(t, filepath.Join(packDir, "default.wav"))
+	wavfixture.Write(t, filepath.Join(gitObjects, "stray.wav"))
 
 	result, err := validateDirectorySoundpack(packDir)
 	if err != nil {
@@ -829,7 +817,7 @@ func setupInstallTestEnv(t *testing.T) (dataDir, configDir string, cleanup func(
 // createTestJSONSoundpack creates a minimal valid JSON soundpack file in the given directory.
 func createTestJSONSoundpack(t *testing.T, dir, name string) string {
 	t.Helper()
-	createDummyWAV(t, filepath.Join(dir, "tone.wav"))
+	wavfixture.Write(t, filepath.Join(dir, "tone.wav"))
 	spFile := soundpack.JSONSoundpackFile{
 		Name:        name,
 		Description: "Test soundpack for install",
@@ -885,7 +873,7 @@ func TestSoundpackInstall_CopiesDirectoryToDataDir(t *testing.T) {
 
 	// Create a directory soundpack with a dummy loading/loading.wav file
 	srcDir := filepath.Join(t.TempDir(), "test-dir-pack")
-	createDummyWAV(t, filepath.Join(srcDir, "loading", "loading.wav"))
+	wavfixture.Write(t, filepath.Join(srcDir, "loading", "loading.wav"))
 
 	cli := NewCLI()
 	stdout := &bytes.Buffer{}
@@ -1053,7 +1041,7 @@ func TestSoundpackInstallRejectsManifestNameTraversal(t *testing.T) {
 	defer cleanup()
 
 	srcDir := t.TempDir()
-	createDummyWAV(t, filepath.Join(srcDir, "tone.wav"))
+	wavfixture.Write(t, filepath.Join(srcDir, "tone.wav"))
 	manifest := soundpack.JSONSoundpackFile{
 		Name:     "../escaped",
 		Mappings: map[string]string{"default.wav": "tone.wav"},
@@ -1082,7 +1070,7 @@ func TestSoundpackInstallCopiesRelativeAssetsAndHonorsExplicitConfig(t *testing.
 	defer cleanup()
 
 	srcDir := t.TempDir()
-	createDummyWAV(t, filepath.Join(srcDir, "sounds", "tone.wav"))
+	wavfixture.Write(t, filepath.Join(srcDir, "sounds", "tone.wav"))
 	manifest := soundpack.JSONSoundpackFile{
 		Name:     "portable-pack",
 		Mappings: map[string]string{"default.wav": "sounds/tone.wav"},
@@ -1140,7 +1128,7 @@ func TestSoundpackInstallRejectsNonPortableMappingPaths(t *testing.T) {
 	dataDir, _, cleanup := setupInstallTestEnv(t)
 	defer cleanup()
 	outside := filepath.Join(t.TempDir(), "outside.wav")
-	createDummyWAV(t, outside)
+	wavfixture.Write(t, outside)
 
 	for _, tc := range []struct {
 		name    string
@@ -1174,7 +1162,7 @@ func TestSoundpackInstallRejectsDirectoryContainingDestination(t *testing.T) {
 	dataDir, _, cleanup := setupInstallTestEnv(t)
 	defer cleanup()
 	source := filepath.Join(dataDir, "claudio")
-	createDummyWAV(t, filepath.Join(source, "default.wav"))
+	wavfixture.Write(t, filepath.Join(source, "default.wav"))
 
 	cli := NewCLI()
 	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
@@ -1199,7 +1187,7 @@ func TestSoundpackInstallRefusesForeignDestination(t *testing.T) {
 		t.Fatal(err)
 	}
 	srcDir := t.TempDir()
-	createDummyWAV(t, filepath.Join(srcDir, "tone.wav"))
+	wavfixture.Write(t, filepath.Join(srcDir, "tone.wav"))
 	manifest := soundpack.JSONSoundpackFile{Name: "foreign-pack", Mappings: map[string]string{"default.wav": "tone.wav"}}
 	data, _ := json.Marshal(manifest)
 	manifestPath := filepath.Join(srcDir, "pack.json")

@@ -1,9 +1,12 @@
 package install
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/spf13/afero"
 )
 
 func TestParseAgentValid(t *testing.T) {
@@ -191,5 +194,79 @@ func TestAgentBestConfigPathRejectsUnresolvedAgents(t *testing.T) {
 	}
 	if _, err := Agent("bogus").BestConfigPath(ScopeGlobal); err == nil {
 		t.Error("expected invalid agent error")
+	}
+}
+
+func TestFindBestPathReturnsExistingFile(t *testing.T) {
+	dir := t.TempDir()
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chdir(orig) }()
+
+	// Codex project scope: ./.codex/hooks.json
+	if err := afero.NewOsFs().MkdirAll(".codex", 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := afero.WriteFile(afero.NewOsFs(), ".codex/hooks.json", []byte("{}"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := AgentCodex.BestConfigPath("project")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != filepath.Join(".codex", "hooks.json") {
+		t.Errorf("expected existing codex file, got %q", got)
+	}
+
+	// Claude project scope: ./.claude/settings.json
+	if err := afero.NewOsFs().MkdirAll(".claude", 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := afero.WriteFile(afero.NewOsFs(), ".claude/settings.json", []byte("{}"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cgot, err := AgentClaude.BestConfigPath("project")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cgot != filepath.Join(".claude", "settings.json") {
+		t.Errorf("expected existing claude file, got %q", cgot)
+	}
+}
+
+func TestAdditionalBestPathFallbacksAndInvalidScopes(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("HOMEDRIVE", "")
+	t.Setenv("HOMEPATH", "")
+	t.Setenv("COPILOT_HOME", "")
+
+	qwenPath, err := AgentQwen.BestConfigPath("global")
+	if err != nil {
+		t.Fatalf("FindBestQwenPath returned error: %v", err)
+	}
+	if want := filepath.Join(home, ".qwen", "settings.json"); qwenPath != want {
+		t.Errorf("FindBestQwenPath = %q, want %q", qwenPath, want)
+	}
+
+	copilotPath, err := AgentCopilot.BestConfigPath("global")
+	if err != nil {
+		t.Fatalf("FindBestCopilotPath returned error: %v", err)
+	}
+	if want := filepath.Join(home, ".copilot", "settings.json"); copilotPath != want {
+		t.Errorf("FindBestCopilotPath = %q, want %q", copilotPath, want)
+	}
+
+	if _, err := AgentQwen.BestConfigPath("bogus"); err == nil {
+		t.Error("expected invalid Qwen best path scope error")
+	}
+	if _, err := AgentCopilot.BestConfigPath("bogus"); err == nil {
+		t.Error("expected invalid Copilot best path scope error")
 	}
 }

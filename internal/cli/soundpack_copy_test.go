@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"claudio.click/internal/testutil/wavfixture"
 )
 
 func symlinkOrSkip(t *testing.T, target, link string) {
@@ -24,7 +26,7 @@ func TestCopyDirectoryRejectsSymlinkedFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	src := filepath.Join(t.TempDir(), "pack")
-	createDummyWAV(t, filepath.Join(src, "default.wav"))
+	wavfixture.Write(t, filepath.Join(src, "default.wav"))
 	symlinkOrSkip(t, outside, filepath.Join(src, "notes.txt"))
 	dst := filepath.Join(t.TempDir(), "dst")
 
@@ -39,9 +41,9 @@ func TestCopyDirectoryRejectsSymlinkedFile(t *testing.T) {
 
 func TestCopyDirectoryRejectsSymlinkedDirectory(t *testing.T) {
 	outsideDir := t.TempDir()
-	createDummyWAV(t, filepath.Join(outsideDir, "stolen.wav"))
+	wavfixture.Write(t, filepath.Join(outsideDir, "stolen.wav"))
 	src := filepath.Join(t.TempDir(), "pack")
-	createDummyWAV(t, filepath.Join(src, "default.wav"))
+	wavfixture.Write(t, filepath.Join(src, "default.wav"))
 	symlinkOrSkip(t, outsideDir, filepath.Join(src, "success"))
 	dst := filepath.Join(t.TempDir(), "dst")
 
@@ -55,8 +57,8 @@ func TestCopyDirectoryRejectsSymlinkedDirectory(t *testing.T) {
 
 func TestCopyDirectorySkipsGitMetadata(t *testing.T) {
 	src := filepath.Join(t.TempDir(), "pack")
-	createDummyWAV(t, filepath.Join(src, "default.wav"))
-	createDummyWAV(t, filepath.Join(src, ".git", "objects", "stray.wav"))
+	wavfixture.Write(t, filepath.Join(src, "default.wav"))
+	wavfixture.Write(t, filepath.Join(src, ".git", "objects", "stray.wav"))
 	if err := os.WriteFile(filepath.Join(src, ".git", "config"), []byte("[core]"), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +77,7 @@ func TestCopyDirectorySkipsGitMetadata(t *testing.T) {
 
 func TestCopyDirectoryFollowsSymlinkedRoot(t *testing.T) {
 	real := filepath.Join(t.TempDir(), "pack")
-	createDummyWAV(t, filepath.Join(real, "default.wav"))
+	wavfixture.Write(t, filepath.Join(real, "default.wav"))
 	link := filepath.Join(t.TempDir(), "link-pack")
 	symlinkOrSkip(t, real, link)
 	dst := filepath.Join(t.TempDir(), "dst")
@@ -90,7 +92,7 @@ func TestCopyDirectoryFollowsSymlinkedRoot(t *testing.T) {
 
 func TestCopyFileRejectsSymlink(t *testing.T) {
 	outside := filepath.Join(t.TempDir(), "secret.wav")
-	createDummyWAV(t, outside)
+	wavfixture.Write(t, outside)
 	link := filepath.Join(t.TempDir(), "tone.wav")
 	symlinkOrSkip(t, outside, link)
 
@@ -107,7 +109,7 @@ func TestSoundpackInstallDirectoryRejectsSymlink(t *testing.T) {
 		t.Fatal(err)
 	}
 	src := filepath.Join(t.TempDir(), "linked-pack")
-	createDummyWAV(t, filepath.Join(src, "default.wav"))
+	wavfixture.Write(t, filepath.Join(src, "default.wav"))
 	symlinkOrSkip(t, outside, filepath.Join(src, "readme.txt"))
 
 	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
@@ -123,7 +125,7 @@ func TestSoundpackInstallJSONRejectsSymlinkedMappedFile(t *testing.T) {
 	dataDir, _, cleanup := setupInstallTestEnv(t)
 	defer cleanup()
 	outside := filepath.Join(t.TempDir(), "secret.wav")
-	createDummyWAV(t, outside)
+	wavfixture.Write(t, outside)
 	src := filepath.Join(t.TempDir(), "src")
 	symlinkOrSkip(t, outside, filepath.Join(src, "tone.wav"))
 	path := writeJSONPack(t, src, map[string]string{"default.wav": "tone.wav"})

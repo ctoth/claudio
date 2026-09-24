@@ -152,14 +152,8 @@ func TestInstallCommandsOutputMessage(t *testing.T) {
 	defer os.RemoveAll(tmpHome)
 
 	// Set HOME env var for the test
-	originalHome := os.Getenv("HOME")
-	originalUserProfile := os.Getenv("USERPROFILE")
-	os.Setenv("HOME", tmpHome)
-	os.Setenv("USERPROFILE", tmpHome)
-	defer func() {
-		os.Setenv("HOME", originalHome)
-		os.Setenv("USERPROFILE", originalUserProfile)
-	}()
+	t.Setenv("HOME", tmpHome)
+	t.Setenv("USERPROFILE", tmpHome)
 
 	cmd := newInstallCommandsCommand()
 

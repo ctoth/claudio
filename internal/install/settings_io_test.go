@@ -2,6 +2,7 @@ package install
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -416,4 +417,142 @@ func getKeys(m map[string]interface{}) []string {
 		keys = append(keys, k)
 	}
 	return keys
+}
+
+func TestWriteSettingsFileReadOnlyFails(t *testing.T) {
+	ro := afero.NewReadOnlyFs(afero.NewMemMapFs())
+	if err := WriteSettingsFile(ro, "/x/settings.json", &SettingsMap{"a": "b"}); err == nil {
+		t.Error("expected error writing to read-only filesystem")
+	}
+}
+
+func TestGetJSONType(t *testing.T) {
+	cases := map[string]string{
+		"":          "empty",
+		"[1,2]":     "array",
+		`"hi"`:      "string",
+		"null":      "null",
+		"true":      "boolean",
+		"false":     "boolean",
+		"42":        "non-object value",
+		"{\"a\":1}": "object",
+	}
+	for in, want := range cases {
+		if got := getJSONType([]byte(in)); got != want {
+			t.Errorf("getJSONType(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestReadSettingsFileBranches(t *testing.T) {
+	fsys := afero.NewMemMapFs()
+
+	// Missing file -> empty settings, no error
+	s, err := ReadSettingsFile(fsys, "/nope/settings.json")
+	if err != nil || s == nil {
+		t.Fatalf("expected empty settings for missing file, got %v err %v", s, err)
+	}
+
+	// "null" content -> empty settings
+	_ = afero.WriteFile(fsys, "/a.json", []byte("null"), 0644)
+	if s, err := ReadSettingsFile(fsys, "/a.json"); err != nil || s == nil {
+		t.Fatalf("expected empty settings for null content, err %v", err)
+	}
+
+	// whitespace-only -> empty settings
+	_ = afero.WriteFile(fsys, "/ws.json", []byte("   \n"), 0644)
+	if _, err := ReadSettingsFile(fsys, "/ws.json"); err != nil {
+		t.Fatalf("expected nil err for whitespace content, got %v", err)
+	}
+
+	// JSON array (not object) -> error
+	_ = afero.WriteFile(fsys, "/arr.json", []byte("[1,2,3]"), 0644)
+	if _, err := ReadSettingsFile(fsys, "/arr.json"); err == nil {
+		t.Error("expected error for JSON array settings")
+	}
+
+	// malformed JSON -> error
+	_ = afero.WriteFile(fsys, "/bad.json", []byte("{bad"), 0644)
+	if _, err := ReadSettingsFile(fsys, "/bad.json"); err == nil {
+		t.Error("expected error for malformed JSON")
+	}
+}
+
+func TestWriteSettingsFileRoundTrip(t *testing.T) {
+	fsys := afero.NewMemMapFs()
+	path := "/deep/nested/dir/settings.json"
+	in := &SettingsMap{"version": "1.0", "hooks": map[string]interface{}{}}
+	if err := WriteSettingsFile(fsys, path, in); err != nil {
+		t.Fatalf("write failed: %v", err)
+	}
+	out, err := ReadSettingsFile(fsys, path)
+	if err != nil {
+		t.Fatalf("read failed: %v", err)
+	}
+	if (*out)["version"] != "1.0" {
+		t.Errorf("roundtrip lost version, got %v", (*out)["version"])
+	}
+}
+
+func TestWriteSettingsFileMarshalError(t *testing.T) {
+	fsys := afero.NewMemMapFs()
+	settings := &SettingsMap{"bad": make(chan int)}
+	if err := WriteSettingsFile(fsys, "/settings.json", settings); err == nil {
+		t.Error("expected marshal error for unsupported settings value")
+	}
+}
+
+func TestWriteSettingsFilePreservesExistingPermissions(t *testing.T) {
+	fsys := afero.NewMemMapFs()
+	path := "/settings.json"
+	if err := afero.WriteFile(fsys, path, []byte(`{"old":true}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	settings := &SettingsMap{"new": true}
+	if err := WriteSettingsFile(fsys, path, settings); err != nil {
+		t.Fatal(err)
+	}
+	info, err := fsys.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode() & os.ModePerm; got != 0600 {
+		t.Errorf("mode = %v, want 0600", got)
+	}
+}
+
+func TestReadSettingsFilePrimitiveJSONErrors(t *testing.T) {
+	fsys := afero.NewMemMapFs()
+	cases := map[string]string{
+		"/string.json": `"not an object"`,
+		"/number.json": "42",
+		"/bool.json":   "true",
+	}
+	for path, content := range cases {
+		if err := afero.WriteFile(fsys, path, []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := ReadSettingsFile(fsys, path); err == nil {
+			t.Errorf("expected primitive JSON error for %s", path)
+		}
+	}
+}
+
+func TestReadSettingsFileReadError(t *testing.T) {
+	fsys := afero.NewMemMapFs()
+	path := "/settings.json"
+	if err := afero.WriteFile(fsys, path, []byte(`{"ok":true}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReadSettingsFile(readErrorFs{Fs: fsys}, path); err == nil {
+		t.Fatal("expected read error")
+	}
+}
+
+type readErrorFs struct {
+	afero.Fs
+}
+
+func (f readErrorFs) Open(name string) (afero.File, error) {
+	return nil, errors.New("injected read error")
 }

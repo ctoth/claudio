@@ -3,44 +3,19 @@ package native
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"errors"
 	"io"
-	"math"
 	"os"
 	"testing"
 	"time"
 
 	"claudio.click/internal/audio"
+	"claudio.click/internal/testutil/wavfixture"
 )
 
 func toneSource(rate, channels, milliseconds int) audio.AudioSource {
-	frames := rate * milliseconds / 1000
-	pcm := make([]byte, frames*channels*2)
-	for i := 0; i < frames; i++ {
-		v := int16(2000 * math.Sin(2*math.Pi*440*float64(i)/float64(rate)))
-		for ch := 0; ch < channels; ch++ {
-			binary.LittleEndian.PutUint16(pcm[(i*channels+ch)*2:], uint16(v))
-		}
-	}
-	var wav bytes.Buffer
-	wav.WriteString("RIFF")
-	_ = binary.Write(&wav, binary.LittleEndian, uint32(36+len(pcm)))
-	wav.WriteString("WAVEfmt ")
-	_ = binary.Write(&wav, binary.LittleEndian, uint32(16))
-	for _, v := range []uint16{1, uint16(channels)} {
-		_ = binary.Write(&wav, binary.LittleEndian, v)
-	}
-	for _, v := range []uint32{uint32(rate), uint32(rate * channels * 2)} {
-		_ = binary.Write(&wav, binary.LittleEndian, v)
-	}
-	for _, v := range []uint16{uint16(channels * 2), 16} {
-		_ = binary.Write(&wav, binary.LittleEndian, v)
-	}
-	wav.WriteString("data")
-	_ = binary.Write(&wav, binary.LittleEndian, uint32(len(pcm)))
-	wav.Write(pcm)
-	return audio.NewReaderSource(io.NopCloser(bytes.NewReader(wav.Bytes())), "wav")
+	data := wavfixture.WAV(wavfixture.TagPCM, 16, rate, wavfixture.ToneFrames(rate, channels, milliseconds, 2000.0/32768))
+	return audio.NewReaderSource(io.NopCloser(bytes.NewReader(data)), "wav")
 }
 
 func waitForDevicePlayback(t *testing.T, b *Backend, done <-chan error) {

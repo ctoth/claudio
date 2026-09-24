@@ -6,13 +6,14 @@ import (
 	"testing"
 
 	"claudio.click/internal/safeio"
+	"claudio.click/internal/testutil/wavfixture"
 )
 
 // Float WAV samples outside [-1, 1] are legal and common after mastering.
 // They must clip to full scale, never wrap around to the opposite sign.
 func TestFloatWAVClipsInsteadOfOverflowing(t *testing.T) {
 	src := [][]float64{{2.0, -3.0}, {1.5, -1.0000001}, {0.5, -0.5}}
-	got, _, err := decodeAll(t, "hot.wav", buildWAV(wavTagFloat, 32, 44100, src))
+	got, _, err := decodeAll(t, "hot.wav", wavfixture.WAV(wavfixture.TagFloat, 32, 44100, src))
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}

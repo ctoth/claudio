@@ -10,6 +10,7 @@ import (
 
 	"claudio.click/internal/config"
 	"claudio.click/internal/soundpack"
+	"claudio.click/internal/testutil/wavfixture"
 	"github.com/spf13/afero"
 )
 
@@ -37,25 +38,25 @@ func TestEverySoundpackUseAcceptsResolvesAtRuntime(t *testing.T) {
 
 	// XDG directory whose manifest name differs from the directory name.
 	metaDir := filepath.Join(packsDir, "dir-name")
-	createDummyWAV(t, filepath.Join(metaDir, "meta.wav"))
+	wavfixture.Write(t, filepath.Join(metaDir, "meta.wav"))
 	writeNamedJSONPack(t, filepath.Join(metaDir, "soundpack.json"), "meta-name", "meta.wav")
 
 	// Loose JSON file directly in the XDG soundpacks directory.
-	createDummyWAV(t, filepath.Join(packsDir, "loose.wav"))
+	wavfixture.Write(t, filepath.Join(packsDir, "loose.wav"))
 	writeNamedJSONPack(t, filepath.Join(packsDir, "loose-file.json"), "loose-pack", "loose.wav")
 
 	// Loose JSON file in the parent claudio data directory.
-	createDummyWAV(t, filepath.Join(dataDir, "claudio", "parent.wav"))
+	wavfixture.Write(t, filepath.Join(dataDir, "claudio", "parent.wav"))
 	writeNamedJSONPack(t, filepath.Join(dataDir, "claudio", "parent-file.json"), "parent-pack", "parent.wav")
 
 	// Plain directory pack in XDG.
-	createDummyWAV(t, filepath.Join(packsDir, "plain-dir", "default.wav"))
+	wavfixture.Write(t, filepath.Join(packsDir, "plain-dir", "default.wav"))
 
 	// Directory and JSON packs referenced from config soundpack_paths.
 	extDir := filepath.Join(t.TempDir(), "ext-dir")
-	createDummyWAV(t, filepath.Join(extDir, "default.wav"))
+	wavfixture.Write(t, filepath.Join(extDir, "default.wav"))
 	extJSONDir := t.TempDir()
-	createDummyWAV(t, filepath.Join(extJSONDir, "ext.wav"))
+	wavfixture.Write(t, filepath.Join(extJSONDir, "ext.wav"))
 	extJSON := filepath.Join(extJSONDir, "ext-file.json")
 	writeNamedJSONPack(t, extJSON, "ext-json", "ext.wav")
 
@@ -121,10 +122,10 @@ func TestEverySoundpackUseAcceptsResolvesAtRuntime(t *testing.T) {
 func TestSoundpackNamePrefersListedPackOverWorkingDirectory(t *testing.T) {
 	dataDir, _, cleanup := setupInstallTestEnv(t)
 	defer cleanup()
-	createDummyWAV(t, filepath.Join(dataDir, "claudio", "soundpacks", "shadowed", "default.wav"))
+	wavfixture.Write(t, filepath.Join(dataDir, "claudio", "soundpacks", "shadowed", "default.wav"))
 
 	cwd := t.TempDir()
-	createDummyWAV(t, filepath.Join(cwd, "shadowed", "default.wav"))
+	wavfixture.Write(t, filepath.Join(cwd, "shadowed", "default.wav"))
 	t.Chdir(cwd)
 
 	cfg := config.NewConfigManager().GetDefaultConfig()
