@@ -55,7 +55,15 @@ func validateMappingValue(value, baseDir string) (resolved string, err error) {
 	// the file isn't there yet, the syntactic check is all we can do;
 	// the missing-file error will surface at load time.
 	if _, statErr := os.Lstat(cleaned); statErr == nil {
-		resolved, evalErr := filepath.EvalSymlinks(cleaned)
+		// EvalSymlinks keeps a relative input relative, so resolve from an
+		// absolute path: a manifest named relative to the working directory
+		// would otherwise compare a relative target against an absolute
+		// root below and be reported as escaping it.
+		absCleaned, absErr := filepath.Abs(cleaned)
+		if absErr != nil {
+			return "", fmt.Errorf("resolving %q: %w", value, absErr)
+		}
+		resolved, evalErr := filepath.EvalSymlinks(absCleaned)
 		if evalErr != nil {
 			return "", fmt.Errorf("evaluating symlinks for %q: %w", value, evalErr)
 		}
@@ -63,9 +71,9 @@ func validateMappingValue(value, baseDir string) (resolved string, err error) {
 		if baseErr != nil {
 			return "", fmt.Errorf("resolving baseDir %q: %w", baseDir, baseErr)
 		}
-		// EvalSymlinks resolves the absolute path of the target, so the
-		// baseDir we compare against must also be absolute for Rel to
-		// produce a meaningful answer.
+		// The target is resolved from an absolute path, so the baseDir we
+		// compare against must also be absolute for Rel to produce a
+		// meaningful answer.
 		realBase, baseEvalErr := filepath.EvalSymlinks(absBase)
 		if baseEvalErr != nil {
 			// baseDir may not exist yet either (rare but possible);

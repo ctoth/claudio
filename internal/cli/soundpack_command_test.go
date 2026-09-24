@@ -468,6 +468,46 @@ func TestSoundpackValidate_MissingFiles(t *testing.T) {
 	}
 }
 
+// TestSoundpackValidate_AbsolutePathExitsNonZero pins issue #85: a JSON
+// pack whose mapping points at an existing file by absolute path must fail
+// validate, because the hook-time loader refuses to load it.
+func TestSoundpackValidate_AbsolutePathExitsNonZero(t *testing.T) {
+	tmpDir := t.TempDir()
+	realFile := filepath.Join(tmpDir, "git-start.wav")
+	wavfixture.Write(t, realFile)
+
+	spFile := soundpack.JSONSoundpackFile{
+		Name: "absolute-pack",
+		Mappings: map[string]string{
+			"loading/git-start.wav": realFile,
+		},
+	}
+	jsonData, err := json.MarshalIndent(spFile, "", "  ")
+	if err != nil {
+		t.Fatalf("failed to marshal JSON: %v", err)
+	}
+	jsonPath := filepath.Join(tmpDir, "pack.json")
+	if err := os.WriteFile(jsonPath, jsonData, 0644); err != nil {
+		t.Fatalf("failed to write JSON: %v", err)
+	}
+
+	cli := NewCLI()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	exitCode := cli.Run([]string{"claudio", "soundpack", "validate", jsonPath}, nil, stdout, stderr)
+
+	if exitCode == 0 {
+		t.Fatalf("expected non-zero exit for absolute mapping, stdout: %s", stdout.String())
+	}
+	output := stdout.String()
+	if !strings.Contains(output, "Unsafe References") || !strings.Contains(output, "absolute paths not allowed") {
+		t.Errorf("expected unsafe absolute-path report, got: %s", output)
+	}
+	if !strings.Contains(output, "0/107") {
+		t.Errorf("absolute mapping must not count as coverage, got: %s", output)
+	}
+}
+
 func TestSoundpackValidate_EmptyMappings(t *testing.T) {
 	tmpDir := t.TempDir()
 
@@ -1116,6 +1156,50 @@ func TestSoundpackInstallCopiesRelativeAssetsAndHonorsExplicitConfig(t *testing.
 	defaultConfig := filepath.Join(configDir, "claudio", "config.json")
 	if _, err := os.Stat(defaultConfig); !os.IsNotExist(err) {
 		t.Fatalf("default config was written despite --config: %v", err)
+	}
+}
+
+// Issue #86: `claudio soundpack install pack.json`, run from the pack's
+// own directory with validation on, must install the pack with its audio
+// and the installed pack must resolve its sounds at hook time.
+func TestSoundpackInstallRelativeManifestPathPlaysInstalledAssets(t *testing.T) {
+	dataDir, _, cleanup := setupInstallTestEnv(t)
+	defer cleanup()
+
+	srcDir := t.TempDir()
+	wavfixture.Write(t, filepath.Join(srcDir, "success", "git-success.wav"))
+	manifest := soundpack.JSONSoundpackFile{
+		Name:     "relative-pack",
+		Mappings: map[string]string{"success/git-success.wav": "success/git-success.wav"},
+	}
+	data, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(srcDir, "pack.json"), data, 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(srcDir)
+
+	cli := NewCLI()
+	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
+	if code := cli.Run([]string{"claudio", "soundpack", "install", "pack.json", "--default"}, nil, stdout, stderr); code != 0 {
+		t.Fatalf("install failed: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+
+	installedDir := filepath.Join(dataDir, "claudio", "soundpacks", "relative-pack")
+	cfg, err := config.NewConfigManager().LoadConfig()
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	cfg.Enabled = false
+	runtimeCLI := NewCLI()
+	if err := runtimeCLI.initializeAudioSystem(cfg); err != nil {
+		t.Fatalf("installed pack did not initialize: %v", err)
+	}
+	resolved, err := runtimeCLI.soundpackResolver.ResolveSound("success/git-success.wav")
+	if err != nil || filepath.Clean(resolved) != filepath.Join(installedDir, "success", "git-success.wav") {
+		t.Fatalf("installed sound resolution: path=%q err=%v", resolved, err)
 	}
 }
 
