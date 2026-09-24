@@ -47,6 +47,11 @@ release tags and current checkout history.
   logged as warnings.
 
 ### Fixed
+- A selected soundpack whose directory cannot be loaded as a pack (for
+  example, one with a broken `soundpack.json`) falls back to looking up
+  sounds only in its own directories. Before, the fallback also searched
+  every other pack in `soundpack_paths`, so it could play another pack's
+  sounds.
 - `soundpack install <pack.json>` copies the audio files the manifest
   references into the installed pack, so an installed JSON pack plays its
   sounds (#86).

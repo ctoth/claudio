@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -36,19 +37,67 @@ func TestHookPlaysNamedDirectoryPackInstalledUnderXDGDataHome(t *testing.T) {
 		}
 	}
 
+	writeUserConfig(t, map[string]any{"default_soundpack": "pack"})
+
+	want := filepath.Join(packDir, "loading", "git-start.wav")
+	if got := playedForGitStatus(t); got != want {
+		t.Errorf("played %q, want %q", got, want)
+	}
+}
+
+// A selected pack whose directory exists but cannot be loaded falls back
+// to plain directory lookup. That lookup must stay inside the selected
+// pack: other soundpack_paths entries are other packs, and their sounds
+// must not stand in for this one's.
+func TestHookFallbackForUnloadablePackIgnoresOtherSoundpackPaths(t *testing.T) {
+	root := testenv.IsolateXDG(t)
+	audiotest.ResetLastFakeBackend()
+
+	packDir := filepath.Join(root, "packs", "pack")
+	wavfixture.Write(t, filepath.Join(packDir, "default.wav"))
+	if err := os.WriteFile(filepath.Join(packDir, "soundpack.json"), []byte("{"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	otherDir := filepath.Join(root, "packs", "other")
+	for _, rel := range []string{"loading/git-start.wav", "default.wav"} {
+		wavfixture.Write(t, filepath.Join(otherDir, rel))
+	}
+
+	writeUserConfig(t, map[string]any{
+		"default_soundpack": "pack",
+		"soundpack_paths":   []string{packDir, otherDir},
+	})
+
+	want := filepath.Join(packDir, "default.wav")
+	if got := playedForGitStatus(t); got != want {
+		t.Errorf("played %q, want the selected pack's %q", got, want)
+	}
+}
+
+// writeUserConfig writes cfg as the XDG user config.json.
+func writeUserConfig(t *testing.T, cfg map[string]any) {
+	t.Helper()
+	data, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
 	configPath := config.UserConfigPath("config.json")
 	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(configPath, []byte(`{"default_soundpack":"pack"}`), 0o644); err != nil {
+	if err := os.WriteFile(configPath, data, 0o644); err != nil {
 		t.Fatal(err)
 	}
+}
 
+// playedForGitStatus runs the PreToolUse `git status` hook and returns the
+// one file it played.
+func playedForGitStatus(t *testing.T) string {
+	t.Helper()
 	stderr := &bytes.Buffer{}
 	if code := NewCLI().Run([]string{"claudio"}, strings.NewReader(preToolUseGitStatus), &bytes.Buffer{}, stderr); code != 0 {
 		t.Fatalf("exit code %d, stderr: %s", code, stderr.String())
 	}
-
 	fake := audiotest.LastFakeBackend()
 	if fake == nil {
 		t.Fatal("fake audio backend was not constructed")
@@ -57,10 +106,7 @@ func TestHookPlaysNamedDirectoryPackInstalledUnderXDGDataHome(t *testing.T) {
 	if len(plays) != 1 {
 		t.Fatalf("expected one Play, got %+v", plays)
 	}
-	want := filepath.Join(packDir, "loading", "git-start.wav")
-	if plays[0].SourcePath != want {
-		t.Errorf("played %q, want %q", plays[0].SourcePath, want)
-	}
+	return plays[0].SourcePath
 }
 
 // Regression for #84's embedded-pack claim: the windows pack maps a key

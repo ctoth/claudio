@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -225,7 +226,9 @@ func resolveSoundpackSource(value string, configPaths []string) string {
 // configuredSoundpackMapper loads cfg.DefaultSoundpack. A path that does
 // not exist is an error, so the caller falls back to the platform pack; a
 // path that exists but cannot be loaded as a pack is searched for by name
-// in the soundpack base directories.
+// in the soundpack base directories, plus the path itself when it is a
+// directory. Other soundpack_paths entries are other packs and are never
+// searched: their sounds must not stand in for this one's.
 func configuredSoundpackMapper(cfg *config.Config) (soundpack.PathMapper, error) {
 	source := resolveSoundpackSource(cfg.DefaultSoundpack, cfg.SoundpackPaths)
 	if isEmbeddedSoundpack(source) {
@@ -237,10 +240,14 @@ func configuredSoundpackMapper(cfg *config.Config) (soundpack.PathMapper, error)
 		return mapper, err
 	}
 
-	if _, err := os.Stat(source); err != nil {
+	info, err := os.Stat(source)
+	if err != nil {
 		return nil, fmt.Errorf("configured soundpack %q: %w", cfg.DefaultSoundpack, err)
 	}
-	basePaths := append(config.SoundpackPaths(cfg.DefaultSoundpack), cfg.SoundpackPaths...)
+	basePaths := config.SoundpackPaths(cfg.DefaultSoundpack)
+	if info.IsDir() && !slices.Contains(basePaths, source) {
+		basePaths = append(basePaths, source)
+	}
 	return soundpack.CreateSoundpackMapperWithBasePaths(cfg.DefaultSoundpack, source, basePaths)
 }
 
