@@ -1,0 +1,220 @@
+{
+  "installed": {
+    "hooks": {
+      "Notification": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio --hook-agent qwen",
+              "name": "claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "PermissionRequest": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio --hook-agent qwen",
+              "name": "claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "PostCompact": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio --hook-agent qwen",
+              "name": "claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "PostToolUse": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio --hook-agent qwen",
+              "name": "claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "PostToolUseFailure": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio --hook-agent qwen",
+              "name": "claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "PreCompact": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio --hook-agent qwen",
+              "name": "claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "PreToolUse": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio --hook-agent qwen",
+              "name": "claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "SessionEnd": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio --hook-agent qwen",
+              "name": "claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "SessionStart": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio --hook-agent qwen",
+              "name": "claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "Stop": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio --hook-agent qwen",
+              "name": "claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "StopFailure": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio --hook-agent qwen",
+              "name": "claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "SubagentStart": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio --hook-agent qwen",
+              "name": "claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "SubagentStop": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio --hook-agent qwen",
+              "name": "claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "TodoCompleted": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio --hook-agent qwen",
+              "name": "claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "TodoCreated": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio --hook-agent qwen",
+              "name": "claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "UserPromptSubmit": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio --hook-agent qwen",
+              "name": "claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ]
+    },
+    "theme": "dark"
+  },
+  "removed": {
+    "theme": "dark"
+  },
+  "removedNames": [
+    "Notification",
+    "PermissionRequest",
+    "PostCompact",
+    "PostToolUse",
+    "PostToolUseFailure",
+    "PreCompact",
+    "PreToolUse",
+    "SessionEnd",
+    "SessionStart",
+    "Stop",
+    "StopFailure",
+    "SubagentStart",
+    "SubagentStop",
+    "TodoCompleted",
+    "TodoCreated",
+    "UserPromptSubmit"
+  ]
+}

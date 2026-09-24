@@ -1,0 +1,348 @@
+{
+  "installed": {
+    "hooks": {
+      "ConfigChange": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "CwdChanged": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "Elicitation": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "ElicitationResult": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "InstructionsLoaded": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "Notification": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "PermissionDenied": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "PermissionRequest": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "PostCompact": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "PostToolBatch": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "PostToolUse": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "PostToolUseFailure": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "PreCompact": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "PreToolUse": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "SessionEnd": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "SessionStart": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "Setup": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "Stop": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "StopFailure": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "SubagentStart": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "SubagentStop": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "TaskCompleted": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "TaskCreated": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "TeammateIdle": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "UserPromptExpansion": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "UserPromptSubmit": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "WorktreeCreate": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "WorktreeRemove": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ]
+    },
+    "theme": "dark"
+  },
+  "removed": {
+    "theme": "dark"
+  },
+  "removedNames": [
+    "ConfigChange",
+    "CwdChanged",
+    "Elicitation",
+    "ElicitationResult",
+    "InstructionsLoaded",
+    "Notification",
+    "PermissionDenied",
+    "PermissionRequest",
+    "PostCompact",
+    "PostToolBatch",
+    "PostToolUse",
+    "PostToolUseFailure",
+    "PreCompact",
+    "PreToolUse",
+    "SessionEnd",
+    "SessionStart",
+    "Setup",
+    "Stop",
+    "StopFailure",
+    "SubagentStart",
+    "SubagentStop",
+    "TaskCompleted",
+    "TaskCreated",
+    "TeammateIdle",
+    "UserPromptExpansion",
+    "UserPromptSubmit",
+    "WorktreeCreate",
+    "WorktreeRemove"
+  ]
+}

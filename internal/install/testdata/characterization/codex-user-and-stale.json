@@ -1,0 +1,164 @@
+{
+  "installed": {
+    "hooks": {
+      "PermissionRequest": [
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\"",
+              "commandWindows": "\u0026 'C:/Program Files/claudio/claudio.exe'",
+              "type": "command"
+            }
+          ],
+          "matcher": "*"
+        }
+      ],
+      "PostCompact": [
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\"",
+              "commandWindows": "\u0026 'C:/Program Files/claudio/claudio.exe'",
+              "type": "command"
+            }
+          ],
+          "matcher": "*"
+        }
+      ],
+      "PostToolUse": [
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\"",
+              "commandWindows": "\u0026 'C:/Program Files/claudio/claudio.exe'",
+              "type": "command"
+            }
+          ],
+          "matcher": "*"
+        }
+      ],
+      "PreCompact": [
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\"",
+              "commandWindows": "\u0026 'C:/Program Files/claudio/claudio.exe'",
+              "type": "command"
+            }
+          ],
+          "matcher": "*"
+        }
+      ],
+      "PreToolUse": [
+        {
+          "hooks": [
+            {
+              "command": "echo user",
+              "type": "command"
+            }
+          ],
+          "matcher": "Bash"
+        },
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\"",
+              "commandWindows": "\u0026 'C:/Program Files/claudio/claudio.exe'",
+              "type": "command"
+            }
+          ],
+          "matcher": "*"
+        }
+      ],
+      "SessionStart": [
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\"",
+              "commandWindows": "\u0026 'C:/Program Files/claudio/claudio.exe'",
+              "type": "command"
+            }
+          ],
+          "matcher": "*"
+        }
+      ],
+      "Stop": [
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\"",
+              "commandWindows": "\u0026 'C:/Program Files/claudio/claudio.exe'",
+              "type": "command"
+            }
+          ],
+          "matcher": "*"
+        }
+      ],
+      "SubagentStart": [
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\"",
+              "commandWindows": "\u0026 'C:/Program Files/claudio/claudio.exe'",
+              "type": "command"
+            }
+          ],
+          "matcher": "*"
+        }
+      ],
+      "SubagentStop": [
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\"",
+              "commandWindows": "\u0026 'C:/Program Files/claudio/claudio.exe'",
+              "type": "command"
+            }
+          ],
+          "matcher": "*"
+        }
+      ],
+      "UserPromptSubmit": [
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\"",
+              "commandWindows": "\u0026 'C:/Program Files/claudio/claudio.exe'",
+              "type": "command"
+            }
+          ],
+          "matcher": "*"
+        }
+      ]
+    },
+    "theme": "dark"
+  },
+  "removed": {
+    "hooks": {
+      "PreToolUse": [
+        {
+          "hooks": [
+            {
+              "command": "echo user",
+              "type": "command"
+            }
+          ],
+          "matcher": "Bash"
+        }
+      ]
+    },
+    "theme": "dark"
+  },
+  "removedNames": [
+    "PermissionRequest",
+    "PostCompact",
+    "PostToolUse",
+    "PreCompact",
+    "PreToolUse",
+    "SessionStart",
+    "Stop",
+    "SubagentStart",
+    "SubagentStop",
+    "UserPromptSubmit"
+  ]
+}

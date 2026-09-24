@@ -39,7 +39,11 @@ func TestCodexWindowsHookExecutesLiteralPath(t *testing.T) {
 			if err := os.WriteFile(path, contents, 0700); err != nil {
 				t.Fatal(err)
 			}
-			command := GenerateCodexHookSpecs(path)[0].CommandWindows + " /?"
+			specs, err := GenerateHookSpecs(path, AgentCodex)
+			if err != nil {
+				t.Fatal(err)
+			}
+			command := specs[0].CommandWindows + " /?"
 			cmd := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", command)
 			cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 			output, err := cmd.CombinedOutput()

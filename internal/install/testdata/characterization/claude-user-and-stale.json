@@ -1,0 +1,370 @@
+{
+  "installed": {
+    "hooks": {
+      "ConfigChange": [
+        {
+          "hooks": [
+            {
+              "command": "C:/Program Files/claudio/claudio.exe",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "CwdChanged": [
+        {
+          "hooks": [
+            {
+              "command": "C:/Program Files/claudio/claudio.exe",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "Elicitation": [
+        {
+          "hooks": [
+            {
+              "command": "C:/Program Files/claudio/claudio.exe",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "ElicitationResult": [
+        {
+          "hooks": [
+            {
+              "command": "C:/Program Files/claudio/claudio.exe",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "InstructionsLoaded": [
+        {
+          "hooks": [
+            {
+              "command": "C:/Program Files/claudio/claudio.exe",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "Notification": [
+        {
+          "hooks": [
+            {
+              "command": "C:/Program Files/claudio/claudio.exe",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "PermissionDenied": [
+        {
+          "hooks": [
+            {
+              "command": "C:/Program Files/claudio/claudio.exe",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "PermissionRequest": [
+        {
+          "hooks": [
+            {
+              "command": "C:/Program Files/claudio/claudio.exe",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "PostCompact": [
+        {
+          "hooks": [
+            {
+              "command": "C:/Program Files/claudio/claudio.exe",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "PostToolBatch": [
+        {
+          "hooks": [
+            {
+              "command": "C:/Program Files/claudio/claudio.exe",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "PostToolUse": [
+        {
+          "hooks": [
+            {
+              "command": "C:/Program Files/claudio/claudio.exe",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "PostToolUseFailure": [
+        {
+          "hooks": [
+            {
+              "command": "C:/Program Files/claudio/claudio.exe",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "PreCompact": [
+        {
+          "hooks": [
+            {
+              "command": "C:/Program Files/claudio/claudio.exe",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "PreToolUse": [
+        {
+          "hooks": [
+            {
+              "command": "C:/Program Files/claudio/claudio.exe",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "SessionEnd": [
+        {
+          "hooks": [
+            {
+              "command": "C:/Program Files/claudio/claudio.exe",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "SessionStart": [
+        {
+          "hooks": [
+            {
+              "command": "echo user",
+              "type": "command"
+            }
+          ],
+          "matcher": "Bash"
+        },
+        {
+          "hooks": [
+            {
+              "command": "C:/Program Files/claudio/claudio.exe",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "Setup": [
+        {
+          "hooks": [
+            {
+              "command": "C:/Program Files/claudio/claudio.exe",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "Stop": [
+        {
+          "hooks": [
+            {
+              "command": "C:/Program Files/claudio/claudio.exe",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "StopFailure": [
+        {
+          "hooks": [
+            {
+              "command": "C:/Program Files/claudio/claudio.exe",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "SubagentStart": [
+        {
+          "hooks": [
+            {
+              "command": "C:/Program Files/claudio/claudio.exe",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "SubagentStop": [
+        {
+          "hooks": [
+            {
+              "command": "C:/Program Files/claudio/claudio.exe",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "TaskCompleted": [
+        {
+          "hooks": [
+            {
+              "command": "C:/Program Files/claudio/claudio.exe",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "TaskCreated": [
+        {
+          "hooks": [
+            {
+              "command": "C:/Program Files/claudio/claudio.exe",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "TeammateIdle": [
+        {
+          "hooks": [
+            {
+              "command": "C:/Program Files/claudio/claudio.exe",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "UserPromptExpansion": [
+        {
+          "hooks": [
+            {
+              "command": "C:/Program Files/claudio/claudio.exe",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "UserPromptSubmit": [
+        {
+          "hooks": [
+            {
+              "command": "C:/Program Files/claudio/claudio.exe",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "WorktreeCreate": [
+        {
+          "hooks": [
+            {
+              "command": "C:/Program Files/claudio/claudio.exe",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "WorktreeRemove": [
+        {
+          "hooks": [
+            {
+              "command": "C:/Program Files/claudio/claudio.exe",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ]
+    },
+    "theme": "dark"
+  },
+  "removed": {
+    "hooks": {
+      "SessionStart": [
+        {
+          "hooks": [
+            {
+              "command": "echo user",
+              "type": "command"
+            }
+          ],
+          "matcher": "Bash"
+        }
+      ]
+    },
+    "theme": "dark"
+  },
+  "removedNames": [
+    "ConfigChange",
+    "CwdChanged",
+    "Elicitation",
+    "ElicitationResult",
+    "InstructionsLoaded",
+    "Notification",
+    "PermissionDenied",
+    "PermissionRequest",
+    "PostCompact",
+    "PostToolBatch",
+    "PostToolUse",
+    "PostToolUseFailure",
+    "PreCompact",
+    "PreToolUse",
+    "SessionEnd",
+    "SessionStart",
+    "Setup",
+    "Stop",
+    "StopFailure",
+    "SubagentStart",
+    "SubagentStop",
+    "TaskCompleted",
+    "TaskCreated",
+    "TeammateIdle",
+    "UserPromptExpansion",
+    "UserPromptSubmit",
+    "WorktreeCreate",
+    "WorktreeRemove"
+  ]
+}

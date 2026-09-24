@@ -35,9 +35,6 @@ func TestInstallAgentHooksRejectsNonConcreteAgent(t *testing.T) {
 		if _, err := InstallAgentHooks(&SettingsMap{}, agent, "/usr/local/bin/claudio"); err == nil {
 			t.Errorf("InstallAgentHooks(%q) should error", agent)
 		}
-		if _, err := GenerateClaudioHooksForAgent("/usr/local/bin/claudio", agent); err == nil {
-			t.Errorf("GenerateClaudioHooksForAgent(%q) should error", agent)
-		}
 	}
 }
 
@@ -49,9 +46,6 @@ func TestInstallAgentHooksReportsMergeErrors(t *testing.T) {
 }
 
 func TestAgentSpecAccessors(t *testing.T) {
-	if !AgentCodex.UsesCaptainHook() || AgentClaude.UsesCaptainHook() {
-		t.Error("only codex should use captain-hook")
-	}
 	if AgentCodex.TrustHint() == "" || AgentClaude.TrustHint() != "" {
 		t.Error("only codex should have a trust hint")
 	}
@@ -60,5 +54,21 @@ func TestAgentSpecAccessors(t *testing.T) {
 	}
 	if got := Agent("bogus").Registry(); got != nil {
 		t.Errorf("unknown agent registry = %v, want nil", got)
+	}
+}
+
+// TestAgentHooksReportTooDeepSettings pins that settings nested deeper than
+// the JSON decoder accepts are an error, not a panic or a silent loss.
+func TestAgentHooksReportTooDeepSettings(t *testing.T) {
+	var deep any = "leaf"
+	for range 10001 {
+		deep = map[string]any{"x": deep}
+	}
+	settings := SettingsMap{"deep": deep}
+	if _, err := InstallAgentHooks(&settings, AgentClaude, "/usr/local/bin/claudio"); err == nil {
+		t.Error("InstallAgentHooks: expected copy error")
+	}
+	if _, _, err := RemoveAgentHooks(&settings, AgentClaude); err == nil {
+		t.Error("RemoveAgentHooks: expected copy error")
 	}
 }

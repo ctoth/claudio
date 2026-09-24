@@ -1,0 +1,242 @@
+{
+  "installed": {
+    "hooks": {
+      "Notification": [
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent qwen",
+              "name": "claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "PermissionRequest": [
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent qwen",
+              "name": "claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "PostCompact": [
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent qwen",
+              "name": "claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "PostToolUse": [
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent qwen",
+              "name": "claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "PostToolUseFailure": [
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent qwen",
+              "name": "claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "PreCompact": [
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent qwen",
+              "name": "claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "PreToolUse": [
+        {
+          "hooks": [
+            {
+              "command": "echo user",
+              "type": "command"
+            }
+          ],
+          "matcher": "Bash"
+        },
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent qwen",
+              "name": "claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "SessionEnd": [
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent qwen",
+              "name": "claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "SessionStart": [
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent qwen",
+              "name": "claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "Stop": [
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent qwen",
+              "name": "claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "StopFailure": [
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent qwen",
+              "name": "claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "SubagentStart": [
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent qwen",
+              "name": "claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "SubagentStop": [
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent qwen",
+              "name": "claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "TodoCompleted": [
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent qwen",
+              "name": "claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "TodoCreated": [
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent qwen",
+              "name": "claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "UserPromptSubmit": [
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent qwen",
+              "name": "claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ]
+    },
+    "theme": "dark"
+  },
+  "removed": {
+    "hooks": {
+      "PreToolUse": [
+        {
+          "hooks": [
+            {
+              "command": "echo user",
+              "type": "command"
+            }
+          ],
+          "matcher": "Bash"
+        }
+      ]
+    },
+    "theme": "dark"
+  },
+  "removedNames": [
+    "Notification",
+    "PermissionRequest",
+    "PostCompact",
+    "PostToolUse",
+    "PostToolUseFailure",
+    "PreCompact",
+    "PreToolUse",
+    "SessionEnd",
+    "SessionStart",
+    "Stop",
+    "StopFailure",
+    "SubagentStart",
+    "SubagentStop",
+    "TodoCompleted",
+    "TodoCreated",
+    "UserPromptSubmit"
+  ]
+}

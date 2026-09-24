@@ -1,0 +1,144 @@
+{
+  "installed": {
+    "hooks": {
+      "AfterAgent": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio --hook-agent gemini",
+              "name": "claudio",
+              "type": "command"
+            }
+          ]
+        }
+      ],
+      "AfterModel": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio --hook-agent gemini",
+              "name": "claudio",
+              "type": "command"
+            }
+          ]
+        }
+      ],
+      "AfterTool": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio --hook-agent gemini",
+              "name": "claudio",
+              "type": "command"
+            }
+          ]
+        }
+      ],
+      "BeforeAgent": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio --hook-agent gemini",
+              "name": "claudio",
+              "type": "command"
+            }
+          ]
+        }
+      ],
+      "BeforeModel": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio --hook-agent gemini",
+              "name": "claudio",
+              "type": "command"
+            }
+          ]
+        }
+      ],
+      "BeforeTool": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio --hook-agent gemini",
+              "name": "claudio",
+              "type": "command"
+            }
+          ]
+        }
+      ],
+      "BeforeToolSelection": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio --hook-agent gemini",
+              "name": "claudio",
+              "type": "command"
+            }
+          ]
+        }
+      ],
+      "Notification": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio --hook-agent gemini",
+              "name": "claudio",
+              "type": "command"
+            }
+          ]
+        }
+      ],
+      "PreCompress": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio --hook-agent gemini",
+              "name": "claudio",
+              "type": "command"
+            }
+          ]
+        }
+      ],
+      "SessionEnd": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio --hook-agent gemini",
+              "name": "claudio",
+              "type": "command"
+            }
+          ]
+        }
+      ],
+      "SessionStart": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio --hook-agent gemini",
+              "name": "claudio",
+              "type": "command"
+            }
+          ]
+        }
+      ]
+    },
+    "theme": "dark"
+  },
+  "removed": {
+    "theme": "dark"
+  },
+  "removedNames": [
+    "AfterAgent",
+    "AfterModel",
+    "AfterTool",
+    "BeforeAgent",
+    "BeforeModel",
+    "BeforeTool",
+    "BeforeToolSelection",
+    "Notification",
+    "PreCompress",
+    "SessionEnd",
+    "SessionStart"
+  ]
+}

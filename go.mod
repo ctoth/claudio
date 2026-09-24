@@ -6,7 +6,7 @@ toolchain go1.26.6
 
 require (
 	github.com/adrg/xdg v0.5.3
-	github.com/ctoth/captain-hook v0.1.2
+	github.com/ctoth/captain-hook v0.2.0
 	github.com/ebitengine/oto/v3 v3.5.1
 	github.com/go-audio/aiff v1.1.0
 	github.com/gofrs/flock v0.13.0

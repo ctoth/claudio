@@ -240,8 +240,3 @@ func TestAgentEnabledHooksAndNames(t *testing.T) {
 		t.Errorf("copilot hook names mismatch")
 	}
 }
-
-// enabledClaudeHookCount is the number of Claude hooks installed by default.
-func enabledClaudeHookCount() int {
-	return len(expectedClaudeHookNames()) - len(defaultDisabledClaudeHookNames())
-}

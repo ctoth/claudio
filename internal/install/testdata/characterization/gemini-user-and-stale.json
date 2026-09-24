@@ -1,0 +1,166 @@
+{
+  "installed": {
+    "hooks": {
+      "AfterAgent": [
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent gemini",
+              "name": "claudio",
+              "type": "command"
+            }
+          ]
+        }
+      ],
+      "AfterModel": [
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent gemini",
+              "name": "claudio",
+              "type": "command"
+            }
+          ]
+        }
+      ],
+      "AfterTool": [
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent gemini",
+              "name": "claudio",
+              "type": "command"
+            }
+          ]
+        }
+      ],
+      "BeforeAgent": [
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent gemini",
+              "name": "claudio",
+              "type": "command"
+            }
+          ]
+        }
+      ],
+      "BeforeModel": [
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent gemini",
+              "name": "claudio",
+              "type": "command"
+            }
+          ]
+        }
+      ],
+      "BeforeTool": [
+        {
+          "hooks": [
+            {
+              "command": "echo user",
+              "type": "command"
+            }
+          ],
+          "matcher": "Bash"
+        },
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent gemini",
+              "name": "claudio",
+              "type": "command"
+            }
+          ]
+        }
+      ],
+      "BeforeToolSelection": [
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent gemini",
+              "name": "claudio",
+              "type": "command"
+            }
+          ]
+        }
+      ],
+      "Notification": [
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent gemini",
+              "name": "claudio",
+              "type": "command"
+            }
+          ]
+        }
+      ],
+      "PreCompress": [
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent gemini",
+              "name": "claudio",
+              "type": "command"
+            }
+          ]
+        }
+      ],
+      "SessionEnd": [
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent gemini",
+              "name": "claudio",
+              "type": "command"
+            }
+          ]
+        }
+      ],
+      "SessionStart": [
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent gemini",
+              "name": "claudio",
+              "type": "command"
+            }
+          ]
+        }
+      ]
+    },
+    "theme": "dark"
+  },
+  "removed": {
+    "hooks": {
+      "BeforeTool": [
+        {
+          "hooks": [
+            {
+              "command": "echo user",
+              "type": "command"
+            }
+          ],
+          "matcher": "Bash"
+        }
+      ]
+    },
+    "theme": "dark"
+  },
+  "removedNames": [
+    "AfterAgent",
+    "AfterModel",
+    "AfterTool",
+    "BeforeAgent",
+    "BeforeModel",
+    "BeforeTool",
+    "BeforeToolSelection",
+    "Notification",
+    "PreCompress",
+    "SessionEnd",
+    "SessionStart"
+  ]
+}
