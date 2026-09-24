@@ -41,6 +41,10 @@ release tags and current checkout history.
 - hook-logger writes its captures under Claudio's own cache directory.
 - Removed `analyze --soundpack`. It filtered on a field that was never
   recorded, so it could never match.
+- When no sound in a soundpack's fallback chain resolves, the log now has one
+  warning that names the soundpack and lists every file path Claudio
+  checked. Misses on the way to a sound that does resolve are no longer
+  logged as warnings.
 
 ### Fixed
 - `soundpack install <pack.json>` copies the audio files the manifest
