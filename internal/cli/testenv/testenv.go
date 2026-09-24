@@ -16,7 +16,8 @@ import (
 )
 
 // IsolateXDG sets HOME, USERPROFILE, LOCALAPPDATA, XDG_CACHE_HOME,
-// XDG_DATA_HOME, and XDG_CONFIG_HOME to subdirectories under t.TempDir() and calls
+// XDG_DATA_HOME, XDG_CONFIG_HOME, XDG_DATA_DIRS, and XDG_CONFIG_DIRS to
+// subdirectories under t.TempDir() and calls
 // xdg.Reload() so the adrg/xdg library picks up the new values.
 //
 // It also sets CLAUDIO_FILE_LOGGING=false so the lumberjack file
@@ -46,6 +47,11 @@ func IsolateXDG(t *testing.T) string {
 	t.Setenv("XDG_CACHE_HOME", filepath.Join(root, ".cache"))
 	t.Setenv("XDG_DATA_HOME", filepath.Join(root, ".local", "share"))
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, ".config"))
+	// Without these, xdg falls back to the host's system dirs
+	// (/usr/local/share, /etc/xdg, %ProgramData%) and installed soundpacks
+	// or configs there leak into tests.
+	t.Setenv("XDG_DATA_DIRS", filepath.Join(root, "data-dirs"))
+	t.Setenv("XDG_CONFIG_DIRS", filepath.Join(root, "config-dirs"))
 
 	// Disable file logging via env var so the lumberjack file handle
 	// does not block t.TempDir() cleanup on Windows. This applies
