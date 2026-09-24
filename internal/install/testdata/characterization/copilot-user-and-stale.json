@@ -1,0 +1,128 @@
+{
+  "installed": {
+    "hooks": {
+      "ErrorOccurred": [
+        {
+          "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent copilot",
+          "timeoutSec": 30,
+          "type": "command"
+        }
+      ],
+      "Notification": [
+        {
+          "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent copilot",
+          "timeoutSec": 30,
+          "type": "command"
+        }
+      ],
+      "PermissionRequest": [
+        {
+          "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent copilot",
+          "timeoutSec": 30,
+          "type": "command"
+        }
+      ],
+      "PostToolUse": [
+        {
+          "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent copilot",
+          "timeoutSec": 30,
+          "type": "command"
+        }
+      ],
+      "PostToolUseFailure": [
+        {
+          "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent copilot",
+          "timeoutSec": 30,
+          "type": "command"
+        }
+      ],
+      "PreCompact": [
+        {
+          "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent copilot",
+          "timeoutSec": 30,
+          "type": "command"
+        }
+      ],
+      "PreToolUse": [
+        {
+          "command": "echo user",
+          "type": "command"
+        },
+        {
+          "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent copilot",
+          "timeoutSec": 30,
+          "type": "command"
+        }
+      ],
+      "SessionEnd": [
+        {
+          "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent copilot",
+          "timeoutSec": 30,
+          "type": "command"
+        }
+      ],
+      "SessionStart": [
+        {
+          "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent copilot",
+          "timeoutSec": 30,
+          "type": "command"
+        }
+      ],
+      "Stop": [
+        {
+          "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent copilot",
+          "timeoutSec": 30,
+          "type": "command"
+        }
+      ],
+      "SubagentStop": [
+        {
+          "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent copilot",
+          "timeoutSec": 30,
+          "type": "command"
+        }
+      ],
+      "UserPromptSubmit": [
+        {
+          "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent copilot",
+          "timeoutSec": 30,
+          "type": "command"
+        }
+      ],
+      "subagentStart": [
+        {
+          "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent copilot --hook-event subagentStart",
+          "timeoutSec": 30,
+          "type": "command"
+        }
+      ]
+    },
+    "theme": "dark"
+  },
+  "removed": {
+    "hooks": {
+      "PreToolUse": [
+        {
+          "command": "echo user",
+          "type": "command"
+        }
+      ]
+    },
+    "theme": "dark"
+  },
+  "removedNames": [
+    "ErrorOccurred",
+    "Notification",
+    "PermissionRequest",
+    "PostToolUse",
+    "PostToolUseFailure",
+    "PreCompact",
+    "PreToolUse",
+    "SessionEnd",
+    "SessionStart",
+    "Stop",
+    "SubagentStop",
+    "UserPromptSubmit",
+    "subagentStart"
+  ]
+}

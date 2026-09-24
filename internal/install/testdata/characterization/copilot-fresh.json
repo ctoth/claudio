@@ -1,0 +1,116 @@
+{
+  "installed": {
+    "hooks": {
+      "ErrorOccurred": [
+        {
+          "command": "/usr/local/bin/claudio --hook-agent copilot",
+          "timeoutSec": 30,
+          "type": "command"
+        }
+      ],
+      "Notification": [
+        {
+          "command": "/usr/local/bin/claudio --hook-agent copilot",
+          "timeoutSec": 30,
+          "type": "command"
+        }
+      ],
+      "PermissionRequest": [
+        {
+          "command": "/usr/local/bin/claudio --hook-agent copilot",
+          "timeoutSec": 30,
+          "type": "command"
+        }
+      ],
+      "PostToolUse": [
+        {
+          "command": "/usr/local/bin/claudio --hook-agent copilot",
+          "timeoutSec": 30,
+          "type": "command"
+        }
+      ],
+      "PostToolUseFailure": [
+        {
+          "command": "/usr/local/bin/claudio --hook-agent copilot",
+          "timeoutSec": 30,
+          "type": "command"
+        }
+      ],
+      "PreCompact": [
+        {
+          "command": "/usr/local/bin/claudio --hook-agent copilot",
+          "timeoutSec": 30,
+          "type": "command"
+        }
+      ],
+      "PreToolUse": [
+        {
+          "command": "/usr/local/bin/claudio --hook-agent copilot",
+          "timeoutSec": 30,
+          "type": "command"
+        }
+      ],
+      "SessionEnd": [
+        {
+          "command": "/usr/local/bin/claudio --hook-agent copilot",
+          "timeoutSec": 30,
+          "type": "command"
+        }
+      ],
+      "SessionStart": [
+        {
+          "command": "/usr/local/bin/claudio --hook-agent copilot",
+          "timeoutSec": 30,
+          "type": "command"
+        }
+      ],
+      "Stop": [
+        {
+          "command": "/usr/local/bin/claudio --hook-agent copilot",
+          "timeoutSec": 30,
+          "type": "command"
+        }
+      ],
+      "SubagentStop": [
+        {
+          "command": "/usr/local/bin/claudio --hook-agent copilot",
+          "timeoutSec": 30,
+          "type": "command"
+        }
+      ],
+      "UserPromptSubmit": [
+        {
+          "command": "/usr/local/bin/claudio --hook-agent copilot",
+          "timeoutSec": 30,
+          "type": "command"
+        }
+      ],
+      "subagentStart": [
+        {
+          "command": "/usr/local/bin/claudio --hook-agent copilot --hook-event subagentStart",
+          "timeoutSec": 30,
+          "type": "command"
+        }
+      ]
+    },
+    "theme": "dark"
+  },
+  "removed": {
+    "theme": "dark"
+  },
+  "removedNames": [
+    "ErrorOccurred",
+    "Notification",
+    "PermissionRequest",
+    "PostToolUse",
+    "PostToolUseFailure",
+    "PreCompact",
+    "PreToolUse",
+    "SessionEnd",
+    "SessionStart",
+    "Stop",
+    "SubagentStop",
+    "UserPromptSubmit",
+    "subagentStart"
+  ]
+}

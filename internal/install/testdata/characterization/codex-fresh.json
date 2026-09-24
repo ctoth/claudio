@@ -1,0 +1,142 @@
+{
+  "installed": {
+    "hooks": {
+      "PermissionRequest": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "commandWindows": "\u0026 '/usr/local/bin/claudio'",
+              "type": "command"
+            }
+          ],
+          "matcher": "*"
+        }
+      ],
+      "PostCompact": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "commandWindows": "\u0026 '/usr/local/bin/claudio'",
+              "type": "command"
+            }
+          ],
+          "matcher": "*"
+        }
+      ],
+      "PostToolUse": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "commandWindows": "\u0026 '/usr/local/bin/claudio'",
+              "type": "command"
+            }
+          ],
+          "matcher": "*"
+        }
+      ],
+      "PreCompact": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "commandWindows": "\u0026 '/usr/local/bin/claudio'",
+              "type": "command"
+            }
+          ],
+          "matcher": "*"
+        }
+      ],
+      "PreToolUse": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "commandWindows": "\u0026 '/usr/local/bin/claudio'",
+              "type": "command"
+            }
+          ],
+          "matcher": "*"
+        }
+      ],
+      "SessionStart": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "commandWindows": "\u0026 '/usr/local/bin/claudio'",
+              "type": "command"
+            }
+          ],
+          "matcher": "*"
+        }
+      ],
+      "Stop": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "commandWindows": "\u0026 '/usr/local/bin/claudio'",
+              "type": "command"
+            }
+          ],
+          "matcher": "*"
+        }
+      ],
+      "SubagentStart": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "commandWindows": "\u0026 '/usr/local/bin/claudio'",
+              "type": "command"
+            }
+          ],
+          "matcher": "*"
+        }
+      ],
+      "SubagentStop": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "commandWindows": "\u0026 '/usr/local/bin/claudio'",
+              "type": "command"
+            }
+          ],
+          "matcher": "*"
+        }
+      ],
+      "UserPromptSubmit": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "commandWindows": "\u0026 '/usr/local/bin/claudio'",
+              "type": "command"
+            }
+          ],
+          "matcher": "*"
+        }
+      ]
+    },
+    "theme": "dark"
+  },
+  "removed": {
+    "theme": "dark"
+  },
+  "removedNames": [
+    "PermissionRequest",
+    "PostCompact",
+    "PostToolUse",
+    "PreCompact",
+    "PreToolUse",
+    "SessionStart",
+    "Stop",
+    "SubagentStart",
+    "SubagentStop",
+    "UserPromptSubmit"
+  ]
+}
