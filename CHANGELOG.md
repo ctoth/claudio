@@ -15,6 +15,25 @@ release tags and current checkout history.
   commands in mixed groups are preserved, and both portable and
   PowerShell-native commands are written.
 - Claude Code settings and command paths honor `CLAUDE_CONFIG_DIR`.
+- A malformed config file no longer fails hooks: Claudio prints one warning
+  and uses the defaults, and `claudio status` reports the file as
+  "invalid, ignored". Every command applies the same missing/broken-config
+  policy.
+- Failed commands print their error once, without the usage text.
+- The embedded WSL pack is derived from the Windows pack. It gains the 11
+  sounds it was missing and is now named `windows-media-wsl-soundpack`.
+- The sound-tracking database stores event categories by name. Existing
+  rows that use the old integer form still read correctly.
+- WAV and MP3 decode through beep, and MP3 is streamed instead of fully
+  decoded up front.
+- The `fake` audio backend is test-only and is rejected in config.
+- Hook payloads are logged as a length and a hash, never as their text, so
+  prompts and tool output no longer reach the log file.
+- Reinstalling hooks when they are already current makes no backup and
+  leaves the settings file untouched.
+- hook-logger writes its captures under Claudio's own cache directory.
+- Removed `analyze --soundpack`. It filtered on a field that was never
+  recorded, so it could never match.
 
 ### Fixed
 - Read config files on top of the defaults. A partial `config.json` that
@@ -56,6 +75,28 @@ release tags and current checkout history.
   metadata from the matching event.
 - Discover configuration through the injected filesystem.
 - Bound hook-logger input and write its cache files with private permissions.
+- Pass `--` to git and reject soundpack refs that start with `-`, so a URL
+  or ref can no longer be read as a git option. git never prompts for
+  credentials.
+- Reject soundpacks whose JSON mappings point at missing files or escape the
+  pack with `..` or absolute paths, in `soundpack add`, `install` and
+  `validate`.
+- `soundpack use` only accepts names that also load at hook time.
+- Soundpack copies reject symlinks and skip `.git`.
+- Report an error instead of creating a directory literally named `~` when
+  no home directory can be resolved.
+- Reject hook entries of an unknown shape instead of rewriting them as text,
+  and list the project settings path once.
+- `kubectl port-forward` looks for `kubectl-port-forward.wav`, and
+  `docker-compose up` also tries `docker-compose-up.wav`. Hyphenated command
+  names used to be split apart.
+- `volume` and `mute` validate the config before writing it.
+- `analyze` output order is deterministic, query errors are reported, and
+  `analyze missing` with tracking disabled prints a hint and exits 0.
+- Float WAV samples clip instead of overflowing, and 8-bit WAV and AIFC files
+  play.
+- Environment-variable overrides no longer modify the loaded config's shared
+  file-logging settings.
 
 ### Documentation
 - Added a guide for remote audio over SSH.
