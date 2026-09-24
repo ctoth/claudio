@@ -371,7 +371,7 @@ func TestRunUninstallWorkflow(t *testing.T) {
 				t.Errorf("Failed to read settings file: %v", err)
 				return
 			}
-			
+
 			var settingsMap install.SettingsMap
 			err = json.Unmarshal(settingsData, &settingsMap)
 			if err != nil {

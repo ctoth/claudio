@@ -59,13 +59,13 @@ func TestQueryFilter_ApplyTimeFilter(t *testing.T) {
 			filter: QueryFilter{
 				DatePreset: "last-week",
 			},
-			now:       time.Date(2024, 1, 15, 14, 30, 0, 0, time.UTC), // Monday
-			wantStart: time.Date(2024, 1, 8, 0, 0, 0, 0, time.UTC).Unix(),   // Previous Monday  
-			wantEnd:   time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC).Unix(),  // Current Monday (start of today)
+			now:       time.Date(2024, 1, 15, 14, 30, 0, 0, time.UTC),      // Monday
+			wantStart: time.Date(2024, 1, 8, 0, 0, 0, 0, time.UTC).Unix(),  // Previous Monday
+			wantEnd:   time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC).Unix(), // Current Monday (start of today)
 		},
 		{
-			name: "No time filter - should return zero start and current time end",
-			filter: QueryFilter{},
+			name:      "No time filter - should return zero start and current time end",
+			filter:    QueryFilter{},
 			now:       time.Date(2024, 1, 15, 14, 30, 0, 0, time.UTC),
 			wantStart: 0, // No lower bound
 			wantEnd:   time.Date(2024, 1, 15, 14, 30, 0, 0, time.UTC).Unix(),
@@ -90,9 +90,9 @@ func TestQueryFilter_BuildWhereClause(t *testing.T) {
 		wantArgCount int
 	}{
 		{
-			name: "Empty filter",
-			filter: QueryFilter{},
-			wantClause: "",
+			name:         "Empty filter",
+			filter:       QueryFilter{},
+			wantClause:   "",
 			wantArgCount: 0,
 		},
 		{
@@ -100,16 +100,16 @@ func TestQueryFilter_BuildWhereClause(t *testing.T) {
 			filter: QueryFilter{
 				Tool: "bash",
 			},
-			wantClause: "tool_name = ?",
+			wantClause:   "tool_name = ?",
 			wantArgCount: 1,
 		},
 		{
 			name: "Category and tool filter",
 			filter: QueryFilter{
-				Tool:     "git", 
+				Tool:     "git",
 				Category: "success",
 			},
-			wantClause: "tool_name = ? AND JSON_EXTRACT(context, '$.Category') = ?",
+			wantClause:   "tool_name = ? AND JSON_EXTRACT(context, '$.Category') = ?",
 			wantArgCount: 2,
 		},
 		{
@@ -118,7 +118,7 @@ func TestQueryFilter_BuildWhereClause(t *testing.T) {
 				StartTime: timePtr(time.Date(2024, 1, 10, 0, 0, 0, 0, time.UTC)),
 				EndTime:   timePtr(time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)),
 			},
-			wantClause: "timestamp >= ? AND timestamp <= ?",
+			wantClause:   "timestamp >= ? AND timestamp <= ?",
 			wantArgCount: 2,
 		},
 		{
@@ -126,7 +126,7 @@ func TestQueryFilter_BuildWhereClause(t *testing.T) {
 			filter: QueryFilter{
 				SessionID: "test-session-123",
 			},
-			wantClause: "session_id = ?",
+			wantClause:   "session_id = ?",
 			wantArgCount: 1,
 		},
 		{
@@ -138,7 +138,7 @@ func TestQueryFilter_BuildWhereClause(t *testing.T) {
 				Category:  "error",
 				SessionID: "session-456",
 			},
-			wantClause: "timestamp >= ? AND timestamp <= ? AND tool_name = ? AND JSON_EXTRACT(context, '$.Category') = ? AND session_id = ?",
+			wantClause:   "timestamp >= ? AND timestamp <= ? AND tool_name = ? AND JSON_EXTRACT(context, '$.Category') = ? AND session_id = ?",
 			wantArgCount: 5,
 		},
 	}
@@ -171,7 +171,7 @@ func TestParseDatePreset(t *testing.T) {
 			wantError: false,
 		},
 		{
-			name:      "yesterday", 
+			name:      "yesterday",
 			preset:    "yesterday",
 			wantStart: time.Date(2024, 1, 14, 0, 0, 0, 0, time.UTC),
 			wantEnd:   time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC),
@@ -185,7 +185,7 @@ func TestParseDatePreset(t *testing.T) {
 			wantError: false,
 		},
 		{
-			name:      "last-week", 
+			name:      "last-week",
 			preset:    "last-week",
 			wantStart: time.Date(2024, 1, 8, 0, 0, 0, 0, time.UTC),  // Previous Monday
 			wantEnd:   time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC), // Current Monday
@@ -218,7 +218,7 @@ func TestParseDatePreset(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// TDD RED: This function doesn't exist yet
 			gotStart, gotEnd, err := ParseDatePreset(tt.preset, baseTime)
-			
+
 			if tt.wantError {
 				assert.Error(t, err, "Expected error for invalid preset")
 			} else {
@@ -243,7 +243,7 @@ func TestQueryFilter_WithNaturalLanguageDates(t *testing.T) {
 			wantError:   false,
 		},
 		{
-			name:        "last week using natural language", 
+			name:        "last week using natural language",
 			naturalDate: "last week",
 			wantError:   false,
 		},
@@ -254,7 +254,7 @@ func TestQueryFilter_WithNaturalLanguageDates(t *testing.T) {
 		},
 		{
 			name:        "2 weeks ago",
-			naturalDate: "2 weeks ago", 
+			naturalDate: "2 weeks ago",
 			wantError:   false,
 		},
 		{
@@ -268,7 +268,7 @@ func TestQueryFilter_WithNaturalLanguageDates(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// TDD RED: This function doesn't exist yet
 			result, err := ParseNaturalDate(tt.naturalDate)
-			
+
 			if tt.wantError {
 				assert.Error(t, err, "Expected error for invalid natural date")
 			} else {

@@ -15,10 +15,10 @@ func TestCLIUnconfiguredUsePlatformSoundpack(t *testing.T) {
 	testenv.IsolateXDG(t)
 	t.Run("unconfigured CLI should auto-detect and use wsl.json in WSL", func(t *testing.T) {
 		// Test should succeed with embedded WSL soundpack when no file found
-		
+
 		// Create temporary directory to simulate executable location
 		tempDir := t.TempDir()
-		
+
 		// Create wsl.json with test soundpack data
 		wslJsonPath := filepath.Join(tempDir, "wsl.json")
 		wslJsonContent := `{
@@ -31,49 +31,49 @@ func TestCLIUnconfiguredUsePlatformSoundpack(t *testing.T) {
 				"default.wav": "/mnt/c/Windows/Media/Windows Default.wav"
 			}
 		}`
-		
+
 		err := os.WriteFile(wslJsonPath, []byte(wslJsonContent), 0644)
 		if err != nil {
 			t.Fatalf("Failed to create test wsl.json: %v", err)
 		}
-		
+
 		// Create a mock executable in the same directory
 		mockExecutable := filepath.Join(tempDir, "claudio")
 		err = os.WriteFile(mockExecutable, []byte("mock"), 0755)
 		if err != nil {
 			t.Fatalf("Failed to create mock executable: %v", err)
 		}
-		
+
 		// Prepare CLI test input
 		testInput := `{"session_id":"test","transcript_path":"/test","cwd":"/test","hook_event_name":"PostToolUse","tool_name":"Bash","tool_response":{"stdout":"success","stderr":"","interrupted":false}}`
-		
+
 		// Change to temp directory so current working directory check finds wsl.json
 		originalDir, err := os.Getwd()
 		if err != nil {
 			t.Fatalf("Failed to get current directory: %v", err)
 		}
 		defer func() { _ = os.Chdir(originalDir) }()
-		
+
 		err = os.Chdir(tempDir)
 		if err != nil {
 			t.Fatalf("Failed to change to temp directory: %v", err)
 		}
-		
+
 		// Create CLI with no config file - should fall back to platform detection
 		cli := NewCLI()
-		
+
 		// Run CLI - this should now work with platform JSON auto-detection
 		stdin := strings.NewReader(testInput)
 		var stdout, stderr strings.Builder
-		
+
 		exitCode := cli.Run([]string{"claudio", "--silent"}, stdin, &stdout, &stderr)
-		
+
 		// Log the results for debugging
 		t.Logf("Exit code: %d", exitCode)
 		t.Logf("Stdout: %s", stdout.String())
 		t.Logf("Stderr: %s", stderr.String())
 		t.Logf("WSL JSON path: %s", wslJsonPath)
-		
+
 		// With embedded soundpacks, CLI should succeed
 		// Note: We can't verify which soundpack was used by checking stderr because
 		// stderr only shows ERROR-level logs, and the success messages are at INFO level
@@ -85,23 +85,23 @@ func TestCLIUnconfiguredUsePlatformSoundpack(t *testing.T) {
 			t.Log("TDD GREEN: CLI succeeded with embedded soundpack fallback")
 		}
 	})
-	
+
 	t.Run("unconfigured CLI should work without any config files", func(t *testing.T) {
 		// Test that claudio can run in a completely clean environment
 		// This tests the "fresh install" scenario
-		
+
 		testInput := `{"session_id":"test","transcript_path":"/test","cwd":"/test","hook_event_name":"PostToolUse","tool_name":"Echo","tool_response":{"stdout":"hello","stderr":"","interrupted":false}}`
-		
+
 		cli := NewCLI()
 		stdin := strings.NewReader(testInput)
 		var stdout, stderr strings.Builder
-		
+
 		// This should work even without config, using built-in defaults
 		exitCode := cli.Run([]string{"claudio", "--silent"}, stdin, &stdout, &stderr)
-		
+
 		t.Logf("Clean environment test - Exit code: %d", exitCode)
 		t.Logf("Clean environment test - Stderr: %s", stderr.String())
-		
+
 		if exitCode != 0 {
 			t.Error("TDD: CLI should work in clean environment with built-in defaults, even without platform JSON")
 		}
@@ -113,16 +113,16 @@ func TestCLIConfiguredWithPlatformFallback(t *testing.T) {
 	testenv.IsolateXDG(t)
 	t.Run("configured CLI should fallback to platform JSON when configured soundpack missing", func(t *testing.T) {
 		// Test should succeed with embedded WSL soundpack as fallback when configured soundpack missing
-		
+
 		tempDir := t.TempDir()
-		
+
 		// Create config with non-existent soundpack
 		configDir := filepath.Join(tempDir, "config")
 		err := os.MkdirAll(configDir, 0755)
 		if err != nil {
 			t.Fatalf("Failed to create config directory: %v", err)
 		}
-		
+
 		configPath := filepath.Join(configDir, "config.json")
 		configContent := `{
 			"volume": 0.5,
@@ -131,19 +131,19 @@ func TestCLIConfiguredWithPlatformFallback(t *testing.T) {
 			"enabled": true,
 			"log_level": "debug"
 		}`
-		
+
 		err = os.WriteFile(configPath, []byte(configContent), 0644)
 		if err != nil {
 			t.Fatalf("Failed to create config file: %v", err)
 		}
-		
-		// Create platform JSON next to executable 
+
+		// Create platform JSON next to executable
 		execDir := filepath.Join(tempDir, "exec")
 		err = os.MkdirAll(execDir, 0755)
 		if err != nil {
 			t.Fatalf("Failed to create exec directory: %v", err)
 		}
-		
+
 		wslJsonPath := filepath.Join(execDir, "wsl.json")
 		wslJsonContent := `{
 			"name": "fallback-wsl-soundpack",
@@ -151,39 +151,39 @@ func TestCLIConfiguredWithPlatformFallback(t *testing.T) {
 				"success/fallback.wav": "/mnt/c/Windows/Media/chord.wav"
 			}
 		}`
-		
+
 		err = os.WriteFile(wslJsonPath, []byte(wslJsonContent), 0644)
 		if err != nil {
 			t.Fatalf("Failed to create fallback wsl.json: %v", err)
 		}
-		
-		// Change to execDir so current working directory check finds wsl.json  
+
+		// Change to execDir so current working directory check finds wsl.json
 		originalDir, err := os.Getwd()
 		if err != nil {
 			t.Fatalf("Failed to get current directory: %v", err)
 		}
 		defer func() { _ = os.Chdir(originalDir) }()
-		
+
 		err = os.Chdir(execDir)
 		if err != nil {
 			t.Fatalf("Failed to change to exec directory: %v", err)
 		}
-		
+
 		// Test with the config that points to nonexistent soundpack
 		testInput := `{"session_id":"test","transcript_path":"/test","cwd":"/test","hook_event_name":"PostToolUse","tool_name":"Bash","tool_response":{"stdout":"success","stderr":"","interrupted":false}}`
-		
+
 		cli := NewCLI()
 		stdin := strings.NewReader(testInput)
 		var stdout, stderr strings.Builder
-		
+
 		// This should now work with platform JSON fallback
 		exitCode := cli.Run([]string{"claudio", "--config", configPath, "--silent"}, stdin, &stdout, &stderr)
-		
+
 		t.Logf("Configured CLI with fallback test - Exit code: %d", exitCode)
 		t.Logf("Configured CLI with fallback test - Stderr: %s", stderr.String())
-		t.Logf("Config path: %s", configPath) 
+		t.Logf("Config path: %s", configPath)
 		t.Logf("WSL JSON path: %s", wslJsonPath)
-		
+
 		// With embedded soundpacks, CLI should succeed with fallback
 		// Note: We can't verify which soundpack was used by checking stderr because
 		// stderr only shows ERROR-level logs, and the success messages are at INFO level
@@ -195,11 +195,11 @@ func TestCLIConfiguredWithPlatformFallback(t *testing.T) {
 			t.Log("TDD GREEN: CLI succeeded with platform soundpack fallback")
 		}
 	})
-	
+
 	t.Run("configured CLI should prefer configured soundpack over platform JSON", func(t *testing.T) {
 		// Create a valid soundpack directory structure
 		tempDir := t.TempDir()
-		
+
 		// Create a working soundpack directory
 		soundpackDir := filepath.Join(tempDir, "test-soundpack")
 		successDir := filepath.Join(soundpackDir, "success")
@@ -207,14 +207,14 @@ func TestCLIConfiguredWithPlatformFallback(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create soundpack directory: %v", err)
 		}
-		
+
 		// Create a test sound file (empty is fine for this test)
 		testSoundPath := filepath.Join(successDir, "success.wav")
 		err = os.WriteFile(testSoundPath, []byte("fake wav data"), 0644)
 		if err != nil {
 			t.Fatalf("Failed to create test sound file: %v", err)
 		}
-		
+
 		// Create config pointing to the valid soundpack
 		configPath := filepath.Join(tempDir, "config.json")
 		configContent := `{
@@ -224,34 +224,34 @@ func TestCLIConfiguredWithPlatformFallback(t *testing.T) {
 			"enabled": true,
 			"log_level": "debug"
 		}`
-		
+
 		err = os.WriteFile(configPath, []byte(configContent), 0644)
 		if err != nil {
 			t.Fatalf("Failed to create config file: %v", err)
 		}
-		
+
 		// Also create a platform JSON that should NOT be used
 		wslJsonPath := filepath.Join(tempDir, "wsl.json")
 		err = os.WriteFile(wslJsonPath, []byte(`{"name":"should-not-use-this"}`), 0644)
 		if err != nil {
 			t.Fatalf("Failed to create wsl.json: %v", err)
 		}
-		
+
 		testInput := `{"session_id":"test","transcript_path":"/test","cwd":"/test","hook_event_name":"PostToolUse","tool_name":"Bash","tool_response":{"stdout":"success","stderr":"","interrupted":false}}`
-		
+
 		cli := NewCLI()
 		stdin := strings.NewReader(testInput)
 		var stdout, stderr strings.Builder
-		
+
 		exitCode := cli.Run([]string{"claudio", "--config", configPath, "--silent"}, stdin, &stdout, &stderr)
-		
+
 		t.Logf("Configured CLI preference test - Exit code: %d", exitCode)
 		t.Logf("Configured CLI preference test - Stderr: %s", stderr.String())
-		
+
 		if exitCode != 0 {
 			t.Errorf("CLI should succeed with valid configured soundpack, got exit code %d", exitCode)
 		}
-		
+
 		stderrStr := stderr.String()
 		if strings.Contains(stderrStr, "should-not-use-this") {
 			t.Error("CLI should prefer configured soundpack over platform JSON")
@@ -264,22 +264,22 @@ func TestCLIPlatformDetectionIntegration(t *testing.T) {
 	testenv.IsolateXDG(t)
 	t.Run("CLI should integrate platform detection into soundpack resolution", func(t *testing.T) {
 		// This tests that the CLI actually calls the platform detection logic
-		
+
 		// Create a ConfigManager and verify it has platform detection
 		mgr := config.NewConfigManager()
 		if mgr == nil {
 			t.Fatal("ConfigManager should not be nil")
 		}
-		
+
 		// Test current platform detection behavior with updated API
 		// Use real filesystem and current executable directory
 		execDir := getPlatformExecutableDirectoryForTest()
 		platformSoundpack := mgr.GetPlatformSoundpack(execDir)
 		t.Logf("Current platform soundpack detection result: %s", platformSoundpack)
-		
+
 		// This should show current behavior (likely "default" or "linux.json")
 		// When we implement the fixes, this should return path to actual JSON file
-		
+
 		// The CLI initialization should eventually use this information
 		// But currently it's not integrated into the main soundpack resolution flow
 		t.Skip("Platform detection integration into CLI not implemented yet - will implement in GREEN phase")

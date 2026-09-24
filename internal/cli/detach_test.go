@@ -142,7 +142,6 @@ func TestBuildDetachedWorkerArgs_DaemonChildFirst(t *testing.T) {
 	}
 }
 
-
 // TestDetachStdio_PrefersDevNull verifies the happy path attaches all three
 // streams to the same DevNull file. Covers finding #48 by exercising the
 // preferred code path.

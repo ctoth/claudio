@@ -283,7 +283,7 @@ func TestGetSoundUsage(t *testing.T) {
 		},
 		{
 			timestamp:     now - 1800, // 30 minutes ago
-			sessionID:     "session-1", 
+			sessionID:     "session-1",
 			toolName:      "Edit",
 			soundPath:     "success/edit-success.wav",
 			contextJSON:   `{"Category":1,"ToolName":"Edit","IsSuccess":true}`,
@@ -301,7 +301,7 @@ func TestGetSoundUsage(t *testing.T) {
 			timestamp:     oneWeekAgo,
 			sessionID:     "session-old",
 			toolName:      "Git",
-			soundPath:     "success/git-push.wav", 
+			soundPath:     "success/git-push.wav",
 			contextJSON:   `{"Category":1,"ToolName":"Git","IsSuccess":true}`,
 			fallbackLevel: 1,
 		},
@@ -390,7 +390,7 @@ func TestGetUsageSummary(t *testing.T) {
 		},
 		{
 			toolName:      "Bash",
-			soundPath:     "success/tool-complete.wav", 
+			soundPath:     "success/tool-complete.wav",
 			contextJSON:   `{"Category":1,"ToolName":"Bash","IsSuccess":true}`,
 			fallbackLevel: 4, // High fallback to generic sound
 			count:         5,
@@ -538,7 +538,7 @@ func TestGetToolUsageStats(t *testing.T) {
 	}
 }
 
-// TDD RED: Test GetCategoryDistribution function that doesn't exist yet  
+// TDD RED: Test GetCategoryDistribution function that doesn't exist yet
 func TestGetCategoryDistribution(t *testing.T) {
 	// Create temporary directory for test database
 	tempDir := t.TempDir()
@@ -566,7 +566,7 @@ func TestGetCategoryDistribution(t *testing.T) {
 	for _, event := range testEvents {
 		categoryInt := categoryStringToInt(event.category)
 		contextJSON := `{"Category":` + string(rune(categoryInt+48)) + `,"ToolName":"Test"}`
-		
+
 		for i := 0; i < event.count; i++ {
 			_, err = db.Exec(`
 				INSERT INTO hook_events (timestamp, session_id, tool_name, selected_path, chain_type, context)

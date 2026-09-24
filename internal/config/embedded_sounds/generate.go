@@ -105,13 +105,13 @@ func writeWAV(name string, samples []int16) error {
 	w(uint32(36 + dataLen))
 	f.WriteString("WAVE")
 	f.WriteString("fmt ")
-	w(uint32(16))                 // PCM fmt chunk size
-	w(uint16(1))                  // audio format = PCM
-	w(uint16(numChannels))        //
-	w(uint32(sampleRate))         //
-	w(uint32(byteRate))           //
-	w(uint16(blockAlign))         //
-	w(uint16(bitsPerSample))      //
+	w(uint32(16))            // PCM fmt chunk size
+	w(uint16(1))             // audio format = PCM
+	w(uint16(numChannels))   //
+	w(uint32(sampleRate))    //
+	w(uint32(byteRate))      //
+	w(uint16(blockAlign))    //
+	w(uint16(bitsPerSample)) //
 	f.WriteString("data")
 	w(uint32(dataLen))
 	for _, s := range samples {

@@ -3,9 +3,7 @@ package install
 import (
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/spf13/afero"
@@ -63,68 +61,12 @@ func ReadSettingsFile(filesystem afero.Fs, filePath string) (*SettingsMap, error
 }
 
 // BackupSettingsFile copies filePath to filePath+".bak" if filePath
-// exists and parses as JSON. Failure is logged at WARN but not
-// returned — callers proceed with the write regardless. A missing
-// backup is better than a blocked write; a refusal to overwrite a
-// valid .bak with a corrupt source preserves the last-known-good copy.
+// exists and parses as a JSON object. See safeio.BackupJSONFile for the
+// failure policy: errors are logged, never returned (callers proceed
+// with the write regardless), and a corrupt source never overwrites the
+// last-known-good .bak.
 func BackupSettingsFile(filesystem afero.Fs, filePath string) {
-	info, err := filesystem.Stat(filePath)
-	if err != nil {
-		return // no file, no backup needed
-	}
-	data, err := afero.ReadFile(filesystem, filePath)
-	if err != nil {
-		slog.Warn("backup skipped: read failed", "path", filePath, "err", err)
-		return
-	}
-	var probe SettingsMap
-	if err := json.Unmarshal(data, &probe); err != nil {
-		slog.Warn("backup skipped: existing file is not valid JSON, refusing to overwrite .bak",
-			"path", filePath, "err", err)
-		return
-	}
-	// Atomic temp+rename for the .bak write so a crash mid-write cannot
-	// corrupt the recovery file the whole hardening chunk exists to provide.
-	bakPath := filePath + ".bak"
-	bakDir := filepath.Dir(bakPath)
-	mode := info.Mode() & os.ModePerm
-
-	tempFile, err := afero.TempFile(filesystem, bakDir, ".settings-bak-*.tmp")
-	if err != nil {
-		slog.Warn("backup skipped: temp file create failed", "path", bakPath, "err", err)
-		return
-	}
-	tempName := tempFile.Name()
-	cleanupTemp := func() { _ = filesystem.Remove(tempName) }
-
-	if _, err := tempFile.Write(data); err != nil {
-		tempFile.Close()
-		cleanupTemp()
-		slog.Warn("backup skipped: temp write failed", "path", bakPath, "err", err)
-		return
-	}
-	if err := tempFile.Sync(); err != nil {
-		tempFile.Close()
-		cleanupTemp()
-		slog.Warn("backup skipped: temp sync failed", "path", bakPath, "err", err)
-		return
-	}
-	if err := tempFile.Close(); err != nil {
-		cleanupTemp()
-		slog.Warn("backup skipped: temp close failed", "path", bakPath, "err", err)
-		return
-	}
-	if err := filesystem.Chmod(tempName, mode); err != nil {
-		cleanupTemp()
-		slog.Warn("backup skipped: chmod failed", "path", bakPath, "err", err)
-		return
-	}
-	if err := filesystem.Rename(tempName, bakPath); err != nil {
-		cleanupTemp()
-		slog.Warn("backup rename failed", "path", bakPath, "err", err)
-		return
-	}
-	slog.Debug("settings backed up", "from", filePath, "to", bakPath)
+	safeio.BackupJSONFile(filesystem, filePath, &SettingsMap{}, ".settings-bak-*.tmp")
 }
 
 // WriteSettingsFile backs up the existing settings (see BackupSettingsFile)

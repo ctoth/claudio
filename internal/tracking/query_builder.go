@@ -24,10 +24,10 @@ type QueryFilter struct {
 	SessionID string // Filter by specific session
 
 	// Output control
-	Limit   int    // Maximum results (default: 20)
-	Offset  int    // For pagination
-	OrderBy string // Sort field
-	OrderDesc bool // Sort direction
+	Limit     int    // Maximum results (default: 20)
+	Offset    int    // For pagination
+	OrderBy   string // Sort field
+	OrderDesc bool   // Sort direction
 }
 
 // ApplyTimeFilter converts QueryFilter time options to Unix timestamps
@@ -80,12 +80,12 @@ func (q *QueryFilter) BuildWhereClause() (string, []interface{}) {
 	if q.StartTime != nil || q.EndTime != nil || q.Days > 0 || q.DatePreset != "" {
 		// Use ApplyTimeFilter to get the actual timestamps
 		startUnix, endUnix := q.ApplyTimeFilter(time.Now())
-		
+
 		if startUnix > 0 {
 			clauses = append(clauses, "timestamp >= ?")
 			args = append(args, startUnix)
 		}
-		
+
 		clauses = append(clauses, "timestamp <= ?")
 		args = append(args, endUnix)
 	}
@@ -121,9 +121,9 @@ func (q *QueryFilter) BuildWhereClause() (string, []interface{}) {
 	if len(clauses) > 0 {
 		whereClause = strings.Join(clauses, " AND ")
 	}
-	
+
 	slog.Debug("built where clause", "clause", whereClause, "arg_count", len(args))
-	
+
 	return whereClause, args
 }
 
@@ -227,4 +227,3 @@ func categoryStringToInt(category string) int {
 		return 0 // Default to loading
 	}
 }
-
