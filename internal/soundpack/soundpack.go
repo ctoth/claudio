@@ -87,14 +87,23 @@ func NewSoundpackResolver(mapper PathMapper) SoundpackResolver {
 
 // ResolveSound resolves a single sound path using the configured mapper
 func (u *UnifiedSoundpackResolver) ResolveSound(relativePath string) (string, error) {
+	resolved, _, err := u.resolve(relativePath)
+	return resolved, err
+}
+
+// resolve maps relativePath to candidates and returns the first existing
+// regular file, along with every candidate it checked. A miss is logged at
+// Debug: during a fallback walk misses are expected, and the caller owns the
+// one warning for a resolution that fails outright.
+func (u *UnifiedSoundpackResolver) resolve(relativePath string) (string, []string, error) {
 	if relativePath == "" {
-		return "", errors.New("sound path cannot be empty")
+		return "", nil, errors.New("sound path cannot be empty")
 	}
 
 	// Get candidate paths from mapper
 	candidates, err := u.mapper.MapPath(relativePath)
 	if err != nil {
-		return "", fmt.Errorf("path mapping failed: %w", err)
+		return "", nil, fmt.Errorf("path mapping failed: %w", err)
 	}
 
 	// Try each candidate path until we find an existing file
@@ -106,22 +115,19 @@ func (u *UnifiedSoundpackResolver) ResolveSound(relativePath string) (string, er
 				"mapper_type", u.mapper.GetType(),
 				"candidate_index", i)
 
-			return candidate, nil
+			return candidate, candidates, nil
 		}
 	}
 
-	// No candidates found
-	err = &FileNotFoundError{
+	slog.Debug("sound path not resolved",
+		"relative_path", relativePath,
+		"candidates", candidates,
+		"mapper_type", u.mapper.GetType())
+
+	return "", candidates, &FileNotFoundError{
 		SoundPath: relativePath,
 		Paths:     candidates,
 	}
-
-	slog.Warn("sound path not resolved",
-		"relative_path", relativePath,
-		"candidates_checked", len(candidates),
-		"mapper_type", u.mapper.GetType())
-
-	return "", err
 }
 
 // ResolveSoundWithFallback tries multiple sound paths in order until one is
@@ -133,6 +139,10 @@ func (u *UnifiedSoundpackResolver) ResolveSound(relativePath string) (string, er
 // The observer is invoked with exists=true ONLY when the candidate resolved
 // to a physical file present on disk. A mapping miss (ResolveSound returns
 // an error) is reported as exists=false.
+//
+// When every path misses, one WARN record names the soundpack and lists
+// every absolute candidate checked, so a user's log shows where claudio
+// looked.
 func (u *UnifiedSoundpackResolver) ResolveSoundWithFallback(paths []string, opts ...ResolveOption) (string, error) {
 	cfg := buildResolveConfig(opts)
 
@@ -145,10 +155,11 @@ func (u *UnifiedSoundpackResolver) ResolveSoundWithFallback(paths []string, opts
 		"mapper_type", u.mapper.GetType())
 
 	var lastErr error
+	var checked []string
 	for i, path := range paths {
 		sequence := i + 1
 
-		resolved, err := u.ResolveSound(path)
+		resolved, candidates, err := u.resolve(path)
 		if err == nil {
 			if cfg.observer != nil {
 				cfg.observer(path, sequence, true)
@@ -167,12 +178,15 @@ func (u *UnifiedSoundpackResolver) ResolveSoundWithFallback(paths []string, opts
 			cfg.observer(path, sequence, false)
 		}
 
+		checked = append(checked, candidates...)
 		lastErr = err
 	}
 
 	slog.Warn("all fallback paths failed",
+		"soundpack", u.mapper.GetName(),
+		"mapper_type", u.mapper.GetType(),
 		"paths_tried", len(paths),
-		"mapper_type", u.mapper.GetType())
+		"candidates", checked)
 
 	return "", lastErr
 }
