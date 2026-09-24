@@ -128,6 +128,16 @@ type EventContext struct {
 	SoundHint    string        `json:"SoundHint"`
 	FileType     string        `json:"FileType"`
 	Operation    string        `json:"Operation"`
+
+	// Command, Subcommand and Phase are the typed pieces the mapper builds
+	// its command levels from. For tool events Command is the resolved tool
+	// (the shell command for Bash, "mcp" for MCP tools, otherwise the tool
+	// name), Subcommand is the parsed shell subcommand (may contain '-', as
+	// in "port-forward"), and Phase is "start", "success" or "error".
+	// Lifecycle events leave them empty.
+	Command    string `json:"Command,omitempty"`
+	Subcommand string `json:"Subcommand,omitempty"`
+	Phase      string `json:"Phase,omitempty"`
 }
 
 // CommandInfo represents parsed command information from Bash tool input
@@ -246,27 +256,63 @@ func (e *HookEvent) applyCompatibilityAliases(data []byte) error {
 	return nil
 }
 
+// lifecycleEvent is the fixed context a tool-less event maps to.
+type lifecycleEvent struct {
+	category  EventCategory
+	hint      string
+	operation string
+}
+
+// lifecycleEvents maps every tool-less event with a fixed context. Error
+// category events also set HasError. Silent events carry no hint.
+var lifecycleEvents = map[string]lifecycleEvent{
+	"UserPromptSubmit":    {Interactive, "message-sent", "prompt"},
+	"UserPromptExpansion": {Interactive, "prompt-expansion", "prompt-expansion"},
+	"PostToolBatch":       {Success, "tool-batch", "tool-batch"},
+	"Stop":                {Completion, "agent-complete", "stop"},
+	"SubagentStop":        {Completion, "subagent-complete", "subagent-stop"},
+	"SubagentStart":       {Loading, "subagent-start", "subagent-start"},
+	"PostCompact":         {System, "post-compact", "post-compact"},
+	"PreCompact":          {System, "compacting", "compact"},
+	"PreCompress":         {System, "compacting", "compact"},
+	"SessionStart":        {System, "session-start", "session-start"},
+	"PermissionRequest":   {Interactive, "permission-request", "permission-request"},
+	"PermissionDenied":    {Error, "permission-denied", "permission-denied"},
+	"SessionEnd":          {Interactive, "session-end", "session-end"},
+	"BeforeAgent":         {Interactive, "before-agent", "before-agent"},
+	"AfterAgent":          {Completion, "agent-complete", "after-agent"},
+	"StopFailure":         {Error, "stop-failure", "stop-failure"},
+	"ErrorOccurred":       {Error, "error-occurred", "error-occurred"},
+	"Setup":               {System, "setup", "setup"},
+	"TaskCreated":         {Loading, "task-created", "task-created"},
+	"TaskCompleted":       {Completion, "task-completed", "task-completed"},
+	"TeammateIdle":        {Interactive, "teammate-idle", "teammate-idle"},
+	"InstructionsLoaded":  {System, "instructions-loaded", "instructions-loaded"},
+	"ConfigChange":        {System, "config-change", "config-change"},
+	"CwdChanged":          {System, "cwd-changed", "cwd-changed"},
+	"FileChanged":         {System, "file-changed", "file-changed"},
+	"WorktreeCreate":      {System, "worktree-create", "worktree-create"},
+	"WorktreeRemove":      {System, "worktree-remove", "worktree-remove"},
+	"Elicitation":         {Interactive, "elicitation", "elicitation"},
+	"ElicitationResult":   {Interactive, "elicitation-result", "elicitation-result"},
+	"TodoCreated":         {Loading, "todo-created", "todo-created"},
+	"TodoCompleted":       {Completion, "todo-completed", "todo-completed"},
+	"MessageDisplay":      {Silent, "", "message-display"},
+	"BeforeModel":         {Silent, "", "beforemodel"},
+	"AfterModel":          {Silent, "", "aftermodel"},
+	"BeforeToolSelection": {Silent, "", "beforetoolselection"},
+}
+
+// unknownEvent is the context for events claudio does not recognize.
+var unknownEvent = lifecycleEvent{Interactive, "default", "unknown"}
+
 // GetContext extracts actionable context from the hook event for sound mapping
 func (e *HookEvent) GetContext() *EventContext {
 	context := &EventContext{
 		ToolName: normalizeToolName(getStringPtr(e.ToolName)),
 	}
 
-	slog.Debug("extracting event context",
-		"event_name", e.EventName,
-		"tool_name", context.ToolName)
-
 	switch e.EventName {
-	case "UserPromptSubmit":
-		context.Category = Interactive
-		context.SoundHint = "message-sent"
-		context.Operation = "prompt"
-
-	case "UserPromptExpansion":
-		context.Category = Interactive
-		context.SoundHint = "prompt-expansion"
-		context.Operation = "prompt-expansion"
-
 	case "Notification":
 		context.Category = Interactive
 		context.SoundHint = e.detectNotificationType()
@@ -281,191 +327,16 @@ func (e *HookEvent) GetContext() *EventContext {
 	case "PostToolUseFailure":
 		e.populatePostToolContext(context, true)
 
-	case "PostToolBatch":
-		context.Category = Success
-		context.SoundHint = "tool-batch"
-		context.Operation = "tool-batch"
-
-	case "Stop":
-		context.Category = Completion
-		context.SoundHint = "agent-complete"
-		context.Operation = "stop"
-		slog.Debug("categorizing Stop event as Completion", "hint", context.SoundHint, "operation", context.Operation)
-
-	case "SubagentStop":
-		context.Category = Completion
-		context.SoundHint = "subagent-complete"
-		context.Operation = "subagent-stop"
-		slog.Debug("categorizing SubagentStop event as Completion", "hint", context.SoundHint, "operation", context.Operation)
-
-	case "SubagentStart":
-		context.Category = Loading
-		context.SoundHint = "subagent-start"
-		context.Operation = "subagent-start"
-		slog.Debug("categorizing SubagentStart event as Loading", "hint", context.SoundHint, "operation", context.Operation)
-
-	case "PostCompact":
-		context.Category = System
-		context.SoundHint = "post-compact"
-		context.Operation = "post-compact"
-		slog.Debug("categorizing PostCompact event as System", "hint", context.SoundHint, "operation", context.Operation)
-
-	case "PreCompact", "PreCompress":
-		context.Category = System
-		context.SoundHint = "compacting"
-		context.Operation = "compact"
-		slog.Debug("categorizing compaction event as System", "event_name", e.EventName, "hint", context.SoundHint, "operation", context.Operation)
-
-	case "SessionStart":
-		context.Category = System
-		context.SoundHint = "session-start"
-		context.Operation = "session-start"
-		slog.Debug("categorizing SessionStart event as System", "hint", context.SoundHint, "operation", context.Operation)
-
-	case "PermissionRequest":
-		context.Category = Interactive
-		context.SoundHint = "permission-request"
-		context.Operation = "permission-request"
-		slog.Debug("categorizing PermissionRequest event as Interactive", "hint", context.SoundHint, "operation", context.Operation)
-
-	case "PermissionDenied":
-		context.Category = Error
-		context.HasError = true
-		context.SoundHint = "permission-denied"
-		context.Operation = "permission-denied"
-		slog.Debug("categorizing PermissionDenied event as Error", "hint", context.SoundHint, "operation", context.Operation)
-
-	case "SessionEnd":
-		context.Category = Interactive
-		context.SoundHint = "session-end"
-		context.Operation = "session-end"
-		slog.Debug("categorizing SessionEnd event as Interactive", "hint", context.SoundHint, "operation", context.Operation)
-
-	case "BeforeAgent":
-		context.Category = Interactive
-		context.SoundHint = "before-agent"
-		context.Operation = "before-agent"
-		slog.Debug("categorizing BeforeAgent event as Interactive", "hint", context.SoundHint, "operation", context.Operation)
-
-	case "AfterAgent":
-		context.Category = Completion
-		context.SoundHint = "agent-complete"
-		context.Operation = "after-agent"
-		slog.Debug("categorizing AfterAgent event as Completion", "hint", context.SoundHint, "operation", context.Operation)
-
-	case "StopFailure":
-		context.Category = Error
-		context.HasError = true
-		context.SoundHint = "stop-failure"
-		context.Operation = "stop-failure"
-		slog.Debug("categorizing StopFailure event as Error", "hint", context.SoundHint, "operation", context.Operation)
-
-	case "ErrorOccurred":
-		context.Category = Error
-		context.HasError = true
-		context.SoundHint = "error-occurred"
-		context.Operation = "error-occurred"
-		slog.Debug("categorizing ErrorOccurred event as Error", "hint", context.SoundHint, "operation", context.Operation)
-
-	case "Setup":
-		context.Category = System
-		context.SoundHint = "setup"
-		context.Operation = "setup"
-		slog.Debug("categorizing Setup event as System", "hint", context.SoundHint, "operation", context.Operation)
-
-	case "MessageDisplay":
-		context.Category = Silent
-		context.Operation = "message-display"
-		slog.Debug("categorizing MessageDisplay event as Silent")
-
-	case "TaskCreated":
-		context.Category = Loading
-		context.SoundHint = "task-created"
-		context.Operation = "task-created"
-		slog.Debug("categorizing TaskCreated event as Loading", "hint", context.SoundHint, "operation", context.Operation)
-
-	case "TaskCompleted":
-		context.Category = Completion
-		context.SoundHint = "task-completed"
-		context.Operation = "task-completed"
-		slog.Debug("categorizing TaskCompleted event as Completion", "hint", context.SoundHint, "operation", context.Operation)
-
-	case "TeammateIdle":
-		context.Category = Interactive
-		context.SoundHint = "teammate-idle"
-		context.Operation = "teammate-idle"
-		slog.Debug("categorizing TeammateIdle event as Interactive", "hint", context.SoundHint, "operation", context.Operation)
-
-	case "InstructionsLoaded":
-		context.Category = System
-		context.SoundHint = "instructions-loaded"
-		context.Operation = "instructions-loaded"
-		slog.Debug("categorizing InstructionsLoaded event as System", "hint", context.SoundHint, "operation", context.Operation)
-
-	case "ConfigChange":
-		context.Category = System
-		context.SoundHint = "config-change"
-		context.Operation = "config-change"
-		slog.Debug("categorizing ConfigChange event as System", "hint", context.SoundHint, "operation", context.Operation)
-
-	case "CwdChanged":
-		context.Category = System
-		context.SoundHint = "cwd-changed"
-		context.Operation = "cwd-changed"
-		slog.Debug("categorizing CwdChanged event as System", "hint", context.SoundHint, "operation", context.Operation)
-
-	case "FileChanged":
-		context.Category = System
-		context.SoundHint = "file-changed"
-		context.Operation = "file-changed"
-		slog.Debug("categorizing FileChanged event as System", "hint", context.SoundHint, "operation", context.Operation)
-
-	case "WorktreeCreate":
-		context.Category = System
-		context.SoundHint = "worktree-create"
-		context.Operation = "worktree-create"
-		slog.Debug("categorizing WorktreeCreate event as System", "hint", context.SoundHint, "operation", context.Operation)
-
-	case "WorktreeRemove":
-		context.Category = System
-		context.SoundHint = "worktree-remove"
-		context.Operation = "worktree-remove"
-		slog.Debug("categorizing WorktreeRemove event as System", "hint", context.SoundHint, "operation", context.Operation)
-
-	case "Elicitation":
-		context.Category = Interactive
-		context.SoundHint = "elicitation"
-		context.Operation = "elicitation"
-		slog.Debug("categorizing Elicitation event as Interactive", "hint", context.SoundHint, "operation", context.Operation)
-
-	case "ElicitationResult":
-		context.Category = Interactive
-		context.SoundHint = "elicitation-result"
-		context.Operation = "elicitation-result"
-		slog.Debug("categorizing ElicitationResult event as Interactive", "hint", context.SoundHint, "operation", context.Operation)
-
-	case "TodoCreated":
-		context.Category = Loading
-		context.SoundHint = "todo-created"
-		context.Operation = "todo-created"
-		slog.Debug("categorizing TodoCreated event as Loading", "hint", context.SoundHint, "operation", context.Operation)
-
-	case "TodoCompleted":
-		context.Category = Completion
-		context.SoundHint = "todo-completed"
-		context.Operation = "todo-completed"
-		slog.Debug("categorizing TodoCompleted event as Completion", "hint", context.SoundHint, "operation", context.Operation)
-
-	case "BeforeModel", "AfterModel", "BeforeToolSelection":
-		context.Category = Silent
-		context.Operation = strings.ToLower(e.EventName)
-		slog.Debug("categorizing no-sound event as Silent", "event_name", e.EventName)
-
 	default:
-		slog.Warn("unknown hook event type", "event_name", e.EventName)
-		context.Category = Interactive
-		context.SoundHint = "default"
-		context.Operation = "unknown"
+		spec, ok := lifecycleEvents[e.EventName]
+		if !ok {
+			slog.Warn("unknown hook event type", "event_name", e.EventName)
+			spec = unknownEvent
+		}
+		context.Category = spec.category
+		context.SoundHint = spec.hint
+		context.Operation = spec.operation
+		context.HasError = spec.category == Error
 	}
 
 	// Extract file type context for file operations
@@ -479,6 +350,9 @@ func (e *HookEvent) GetContext() *EventContext {
 		"sound_hint", context.SoundHint,
 		"tool_name", context.ToolName,
 		"original_tool", context.OriginalTool,
+		"command", context.Command,
+		"subcommand", context.Subcommand,
+		"phase", context.Phase,
 		"is_success", context.IsSuccess,
 		"has_error", context.HasError,
 		"file_type", context.FileType,
@@ -490,31 +364,7 @@ func (e *HookEvent) GetContext() *EventContext {
 func (e *HookEvent) populatePreToolContext(context *EventContext) {
 	context.Category = Loading
 	context.Operation = "tool-start"
-
-	if context.ToolName == "Bash" {
-		commandInfo := e.extractCommandInfo()
-		if commandInfo.Command != "" {
-			context.OriginalTool = "Bash"
-			context.ToolName = commandInfo.Command
-
-			if commandInfo.HasSubcommand {
-				context.SoundHint = strings.ToLower(commandInfo.Command) + "-" +
-					strings.ToLower(commandInfo.Subcommand) + "-start"
-			} else {
-				context.SoundHint = strings.ToLower(commandInfo.Command) + "-start"
-			}
-		} else {
-			context.SoundHint = strings.ToLower(context.ToolName) + "-start"
-		}
-	} else if isMCPToolName(context.ToolName) {
-		context.OriginalTool = getStringPtr(e.ToolName)
-		context.ToolName = "mcp"
-		context.SoundHint = "mcp-start"
-	} else if context.ToolName != "" {
-		context.SoundHint = strings.ToLower(context.ToolName) + "-start"
-	} else {
-		context.SoundHint = "tool-loading"
-	}
+	e.populateToolIdentity(context, "start", "")
 }
 
 func (e *HookEvent) populatePostToolContext(context *EventContext, forceError bool) {
@@ -525,79 +375,53 @@ func (e *HookEvent) populatePostToolContext(context *EventContext, forceError bo
 	}
 	context.IsSuccess = success
 	context.HasError = hasError
+	context.Operation = "tool-complete"
 
 	if hasError {
 		context.Category = Error
-		e.populatePostToolErrorHint(context, errorType)
+		e.populateToolIdentity(context, "error", errorType)
 	} else {
 		context.Category = Success
-		e.populatePostToolSuccessHint(context)
+		e.populateToolIdentity(context, "success", "")
 	}
-
-	context.Operation = "tool-complete"
 }
 
-func (e *HookEvent) populatePostToolErrorHint(context *EventContext, errorType string) {
-	if context.ToolName == "Bash" {
-		commandInfo := e.extractCommandInfo()
-		if commandInfo.Command != "" {
-			context.OriginalTool = "Bash"
-			context.ToolName = commandInfo.Command
+// noToolHints is the hint for a tool event that names no tool, by phase.
+var noToolHints = map[string]string{
+	"start":   "tool-loading",
+	"success": "tool-success",
+	"error":   "tool-error",
+}
 
-			if errorType != "" {
-				context.SoundHint = errorType
-			} else if commandInfo.HasSubcommand {
-				context.SoundHint = strings.ToLower(commandInfo.Command) + "-" +
-					strings.ToLower(commandInfo.Subcommand) + "-error"
-			} else {
-				context.SoundHint = strings.ToLower(commandInfo.Command) + "-error"
-			}
-		} else if errorType != "" {
-			context.SoundHint = errorType
-		} else {
-			context.SoundHint = strings.ToLower(context.ToolName) + "-error"
+// populateToolIdentity resolves the tool a tool event is about and sets
+// Command, Subcommand, Phase and SoundHint. Bash becomes its shell command
+// (OriginalTool "Bash") and MCP tools become "mcp" (OriginalTool the full
+// MCP name). The hint is errorType when set, otherwise
+// command[-subcommand]-phase.
+func (e *HookEvent) populateToolIdentity(context *EventContext, phase, errorType string) {
+	switch {
+	case context.ToolName == "Bash":
+		if info := e.extractCommandInfo(); info.Command != "" {
+			context.OriginalTool = "Bash"
+			context.ToolName = info.Command
+			context.Subcommand = info.Subcommand
 		}
-	} else if isMCPToolName(context.ToolName) {
+	case isMCPToolName(context.ToolName):
 		context.OriginalTool = getStringPtr(e.ToolName)
 		context.ToolName = "mcp"
-		if errorType != "" {
-			context.SoundHint = errorType
-		} else {
-			context.SoundHint = "mcp-error"
-		}
-	} else if errorType != "" {
+	}
+	context.Command = context.ToolName
+	context.Phase = phase
+
+	switch {
+	case errorType != "":
 		context.SoundHint = errorType
-	} else if context.ToolName != "" {
-		context.SoundHint = strings.ToLower(context.ToolName) + "-error"
-	} else {
-		context.SoundHint = "tool-error"
-	}
-}
-
-func (e *HookEvent) populatePostToolSuccessHint(context *EventContext) {
-	if context.ToolName == "Bash" {
-		commandInfo := e.extractCommandInfo()
-		if commandInfo.Command != "" {
-			context.OriginalTool = "Bash"
-			context.ToolName = commandInfo.Command
-
-			if commandInfo.HasSubcommand {
-				context.SoundHint = strings.ToLower(commandInfo.Command) + "-" +
-					strings.ToLower(commandInfo.Subcommand) + "-success"
-			} else {
-				context.SoundHint = strings.ToLower(commandInfo.Command) + "-success"
-			}
-		} else {
-			context.SoundHint = strings.ToLower(context.ToolName) + "-success"
-		}
-	} else if isMCPToolName(context.ToolName) {
-		context.OriginalTool = getStringPtr(e.ToolName)
-		context.ToolName = "mcp"
-		context.SoundHint = "mcp-success"
-	} else if context.ToolName != "" {
-		context.SoundHint = strings.ToLower(context.ToolName) + "-success"
-	} else {
-		context.SoundHint = "tool-success"
+	case context.ToolName == "":
+		context.SoundHint = noToolHints[phase]
+	case context.Subcommand != "":
+		context.SoundHint = strings.ToLower(context.Command) + "-" + strings.ToLower(context.Subcommand) + "-" + phase
+	default:
+		context.SoundHint = strings.ToLower(context.Command) + "-" + phase
 	}
 }
 
@@ -838,13 +662,8 @@ func (e *HookEvent) extractCommandInfo() CommandInfo {
 
 // isValidSubcommand determines if a word is likely a subcommand rather than an argument
 func isValidSubcommand(command, word string) bool {
-	// Paths and file names are not subcommands
+	// Paths, file names and URLs are not subcommands
 	if strings.Contains(word, "/") || strings.Contains(word, ".") {
-		return false
-	}
-
-	// URLs are not subcommands
-	if strings.Contains(word, "://") {
 		return false
 	}
 

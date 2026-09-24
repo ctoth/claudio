@@ -657,7 +657,7 @@ func (c *CLI) processHookEvent(hookEvent *hooks.HookEvent, cfg *config.Config, s
 	// lookup chain and the chosen winner. Errors are logged at WARN and do
 	// NOT propagate — tracking is best-effort.
 	if buf != nil && dbHook != nil {
-		if err := dbHook.RecordEvent(ctx, eventCtx, result.ChainType, buf.Lookups(), result.SelectedPath); err != nil {
+		if err := dbHook.RecordEvent(ctx, eventCtx, string(result.ChainType), buf.Lookups(), result.SelectedPath); err != nil {
 			slog.Warn("sound tracking RecordEvent failed (continuing)",
 				"error", err,
 				"chain_type", result.ChainType,

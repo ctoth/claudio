@@ -23,27 +23,29 @@ type SoundMapper struct {
 	observer soundpack.PathObserver      // optional per-candidate observer
 }
 
-// Chain type constants for sound mapping strategy
+// ChainType names the fallback chain a mapping used. The string values are
+// recorded in the tracking database.
+type ChainType string
+
 const (
-	ChainTypeEnhanced = "enhanced" // PreToolUse: 9-level with command-only sounds
-	ChainTypePostTool = "posttool" // PostToolUse: 6-level, skip command-only sounds
-	ChainTypeSimple   = "simple"   // Simple events: 4-level event-specific fallback
+	ChainTypeEnhanced ChainType = "enhanced" // PreToolUse: 9-level with command-only sounds
+	ChainTypePostTool ChainType = "posttool" // PostToolUse: 6-level, skip command-only sounds
+	ChainTypeSimple   ChainType = "simple"   // Simple events: 4-level event-specific fallback
 )
 
 // SoundMappingResult contains the mapping result and metadata
 type SoundMappingResult struct {
-	SelectedPath  string   // The first path in the fallback chain (to be used)
-	FallbackLevel int      // Which level was selected (1-6, 1-based)
-	TotalPaths    int      // Total number of paths generated
-	AllPaths      []string // All paths in fallback order
-	ChainType     string   // Type of fallback chain used: "enhanced", "posttool", "simple"
+	SelectedPath  string    // The chosen candidate (first existing, else the last)
+	FallbackLevel int       // 1-based index of SelectedPath in AllPaths
+	TotalPaths    int       // Total number of paths generated
+	AllPaths      []string  // All paths in fallback order
+	ChainType     ChainType // Fallback chain used
 }
 
 // NewSoundMapper creates a new sound mapper with no resolver (path-existence
 // checks return false; FallbackLevel defaults to 1). Retained for tests and
 // for the rare caller that wants chain-construction without resolution.
 func NewSoundMapper() *SoundMapper {
-	slog.Debug("creating new sound mapper without resolver")
 	return &SoundMapper{}
 }
 
@@ -53,7 +55,6 @@ func NewSoundMapper() *SoundMapper {
 // a nil observer means "no observation". Use with tracking.LookupBuffer to
 // record the resolved chain for later RecordEvent persistence.
 func NewSoundMapperWithResolver(resolver soundpack.SoundpackResolver, observer soundpack.PathObserver) *SoundMapper {
-	slog.Debug("creating new sound mapper with resolver")
 	return &SoundMapper{
 		resolver: resolver,
 		observer: observer,
@@ -65,9 +66,9 @@ func NewSoundMapperWithResolver(resolver soundpack.SoundpackResolver, observer s
 // - PostToolUse: 6-level fallback (skip command-only sounds for semantic accuracy)
 // - Simple events: 4-level fallback (UserPromptSubmit, Notification, Stop, SubagentStop, PreCompact)
 //
-// ctx is threaded into resolver operations. A nil ctx is treated as
-// context.Background() so existing call sites that don't have a context
-// handy still work.
+// Levels whose inputs are empty are skipped, and duplicate candidates are
+// collapsed. ctx is threaded into resolver operations; a nil ctx is treated
+// as context.Background().
 func (m *SoundMapper) MapSound(ctx context.Context, eventCtx *hooks.EventContext) *SoundMappingResult {
 	if ctx == nil {
 		ctx = context.Background()
@@ -87,273 +88,186 @@ func (m *SoundMapper) MapSound(ctx context.Context, eventCtx *hooks.EventContext
 		return nil
 	}
 
-	// Determine chain type based on event context
-	chainType := m.determineChainType(eventCtx)
-	slog.Debug("determined fallback chain type", "chain_type", chainType, "category", eventCtx.Category.String())
-
-	// Route to appropriate mapping method based on chain type
-	switch chainType {
-	case ChainTypeEnhanced:
-		return m.mapEnhancedSound(ctx, eventCtx)
-	case ChainTypePostTool:
-		return m.mapPostToolSound(ctx, eventCtx)
-	case ChainTypeSimple:
-		return m.mapSimpleSound(ctx, eventCtx)
+	chainType := chainTypeFor(eventCtx)
+	in := newChainInput(eventCtx)
+	var paths []string
+	for _, level := range chains[chainType] {
+		if p := level(in); p != "" {
+			paths = append(paths, p)
+		}
 	}
-	// Unreachable: determineChainType returns only Enhanced, PostTool, or Simple.
-	return m.mapSimpleSound(ctx, eventCtx)
+	return m.finalizeResult(ctx, eventCtx, paths, chainType)
 }
 
-// determineChainType analyzes event context to determine which fallback chain type to use
-func (m *SoundMapper) determineChainType(context *hooks.EventContext) string {
-	// Strategy pattern: determine chain type based on event characteristics
-	if m.isEnhancedChainEvent(context) {
-		return ChainTypeEnhanced
+// chainTypeFor picks the chain: tool events use the enhanced (start) or
+// posttool (success/error) chain, everything else the simple chain.
+func chainTypeFor(eventCtx *hooks.EventContext) ChainType {
+	if eventCtx.ToolName == "" {
+		return ChainTypeSimple
 	}
-
-	if m.isPostToolChainEvent(context) {
-		return ChainTypePostTool
-	}
-
-	// Default to simple chain for all other events
-	return ChainTypeSimple
-}
-
-// isEnhancedChainEvent determines if event should use enhanced 9-level fallback
-func (m *SoundMapper) isEnhancedChainEvent(context *hooks.EventContext) bool {
-	// PreToolUse events with tool names use enhanced fallback including command-only sounds
-	return context.Category == hooks.Loading && context.ToolName != ""
-}
-
-// isPostToolChainEvent determines if event should use PostToolUse 6-level fallback
-func (m *SoundMapper) isPostToolChainEvent(context *hooks.EventContext) bool {
-	// PostToolUse events with tool names use 6-level fallback (skip command-only sounds for semantic accuracy)
-	return (context.Category == hooks.Success || context.Category == hooks.Error) && context.ToolName != ""
-}
-
-// mapEnhancedSound handles PreToolUse events with 9-level enhanced fallback chain
-func (m *SoundMapper) mapEnhancedSound(ctx context.Context, eventCtx *hooks.EventContext) *SoundMappingResult {
-	slog.Debug("mapping sound using enhanced 9-level fallback for PreToolUse",
-		"category", eventCtx.Category.String(),
-		"tool_name", eventCtx.ToolName,
-		"original_tool", eventCtx.OriginalTool,
-		"sound_hint", eventCtx.SoundHint,
-		"operation", eventCtx.Operation)
-
-	// Pre-allocate slice with estimated capacity to reduce memory allocations
-	paths := make([]string, 0, 9)
-	categoryStr := eventCtx.Category.String()
-
-	// Extract command and subcommand once for reuse
-	command, subcommand := m.extractCommandFromHint(eventCtx.SoundHint, eventCtx.ToolName)
-	suffix := m.extractSuffixFromOperation(eventCtx.Operation)
-
-	// Level 1: Exact hint match
-	if eventCtx.SoundHint != "" {
-		hintPath := categoryStr + "/" + normalizeName(eventCtx.SoundHint) + ".wav"
-		paths = append(paths, hintPath)
-		slog.Debug("added level 1 path (exact hint)", "path", hintPath)
-	}
-
-	// Level 2: Command-subcommand without suffix (e.g., "git-commit.wav")
-	if command != "" && subcommand != "" {
-		cmdSubPath := categoryStr + "/" + normalizeName(command) + "-" + normalizeName(subcommand) + ".wav"
-		paths = append(paths, cmdSubPath)
-		slog.Debug("added level 2 path (command-subcommand)", "path", cmdSubPath)
-	}
-
-	// Level 3: Command with suffix (e.g., "git-start.wav")
-	if command != "" && suffix != "" {
-		cmdSuffixPath := categoryStr + "/" + normalizeName(command) + "-" + suffix + ".wav"
-		paths = append(paths, cmdSuffixPath)
-		slog.Debug("added level 3 path (command with suffix)", "path", cmdSuffixPath)
-	}
-
-	// Level 4: Command-only (e.g., "git.wav") - included for PreToolUse semantic appropriateness
-	if command != "" {
-		commandPath := categoryStr + "/" + normalizeName(command) + ".wav"
-		paths = append(paths, commandPath)
-		slog.Debug("added level 4 path (command-only)", "path", commandPath)
-	}
-
-	// Level 5: Original tool with suffix (e.g., "bash-start.wav")
-	if eventCtx.OriginalTool != "" && suffix != "" {
-		origSuffixPath := categoryStr + "/" + normalizeName(eventCtx.OriginalTool) + "-" + suffix + ".wav"
-		paths = append(paths, origSuffixPath)
-		slog.Debug("added level 5 path (original tool with suffix)", "path", origSuffixPath)
-	}
-
-	// Level 6: Original tool fallback (e.g., "bash.wav") - avoid duplicates
-	if eventCtx.OriginalTool != "" && eventCtx.OriginalTool != command {
-		originalPath := categoryStr + "/" + normalizeName(eventCtx.OriginalTool) + ".wav"
-		paths = append(paths, originalPath)
-		slog.Debug("added level 6 path (original tool)", "path", originalPath)
-	}
-
-	// Level 7: Operation-specific (e.g., "tool-start.wav")
-	if eventCtx.Operation != "" {
-		opPath := categoryStr + "/" + normalizeName(eventCtx.Operation) + ".wav"
-		paths = append(paths, opPath)
-		slog.Debug("added level 7 path (operation-specific)", "path", opPath)
-	}
-
-	// Level 8: Category-specific (e.g., "loading.wav")
-	if categoryStr != "" && categoryStr != "unknown" {
-		categoryPath := categoryStr + "/" + categoryStr + ".wav"
-		paths = append(paths, categoryPath)
-		slog.Debug("added level 8 path (category-specific)", "path", categoryPath)
-	}
-
-	// Level 9: Default fallback
-	paths = append(paths, "default.wav")
-	slog.Debug("added level 9 path (default)", "path", "default.wav")
-
-	// Ensure we have at least the default path
-	if len(paths) == 0 {
-		slog.Warn("no paths generated in enhanced fallback, using default")
-		paths = []string{"default.wav"}
-	}
-
-	return m.finalizeResult(ctx, paths, ChainTypeEnhanced)
-}
-
-// buildPath creates a standardized sound path with proper normalization
-func (m *SoundMapper) buildPath(category, name string) string {
-	if category == "" {
-		return "default.wav"
-	}
-	if name == "" {
-		return category + "/" + category + ".wav"
-	}
-	return category + "/" + normalizeName(name) + ".wav"
-}
-
-// getEventSpecificPath maps operations to event-specific sound paths for simple events
-func (m *SoundMapper) getEventSpecificPath(category, operation string) string {
-	if category == "" || operation == "" {
-		return ""
-	}
-
-	// Map operation to event-specific sound name
-	var eventName string
-	switch operation {
-	case "prompt":
-		eventName = "prompt-submit"
-	case "notification":
-		eventName = "notification"
-	case "stop":
-		eventName = "stop"
-	case "subagent-stop":
-		eventName = "subagent-stop"
-	case "compact":
-		eventName = "pre-compact"
-	default:
-		// For unknown operations, use the operation name directly
-		eventName = operation
-	}
-
-	return m.buildPath(category, eventName)
-}
-
-// determineCategorySuffix determines the appropriate suffix based on event category and context
-func (m *SoundMapper) determineCategorySuffix(category hooks.EventCategory, operation string) string {
-	switch category {
-	case hooks.Success:
-		return "success"
-	case hooks.Error:
-		return "error"
+	switch eventCtx.Category {
 	case hooks.Loading:
-		return "start"
-	case hooks.Interactive:
-		return "submit"
-	case hooks.Completion:
-		return "complete"
-	case hooks.System:
-		return "" // System events typically don't have suffixes
+		return ChainTypeEnhanced
+	case hooks.Success, hooks.Error:
+		return ChainTypePostTool
 	default:
-		// Fallback to operation-based suffix
-		return m.extractSuffixFromOperation(operation)
+		return ChainTypeSimple
 	}
 }
 
-// extractCommandFromHint extracts command and subcommand from sound hint and tool name
-func (m *SoundMapper) extractCommandFromHint(hint, toolName string) (command, subcommand string) {
-	if hint == "" || toolName == "" {
-		return toolName, ""
-	}
-
-	// Parse hint like "git-commit-start" to extract "git" and "commit"
-	parts := strings.Split(hint, "-")
-	if len(parts) >= 2 {
-		// First part should match the tool name
-		if strings.EqualFold(parts[0], toolName) {
-			command = parts[0]
-			// Check if second part is a known suffix, if not it's likely a subcommand
-			suffixes := []string{"start", "thinking", "success", "error", "complete"}
-			secondPart := parts[1]
-
-			// If second part is not a suffix, it's a subcommand
-			isSuffix := false
-			for _, suffix := range suffixes {
-				if strings.EqualFold(secondPart, suffix) {
-					isSuffix = true
-					break
-				}
-			}
-
-			if !isSuffix && len(parts) >= 3 {
-				// Pattern: git-commit-start -> command="git", subcommand="commit"
-				subcommand = secondPart
-			}
-		}
-	}
-
-	// Fallback: use toolName as command if extraction failed
-	if command == "" {
-		command = toolName
-	}
-
-	slog.Debug("extracted command from hint",
-		"hint", hint,
-		"tool_name", toolName,
-		"command", command,
-		"subcommand", subcommand)
-
-	return command, subcommand
+// chainInput is everything a chain level reads.
+type chainInput struct {
+	category     string
+	hint         string
+	command      string
+	subcommand   string
+	suffix       string
+	originalTool string
+	operation    string
 }
 
-// extractSuffixFromOperation extracts the appropriate suffix from operation context
-func (m *SoundMapper) extractSuffixFromOperation(operation string) string {
-	if operation == "" {
+func newChainInput(eventCtx *hooks.EventContext) chainInput {
+	command, subcommand := commandOf(eventCtx)
+	return chainInput{
+		category:     eventCtx.Category.String(),
+		hint:         eventCtx.SoundHint,
+		command:      command,
+		subcommand:   subcommand,
+		suffix:       phaseOf(eventCtx),
+		originalTool: eventCtx.OriginalTool,
+		operation:    eventCtx.Operation,
+	}
+}
+
+// chainLevel yields one candidate path, or "" to skip the level.
+type chainLevel func(in chainInput) string
+
+// chains lists each chain's levels in fallback order. The examples are for
+// "git commit" run through Bash.
+var chains = map[ChainType][]chainLevel{
+	ChainTypeEnhanced: {
+		hintLevel,               // loading/git-commit-start.wav
+		commandSubcommandLevel,  // loading/git-commit.wav
+		commandSuffixLevel,      // loading/git-start.wav
+		commandLevel,            // loading/git.wav
+		originalToolSuffixLevel, // loading/bash-start.wav
+		originalToolLevel,       // loading/bash.wav
+		operationLevel,          // loading/tool-start.wav
+		categoryLevel,           // loading/loading.wav
+		defaultLevel,            // default.wav
+	},
+	// PostTool skips the subcommand and command-only levels: a bare
+	// "git.wav" is a start sound, not a result.
+	ChainTypePostTool: {
+		hintLevel,               // success/git-commit-success.wav
+		commandSuffixLevel,      // success/git-success.wav
+		originalToolSuffixLevel, // success/bash-success.wav
+		operationLevel,          // success/tool-complete.wav
+		categoryLevel,           // success/success.wav
+		defaultLevel,            // default.wav
+	},
+	ChainTypeSimple: {
+		hintLevel,     // completion/agent-complete.wav
+		eventLevel,    // completion/stop.wav
+		categoryLevel, // completion/completion.wav
+		defaultLevel,  // default.wav
+	},
+}
+
+func hintLevel(in chainInput) string {
+	return candidate(in.category, in.hint)
+}
+
+func commandSubcommandLevel(in chainInput) string {
+	return candidate(in.category, in.command, in.subcommand)
+}
+
+func commandSuffixLevel(in chainInput) string {
+	return candidate(in.category, in.command, in.suffix)
+}
+
+func commandLevel(in chainInput) string {
+	return candidate(in.category, in.command)
+}
+
+func originalToolSuffixLevel(in chainInput) string {
+	return candidate(in.category, in.originalTool, in.suffix)
+}
+
+// originalToolLevel skips the original tool when it is the command itself.
+func originalToolLevel(in chainInput) string {
+	if in.originalTool == in.command {
 		return ""
 	}
+	return candidate(in.category, in.originalTool)
+}
 
-	// Map operation to appropriate suffix
-	switch operation {
-	case "tool-start":
-		return "start"
-	case "tool-complete":
-		return "complete"
-	case "prompt":
-		return "submit"
-	case "notification":
-		return "" // No suffix for notifications
-	case "stop":
-		return "complete"
-	case "subagent-stop":
-		return "complete"
-	case "compact":
-		return "" // No suffix for compact operations
-	default:
-		// For unknown operations, try to extract meaningful suffix
-		if strings.HasSuffix(operation, "-start") {
-			return "start"
-		}
-		if strings.HasSuffix(operation, "-complete") {
-			return "complete"
-		}
-		return operation // Use as-is if no known pattern
+func operationLevel(in chainInput) string {
+	return candidate(in.category, in.operation)
+}
+
+// eventSoundNames renames the simple-event operations whose sound name
+// differs from the operation; other operations are used as-is.
+var eventSoundNames = map[string]string{
+	"prompt":  "prompt-submit",
+	"compact": "pre-compact",
+}
+
+func eventLevel(in chainInput) string {
+	if name, ok := eventSoundNames[in.operation]; ok {
+		return candidate(in.category, name)
 	}
+	return candidate(in.category, in.operation)
+}
+
+func categoryLevel(in chainInput) string {
+	if in.category == "unknown" {
+		return ""
+	}
+	return candidate(in.category, in.category)
+}
+
+func defaultLevel(chainInput) string {
+	return "default.wav"
+}
+
+// candidate joins the normalized parts into "<category>/<a>-<b>.wav". A
+// part that is empty or normalizes to nothing skips the level.
+func candidate(category string, parts ...string) string {
+	names := make([]string, len(parts))
+	for i, part := range parts {
+		names[i] = normalizeName(part)
+		if names[i] == "" {
+			return ""
+		}
+	}
+	return category + "/" + strings.Join(names, "-") + ".wav"
+}
+
+// commandOf returns the command and subcommand the command levels are
+// built from. The parser fills EventContext.Command for every tool event;
+// hand-built contexts without it fall back to ToolName with no subcommand.
+func commandOf(eventCtx *hooks.EventContext) (command, subcommand string) {
+	if eventCtx.Command != "" {
+		return eventCtx.Command, eventCtx.Subcommand
+	}
+	return eventCtx.ToolName, ""
+}
+
+// categoryPhases is the phase a tool event's category implies, for
+// hand-built contexts that do not set Phase.
+var categoryPhases = map[hooks.EventCategory]string{
+	hooks.Loading: "start",
+	hooks.Success: "success",
+	hooks.Error:   "error",
+}
+
+// phaseOf returns the suffix for the command and original-tool levels.
+func phaseOf(eventCtx *hooks.EventContext) string {
+	if eventCtx.Phase != "" {
+		return eventCtx.Phase
+	}
+	return categoryPhases[eventCtx.Category]
 }
 
 // dedupPreserveOrder collapses duplicate paths keeping first occurrence.
@@ -385,7 +299,7 @@ func dedupPreserveOrder(paths []string) []string {
 // If the mapper has no resolver, returns level 1 unchecked — callers without
 // a resolver get the first path back as the selection. No observation fires
 // in that path (no candidate was actually inspected).
-func (m *SoundMapper) finalizeResult(ctx context.Context, paths []string, chainType string) *SoundMappingResult {
+func (m *SoundMapper) finalizeResult(ctx context.Context, eventCtx *hooks.EventContext, paths []string, chainType ChainType) *SoundMappingResult {
 	_ = ctx // reserved for future cancellable resolution
 	paths = dedupPreserveOrder(paths)
 
@@ -415,10 +329,7 @@ func (m *SoundMapper) finalizeResult(ctx context.Context, paths []string, chainT
 			// Prefer the observer's logical chain index when present, so the
 			// SelectedPath we surface to the caller and the chain index used
 			// for tracking always agree. Fall back to the resolver's physical
-			// path only when no observer winner was captured. Chunk 14 F3:
-			// the previous shape unconditionally assigned `selectedPath =
-			// resolved` and then overwrote it whenever winnerIdx > 0 — dead
-			// store in the common branch.
+			// path only when no observer winner was captured.
 			if winnerIdx > 0 {
 				fallbackLevel = winnerIdx
 				selectedPath = paths[winnerIdx-1]
@@ -441,129 +352,15 @@ func (m *SoundMapper) finalizeResult(ctx context.Context, paths []string, chainT
 	}
 
 	slog.Debug("sound mapping completed",
+		"category", eventCtx.Category.String(),
+		"tool_name", eventCtx.ToolName,
+		"sound_hint", eventCtx.SoundHint,
+		"chain_type", result.ChainType,
 		"selected_path", result.SelectedPath,
 		"fallback_level", result.FallbackLevel,
-		"total_paths", result.TotalPaths,
-		"chain_type", result.ChainType,
 		"all_paths", result.AllPaths)
 
 	return result
-}
-
-// mapPostToolSound handles PostToolUse events with 6-level fallback (skip command-only sounds)
-func (m *SoundMapper) mapPostToolSound(ctx context.Context, eventCtx *hooks.EventContext) *SoundMappingResult {
-	slog.Debug("mapping sound using PostToolUse 6-level fallback (skip command-only)",
-		"category", eventCtx.Category.String(),
-		"tool_name", eventCtx.ToolName,
-		"original_tool", eventCtx.OriginalTool,
-		"sound_hint", eventCtx.SoundHint,
-		"operation", eventCtx.Operation,
-		"is_success", eventCtx.IsSuccess,
-		"has_error", eventCtx.HasError)
-
-	// Pre-allocate slice with estimated capacity to reduce memory allocations
-	paths := make([]string, 0, 6)
-	categoryStr := eventCtx.Category.String()
-
-	// Extract command once for reuse (skip subcommand since we don't use command-subcommand level)
-	command, _ := m.extractCommandFromHint(eventCtx.SoundHint, eventCtx.ToolName)
-
-	// Determine suffix based on category (success/error context)
-	suffix := m.determineCategorySuffix(eventCtx.Category, eventCtx.Operation)
-
-	// Level 1: Exact hint match
-	if eventCtx.SoundHint != "" {
-		hintPath := m.buildPath(categoryStr, eventCtx.SoundHint)
-		paths = append(paths, hintPath)
-		slog.Debug("added level 1 path (exact hint)", "path", hintPath)
-	}
-
-	// Level 2: Command with suffix (e.g., "git-success.wav") - skip command-only for semantic accuracy
-	if command != "" && suffix != "" {
-		cmdSuffixPath := m.buildPath(categoryStr, command+"-"+suffix)
-		paths = append(paths, cmdSuffixPath)
-		slog.Debug("added level 2 path (command with suffix, skip command-only)", "path", cmdSuffixPath)
-	}
-
-	// Level 3: Original tool with suffix (e.g., "bash-success.wav")
-	if eventCtx.OriginalTool != "" && suffix != "" {
-		origSuffixPath := m.buildPath(categoryStr, eventCtx.OriginalTool+"-"+suffix)
-		paths = append(paths, origSuffixPath)
-		slog.Debug("added level 3 path (original tool with suffix)", "path", origSuffixPath)
-	}
-
-	// Level 4: Operation-specific (e.g., "tool-complete.wav")
-	if eventCtx.Operation != "" {
-		opPath := m.buildPath(categoryStr, eventCtx.Operation)
-		paths = append(paths, opPath)
-		slog.Debug("added level 4 path (operation-specific)", "path", opPath)
-	}
-
-	// Level 5: Category-specific (e.g., "success.wav", "error.wav")
-	if categoryStr != "" && categoryStr != "unknown" {
-		categoryPath := m.buildPath(categoryStr, "")
-		paths = append(paths, categoryPath)
-		slog.Debug("added level 5 path (category-specific)", "path", categoryPath)
-	}
-
-	// Level 6: Default fallback
-	paths = append(paths, "default.wav")
-	slog.Debug("added level 6 path (default)", "path", "default.wav")
-
-	// Ensure we have at least the default path
-	if len(paths) == 0 {
-		slog.Warn("no paths generated in PostToolUse fallback, using default")
-		paths = []string{"default.wav"}
-	}
-
-	return m.finalizeResult(ctx, paths, ChainTypePostTool)
-}
-
-// mapSimpleSound handles simple events with 4-level fallback chain
-func (m *SoundMapper) mapSimpleSound(ctx context.Context, eventCtx *hooks.EventContext) *SoundMappingResult {
-	slog.Debug("mapping sound using simple 4-level fallback for simple events",
-		"category", eventCtx.Category.String(),
-		"sound_hint", eventCtx.SoundHint,
-		"operation", eventCtx.Operation)
-
-	// Pre-allocate slice with exact capacity for 4-level fallback
-	paths := make([]string, 0, 4)
-	categoryStr := eventCtx.Category.String()
-
-	// Level 1: Specific hint match
-	if eventCtx.SoundHint != "" {
-		hintPath := m.buildPath(categoryStr, eventCtx.SoundHint)
-		paths = append(paths, hintPath)
-		slog.Debug("added level 1 path (specific hint)", "path", hintPath)
-	}
-
-	// Level 2: Event-specific based on operation (not tool-based)
-	if eventCtx.Operation != "" {
-		eventPath := m.getEventSpecificPath(categoryStr, eventCtx.Operation)
-		if eventPath != "" {
-			paths = append(paths, eventPath)
-			slog.Debug("added level 2 path (event-specific)", "path", eventPath)
-		}
-	}
-
-	// Level 3: Category-specific
-	if categoryStr != "" && categoryStr != "unknown" {
-		categoryPath := m.buildPath(categoryStr, "")
-		paths = append(paths, categoryPath)
-		slog.Debug("added level 3 path (category-specific)", "path", categoryPath)
-	}
-
-	// Level 4: Default fallback
-	paths = append(paths, "default.wav")
-	slog.Debug("added level 4 path (default)", "path", "default.wav")
-
-	// Ensure we have at least the default path
-	if len(paths) == 0 {
-		slog.Warn("no paths generated in simple fallback, using default")
-		paths = []string{"default.wav"}
-	}
-
-	return m.finalizeResult(ctx, paths, ChainTypeSimple)
 }
 
 // normalizeName converts a name to lowercase and replaces invalid characters
@@ -599,8 +396,5 @@ func normalizeName(name string) string {
 	}
 
 	// Remove leading/trailing hyphens
-	normalized = strings.Trim(normalized, "-")
-
-	slog.Debug("normalized sound name", "original", name, "normalized", normalized)
-	return normalized
+	return strings.Trim(normalized, "-")
 }
