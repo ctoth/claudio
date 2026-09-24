@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"claudio.click/internal/soundpack/gitpack"
 )
 
 func TestSoundpackInstallRespectsNameLock(t *testing.T) {
@@ -13,7 +15,7 @@ func TestSoundpackInstallRespectsNameLock(t *testing.T) {
 	defer cleanup()
 	source := filepath.Join(t.TempDir(), "locked-pack")
 	createDummyWAV(t, filepath.Join(source, "default.wav"))
-	lock, err := lockSoundpackName("locked-pack")
+	lock, err := gitpack.LockName("locked-pack")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,15 +31,5 @@ func TestSoundpackInstallRespectsNameLock(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dataDir, "claudio", "soundpacks", "locked-pack")); !os.IsNotExist(err) {
 		t.Fatalf("blocked install changed destination: %v", err)
-	}
-}
-
-func TestSoundpackNameLockRejectsTraversal(t *testing.T) {
-	_, _, cleanup := setupInstallTestEnv(t)
-	defer cleanup()
-	lock, err := lockSoundpackName("../outside")
-	if err == nil {
-		_ = lock.Unlock()
-		t.Fatal("accepted traversal in lock name")
 	}
 }

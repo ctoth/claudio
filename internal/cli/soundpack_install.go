@@ -9,6 +9,7 @@ import (
 
 	"claudio.click/internal/config"
 	"claudio.click/internal/soundpack"
+	"claudio.click/internal/soundpack/gitpack"
 	"github.com/spf13/cobra"
 )
 
@@ -97,10 +98,10 @@ func (c *CLI) runSoundpackInstall(cmd *cobra.Command, srcPath string, setDefault
 			slog.Debug("using name from JSON file", "name", name)
 		}
 	}
-	if err := validateManagedSoundpackName(name); err != nil {
+	if err := gitpack.ValidateName(name); err != nil {
 		return fmt.Errorf("invalid soundpack name: %w", err)
 	}
-	return withNameLock(name, func() error {
+	return gitpack.WithNameLock(name, func() error {
 		return c.installSoundpackFiles(cmd, srcPath, name, isDir, setDefault)
 	})
 }

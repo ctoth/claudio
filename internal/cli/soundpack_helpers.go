@@ -481,3 +481,16 @@ func copyDirectory(src, dst string) error {
 		}
 	})
 }
+
+// countJSONMappings returns the number of non-empty mappings in an
+// on-disk soundpack JSON. Routes through PeekJSONSoundpackMetadataFromFile
+// so the size cap (MaxSoundpackJSONBytes) and the 10K mappings cap apply
+// — the JSON path here came from a user-supplied gh:owner/repo source and
+// must not be read raw.
+func countJSONMappings(jsonPath string) int {
+	spFile, err := soundpack.PeekJSONSoundpackMetadataFromFile(jsonPath)
+	if err != nil {
+		return 0
+	}
+	return countNonEmptyMappings(spFile.Mappings)
+}

@@ -5,30 +5,11 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
+
+	"claudio.click/internal/soundpack/gitpack"
 )
-
-func TestValidateGitRefRejectsOptionLikeRefs(t *testing.T) {
-	for _, ref := range []string{"-", "--orphan=evil", "-b", "--upload-pack=touch pwned"} {
-		if err := validateGitRef(ref); err == nil {
-			t.Errorf("validateGitRef(%q) accepted an option-like ref", ref)
-		}
-	}
-	for _, ref := range []string{"", "main", "v1.2.3", "feature/x", "0123abcd"} {
-		if err := validateGitRef(ref); err != nil {
-			t.Errorf("validateGitRef(%q) rejected a valid ref: %v", ref, err)
-		}
-	}
-}
-
-func TestGitCommandDisablesTerminalPrompt(t *testing.T) {
-	cmd := gitCommand(context.Background(), "", "status")
-	if !slices.Contains(cmd.Env, "GIT_TERMINAL_PROMPT=0") {
-		t.Fatalf("git command env lacks GIT_TERMINAL_PROMPT=0: %v", cmd.Env)
-	}
-}
 
 func TestSoundpackAddRejectsOptionLikeRefBeforeCloning(t *testing.T) {
 	dataDir, _, cleanup := setupInstallTestEnv(t)
@@ -59,14 +40,14 @@ func TestSoundpackUpdateRejectsOptionLikeRefFromRegistry(t *testing.T) {
 	if code := cli.Run([]string{"claudio", "soundpack", "add", repo, "--name", "tampered"}, nil, &bytes.Buffer{}, &bytes.Buffer{}); code != 0 {
 		t.Fatalf("add exited %d", code)
 	}
-	registry, err := loadSoundpackRegistry()
+	registry, err := gitpack.LoadRegistry()
 	if err != nil {
 		t.Fatal(err)
 	}
 	record := registry.Packs["tampered"]
 	record.Ref = "--orphan=evil"
 	registry.Packs["tampered"] = record
-	if err := saveSoundpackRegistry(registry); err != nil {
+	if err := gitpack.SaveRegistry(registry); err != nil {
 		t.Fatal(err)
 	}
 
@@ -74,7 +55,7 @@ func TestSoundpackUpdateRejectsOptionLikeRefFromRegistry(t *testing.T) {
 	if code := cli.Run([]string{"claudio", "soundpack", "update", "tampered"}, nil, stdout, stderr); code == 0 {
 		t.Fatalf("expected tampered ref to be rejected, stdout=%q", stdout)
 	}
-	branch, err := currentGitBranch(context.Background(), record.Path)
+	branch, err := testGitBranch(context.Background(), record.Path)
 	if err != nil || branch == "evil" {
 		t.Fatalf("tampered ref reached git: branch=%q err=%v", branch, err)
 	}
@@ -106,16 +87,16 @@ func TestSoundpackBranchRefTracksRemoteOnUpdate(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 	repo := createTestGitSoundpackRepo(t)
-	defaultBranch, err := currentGitBranch(ctx, repo)
+	defaultBranch, err := testGitBranch(ctx, repo)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := runGit(ctx, repo, "checkout", "-b", "dev"); err != nil {
+	if _, err := testGit(ctx, repo, "checkout", "-b", "dev"); err != nil {
 		t.Fatal(err)
 	}
 	createDummyWAV(t, filepath.Join(repo, "error", "error.wav"))
 	commitTestGitRepo(t, repo, "dev sound")
-	if _, err := runGit(ctx, repo, "checkout", defaultBranch); err != nil {
+	if _, err := testGit(ctx, repo, "checkout", defaultBranch); err != nil {
 		t.Fatal(err)
 	}
 
@@ -129,7 +110,7 @@ func TestSoundpackBranchRefTracksRemoteOnUpdate(t *testing.T) {
 		t.Fatalf("dev branch not checked out: %v", err)
 	}
 
-	if _, err := runGit(ctx, repo, "checkout", "dev"); err != nil {
+	if _, err := testGit(ctx, repo, "checkout", "dev"); err != nil {
 		t.Fatal(err)
 	}
 	createDummyWAV(t, filepath.Join(repo, "interactive", "interactive.wav"))
@@ -142,23 +123,5 @@ func TestSoundpackBranchRefTracksRemoteOnUpdate(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(clone, "interactive", "interactive.wav")); err != nil {
 		t.Fatalf("update did not advance dev branch ref: %v", err)
-	}
-}
-
-func TestCurrentGitBranchDetachedHeadIsNotAnError(t *testing.T) {
-	ctx := context.Background()
-	repo := createTestGitSoundpackRepo(t)
-	if branch, err := currentGitBranch(ctx, repo); err != nil || branch == "" {
-		t.Fatalf("expected a branch name on a fresh repo, got %q err=%v", branch, err)
-	}
-	if _, err := runGit(ctx, repo, "checkout", "--detach", "HEAD"); err != nil {
-		t.Fatal(err)
-	}
-	branch, err := currentGitBranch(ctx, repo)
-	if err != nil || branch != "" {
-		t.Fatalf("expected detached HEAD to report no branch and no error, got %q err=%v", branch, err)
-	}
-	if _, err := currentGitBranch(ctx, t.TempDir()); err == nil {
-		t.Fatal("expected an error outside a git repository")
 	}
 }

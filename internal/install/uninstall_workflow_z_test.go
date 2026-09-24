@@ -1,4 +1,4 @@
-package uninstall
+package install
 
 import (
 	"encoding/json"
@@ -7,7 +7,6 @@ import (
 
 	"testing"
 
-	"claudio.click/internal/install"
 	"github.com/spf13/afero"
 )
 
@@ -28,7 +27,7 @@ func TestRunUninstallWorkflowUsesTargetConfigPath(t *testing.T) {
 
 	// Seed both files with claudio hooks so we can tell which one the
 	// workflow rewrote.
-	initial := install.SettingsMap{
+	initial := SettingsMap{
 		"hooks": map[string]interface{}{
 			"PreToolUse": "/usr/local/bin/claudio",
 		},
@@ -45,7 +44,7 @@ func TestRunUninstallWorkflowUsesTargetConfigPath(t *testing.T) {
 		t.Fatalf("write decoy file: %v", err)
 	}
 
-	if err := RunUninstallWorkflow(afero.NewOsFs(), install.AgentTarget{Agent: install.AgentClaude, ConfigPath: resolvedPath}); err != nil {
+	if err := RunUninstallWorkflow(afero.NewOsFs(), AgentTarget{Agent: AgentClaude, ConfigPath: resolvedPath}); err != nil {
 		t.Fatalf("workflow failed: %v", err)
 	}
 
@@ -54,7 +53,7 @@ func TestRunUninstallWorkflowUsesTargetConfigPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read resolved after: %v", err)
 	}
-	var resolvedSettings install.SettingsMap
+	var resolvedSettings SettingsMap
 	if err := json.Unmarshal(resolvedAfter, &resolvedSettings); err != nil {
 		t.Fatalf("unmarshal resolved after: %v", err)
 	}
@@ -77,7 +76,7 @@ func TestRunUninstallWorkflowUsesTargetConfigPath(t *testing.T) {
 func TestRunUninstallWorkflowMissingSettingsFileIsNoop(t *testing.T) {
 	settingsPath := filepath.Join(t.TempDir(), "missing", "settings.json")
 
-	if err := RunUninstallWorkflow(afero.NewOsFs(), install.AgentTarget{Agent: install.AgentClaude, ConfigPath: settingsPath}); err != nil {
+	if err := RunUninstallWorkflow(afero.NewOsFs(), AgentTarget{Agent: AgentClaude, ConfigPath: settingsPath}); err != nil {
 		t.Fatalf("missing settings file should be an idempotent uninstall, got: %v", err)
 	}
 
@@ -88,7 +87,7 @@ func TestRunUninstallWorkflowMissingSettingsFileIsNoop(t *testing.T) {
 
 func TestRunUninstallWorkflowCodexPreservesMixedGroupSibling(t *testing.T) {
 	settingsPath := filepath.Join(t.TempDir(), "settings.json")
-	initial := install.SettingsMap{
+	initial := SettingsMap{
 		"hooks": map[string]interface{}{
 			"Stop": []interface{}{
 				map[string]interface{}{
@@ -117,7 +116,7 @@ func TestRunUninstallWorkflowCodexPreservesMixedGroupSibling(t *testing.T) {
 		t.Fatalf("write settings: %v", err)
 	}
 
-	if err := RunUninstallWorkflow(afero.NewOsFs(), install.AgentTarget{Agent: install.AgentCodex, ConfigPath: settingsPath}); err != nil {
+	if err := RunUninstallWorkflow(afero.NewOsFs(), AgentTarget{Agent: AgentCodex, ConfigPath: settingsPath}); err != nil {
 		t.Fatalf("workflow failed: %v", err)
 	}
 
@@ -125,7 +124,7 @@ func TestRunUninstallWorkflowCodexPreservesMixedGroupSibling(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read settings after uninstall: %v", err)
 	}
-	var settings install.SettingsMap
+	var settings SettingsMap
 	if err := json.Unmarshal(after, &settings); err != nil {
 		t.Fatalf("unmarshal settings after uninstall: %v", err)
 	}

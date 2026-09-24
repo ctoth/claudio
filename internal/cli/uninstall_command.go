@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"claudio.click/internal/install"
-	"claudio.click/internal/uninstall"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 )
@@ -68,7 +67,7 @@ func claudioHooksIn(target install.AgentTarget) ([]string, error) {
 
 func runUninstallTargets(cmd *cobra.Command, flags *hookTargetFlags, scope string, targets []install.AgentTarget) error {
 	err := flags.applyToTargets(cmd, "Uninstalling", scope, targets, func(target install.AgentTarget) error {
-		if err := uninstall.RunUninstallWorkflow(afero.NewOsFs(), target); err != nil {
+		if err := install.RunUninstallWorkflow(afero.NewOsFs(), target); err != nil {
 			return fmt.Errorf("uninstall failed for %s: %w", target.Agent, err)
 		}
 		return nil
