@@ -1,21 +1,19 @@
-package uninstall
+package install
 
 import (
 	"testing"
-
-	"claudio.click/internal/install"
 )
 
-func TestDetectClaudioHooksWithFullPaths(t *testing.T) {
+func TestClaudioHookNamesWithFullPaths(t *testing.T) {
 	// TDD RED: Test hook detection with full executable paths instead of just "claudio"
 	testCases := []struct {
 		name     string
-		settings *install.SettingsMap
+		settings *SettingsMap
 		expected []string
 	}{
 		{
 			name: "simple string hook - full system path",
-			settings: &install.SettingsMap{
+			settings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"PreToolUse": "/usr/local/bin/claudio",
 				},
@@ -24,7 +22,7 @@ func TestDetectClaudioHooksWithFullPaths(t *testing.T) {
 		},
 		{
 			name: "simple string hook - dev directory path",
-			settings: &install.SettingsMap{
+			settings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"PostToolUse": "/home/user/dev/claudio/claudio",
 				},
@@ -33,7 +31,7 @@ func TestDetectClaudioHooksWithFullPaths(t *testing.T) {
 		},
 		{
 			name: "simple string hook - relative path",
-			settings: &install.SettingsMap{
+			settings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"UserPromptSubmit": "./claudio",
 				},
@@ -42,7 +40,7 @@ func TestDetectClaudioHooksWithFullPaths(t *testing.T) {
 		},
 		{
 			name: "complex array hook - full system path",
-			settings: &install.SettingsMap{
+			settings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"Notification": []interface{}{
 						map[string]interface{}{
@@ -61,7 +59,7 @@ func TestDetectClaudioHooksWithFullPaths(t *testing.T) {
 		},
 		{
 			name: "direct Copilot command hook",
-			settings: &install.SettingsMap{
+			settings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"PreToolUse": []interface{}{
 						map[string]interface{}{
@@ -75,7 +73,7 @@ func TestDetectClaudioHooksWithFullPaths(t *testing.T) {
 		},
 		{
 			name: "complex array hook - dev directory path",
-			settings: &install.SettingsMap{
+			settings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"SessionStart": []interface{}{
 						map[string]interface{}{
@@ -94,7 +92,7 @@ func TestDetectClaudioHooksWithFullPaths(t *testing.T) {
 		},
 		{
 			name: "mixed full paths and backward compatibility",
-			settings: &install.SettingsMap{
+			settings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"PreToolUse":  "claudio",                    // Old format
 					"PostToolUse": "/usr/local/bin/claudio",     // Full path
@@ -106,7 +104,7 @@ func TestDetectClaudioHooksWithFullPaths(t *testing.T) {
 		},
 		{
 			name: "no claudio paths - different executables",
-			settings: &install.SettingsMap{
+			settings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"PreToolUse":  "/usr/bin/git",
 					"PostToolUse": "/bin/echo",
@@ -116,7 +114,7 @@ func TestDetectClaudioHooksWithFullPaths(t *testing.T) {
 		},
 		{
 			name: "user binary ending in .test is NOT a Claudio command",
-			settings: &install.SettingsMap{
+			settings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"PreToolUse": "/usr/local/bin/lint.test",
 				},
@@ -127,7 +125,7 @@ func TestDetectClaudioHooksWithFullPaths(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := DetectClaudioHooks(tc.settings)
+			result := ClaudioHookNames(tc.settings)
 
 			// Check length
 			if len(result) != len(tc.expected) {
@@ -156,11 +154,11 @@ func TestDetectClaudioHooksWithFullPaths(t *testing.T) {
 	}
 }
 
-func TestDetectClaudioHooks(t *testing.T) {
+func TestClaudioHookNames(t *testing.T) {
 	// TDD RED: Test hook detection for both simple and complex formats
 	testCases := []struct {
 		name     string
-		settings *install.SettingsMap
+		settings *SettingsMap
 		expected []string
 	}{
 		{
@@ -170,7 +168,7 @@ func TestDetectClaudioHooks(t *testing.T) {
 		},
 		{
 			name: "simple string hook - claudio",
-			settings: &install.SettingsMap{
+			settings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"PreToolUse": "claudio",
 				},
@@ -179,7 +177,7 @@ func TestDetectClaudioHooks(t *testing.T) {
 		},
 		{
 			name: "complex array hook - claudio command",
-			settings: &install.SettingsMap{
+			settings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"Notification": []interface{}{
 						map[string]interface{}{
@@ -197,7 +195,7 @@ func TestDetectClaudioHooks(t *testing.T) {
 		},
 		{
 			name: "mixed hooks - claudio and non-claudio",
-			settings: &install.SettingsMap{
+			settings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"PreToolUse":  "claudio",
 					"PostToolUse": "other-command",
@@ -207,7 +205,7 @@ func TestDetectClaudioHooks(t *testing.T) {
 		},
 		{
 			name: "no claudio hooks",
-			settings: &install.SettingsMap{
+			settings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"Other": "something",
 				},
@@ -216,14 +214,14 @@ func TestDetectClaudioHooks(t *testing.T) {
 		},
 		{
 			name: "no hooks section",
-			settings: &install.SettingsMap{
+			settings: &SettingsMap{
 				"version": "1.0",
 			},
 			expected: []string{},
 		},
 		{
 			name: "multiple claudio hooks",
-			settings: &install.SettingsMap{
+			settings: &SettingsMap{
 				"hooks": map[string]interface{}{
 					"PreToolUse":       "claudio",
 					"PostToolUse":      "claudio",
@@ -237,7 +235,7 @@ func TestDetectClaudioHooks(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := DetectClaudioHooks(tc.settings)
+			result := ClaudioHookNames(tc.settings)
 
 			// Check length
 			if len(result) != len(tc.expected) {

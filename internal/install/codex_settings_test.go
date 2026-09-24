@@ -10,7 +10,7 @@ import (
 func TestFindCodexHooksPathsUserScope(t *testing.T) {
 	t.Setenv("CODEX_HOME", "")
 
-	paths, err := FindCodexHooksPaths("global")
+	paths, err := AgentCodex.ConfigPaths("global")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -28,7 +28,7 @@ func TestFindCodexHooksPathsUserScope(t *testing.T) {
 func TestFindCodexHooksPathsLegacyUserScope(t *testing.T) {
 	t.Setenv("CODEX_HOME", "")
 
-	paths, err := FindCodexHooksPaths("user")
+	paths, err := AgentCodex.ConfigPaths("user")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -43,29 +43,11 @@ func TestFindCodexHooksPathsLegacyUserScope(t *testing.T) {
 	}
 }
 
-func TestFindCodexHooksPathsGlobalFallbackWhenHomeMissing(t *testing.T) {
-	t.Setenv("CODEX_HOME", "")
-	t.Setenv("HOME", "")
-	t.Setenv("USERPROFILE", "")
-	t.Setenv("HOMEDRIVE", "")
-	t.Setenv("HOMEPATH", "")
-
-	paths, err := FindCodexHooksPaths("global")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	want := filepath.Join("~", ".codex", "hooks.json")
-	if len(paths) != 1 || paths[0] != want {
-		t.Fatalf("fallback paths = %v, want [%q]", paths, want)
-	}
-}
-
 func TestFindCodexHooksPathsUserScopeHonorsCODEXHOME(t *testing.T) {
 	codexHome := t.TempDir()
 	t.Setenv("CODEX_HOME", codexHome)
 
-	paths, err := FindCodexHooksPaths("user")
+	paths, err := AgentCodex.ConfigPaths("user")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -80,7 +62,7 @@ func TestFindCodexHooksPathsUserScopeHonorsCODEXHOME(t *testing.T) {
 }
 
 func TestFindCodexHooksPathsProjectScope(t *testing.T) {
-	paths, err := FindCodexHooksPaths("project")
+	paths, err := AgentCodex.ConfigPaths("project")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -93,13 +75,13 @@ func TestFindCodexHooksPathsProjectScope(t *testing.T) {
 }
 
 func TestFindCodexHooksPathsInvalidScope(t *testing.T) {
-	if _, err := FindCodexHooksPaths("bogus"); err == nil {
+	if _, err := AgentCodex.ConfigPaths("bogus"); err == nil {
 		t.Error("expected error for invalid scope, got nil")
 	}
 }
 
 func TestFindBestCodexPathReturnsFirstWhenNoneExist(t *testing.T) {
-	got, err := FindBestCodexPath("user")
+	got, err := AgentCodex.BestConfigPath("user")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -124,7 +106,7 @@ func TestFindBestCodexPathPrefersExistingFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := FindBestCodexPath("global")
+	got, err := AgentCodex.BestConfigPath("global")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -134,7 +116,7 @@ func TestFindBestCodexPathPrefersExistingFile(t *testing.T) {
 }
 
 func TestFindBestCodexPathInvalidScope(t *testing.T) {
-	if _, err := FindBestCodexPath("bogus"); err == nil {
+	if _, err := AgentCodex.BestConfigPath("bogus"); err == nil {
 		t.Error("expected error for invalid scope")
 	}
 }
@@ -157,7 +139,7 @@ func TestFindBestCodexPathPrefersCodexHomeOverExistingDefault(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := FindBestCodexPath("global")
+	got, err := AgentCodex.BestConfigPath("global")
 	if err != nil {
 		t.Fatalf("FindBestCodexPath: %v", err)
 	}

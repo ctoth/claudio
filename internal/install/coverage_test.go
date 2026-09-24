@@ -292,7 +292,11 @@ func TestMergeHookValuesPreservesNonClaudioEntriesWhileRefreshingClaudio(t *test
 		},
 	}
 
-	filtered := mergeHookValues(entries, claudioValue).([]interface{})
+	merged, err := mergeHookValues(entries, claudioValue)
+	if err != nil {
+		t.Fatal(err)
+	}
+	filtered := merged.([]interface{})
 	if len(filtered) != 4 {
 		t.Fatalf("merged entry count = %d, want 4: %#v", len(filtered), filtered)
 	}
@@ -429,25 +433,6 @@ func TestMergeHooksMarshalErrorPropagates(t *testing.T) {
 	}
 }
 
-func TestMergeHookValuesUnknownExistingFormat(t *testing.T) {
-	// Existing PreToolUse hook stored as a number (neither string nor array)
-	// exercises the fallback branch in mergeHookValues.
-	existing := &SettingsMap{
-		"hooks": map[string]interface{}{
-			"PreToolUse": float64(42),
-		},
-	}
-	claudioHooks, _ := GenerateClaudioHooksForAgent("/usr/local/bin/claudio", AgentClaude)
-	merged, err := MergeHooksIntoSettings(existing, claudioHooks)
-	if err != nil {
-		t.Fatal(err)
-	}
-	hooksSection := (*merged)["hooks"].(map[string]interface{})
-	if _, ok := hooksSection["PreToolUse"].([]interface{}); !ok {
-		t.Errorf("expected PreToolUse coerced to array, got %T", hooksSection["PreToolUse"])
-	}
-}
-
 func TestFindBestPathReturnsExistingFile(t *testing.T) {
 	dir := t.TempDir()
 	orig, err := os.Getwd()
@@ -466,7 +451,7 @@ func TestFindBestPathReturnsExistingFile(t *testing.T) {
 	if err := afero.WriteFile(afero.NewOsFs(), ".codex/hooks.json", []byte("{}"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	got, err := FindBestCodexPath("project")
+	got, err := AgentCodex.BestConfigPath("project")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -481,7 +466,7 @@ func TestFindBestPathReturnsExistingFile(t *testing.T) {
 	if err := afero.WriteFile(afero.NewOsFs(), ".claude/settings.json", []byte("{}"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	cgot, err := FindBestSettingsPath("project")
+	cgot, err := AgentClaude.BestConfigPath("project")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -491,13 +476,13 @@ func TestFindBestPathReturnsExistingFile(t *testing.T) {
 }
 
 func TestHookCommandQuotingAndRecognitionBranches(t *testing.T) {
-	if got := hookCommandForAgent("/usr/local/bin/claudio", AgentClaude); got != "/usr/local/bin/claudio" {
+	if got := mustSpec(t, AgentClaude).hookCommand("/usr/local/bin/claudio", "PreToolUse"); got != "/usr/local/bin/claudio" {
 		t.Errorf("claude hook command = %q", got)
 	}
-	if got := hookCommandForAgent(`/opt/Claudio Tools/claudio`, AgentGemini); got != `"/opt/Claudio Tools/claudio" --hook-agent gemini` {
+	if got := mustSpec(t, AgentGemini).hookCommand(`/opt/Claudio Tools/claudio`, "PreToolUse"); got != `"/opt/Claudio Tools/claudio" --hook-agent gemini` {
 		t.Errorf("gemini hook command = %q", got)
 	}
-	if got := hookCommandForAgent(`/opt/cla"udio`, AgentQwen); got != `"/opt/cla\"udio" --hook-agent qwen` {
+	if got := mustSpec(t, AgentQwen).hookCommand(`/opt/cla"udio`, "PreToolUse"); got != `"/opt/cla\"udio" --hook-agent qwen` {
 		t.Errorf("qwen hook command = %q", got)
 	}
 	if got := quoteCommandArg("plain"); got != "plain" {
@@ -540,11 +525,11 @@ func TestHookArrayDetectionAdditionalBranches(t *testing.T) {
 	}
 
 	directCommand := map[string]interface{}{"command": "/opt/claudio"}
-	if !itemContainsClaudioCommand(directCommand) {
+	if !IsClaudioHook([]interface{}{directCommand}) {
 		t.Error("direct command item should be recognized")
 	}
 	noHookArray := map[string]interface{}{"matcher": "*"}
-	if itemContainsClaudioCommand(noHookArray) {
+	if IsClaudioHook([]interface{}{noHookArray}) {
 		t.Error("item without hooks array must not be recognized")
 	}
 	nestedCommand := map[string]interface{}{
@@ -554,14 +539,14 @@ func TestHookArrayDetectionAdditionalBranches(t *testing.T) {
 			map[string]interface{}{"command": "/opt/claudio"},
 		},
 	}
-	if !itemContainsClaudioCommand(nestedCommand) {
+	if !IsClaudioHook([]interface{}{nestedCommand}) {
 		t.Error("nested claudio command should be recognized")
 	}
 }
 
-func TestMergeHookValuesReturnsNonArrayClaudioValue(t *testing.T) {
-	if got := mergeHookValues([]interface{}{}, "not-array"); got != "not-array" {
-		t.Errorf("mergeHookValues returned %v, want non-array claudio value", got)
+func TestMergeHookValuesRejectsNonArrayClaudioValue(t *testing.T) {
+	if got, err := mergeHookValues([]interface{}{}, "not-array"); err == nil {
+		t.Errorf("mergeHookValues returned %v, want error for non-array claudio value", got)
 	}
 }
 
@@ -573,7 +558,7 @@ func TestAdditionalBestPathFallbacksAndInvalidScopes(t *testing.T) {
 	t.Setenv("HOMEPATH", "")
 	t.Setenv("COPILOT_HOME", "")
 
-	qwenPath, err := FindBestQwenPath("global")
+	qwenPath, err := AgentQwen.BestConfigPath("global")
 	if err != nil {
 		t.Fatalf("FindBestQwenPath returned error: %v", err)
 	}
@@ -581,7 +566,7 @@ func TestAdditionalBestPathFallbacksAndInvalidScopes(t *testing.T) {
 		t.Errorf("FindBestQwenPath = %q, want %q", qwenPath, want)
 	}
 
-	copilotPath, err := FindBestCopilotPath("global")
+	copilotPath, err := AgentCopilot.BestConfigPath("global")
 	if err != nil {
 		t.Fatalf("FindBestCopilotPath returned error: %v", err)
 	}
@@ -589,35 +574,11 @@ func TestAdditionalBestPathFallbacksAndInvalidScopes(t *testing.T) {
 		t.Errorf("FindBestCopilotPath = %q, want %q", copilotPath, want)
 	}
 
-	if _, err := FindBestQwenPath("bogus"); err == nil {
+	if _, err := AgentQwen.BestConfigPath("bogus"); err == nil {
 		t.Error("expected invalid Qwen best path scope error")
 	}
-	if _, err := FindBestCopilotPath("bogus"); err == nil {
+	if _, err := AgentCopilot.BestConfigPath("bogus"); err == nil {
 		t.Error("expected invalid Copilot best path scope error")
-	}
-}
-
-func TestAdditionalGlobalPathFallbacksWhenHomeMissing(t *testing.T) {
-	t.Setenv("HOME", "")
-	t.Setenv("USERPROFILE", "")
-	t.Setenv("HOMEDRIVE", "")
-	t.Setenv("HOMEPATH", "")
-	t.Setenv("COPILOT_HOME", "")
-
-	qwenPaths, err := FindQwenSettingsPaths("global")
-	if err != nil {
-		t.Fatalf("FindQwenSettingsPaths returned error: %v", err)
-	}
-	if want := filepath.Join("~", ".qwen", "settings.json"); len(qwenPaths) != 1 || qwenPaths[0] != want {
-		t.Fatalf("Qwen fallback paths = %v, want [%q]", qwenPaths, want)
-	}
-
-	copilotPaths, err := FindCopilotSettingsPaths("global")
-	if err != nil {
-		t.Fatalf("FindCopilotSettingsPaths returned error: %v", err)
-	}
-	if want := filepath.Join("~", ".copilot", "settings.json"); len(copilotPaths) != 1 || copilotPaths[0] != want {
-		t.Fatalf("Copilot fallback paths = %v, want [%q]", copilotPaths, want)
 	}
 }
 

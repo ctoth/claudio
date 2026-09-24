@@ -105,7 +105,7 @@ func hasAgentExecutable(agent Agent) bool {
 }
 
 func hasAgentConfigEvidence(agent Agent, scope string) bool {
-	paths, err := agentConfigPaths(agent, scope)
+	paths, err := agent.ConfigPaths(scope)
 	if err != nil {
 		return false
 	}
@@ -118,7 +118,7 @@ func hasAgentConfigEvidence(agent Agent, scope string) bool {
 }
 
 func hasExistingClaudioHooks(agent Agent, scope string) bool {
-	paths, err := agentConfigPaths(agent, scope)
+	paths, err := agent.ConfigPaths(scope)
 	if err != nil {
 		return false
 	}
@@ -131,44 +131,7 @@ func hasExistingClaudioHooks(agent Agent, scope string) bool {
 		if err != nil {
 			continue
 		}
-		if settingsContainClaudioHooks(settings) {
-			return true
-		}
-	}
-	return false
-}
-
-func agentConfigPaths(agent Agent, scope string) ([]string, error) {
-	switch agent {
-	case AgentClaude:
-		return FindClaudeSettingsPaths(scope)
-	case AgentCodex:
-		return FindCodexHooksPaths(scope)
-	case AgentGemini:
-		return FindGeminiSettingsPaths(scope)
-	case AgentQwen:
-		return FindQwenSettingsPaths(scope)
-	case AgentCopilot:
-		return FindCopilotSettingsPaths(scope)
-	default:
-		return nil, fmt.Errorf("invalid concrete agent '%s'", agent)
-	}
-}
-
-func settingsContainClaudioHooks(settings *SettingsMap) bool {
-	if settings == nil {
-		return false
-	}
-	hooksValue, ok := (*settings)["hooks"]
-	if !ok {
-		return false
-	}
-	hooksMap, ok := hooksValue.(map[string]interface{})
-	if !ok {
-		return false
-	}
-	for _, hookValue := range hooksMap {
-		if IsClaudioHook(hookValue) {
+		if len(ClaudioHookNames(settings)) > 0 {
 			return true
 		}
 	}

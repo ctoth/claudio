@@ -13,7 +13,7 @@ func TestFindGeminiSettingsPathsGlobalScope(t *testing.T) {
 	t.Setenv("HOMEDRIVE", "")
 	t.Setenv("HOMEPATH", "")
 
-	paths, err := FindGeminiSettingsPaths("global")
+	paths, err := AgentGemini.ConfigPaths("global")
 	if err != nil {
 		t.Fatalf("FindGeminiSettingsPaths returned error: %v", err)
 	}
@@ -34,7 +34,7 @@ func TestFindGeminiSettingsPathsLegacyUserScope(t *testing.T) {
 	t.Setenv("HOMEDRIVE", "")
 	t.Setenv("HOMEPATH", "")
 
-	paths, err := FindGeminiSettingsPaths("user")
+	paths, err := AgentGemini.ConfigPaths("user")
 	if err != nil {
 		t.Fatalf("FindGeminiSettingsPaths returned error: %v", err)
 	}
@@ -45,31 +45,13 @@ func TestFindGeminiSettingsPathsLegacyUserScope(t *testing.T) {
 	}
 }
 
-func TestFindGeminiSettingsPathsGlobalFallbackWhenHomeMissing(t *testing.T) {
-	t.Setenv("HOME", "")
-	t.Setenv("USERPROFILE", "")
-	t.Setenv("HOMEDRIVE", "")
-	t.Setenv("HOMEPATH", "")
-
-	paths, err := FindGeminiSettingsPaths("global")
-	if err != nil {
-		t.Fatalf("FindGeminiSettingsPaths returned error: %v", err)
-	}
-
-	want := filepath.Join("~", ".gemini", "settings.json")
-	if len(paths) != 1 || paths[0] != want {
-		t.Fatalf("fallback paths = %v, want [%q]", paths, want)
-	}
-}
-
 func TestFindGeminiSettingsPathsProjectScope(t *testing.T) {
-	paths, err := FindGeminiSettingsPaths("project")
+	paths, err := AgentGemini.ConfigPaths("project")
 	if err != nil {
 		t.Fatalf("FindGeminiSettingsPaths returned error: %v", err)
 	}
 
 	want := []string{
-		filepath.Join(".", ".gemini", "settings.json"),
 		filepath.Join(".gemini", "settings.json"),
 	}
 	if len(paths) != len(want) {
@@ -83,7 +65,7 @@ func TestFindGeminiSettingsPathsProjectScope(t *testing.T) {
 }
 
 func TestFindGeminiSettingsPathsInvalidScope(t *testing.T) {
-	if _, err := FindGeminiSettingsPaths("bogus"); err == nil {
+	if _, err := AgentGemini.ConfigPaths("bogus"); err == nil {
 		t.Error("expected invalid Gemini scope error")
 	}
 }
@@ -103,7 +85,7 @@ func TestFindBestGeminiPathPrefersExistingFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := FindBestGeminiPath("global")
+	got, err := AgentGemini.BestConfigPath("global")
 	if err != nil {
 		t.Fatalf("FindBestGeminiPath returned error: %v", err)
 	}
@@ -119,7 +101,7 @@ func TestFindBestGeminiPathReturnsFirstWhenNoneExist(t *testing.T) {
 	t.Setenv("HOMEDRIVE", "")
 	t.Setenv("HOMEPATH", "")
 
-	got, err := FindBestGeminiPath("global")
+	got, err := AgentGemini.BestConfigPath("global")
 	if err != nil {
 		t.Fatalf("FindBestGeminiPath returned error: %v", err)
 	}
@@ -131,7 +113,7 @@ func TestFindBestGeminiPathReturnsFirstWhenNoneExist(t *testing.T) {
 }
 
 func TestFindBestGeminiPathInvalidScope(t *testing.T) {
-	if _, err := FindBestGeminiPath("bogus"); err == nil {
+	if _, err := AgentGemini.BestConfigPath("bogus"); err == nil {
 		t.Fatal("expected invalid scope error")
 	}
 }

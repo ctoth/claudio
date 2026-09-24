@@ -28,12 +28,10 @@ const (
 // ParseAgent validates and converts a string into an Agent.
 func ParseAgent(s string) (Agent, error) {
 	agent := Agent(strings.ToLower(strings.TrimSpace(s)))
-	switch agent {
-	case AgentAuto, AgentAll, AgentClaude, AgentCodex, AgentGemini, AgentQwen, AgentCopilot:
+	if agent == AgentAuto || agent == AgentAll || agent.IsConcrete() {
 		return agent, nil
-	default:
-		return "", fmt.Errorf("invalid agent '%s': must be 'auto', 'claude', 'codex', 'gemini', 'qwen', 'copilot', or 'all'", s)
 	}
+	return "", fmt.Errorf("invalid agent '%s': must be 'auto', 'claude', 'codex', 'gemini', 'qwen', 'copilot', or 'all'", s)
 }
 
 // String returns the agent's string form.
@@ -41,17 +39,17 @@ func (a Agent) String() string { return string(a) }
 
 // ConcreteAgents returns every directly installable agent.
 func ConcreteAgents() []Agent {
-	return []Agent{AgentClaude, AgentCodex, AgentGemini, AgentQwen, AgentCopilot}
+	agents := make([]Agent, len(agentSpecs))
+	for i, s := range agentSpecs {
+		agents[i] = s.agent
+	}
+	return agents
 }
 
 // IsConcrete returns true for agents that map to one config target.
 func (a Agent) IsConcrete() bool {
-	switch a {
-	case AgentClaude, AgentCodex, AgentGemini, AgentQwen, AgentCopilot:
-		return true
-	default:
-		return false
-	}
+	_, ok := a.spec()
+	return ok
 }
 
 // NormalizeScope converts public and legacy scope names to Claudio's public scope vocabulary.
@@ -70,34 +68,18 @@ func NormalizeScope(scope string) (string, error) {
 // Matcher returns the default hook matcher pattern for the agent.
 // Codex uses "*"; Claude Code uses ".*".
 func (a Agent) Matcher() string {
-	switch a {
-	case AgentCodex:
-		return "*"
-	case AgentGemini, AgentCopilot:
-		return ""
-	case AgentQwen:
-		return ".*"
-	default:
-		return ".*"
+	if s, ok := a.spec(); ok {
+		return s.matcher
 	}
+	return ".*"
 }
 
 // Registry returns the hook definitions supported for the agent.
 func (a Agent) Registry() []HookDefinition {
-	switch a {
-	case AgentCodex:
-		return CodexHooks
-	case AgentGemini:
-		return GeminiHooks
-	case AgentQwen:
-		return QwenHooks
-	case AgentCopilot:
-		return CopilotHooks
-	case AgentClaude:
-		return AllHooks
-	default:
-		return nil
+	if s, ok := a.spec(); ok {
+		return *s.registry
 	}
+	return nil
 }
 
 // EnabledHooks returns the agent's default-enabled hook definitions.
@@ -120,28 +102,4 @@ func (a Agent) HookNames() []string {
 		names[i] = h.Name
 	}
 	return names
-}
-
-// BestConfigPath returns the config file path to install hooks into for the agent and scope.
-func (a Agent) BestConfigPath(scope string) (string, error) {
-	normalizedScope, err := NormalizeScope(scope)
-	if err != nil {
-		return "", err
-	}
-	switch a {
-	case AgentCodex:
-		return FindBestCodexPath(normalizedScope)
-	case AgentClaude:
-		return FindBestSettingsPath(normalizedScope)
-	case AgentGemini:
-		return FindBestGeminiPath(normalizedScope)
-	case AgentQwen:
-		return FindBestQwenPath(normalizedScope)
-	case AgentCopilot:
-		return FindBestCopilotPath(normalizedScope)
-	case AgentAuto, AgentAll:
-		return "", fmt.Errorf("agent '%s' must be resolved before selecting a config path", a)
-	default:
-		return "", fmt.Errorf("invalid agent '%s'", a)
-	}
 }

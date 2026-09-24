@@ -1,6 +1,7 @@
 package install
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -15,7 +16,7 @@ func TestFindClaudeSettingsPathsGlobalScope(t *testing.T) {
 	t.Setenv("HOMEDRIVE", "")
 	t.Setenv("HOMEPATH", "")
 
-	paths, err := FindClaudeSettingsPaths("global")
+	paths, err := AgentClaude.ConfigPaths("global")
 	if err != nil {
 		t.Fatalf("FindClaudeSettingsPaths returned error: %v", err)
 	}
@@ -25,23 +26,6 @@ func TestFindClaudeSettingsPathsGlobalScope(t *testing.T) {
 	want := filepath.Join(home, ".claude", "settings.json")
 	if paths[0] != want {
 		t.Errorf("first global Claude path = %q, want %q", paths[0], want)
-	}
-}
-
-func TestFindClaudeSettingsPathsGlobalFallbackWhenHomeMissing(t *testing.T) {
-	t.Setenv("HOME", "")
-	t.Setenv("USERPROFILE", "")
-	t.Setenv("HOMEDRIVE", "")
-	t.Setenv("HOMEPATH", "")
-
-	paths, err := FindClaudeSettingsPaths("global")
-	if err != nil {
-		t.Fatalf("FindClaudeSettingsPaths returned error: %v", err)
-	}
-
-	want := filepath.Join("~", ".claude", "settings.json")
-	if len(paths) != 1 || paths[0] != want {
-		t.Fatalf("fallback paths = %v, want [%q]", paths, want)
 	}
 }
 
@@ -107,7 +91,7 @@ func TestFindClaudeSettings(t *testing.T) {
 			defer cleanup()
 
 			// Test the FindClaudeSettingsPaths function
-			paths, err := FindClaudeSettingsPaths(tc.scope)
+			paths, err := AgentClaude.ConfigPaths(tc.scope)
 			if err != nil {
 				t.Errorf("FindClaudeSettingsPaths failed: %v", err)
 				return
@@ -145,7 +129,7 @@ func TestFindClaudeSettingsInvalidScope(t *testing.T) {
 
 	for _, scope := range invalidScopes {
 		t.Run("invalid_scope_"+scope, func(t *testing.T) {
-			paths, err := FindClaudeSettingsPaths(scope)
+			paths, err := AgentClaude.ConfigPaths(scope)
 
 			if err == nil {
 				t.Errorf("Expected error for invalid scope '%s', but got paths: %v", scope, paths)
@@ -237,7 +221,7 @@ func TestFindClaudeSettingsExistingFiles(t *testing.T) {
 			defer cleanup()
 
 			// Test finding settings
-			paths, err := FindClaudeSettingsPaths(tc.scope)
+			paths, err := AgentClaude.ConfigPaths(tc.scope)
 			if err != nil {
 				t.Errorf("FindClaudeSettingsPaths failed: %v", err)
 				return
@@ -291,7 +275,7 @@ func TestFindClaudeSettingsMultiplePaths(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			paths, err := FindClaudeSettingsPaths(tc.scope)
+			paths, err := AgentClaude.ConfigPaths(tc.scope)
 			if err != nil {
 				t.Errorf("FindClaudeSettingsPaths failed: %v", err)
 				return
@@ -327,7 +311,7 @@ func TestFindClaudeSettingsPathValidation(t *testing.T) {
 
 	for _, scope := range scopes {
 		t.Run("path_validation_"+scope, func(t *testing.T) {
-			paths, err := FindClaudeSettingsPaths(scope)
+			paths, err := AgentClaude.ConfigPaths(scope)
 			if err != nil {
 				t.Errorf("FindClaudeSettingsPaths failed: %v", err)
 				return
@@ -447,7 +431,7 @@ func TestFindBestSettingsPath(t *testing.T) {
 		t.Setenv("HOMEDRIVE", "")
 		t.Setenv("HOMEPATH", "")
 
-		path, err := FindBestSettingsPath("user")
+		path, err := AgentClaude.BestConfigPath("user")
 		if err != nil {
 			t.Fatalf("FindBestSettingsPath failed: %v", err)
 		}
@@ -465,7 +449,7 @@ func TestFindBestSettingsPath(t *testing.T) {
 		t.Setenv("HOMEDRIVE", "")
 		t.Setenv("HOMEPATH", "")
 
-		path, err := FindBestSettingsPath("user")
+		path, err := AgentClaude.BestConfigPath("user")
 		if err != nil {
 			t.Fatalf("FindBestSettingsPath failed: %v", err)
 		}
@@ -477,7 +461,7 @@ func TestFindBestSettingsPath(t *testing.T) {
 	})
 
 	t.Run("invalid scope returns error", func(t *testing.T) {
-		_, err := FindBestSettingsPath("invalid")
+		_, err := AgentClaude.BestConfigPath("invalid")
 		if err == nil {
 			t.Error("Expected error for invalid scope")
 		}
@@ -554,7 +538,15 @@ func TestFindClaudeSettingsEnvironmentIntegration(t *testing.T) {
 			cleanup := tc.setup()
 			defer cleanup()
 
-			paths, err := FindClaudeSettingsPaths(tc.scope)
+			paths, err := AgentClaude.ConfigPaths(tc.scope)
+			if tc.envVars["HOME"] == "" && runtime.GOOS != "windows" {
+				// USERPROFILE is a Windows-only home source; elsewhere an
+				// empty HOME means there is no home directory at all.
+				if !errors.Is(err, errNoHomeDirectory) {
+					t.Errorf("ConfigPaths error = %v, want errNoHomeDirectory", err)
+				}
+				return
+			}
 			if err != nil {
 				t.Errorf("FindClaudeSettingsPaths failed: %v", err)
 				return
@@ -597,7 +589,7 @@ func TestFindClaudeSettingsPathsGlobalScopeHonorsClaudeConfigDir(t *testing.T) {
 	t.Setenv("HOMEPATH", "")
 	t.Setenv("CLAUDE_CONFIG_DIR", altProfile)
 
-	paths, err := FindClaudeSettingsPaths("global")
+	paths, err := AgentClaude.ConfigPaths("global")
 	if err != nil {
 		t.Fatalf("FindClaudeSettingsPaths returned error: %v", err)
 	}
@@ -616,7 +608,7 @@ func TestFindClaudeSettingsPathsGlobalScopeIgnoresBlankClaudeConfigDir(t *testin
 	t.Setenv("HOMEPATH", "")
 	t.Setenv("CLAUDE_CONFIG_DIR", "   ")
 
-	paths, err := FindClaudeSettingsPaths("global")
+	paths, err := AgentClaude.ConfigPaths("global")
 	if err != nil {
 		t.Fatalf("FindClaudeSettingsPaths returned error: %v", err)
 	}

@@ -246,8 +246,8 @@ func TestSettingsContainClaudioHooks(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := settingsContainClaudioHooks(tc.settings); got != tc.want {
-				t.Fatalf("settingsContainClaudioHooks() = %v, want %v", got, tc.want)
+			if got := len(ClaudioHookNames(tc.settings)) > 0; got != tc.want {
+				t.Fatalf("ClaudioHookNames non-empty = %v, want %v", got, tc.want)
 			}
 		})
 	}
@@ -263,7 +263,7 @@ func TestAgentDetectionPrivateHelpersRejectInvalidInputs(t *testing.T) {
 	if hasExistingClaudioHooks(AgentAuto, ScopeGlobal) {
 		t.Fatal("auto is not a concrete agent and should not have hook evidence")
 	}
-	if _, err := agentConfigPaths(AgentAuto, ScopeGlobal); err == nil {
+	if _, err := AgentAuto.ConfigPaths(ScopeGlobal); err == nil {
 		t.Fatal("expected invalid concrete agent error for auto")
 	}
 }
