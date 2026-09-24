@@ -119,7 +119,7 @@ func TestValidateAndLoaderAgreeOnAbsolutePaths(t *testing.T) {
 		"drive-backslash":  `C:\Windows\Media\chimes.wav`,
 		"drive-slash":      "C:/Windows/Media/chimes.wav",
 		"drive-relative":   "c:chimes.wav",
-		"unc-backslash":    `\server\share\x.wav`,
+		"unc-backslash":    `\\server\share\x.wav`,
 		"unc-slash":        "//server/share/x.wav",
 		"rooted-backslash": `\Windows\Media\chimes.wav`,
 	}
