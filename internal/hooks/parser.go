@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"maps"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -42,7 +41,6 @@ func (c EventCategory) valid() bool {
 
 func (c EventCategory) String() string {
 	if !c.valid() {
-		slog.Warn("EventCategory.String() received unknown category", "category", int(c))
 		return "unknown"
 	}
 	return categoryNames[c]
@@ -156,17 +154,11 @@ func ParseHookEvent(data []byte) (*HookEvent, error) {
 // payload format does not include hook_event_name.
 func ParseHookEventWithDefault(data []byte, defaultEvent string) (*HookEvent, error) {
 	if len(data) == 0 {
-		err := fmt.Errorf("empty JSON data")
-		slog.Error("parse failed: empty data", "error", err)
-		return nil, err
+		return nil, fmt.Errorf("empty JSON data")
 	}
 
-	slog.Debug("parsing hook JSON", "size_bytes", len(data))
-
 	var event HookEvent
-	err := json.Unmarshal(data, &event)
-	if err != nil {
-		slog.Error("failed to unmarshal hook JSON", "error", err, "data_preview", string(data[:min(100, len(data))]))
+	if err := json.Unmarshal(data, &event); err != nil {
 		return nil, fmt.Errorf("failed to parse hook JSON: %w", err)
 	}
 	if err := event.applyCompatibilityAliases(data); err != nil {
@@ -179,29 +171,14 @@ func ParseHookEventWithDefault(data []byte, defaultEvent string) (*HookEvent, er
 
 	// Validate required fields
 	if event.SessionID == "" {
-		err := fmt.Errorf("missing required field: session_id")
-		slog.Error("validation failed", "error", err)
-		return nil, err
+		return nil, fmt.Errorf("missing required field: session_id")
 	}
-
 	if event.EventName == "" {
-		err := fmt.Errorf("missing required field: hook_event_name")
-		slog.Error("validation failed", "error", err)
-		return nil, err
+		return nil, fmt.Errorf("missing required field: hook_event_name")
 	}
-
 	if event.CWD == "" {
-		err := fmt.Errorf("missing required field: cwd")
-		slog.Error("validation failed", "error", err)
-		return nil, err
+		return nil, fmt.Errorf("missing required field: cwd")
 	}
-
-	slog.Debug("hook event parsed successfully",
-		"event_name", event.EventName,
-		"session_id", event.SessionID,
-		"tool_name", getStringPtr(event.ToolName),
-		"has_tool_response", event.ToolResponse != nil)
-
 	return &event, nil
 }
 
@@ -229,7 +206,6 @@ type hookEventAliases struct {
 func (e *HookEvent) applyCompatibilityAliases(data []byte) error {
 	var aliases hookEventAliases
 	if err := json.Unmarshal(data, &aliases); err != nil {
-		slog.Error("failed to unmarshal hook JSON aliases", "error", err)
 		return fmt.Errorf("failed to parse hook JSON aliases: %w", err)
 	}
 	if e.SessionID == "" {
@@ -343,20 +319,6 @@ func (e *HookEvent) GetContext() *EventContext {
 	if context.ToolName != "" && context.OriginalTool == "" {
 		context.FileType = e.extractFileType()
 	}
-
-	slog.Debug("event context extracted",
-		"event_name", e.EventName,
-		"category", context.Category.String(),
-		"sound_hint", context.SoundHint,
-		"tool_name", context.ToolName,
-		"original_tool", context.OriginalTool,
-		"command", context.Command,
-		"subcommand", context.Subcommand,
-		"phase", context.Phase,
-		"is_success", context.IsSuccess,
-		"has_error", context.HasError,
-		"file_type", context.FileType,
-		"operation", context.Operation)
 
 	return context
 }
@@ -472,7 +434,6 @@ func isMCPToolName(toolName string) bool {
 // analyzeToolResponse examines tool response to determine success/error status and error type
 func (e *HookEvent) analyzeToolResponse() (success bool, hasError bool, errorType string) {
 	if e.ToolResponse == nil {
-		slog.Debug("no tool response to analyze")
 		return true, false, "" // No response usually means success
 	}
 
@@ -483,11 +444,9 @@ func (e *HookEvent) analyzeToolResponse() (success bool, hasError bool, errorTyp
 		if stringErr := json.Unmarshal(*e.ToolResponse, &responseText); stringErr == nil {
 			return analyzeTextToolResponse(responseText)
 		}
-		slog.Error("failed to parse tool response", "error", err)
+		slog.Warn("tool response is not JSON; treating it as an error", "error", err)
 		return false, true, ""
 	}
-
-	slog.Debug("analyzing tool response", "response_keys", slices.Collect(maps.Keys(response)))
 
 	// Check for interruption first (more specific than stderr)
 	if interrupted, ok := response["interrupted"].(bool); ok && interrupted {
@@ -598,7 +557,6 @@ func (e *HookEvent) extractFileType() string {
 		if path, ok := input[field].(string); ok && path != "" {
 			fileType := extractFileExtension(path)
 			if fileType != "" {
-				slog.Debug("extracted file type", "field", field, "path", path, "file_type", fileType)
 				return fileType
 			}
 		}
@@ -650,12 +608,6 @@ func (e *HookEvent) extractCommandInfo() CommandInfo {
 		Subcommand:    subCmd,
 		HasSubcommand: subCmd != "",
 	}
-
-	slog.Debug("extracted command info",
-		"original", command,
-		"command", result.Command,
-		"subcommand", result.Subcommand,
-		"has_subcommand", result.HasSubcommand)
 
 	return result
 }
@@ -726,33 +678,22 @@ var (
 	idleKeywords       = []string{"idle", "been idle", "idle for"}
 )
 
-// detectNotificationType analyzes notification message content to generate specific sound hints
+// detectNotificationType analyzes notification message content to generate
+// specific sound hints. The message is user content and is never logged.
 func (e *HookEvent) detectNotificationType() string {
 	if e.Message == nil {
-		slog.Debug("detectNotificationType: no message field, using generic notification")
 		return "notification"
 	}
-
 	message := strings.ToLower(*e.Message)
-	slog.Debug("detectNotificationType: analyzing message", "message", *e.Message)
-
-	// Check for permission-related notifications
 	for _, keyword := range permissionKeywords {
 		if strings.Contains(message, keyword) {
-			slog.Debug("detectNotificationType: detected permission notification", "keyword", keyword)
 			return "notification-permission"
 		}
 	}
-
-	// Check for idle-related notifications
 	for _, keyword := range idleKeywords {
 		if strings.Contains(message, keyword) {
-			slog.Debug("detectNotificationType: detected idle notification", "keyword", keyword)
 			return "notification-idle"
 		}
 	}
-
-	// Default fallback for generic notifications
-	slog.Debug("detectNotificationType: using generic notification fallback")
 	return "notification"
 }

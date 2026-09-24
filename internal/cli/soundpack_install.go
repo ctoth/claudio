@@ -72,7 +72,6 @@ func (c *CLI) runSoundpackInstall(cmd *cobra.Command, srcPath string, setDefault
 
 	// Validate unless --skip-validate
 	if !skipValidate {
-		slog.Debug("validating soundpack before install")
 		result, valErr := validateSoundpackPath(srcPath)
 		if valErr == nil {
 			valErr = result.Err()

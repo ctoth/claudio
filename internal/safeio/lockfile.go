@@ -45,7 +45,6 @@ func LockFile(lockPath string) (*flock.Flock, error) {
 		return lock, nil
 	}
 	if err == nil || errors.Is(err, context.DeadlineExceeded) {
-		slog.Debug("file lock still held at deadline", "path", lockPath, "timeout", LockTimeout)
 		return nil, fmt.Errorf("%w: %s", ErrLockHeld, lockPath)
 	}
 	return nil, fmt.Errorf("failed to try-lock %s: %w", lockPath, err)

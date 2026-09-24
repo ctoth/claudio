@@ -2,7 +2,9 @@ package cli
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -39,8 +41,6 @@ type CLI struct {
 // the returned *CLI, so they share its config manager and lazily opened
 // resources (resolver, audio backend, tracking DB) without a context lookup.
 func NewCLI() *CLI {
-	slog.Debug("creating new CLI instance")
-
 	c := &CLI{configManager: config.NewConfigManager()}
 
 	rootCmd := &cobra.Command{
@@ -165,7 +165,6 @@ func (c *CLI) initializeAudioSystem(cfg *config.Config) error {
 	if err := c.initializeAudioSystemWithBackend(cfg); err != nil {
 		return fmt.Errorf("error initializing audio backend: %w", err)
 	}
-	slog.Debug("audio backend system initialized")
 	return nil
 }
 
@@ -261,8 +260,6 @@ func (c *CLI) platformSoundpackMapper() (soundpack.PathMapper, error) {
 
 // initializeAudioSystemWithBackend creates and configures the audio backend
 func (c *CLI) initializeAudioSystemWithBackend(cfg *config.Config) error {
-	slog.Debug("initializing audio backend", "backend_type", cfg.AudioBackend)
-
 	// Create audio backend using package-level constructor
 	backend, err := audio.NewBackend(cfg.AudioBackend)
 	if err != nil {
@@ -282,6 +279,13 @@ func (c *CLI) initializeAudioSystemWithBackend(cfg *config.Config) error {
 		"volume", volume)
 
 	return nil
+}
+
+// payloadFingerprint is a short SHA-256 prefix that identifies a hook
+// payload in logs without revealing its content.
+func payloadFingerprint(data []byte) string {
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:6])
 }
 
 // readHookInput reads hook JSON from stdin or an internal payload file.
@@ -330,6 +334,11 @@ func processHookInput(cmd *cobra.Command, cli *CLI, cfg *config.Config, inputDat
 	defaultEvent, _ := cmd.Flags().GetString("hook-event")
 	hookEvent, err := hooks.ParseHookEventWithDefault(inputData, defaultEvent)
 	if err != nil {
+		// The payload can carry prompts and tool output: identify it by
+		// size and hash only. Run logs the error itself.
+		slog.Warn("hook payload rejected",
+			"payload_bytes", len(inputData),
+			"payload_sha256", payloadFingerprint(inputData))
 		return fmt.Errorf("error parsing hook JSON: %w", err)
 	}
 
@@ -456,8 +465,6 @@ func setupDefaultCommandLogging(stderr io.Writer) {
 
 // processHookEvent processes the parsed hook event
 func (c *CLI) processHookEvent(hookEvent *hooks.HookEvent, cfg *config.Config, stdout, stderr io.Writer) {
-	slog.Debug("processing hook event", "event_name", hookEvent.EventName)
-
 	// Extract hook context directly from event
 	eventCtx := hookEvent.GetContext()
 
@@ -484,9 +491,6 @@ func (c *CLI) processHookEvent(hookEvent *hooks.HookEvent, cfg *config.Config, s
 		buf = tracking.NewLookupBuffer()
 		dbHook = tracking.NewDBHook(c.trackingDB, hookEvent.SessionID)
 		observer = buf.Observer()
-		slog.Debug("created LookupBuffer + DBHook for tracking", "session_id", hookEvent.SessionID)
-	} else {
-		slog.Debug("tracking disabled; mapper resolves without an observer")
 	}
 
 	soundMapper := sounds.NewSoundMapperWithResolver(c.soundpackResolver, observer)
@@ -530,8 +534,6 @@ func (c *CLI) processHookEvent(hookEvent *hooks.HookEvent, cfg *config.Config, s
 
 // playSoundWithBackend plays the specified sound file using the configured audio backend
 func (c *CLI) playSoundWithBackend(soundPath string, volume float64) error {
-	slog.Debug("loading and playing sound with backend", "path", soundPath, "volume", volume)
-
 	// Use unified soundpack resolver to resolve sound file path
 	fullPath, err := c.soundpackResolver.ResolveSound(soundPath)
 	if err != nil {
@@ -552,7 +554,6 @@ func (c *CLI) playSoundWithBackend(soundPath string, volume float64) error {
 		return fmt.Errorf("failed to play sound with backend: %w", err)
 	}
 
-	slog.Debug("sound playback completed successfully", "path", soundPath, "backend_type", fmt.Sprintf("%T", c.audioBackend))
 	return nil
 }
 
@@ -646,27 +647,13 @@ func setupLogging(cfg *config.Config, stderrWriter io.Writer) {
 // any --config override the user passed, because the second LoadConfig
 // went through the env+default search path instead.
 func (c *CLI) initializeTracking(cfg *config.Config) {
-	slog.Debug("initializeTracking() called", "trackingDB_nil", c.trackingDB == nil)
-
 	if c.trackingDB != nil {
-		slog.Debug("tracking database already initialized, skipping")
 		return // Already initialized
 	}
 
 	if cfg == nil {
-		slog.Debug("initializeTracking called with nil cfg; skipping")
 		return
 	}
-
-	slog.Debug("tracking config loaded",
-		"tracking_nil", cfg.SoundTracking == nil,
-		"enabled", cfg.SoundTracking != nil && cfg.SoundTracking.Enabled,
-		"db_path", func() string {
-			if cfg.SoundTracking != nil {
-				return cfg.SoundTracking.DatabasePath
-			}
-			return ""
-		}())
 
 	// Check if tracking is enabled
 	if cfg.SoundTracking == nil || !cfg.SoundTracking.Enabled {
@@ -691,8 +678,6 @@ func (c *CLI) initializeTracking(cfg *config.Config) {
 		}
 		slog.Debug("using default XDG database path", "path", dbPath)
 	}
-
-	slog.Debug("attempting to initialize tracking database", "path", dbPath)
 
 	// Initialize database with graceful degradation
 	db, err := tracking.NewDatabase(dbPath)
@@ -723,7 +708,6 @@ func getPlatformExecutableDirectory() string {
 	}
 
 	execDir := filepath.Dir(executable)
-	slog.Debug("executable directory detected for platform detection", "executable", executable, "directory", execDir)
 
 	return execDir
 }
@@ -734,8 +718,6 @@ func loadEmbeddedPlatformSoundpack(identifier string) (soundpack.PathMapper, err
 	if !ok {
 		return nil, fmt.Errorf("invalid embedded soundpack identifier: %s", identifier)
 	}
-
-	slog.Debug("loading embedded platform soundpack", "filename", filename)
 
 	data, err := config.GetEmbeddedPlatformSoundpackData(filename)
 	if err != nil {

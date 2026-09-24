@@ -140,7 +140,6 @@ func (b *Backend) Play(ctx context.Context, source audio.AudioSource) (err error
 	cancelStart()
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) && playCtx.Err() == nil {
-			slog.Warn("Oto output did not start", "timeout", b.startTimeout)
 			return fmt.Errorf("initialize Oto output: %w after %v", ErrPlaybackStalled, b.startTimeout)
 		}
 		return fmt.Errorf("initialize Oto output: %w", err)
@@ -184,7 +183,6 @@ func (b *Backend) Play(ctx context.Context, source audio.AudioSource) (err error
 		case <-playCtx.Done():
 			return playCtx.Err()
 		case <-deadline.C:
-			slog.Warn("Oto playback stalled; abandoning player", "limit", limit)
 			return fmt.Errorf("oto playback: %w after %v", ErrPlaybackStalled, limit)
 		case <-ticker.C:
 		}

@@ -12,19 +12,14 @@ func CommandExists(command string) bool {
 	}
 
 	_, err := exec.LookPath(command)
-	exists := err == nil
-	slog.Debug("command existence check", "command", command, "exists", exists)
-	return exists
+	return err == nil
 }
 
 // detectOptimalBackendWithChecker picks the "auto" backend; the command
 // checker is injected so tests can simulate any PATH.
 func detectOptimalBackendWithChecker(isWSL bool, commandChecker func(string) bool) string {
-	slog.Debug("detecting optimal audio backend", "is_wsl", isWSL)
-
 	if isWSL {
 		// Preserve WSL's system-command routing to the host audio server.
-		slog.Debug("WSL detected, preferring system commands over oto")
 
 		preferredCmd := getPreferredSystemCommandWithChecker(commandChecker)
 		if preferredCmd != "" {
@@ -45,11 +40,9 @@ func detectOptimalBackendWithChecker(isWSL bool, commandChecker func(string) boo
 func getPreferredSystemCommandWithChecker(commandChecker func(string) bool) string {
 	available := getAvailableSystemCommandsWithChecker(commandChecker)
 	if len(available) == 0 {
-		slog.Debug("no preferred system audio commands found")
 		return ""
 	}
 
-	slog.Debug("preferred system command found", "command", available[0])
 	return available[0]
 }
 

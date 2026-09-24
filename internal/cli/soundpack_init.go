@@ -69,7 +69,6 @@ func runSoundpackInit(cmd *cobra.Command, name, dir string, fromPlatform bool) e
 	// If --from-platform, pre-fill from current platform's embedded soundpack
 	if fromPlatform {
 		platformFile := detectPlatformFile()
-		slog.Debug("loading platform soundpack for pre-fill", "platform_file", platformFile)
 
 		data, err := config.GetEmbeddedPlatformSoundpackData(platformFile)
 		if err != nil {

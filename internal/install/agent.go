@@ -2,7 +2,6 @@ package install
 
 import (
 	"fmt"
-	"log/slog"
 	"strings"
 )
 
@@ -90,7 +89,6 @@ func (a Agent) EnabledHooks() []HookDefinition {
 			enabled = append(enabled, h)
 		}
 	}
-	slog.Debug("agent enabled hooks", "agent", a, "count", len(enabled))
 	return enabled
 }
 

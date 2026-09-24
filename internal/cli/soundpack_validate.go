@@ -57,8 +57,6 @@ type validateResult struct {
 
 // runSoundpackValidate executes the soundpack validate command
 func runSoundpackValidate(cmd *cobra.Command, path string) error {
-	slog.Debug("running soundpack validate", "path", path)
-
 	result, err := validateSoundpackPath(path)
 	if err != nil {
 		return err
@@ -76,8 +74,6 @@ func runSoundpackValidate(cmd *cobra.Command, path string) error {
 
 // validateJSONSoundpackFile validates a JSON soundpack file
 func validateJSONSoundpackFile(path string) (validateResult, error) {
-	slog.Debug("validating JSON soundpack", "path", path)
-
 	// ValidateJSONSoundpack applies the size cap, basics and mappings
 	// count cap, then checks every mapping through the runtime loader's
 	// trust boundary, so validate, install and add accept exactly what the
@@ -158,8 +154,6 @@ func (r validateResult) Err() error {
 
 // validateDirectorySoundpack validates a directory-based soundpack
 func validateDirectorySoundpack(dirPath string) (validateResult, error) {
-	slog.Debug("validating directory soundpack", "path", dirPath)
-
 	// Get all known keys
 	allKeys, err := ExtractAllSoundKeys()
 	if err != nil {
@@ -335,7 +329,6 @@ func newDirectorySoundpackWalkFunc(dirPath string, found map[string]string) file
 		}
 		if info.IsDir() {
 			if path != dirPath && info.Name() == ".git" {
-				slog.Debug("skipping VCS metadata directory in soundpack scan", "path", path)
 				return filepath.SkipDir
 			}
 			return nil
@@ -355,8 +348,6 @@ func newDirectorySoundpackWalkFunc(dirPath string, found map[string]string) file
 		}
 		// Normalize to forward slashes for key matching
 		key := filepath.ToSlash(rel)
-
-		slog.Debug("found audio file in directory", "key", key, "path", path)
 
 		found[key] = path
 

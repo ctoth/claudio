@@ -121,8 +121,6 @@ For Antigravity, this removes ~/.gemini/config/skills/claudio/SKILL.md,
 
 // runInstallCommandsE handles the install-commands subcommand execution
 func runInstallCommandsE(cmd *cobra.Command, args []string) error {
-	slog.Debug("install-commands started")
-
 	agent, err := commandArtifactAgentFlag(cmd)
 	if err != nil {
 		return err
@@ -153,8 +151,6 @@ func runInstallCommandsE(cmd *cobra.Command, args []string) error {
 
 // runUninstallCommandsE handles the uninstall-commands subcommand execution.
 func runUninstallCommandsE(cmd *cobra.Command, args []string) error {
-	slog.Debug("uninstall-commands started")
-
 	agent, err := commandArtifactAgentFlag(cmd)
 	if err != nil {
 		return err
@@ -319,8 +315,6 @@ func installCommandArtifact(artifact commandArtifact) error {
 		return fmt.Errorf("failed to create command artifact directory: %w", err)
 	}
 
-	slog.Debug("command artifact directory ready", "path", artifact.Directory)
-
 	existing, err := os.ReadFile(artifact.Path)
 	if err == nil {
 		if artifact.isCurrentContent(existing) {
@@ -348,8 +342,6 @@ func installCommandArtifact(artifact commandArtifact) error {
 		}
 		return fmt.Errorf("failed to close command artifact: %w", closeErr)
 	}
-
-	slog.Debug("command artifact written successfully", "path", artifact.Path)
 
 	return nil
 }

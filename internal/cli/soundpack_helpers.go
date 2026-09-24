@@ -47,8 +47,6 @@ func discoverSoundpacks() ([]soundpackInfo, error) {
 // resolves a name to the first entry with that name (lookupSoundpack), so
 // all three agree.
 func discoverSoundpacksWithPaths(configPaths []string) []soundpackInfo {
-	slog.Debug("discovering soundpacks")
-
 	embeddedPacks, err := discoverEmbeddedSoundpacks()
 	if err != nil {
 		slog.Warn("failed to discover embedded soundpacks", "error", err)
@@ -111,7 +109,6 @@ func discoverEmbeddedSoundpacks() ([]soundpackInfo, error) {
 		}
 
 		name := strings.TrimSuffix(file, ".json")
-		slog.Debug("discovered embedded soundpack", "name", name)
 
 		packs = append(packs, soundpackInfo{
 			Name:       name,
@@ -136,8 +133,6 @@ func discoverXDGSoundpacks() []soundpackInfo {
 	var packs []soundpackInfo
 
 	for _, basePath := range basePaths {
-		slog.Debug("scanning XDG soundpack directory", "path", basePath)
-
 		entries, err := os.ReadDir(basePath)
 		if err != nil {
 			slog.Debug("could not read XDG soundpack directory", "path", basePath, "error", err)
@@ -157,7 +152,6 @@ func discoverXDGSoundpacks() []soundpackInfo {
 					})
 					continue
 				}
-				slog.Debug("discovered directory soundpack", "name", entry.Name(), "path", fullPath)
 				packs = append(packs, soundpackInfo{
 					Name: entry.Name(),
 					Type: "directory",
@@ -176,7 +170,6 @@ func discoverXDGSoundpacks() []soundpackInfo {
 				if name == "" {
 					name = strings.TrimSuffix(entry.Name(), ".json")
 				}
-				slog.Debug("discovered JSON soundpack", "name", name, "path", fullPath)
 				packs = append(packs, soundpackInfo{
 					Name: name,
 					Type: "json",
@@ -190,7 +183,6 @@ func discoverXDGSoundpacks() []soundpackInfo {
 	parentPaths := config.SoundpackPaths("")
 	for _, basePath := range parentPaths {
 		parentDir := filepath.Dir(basePath) // claudio/ directory
-		slog.Debug("scanning parent claudio directory for JSON soundpacks", "path", parentDir)
 
 		entries, err := os.ReadDir(parentDir)
 		if err != nil {
@@ -210,7 +202,6 @@ func discoverXDGSoundpacks() []soundpackInfo {
 			if name == "" {
 				name = strings.TrimSuffix(entry.Name(), ".json")
 			}
-			slog.Debug("discovered JSON soundpack in parent dir", "name", name, "path", fullPath)
 			packs = append(packs, soundpackInfo{
 				Name: name,
 				Type: "json",
@@ -227,8 +218,6 @@ func discoverConfigSoundpacks(configPaths []string) []soundpackInfo {
 	var packs []soundpackInfo
 
 	for _, path := range configPaths {
-		slog.Debug("checking config soundpack_path", "path", path)
-
 		info, err := os.Stat(path)
 		if err != nil {
 			slog.Debug("config soundpack_path not accessible", "path", path, "error", err)
@@ -237,7 +226,6 @@ func discoverConfigSoundpacks(configPaths []string) []soundpackInfo {
 
 		if info.IsDir() {
 			name := filepath.Base(path)
-			slog.Debug("discovered directory soundpack from config", "name", name, "path", path)
 			packs = append(packs, soundpackInfo{
 				Name: name,
 				Type: "directory",
@@ -253,7 +241,6 @@ func discoverConfigSoundpacks(configPaths []string) []soundpackInfo {
 			if name == "" {
 				name = strings.TrimSuffix(filepath.Base(path), ".json")
 			}
-			slog.Debug("discovered JSON soundpack from config", "name", name, "path", path)
 			packs = append(packs, soundpackInfo{
 				Name: name,
 				Type: "json",
@@ -355,8 +342,6 @@ func ExtractAllSoundKeys() ([]string, error) {
 		for key := range spFile.Mappings {
 			keySet[key] = struct{}{}
 		}
-
-		slog.Debug("extracted keys from platform file", "file", file, "keys", len(spFile.Mappings))
 	}
 
 	if len(keySet) == 0 {
@@ -403,8 +388,6 @@ func categoryFromKey(key string) string {
 // as needed. src must not be a symlink: soundpack sources are untrusted and
 // a link could pull in a file from outside the pack.
 func copyFile(src, dst string) (err error) {
-	slog.Debug("copying file", "src", src, "dst", dst)
-
 	info, err := os.Lstat(src)
 	if err != nil {
 		return fmt.Errorf("failed to inspect source: %w", err)
@@ -448,8 +431,6 @@ func copyFile(src, dst string) (err error) {
 // src root is resolved first; any symlink inside the tree is an error, and
 // .git directories are skipped.
 func copyDirectory(src, dst string) error {
-	slog.Debug("copying directory", "src", src, "dst", dst)
-
 	root, err := filepath.EvalSymlinks(src)
 	if err != nil {
 		return fmt.Errorf("failed to resolve source directory: %w", err)
@@ -470,13 +451,10 @@ func copyDirectory(src, dst string) error {
 		case d.Type()&fs.ModeSymlink != 0:
 			return fmt.Errorf("soundpack contains a symlink, which is not allowed: %s", path)
 		case d.IsDir() && path != root && d.Name() == ".git":
-			slog.Debug("skipping VCS metadata directory", "path", path)
 			return filepath.SkipDir
 		case d.IsDir():
-			slog.Debug("creating directory", "path", dstPath)
 			return os.MkdirAll(dstPath, 0755)
 		default:
-			slog.Debug("copying file in directory", "src", path, "dst", dstPath)
 			return copyFile(path, dstPath)
 		}
 	})

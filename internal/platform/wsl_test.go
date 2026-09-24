@@ -81,3 +81,21 @@ func TestIsWSLDoesNotPanic(t *testing.T) {
 	t.Logf("Real system WSL detection: %v", result)
 	_ = result
 }
+
+// TestIsWSLDetectsOnce: IsWSL is called on every hook (backend choice,
+// default soundpack), so the /proc/version read happens once per process.
+func TestIsWSLDetectsOnce(t *testing.T) {
+	calls := 0
+	prev := isWSL
+	t.Cleanup(func() { isWSL = prev })
+	isWSL = newWSLCache(func() bool { calls++; return true })
+
+	for range 3 {
+		if !IsWSL() {
+			t.Fatal("IsWSL() = false, want the cached detector's true")
+		}
+	}
+	if calls != 1 {
+		t.Errorf("detector ran %d times, want 1", calls)
+	}
+}
