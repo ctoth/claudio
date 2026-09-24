@@ -366,8 +366,8 @@ func TestSoundpackValidate_ValidJSON(t *testing.T) {
 		spFile.Mappings[key] = ""
 	}
 	// Set a few to real files
-	spFile.Mappings["loading/bash-start.wav"] = wav1
-	spFile.Mappings["success/bash-success.wav"] = wav2
+	spFile.Mappings["loading/bash-start.wav"] = "sounds/click.wav"
+	spFile.Mappings["success/bash-success.wav"] = "sounds/beep.wav"
 
 	jsonData, err := json.MarshalIndent(spFile, "", "  ")
 	if err != nil {
@@ -448,8 +448,8 @@ func TestSoundpackValidate_MissingFiles(t *testing.T) {
 		Description: "Pack with broken references",
 		Version:     "1.0.0",
 		Mappings: map[string]string{
-			"loading/bash-start.wav":   filepath.Join(tmpDir, "nonexistent", "missing.wav"),
-			"success/bash-success.wav": filepath.Join(tmpDir, "also", "missing.wav"),
+			"loading/bash-start.wav":   "nonexistent/missing.wav",
+			"success/bash-success.wav": "also/missing.wav",
 			"default.wav":              "",
 		},
 	}
@@ -552,7 +552,7 @@ func TestSoundpackValidate_CoverageCalculation(t *testing.T) {
 
 	// Fill first 10 keys with real files
 	for i := 0; i < 10 && i < len(keys); i++ {
-		spFile.Mappings[keys[i]] = wavFiles[i]
+		spFile.Mappings[keys[i]] = fmt.Sprintf("sounds/sound%d.wav", i)
 	}
 
 	jsonData, err := json.MarshalIndent(spFile, "", "  ")
@@ -731,7 +731,7 @@ func TestSoundpackValidate_FormatCheck(t *testing.T) {
 		Description: "Format check test",
 		Version:     "1.0.0",
 		Mappings: map[string]string{
-			"loading/bash-start.wav": txtFile,
+			"loading/bash-start.wav": "sounds/oops.txt",
 			"default.wav":            "",
 		},
 	}

@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -19,65 +20,49 @@ import (
 // the list subcommand and the soundpack_git.go discovery paths.
 type soundpackInfo struct {
 	Name       string
-	Type       string // "embedded", "json", "directory"
-	SoundCount int
+	Type       string // "embedded", "git", "json", "directory"
+	SoundCount int    // set only by withSoundCounts (soundpack list)
 	Path       string
+	Identifier string // "embedded:<file>" for embedded packs, empty otherwise
 }
 
-func soundpackPathMatchesName(candidate, name string) bool {
-	info, err := os.Stat(candidate)
-	if err != nil {
-		return false
-	}
-	if info.IsDir() {
-		return filepath.Base(filepath.Clean(candidate)) == name
-	}
-	if !strings.EqualFold(filepath.Ext(candidate), ".json") {
-		return false
-	}
-	metadata, err := soundpack.PeekJSONSoundpackMetadataFromFile(candidate)
-	if err == nil && metadata.Name != "" {
-		return metadata.Name == name
-	}
-	base := filepath.Base(candidate)
-	return strings.TrimSuffix(base, filepath.Ext(base)) == name
-}
+const soundpackTypeEmbedded = "embedded"
 
 var embeddedPlatformSoundpackFiles = []string{"windows.json", "wsl.json", "darwin.json", "linux.json"}
 
-func embeddedPlatformSoundpackIdentifier(name string) (string, bool) {
-	if name == "" || strings.ContainsAny(name, `/\`) || filepath.Ext(name) != "" {
-		return "", false
-	}
-
-	filename := name + ".json"
-	for _, embedded := range embeddedPlatformSoundpackFiles {
-		if filename == embedded {
-			return "embedded:" + filename, true
-		}
-	}
-
-	if _, err := config.GetEmbeddedPlatformSoundpackData(filename); err == nil {
-		return "embedded:" + filename, true
-	}
-
-	return "", false
+// discoverSoundpacks lists every soundpack reachable by name, using the
+// soundpack_paths of the effective XDG config. See
+// discoverSoundpacksWithPaths for the order.
+func discoverSoundpacks() ([]soundpackInfo, error) {
+	return discoverSoundpacksWithPaths(configuredSoundpackPaths()), nil
 }
 
-// discoverSoundpacks finds all available soundpacks from embedded, XDG, and config sources.
-// Returns a deduplicated list of soundpack info structs.
-func discoverSoundpacks() ([]soundpackInfo, error) {
+// discoverSoundpacksWithPaths lists every soundpack reachable by name, in
+// resolution precedence order: embedded platform packs, managed git packs,
+// XDG data directory packs, then configPaths (config soundpack_paths).
+// Entries with the same name and path are listed once. Discovery reads
+// names only and leaves SoundCount zero, so name lookup on the hook hot
+// path never walks pack directories (see withSoundCounts). `soundpack list`
+// prints this list, `soundpack use` accepts its names, and the runtime
+// resolves a name to the first entry with that name (lookupSoundpack), so
+// all three agree.
+func discoverSoundpacksWithPaths(configPaths []string) []soundpackInfo {
 	slog.Debug("discovering soundpacks")
 
-	var packs []soundpackInfo
-	seen := make(map[string]struct{}) // Deduplicate by name+path
-
-	// 1. Embedded platform packs (always present)
 	embeddedPacks, err := discoverEmbeddedSoundpacks()
 	if err != nil {
 		slog.Warn("failed to discover embedded soundpacks", "error", err)
-	} else {
-		for _, p := range embeddedPacks {
+	}
+
+	var packs []soundpackInfo
+	seen := make(map[string]struct{}) // Deduplicate by name+path
+	for _, source := range [][]soundpackInfo{
+		embeddedPacks,
+		discoverManagedGitSoundpacks(),
+		discoverXDGSoundpacks(),
+		discoverConfigSoundpacks(configPaths),
+	} {
+		for _, p := range source {
 			key := p.Name + "|" + p.Path
 			if _, exists := seen[key]; !exists {
 				seen[key] = struct{}{}
@@ -86,38 +71,33 @@ func discoverSoundpacks() ([]soundpackInfo, error) {
 		}
 	}
 
-	// 2. XDG data directory packs
-	xdgPacks := discoverXDGSoundpacks()
-	for _, p := range xdgPacks {
-		key := p.Name + "|" + p.Path
-		if _, exists := seen[key]; !exists {
-			seen[key] = struct{}{}
-			packs = append(packs, p)
-		}
-	}
-
-	// 3. Managed git soundpacks
-	gitPacks := discoverManagedGitSoundpacks()
-	for _, p := range gitPacks {
-		key := p.Name + "|" + p.Path
-		if _, exists := seen[key]; !exists {
-			seen[key] = struct{}{}
-			packs = append(packs, p)
-		}
-	}
-
-	// 4. Config soundpack_paths entries
-	configPacks := discoverConfigSoundpacks()
-	for _, p := range configPacks {
-		key := p.Name + "|" + p.Path
-		if _, exists := seen[key]; !exists {
-			seen[key] = struct{}{}
-			packs = append(packs, p)
-		}
-	}
-
 	slog.Info("total soundpacks discovered", "count", len(packs))
-	return packs, nil
+	return packs
+}
+
+// lookupSoundpack returns the soundpack a name resolves to: the first
+// entry named name in discoverSoundpacksWithPaths(configPaths).
+func lookupSoundpack(name string, configPaths []string) (soundpackInfo, bool) {
+	if name == "" {
+		return soundpackInfo{}, false
+	}
+	for _, p := range discoverSoundpacksWithPaths(configPaths) {
+		if p.Name == name {
+			return p, true
+		}
+	}
+	return soundpackInfo{}, false
+}
+
+// configuredSoundpackPaths returns soundpack_paths from the effective XDG
+// config, or nil when it cannot be loaded.
+func configuredSoundpackPaths() []string {
+	cfg, err := config.NewConfigManager().LoadConfig()
+	if err != nil {
+		slog.Debug("could not load config for soundpack path discovery", "error", err)
+		return nil
+	}
+	return cfg.SoundpackPaths
 }
 
 // discoverEmbeddedSoundpacks returns info for embedded platform packs.
@@ -125,34 +105,19 @@ func discoverEmbeddedSoundpacks() ([]soundpackInfo, error) {
 	var packs []soundpackInfo
 
 	for _, file := range embeddedPlatformSoundpackFiles {
-		data, err := config.GetEmbeddedPlatformSoundpackData(file)
-		if err != nil {
+		if _, err := config.GetEmbeddedPlatformSoundpackData(file); err != nil {
 			slog.Warn("failed to read embedded platform soundpack", "file", file, "error", err)
 			continue
 		}
 
-		spFile, peekErr := soundpack.PeekJSONSoundpackFromBytes(data)
-		if peekErr != nil {
-			slog.Warn("failed to parse embedded platform soundpack", "file", file, "error", peekErr)
-			continue
-		}
-
-		// Count non-empty mapping values
-		soundCount := 0
-		for _, val := range spFile.Mappings {
-			if val != "" {
-				soundCount++
-			}
-		}
-
 		name := strings.TrimSuffix(file, ".json")
-		slog.Debug("discovered embedded soundpack", "name", name, "sounds", soundCount)
+		slog.Debug("discovered embedded soundpack", "name", name)
 
 		packs = append(packs, soundpackInfo{
 			Name:       name,
-			Type:       "embedded",
-			SoundCount: soundCount,
+			Type:       soundpackTypeEmbedded,
 			Path:       "(built-in)",
+			Identifier: "embedded:" + file,
 		})
 	}
 
@@ -187,21 +152,17 @@ func discoverXDGSoundpacks() []soundpackInfo {
 				manifestPath := filepath.Join(fullPath, "soundpack.json")
 				if spFile, peekErr := soundpack.PeekJSONSoundpackFromFile(manifestPath); peekErr == nil && spFile.Name != "" {
 					packs = append(packs, soundpackInfo{
-						Name:       spFile.Name,
-						Type:       "json",
-						SoundCount: countNonEmptyMappings(spFile.Mappings),
-						Path:       manifestPath,
+						Name: spFile.Name,
+						Type: "json",
+						Path: manifestPath,
 					})
 					continue
 				}
-				// Directory soundpack - count audio files
-				count := countAudioFiles(fullPath)
-				slog.Debug("discovered directory soundpack", "name", entry.Name(), "path", fullPath, "sounds", count)
+				slog.Debug("discovered directory soundpack", "name", entry.Name(), "path", fullPath)
 				packs = append(packs, soundpackInfo{
-					Name:       entry.Name(),
-					Type:       "directory",
-					SoundCount: count,
-					Path:       fullPath,
+					Name: entry.Name(),
+					Type: "directory",
+					Path: fullPath,
 				})
 			} else if strings.HasSuffix(entry.Name(), ".json") {
 				// JSON soundpack file — peek (apply size cap and basic
@@ -212,17 +173,15 @@ func discoverXDGSoundpacks() []soundpackInfo {
 					slog.Debug("could not peek JSON soundpack file", "path", fullPath, "error", peekErr)
 					continue
 				}
-				soundCount := countNonEmptyMappings(spFile.Mappings)
 				name := spFile.Name
 				if name == "" {
 					name = strings.TrimSuffix(entry.Name(), ".json")
 				}
-				slog.Debug("discovered JSON soundpack", "name", name, "path", fullPath, "sounds", soundCount)
+				slog.Debug("discovered JSON soundpack", "name", name, "path", fullPath)
 				packs = append(packs, soundpackInfo{
-					Name:       name,
-					Type:       "json",
-					SoundCount: soundCount,
-					Path:       fullPath,
+					Name: name,
+					Type: "json",
+					Path: fullPath,
 				})
 			}
 		}
@@ -248,17 +207,15 @@ func discoverXDGSoundpacks() []soundpackInfo {
 			if peekErr != nil {
 				continue
 			}
-			soundCount := countNonEmptyMappings(spFile.Mappings)
 			name := spFile.Name
 			if name == "" {
 				name = strings.TrimSuffix(entry.Name(), ".json")
 			}
-			slog.Debug("discovered JSON soundpack in parent dir", "name", name, "path", fullPath, "sounds", soundCount)
+			slog.Debug("discovered JSON soundpack in parent dir", "name", name, "path", fullPath)
 			packs = append(packs, soundpackInfo{
-				Name:       name,
-				Type:       "json",
-				SoundCount: soundCount,
-				Path:       fullPath,
+				Name: name,
+				Type: "json",
+				Path: fullPath,
 			})
 		}
 	}
@@ -266,18 +223,11 @@ func discoverXDGSoundpacks() []soundpackInfo {
 	return packs
 }
 
-// discoverConfigSoundpacks checks paths from config soundpack_paths
-func discoverConfigSoundpacks() []soundpackInfo {
-	cm := config.NewConfigManager()
-	cfg, err := cm.LoadConfig()
-	if err != nil {
-		slog.Debug("could not load config for soundpack path discovery", "error", err)
-		return nil
-	}
-
+// discoverConfigSoundpacks lists the packs at config soundpack_paths entries.
+func discoverConfigSoundpacks(configPaths []string) []soundpackInfo {
 	var packs []soundpackInfo
 
-	for _, path := range cfg.SoundpackPaths {
+	for _, path := range configPaths {
 		slog.Debug("checking config soundpack_path", "path", path)
 
 		info, err := os.Stat(path)
@@ -287,14 +237,12 @@ func discoverConfigSoundpacks() []soundpackInfo {
 		}
 
 		if info.IsDir() {
-			count := countAudioFiles(path)
 			name := filepath.Base(path)
-			slog.Debug("discovered directory soundpack from config", "name", name, "path", path, "sounds", count)
+			slog.Debug("discovered directory soundpack from config", "name", name, "path", path)
 			packs = append(packs, soundpackInfo{
-				Name:       name,
-				Type:       "directory",
-				SoundCount: count,
-				Path:       path,
+				Name: name,
+				Type: "directory",
+				Path: path,
 			})
 		} else if strings.HasSuffix(path, ".json") {
 			spFile, peekErr := soundpack.PeekJSONSoundpackFromFile(path)
@@ -302,23 +250,59 @@ func discoverConfigSoundpacks() []soundpackInfo {
 				slog.Debug("could not peek config JSON soundpack", "path", path, "error", peekErr)
 				continue
 			}
-			soundCount := countNonEmptyMappings(spFile.Mappings)
 			name := spFile.Name
 			if name == "" {
 				name = strings.TrimSuffix(filepath.Base(path), ".json")
 			}
-			slog.Debug("discovered JSON soundpack from config", "name", name, "path", path, "sounds", soundCount)
+			slog.Debug("discovered JSON soundpack from config", "name", name, "path", path)
 			packs = append(packs, soundpackInfo{
-				Name:       name,
-				Type:       "json",
-				SoundCount: soundCount,
-				Path:       path,
+				Name: name,
+				Type: "json",
+				Path: path,
 			})
 		}
 	}
 
 	return packs
 }
+
+// withSoundCounts fills SoundCount for display (`soundpack list`). It is
+// the only place discovery pays for mapping counts and directory walks.
+func withSoundCounts(packs []soundpackInfo) []soundpackInfo {
+	for i := range packs {
+		packs[i].SoundCount = soundCountFor(packs[i])
+	}
+	return packs
+}
+
+// soundCountFor counts one pack's sounds: non-empty mappings for embedded
+// and JSON packs, audio files for directory packs.
+func soundCountFor(p soundpackInfo) int {
+	if p.Type == soundpackTypeEmbedded {
+		data, err := config.GetEmbeddedPlatformSoundpackData(strings.TrimPrefix(p.Identifier, "embedded:"))
+		if err != nil {
+			return 0
+		}
+		spFile, err := soundpack.PeekJSONSoundpackFromBytes(data)
+		if err != nil {
+			slog.Warn("failed to parse embedded platform soundpack", "identifier", p.Identifier, "error", err)
+			return 0
+		}
+		return countNonEmptyMappings(spFile.Mappings)
+	}
+	info, err := os.Stat(p.Path)
+	if err != nil {
+		return 0
+	}
+	if info.IsDir() {
+		return countAudioFilesInDir(p.Path)
+	}
+	return countJSONMappings(p.Path)
+}
+
+// countAudioFilesInDir is the directory sound counter; a var so tests can
+// prove name lookup never walks pack directories.
+var countAudioFilesInDir = countAudioFiles
 
 // countAudioFiles recursively counts audio files in a directory
 func countAudioFiles(dir string) int {
@@ -330,8 +314,7 @@ func countAudioFiles(dir string) int {
 		if info.IsDir() {
 			return nil
 		}
-		ext := strings.ToLower(filepath.Ext(path))
-		if ext == ".wav" || ext == ".mp3" || ext == ".aiff" {
+		if soundpack.IsAudioExt(filepath.Ext(path)) {
 			count++
 		}
 		return nil
@@ -417,11 +400,23 @@ func categoryFromKey(key string) string {
 	return strings.TrimSuffix(key, filepath.Ext(key))
 }
 
-// copyFile copies a single file from src to dst, creating parent directories as needed.
-func copyFile(src, dst string) error {
+// copyFile copies the regular file src to dst, creating parent directories
+// as needed. src must not be a symlink: soundpack sources are untrusted and
+// a link could pull in a file from outside the pack.
+func copyFile(src, dst string) (err error) {
 	slog.Debug("copying file", "src", src, "dst", dst)
 
-	// Create destination directory
+	info, err := os.Lstat(src)
+	if err != nil {
+		return fmt.Errorf("failed to inspect source: %w", err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("refusing to copy symlink: %s", src)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("refusing to copy non-regular file: %s", src)
+	}
+
 	dstDir := filepath.Dir(dst)
 	if err := os.MkdirAll(dstDir, 0755); err != nil {
 		return fmt.Errorf("failed to create directory %s: %w", dstDir, err)
@@ -437,7 +432,11 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create destination: %w", err)
 	}
-	defer dstFile.Close()
+	defer func() {
+		if closeErr := dstFile.Close(); closeErr != nil && err == nil {
+			err = fmt.Errorf("failed to close destination: %w", closeErr)
+		}
+	}()
 
 	if _, err := io.Copy(dstFile, srcFile); err != nil {
 		return fmt.Errorf("failed to copy data: %w", err)
@@ -446,29 +445,40 @@ func copyFile(src, dst string) error {
 	return nil
 }
 
-// copyDirectory recursively copies a directory from src to dst.
+// copyDirectory recursively copies the directory src to dst. A symlinked
+// src root is resolved first; any symlink inside the tree is an error, and
+// .git directories are skipped.
 func copyDirectory(src, dst string) error {
 	slog.Debug("copying directory", "src", src, "dst", dst)
 
-	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+	root, err := filepath.EvalSymlinks(src)
+	if err != nil {
+		return fmt.Errorf("failed to resolve source directory: %w", err)
+	}
+
+	return filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 
-		// Calculate relative path
-		rel, relErr := filepath.Rel(src, path)
+		rel, relErr := filepath.Rel(root, path)
 		if relErr != nil {
 			return fmt.Errorf("failed to calculate relative path: %w", relErr)
 		}
-
 		dstPath := filepath.Join(dst, rel)
 
-		if info.IsDir() {
+		switch {
+		case d.Type()&fs.ModeSymlink != 0:
+			return fmt.Errorf("soundpack contains a symlink, which is not allowed: %s", path)
+		case d.IsDir() && path != root && d.Name() == ".git":
+			slog.Debug("skipping VCS metadata directory", "path", path)
+			return filepath.SkipDir
+		case d.IsDir():
 			slog.Debug("creating directory", "path", dstPath)
 			return os.MkdirAll(dstPath, 0755)
+		default:
+			slog.Debug("copying file in directory", "src", path, "dst", dstPath)
+			return copyFile(path, dstPath)
 		}
-
-		slog.Debug("copying file in directory", "src", path, "dst", dstPath)
-		return copyFile(path, dstPath)
 	})
 }

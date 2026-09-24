@@ -27,12 +27,12 @@ func TestEmbeddedPlatformSoundpackIdentifierRecognizesBarePlatformNames(t *testi
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, ok := embeddedPlatformSoundpackIdentifier(tt.name)
-			if !ok {
-				t.Fatalf("expected %q to be recognized as a bare embedded soundpack name", tt.name)
+			pack, ok := lookupSoundpack(tt.name, nil)
+			if !ok || pack.Type != soundpackTypeEmbedded {
+				t.Fatalf("expected %q to be recognized as a bare embedded soundpack name, got %#v", tt.name, pack)
 			}
-			if got != tt.want {
-				t.Fatalf("expected %q, got %q", tt.want, got)
+			if pack.Identifier != tt.want {
+				t.Fatalf("expected %q, got %q", tt.want, pack.Identifier)
 			}
 		})
 	}

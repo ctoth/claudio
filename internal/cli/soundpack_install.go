@@ -74,18 +74,13 @@ func runSoundpackInstall(cmd *cobra.Command, srcPath string, setDefault, skipVal
 	// Validate unless --skip-validate
 	if !skipValidate {
 		slog.Debug("validating soundpack before install")
-		if isDir {
-			_, valErr := validateDirectorySoundpack(srcPath)
-			if valErr != nil {
-				slog.Error("validation failed", "error", valErr)
-				return fmt.Errorf("validation failed: %w", valErr)
-			}
-		} else {
-			_, valErr := validateJSONSoundpackFile(srcPath)
-			if valErr != nil {
-				slog.Error("validation failed", "error", valErr)
-				return fmt.Errorf("validation failed: %w", valErr)
-			}
+		result, valErr := validateSoundpackPath(srcPath)
+		if valErr == nil {
+			valErr = result.Err()
+		}
+		if valErr != nil {
+			slog.Error("validation failed", "error", valErr)
+			return fmt.Errorf("validation failed: %w", valErr)
 		}
 		slog.Info("soundpack validation passed")
 	}
@@ -109,16 +104,14 @@ func runSoundpackInstall(cmd *cobra.Command, srcPath string, setDefault, skipVal
 	if err := validateManagedSoundpackName(name); err != nil {
 		return fmt.Errorf("invalid soundpack name: %w", err)
 	}
-	nameLock, err := lockSoundpackName(name)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err := nameLock.Unlock(); err != nil {
-			slog.Warn("failed to release soundpack name lock", "name", name, "error", err)
-		}
-	}()
+	return withNameLock(name, func() error {
+		return installSoundpackFiles(cmd, srcPath, name, isDir, setDefault)
+	})
+}
 
+// installSoundpackFiles copies a validated soundpack into the XDG data
+// directory and updates config. The caller holds the per-name lock.
+func installSoundpackFiles(cmd *cobra.Command, srcPath, name string, isDir, setDefault bool) error {
 	// Determine install target
 	installDir := filepath.Join(xdg.DataHome, "claudio", "soundpacks", name)
 	installPath := installDir
@@ -210,7 +203,11 @@ func stageAndInstallSoundpack(srcPath, installDir string, isDir bool) error {
 		if err := stageJSONSoundpack(srcPath, stageDir); err != nil {
 			return err
 		}
-		if _, err := soundpack.CreateSoundpackMapper("installed", filepath.Join(stageDir, "soundpack.json")); err != nil {
+		staged, err := soundpack.ValidateJSONSoundpack(filepath.Join(stageDir, "soundpack.json"))
+		if err == nil {
+			err = staged.Err()
+		}
+		if err != nil {
 			return fmt.Errorf("staged soundpack validation failed: %w", err)
 		}
 	}
@@ -232,7 +229,9 @@ func stageAndInstallSoundpack(srcPath, installDir string, isDir bool) error {
 			return fmt.Errorf("failed to preserve previous soundpack: %w", err)
 		}
 		if err := os.Rename(stageDir, installDir); err != nil {
-			_ = os.Rename(backupDir, installDir)
+			if restoreErr := os.Rename(backupDir, installDir); restoreErr != nil {
+				return fmt.Errorf("failed to activate staged soundpack: %w; previous soundpack remains at %s because restoration failed: %w", err, backupDir, restoreErr)
+			}
 			return fmt.Errorf("failed to activate staged soundpack: %w", err)
 		}
 		if err := os.RemoveAll(backupDir); err != nil {
@@ -282,7 +281,13 @@ func stageJSONSoundpack(srcPath, stageDir string) error {
 			return fmt.Errorf("failed to copy mapped file %q: %w", value, err)
 		}
 	}
-	if err := copyFile(srcPath, filepath.Join(stageDir, "soundpack.json")); err != nil {
+	// The manifest path is the user's own argument, so a symlink there is
+	// resolved; symlinks among the mapped files are rejected by copyFile.
+	manifestPath, err := filepath.EvalSymlinks(srcPath)
+	if err != nil {
+		return fmt.Errorf("failed to resolve soundpack manifest: %w", err)
+	}
+	if err := copyFile(manifestPath, filepath.Join(stageDir, "soundpack.json")); err != nil {
 		return fmt.Errorf("failed to copy soundpack manifest: %w", err)
 	}
 	return nil

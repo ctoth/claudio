@@ -35,39 +35,22 @@ Examples:
 func runSoundpackUse(cmd *cobra.Command, name string) error {
 	slog.Debug("running soundpack use", "name", name)
 
-	// Discover available soundpacks to validate the name
-	packs, err := discoverSoundpacks()
-	if err != nil {
-		slog.Error("failed to discover soundpacks", "error", err)
-		return fmt.Errorf("failed to discover soundpacks: %w", err)
-	}
-
-	// Check if the requested name matches any discovered soundpack
-	found := false
-	for _, p := range packs {
-		if p.Name == name {
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		// Build list of available names for the error message
-		var available []string
-		for _, p := range packs {
-			available = append(available, p.Name)
-		}
-		sort.Strings(available)
-		slog.Error("soundpack not found", "name", name, "available", available)
-		return fmt.Errorf("soundpack '%s' not found. Available soundpacks: %s", name, strings.Join(available, ", "))
-	}
-
 	alreadyActive := false
+	var notFound error
 	if err := mutateConfigForCommand(cmd, func(cfg *config.Config) error {
+		// Validate against the same soundpack_paths the runtime will read,
+		// using the runtime's own lookup.
+		if _, ok := lookupSoundpack(name, cfg.SoundpackPaths); !ok {
+			notFound = soundpackNotFoundError(name, cfg.SoundpackPaths)
+			return notFound
+		}
 		alreadyActive = cfg.DefaultSoundpack == name
 		cfg.DefaultSoundpack = name
 		return nil
 	}); err != nil {
+		if notFound != nil {
+			return notFound
+		}
 		return fmt.Errorf("failed to update config: %w", err)
 	}
 
@@ -79,4 +62,18 @@ func runSoundpackUse(cmd *cobra.Command, name string) error {
 
 	slog.Info("soundpack use completed", "name", name, "was_already_active", alreadyActive)
 	return nil
+}
+
+func soundpackNotFoundError(name string, configPaths []string) error {
+	var available []string
+	seen := make(map[string]struct{})
+	for _, p := range discoverSoundpacksWithPaths(configPaths) {
+		if _, dup := seen[p.Name]; !dup {
+			seen[p.Name] = struct{}{}
+			available = append(available, p.Name)
+		}
+	}
+	sort.Strings(available)
+	slog.Error("soundpack not found", "name", name, "available", available)
+	return fmt.Errorf("soundpack '%s' not found. Available soundpacks: %s", name, strings.Join(available, ", "))
 }

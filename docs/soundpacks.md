@@ -89,9 +89,10 @@ claudio soundpack use <name>
 ```
 
 `soundpack use` sets `default_soundpack` in `config.json`. The name has to
-be one that `soundpack list` shows: an embedded pack, a pack in the XDG
-`soundpacks/` directory, a pack listed in `soundpack_paths`, or a managed git
-pack.
+be one that `soundpack list` shows: an embedded pack, a managed git pack, a
+pack in the XDG `soundpacks/` directory, or a pack listed in
+`soundpack_paths`. `soundpack list` prints packs in that order. If two packs
+share a name, the first one listed is the one Claudio plays.
 
 To override the pack for one run without changing the config:
 

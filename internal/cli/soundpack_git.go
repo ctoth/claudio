@@ -145,6 +145,18 @@ func newSoundpackStatusCommand() *cobra.Command {
 	return statusCmd
 }
 
+// gitAddRequest carries the validated inputs of `soundpack add`.
+type gitAddRequest struct {
+	source       string
+	url          string
+	name         string
+	ref          string
+	subdir       string
+	setDefault   bool
+	skipValidate bool
+	replace      bool
+}
+
 func runSoundpackAdd(cmd *cobra.Command, source, requestedName, ref, subdir string, setDefault, skipValidate, replace bool) error {
 	if err := requireGit(); err != nil {
 		return err
@@ -165,50 +177,46 @@ func runSoundpackAdd(cmd *cobra.Command, source, requestedName, ref, subdir stri
 	if err := validateGitSubdir(subdir); err != nil {
 		return err
 	}
+	if err := validateGitRef(ref); err != nil {
+		return err
+	}
 	if err := validateConfigMutationTarget(cmd); err != nil {
 		return fmt.Errorf("failed to load config before adding soundpack: %w", err)
 	}
-	nameLock, err := lockSoundpackName(name)
-	if err != nil {
-		return err
+	req := gitAddRequest{
+		source:       source,
+		url:          url,
+		name:         name,
+		ref:          ref,
+		subdir:       subdir,
+		setDefault:   setDefault,
+		skipValidate: skipValidate,
+		replace:      replace,
 	}
-	defer func() {
-		if unlockErr := nameLock.Unlock(); unlockErr != nil {
-			slog.Warn("failed to release soundpack name lock", "name", name, "error", unlockErr)
-		}
-	}()
+	return withNameLock(name, func() error {
+		return addGitSoundpack(cmd, req)
+	})
+}
+
+// addGitSoundpack clones, validates and activates a managed git soundpack.
+// The caller holds the per-name lock.
+func addGitSoundpack(cmd *cobra.Command, req gitAddRequest) error {
+	name := req.name
 	cleanedSubdir := ""
-	if subdir != "" {
-		cleaned := filepath.ToSlash(filepath.Clean(subdir))
+	if req.subdir != "" {
+		cleaned := filepath.ToSlash(filepath.Clean(req.subdir))
 		if cleaned != "." {
 			cleanedSubdir = cleaned
 		}
 	}
 	clonePath := filepath.Join(gitSoundpackBaseDir(), name)
 
-	registry, err := loadSoundpackRegistry()
+	existing, exists, err := readRecord(name)
 	if err != nil {
 		return err
 	}
-	existing, exists := registry.Packs[name]
-	if exists && !replace {
-		if existing.SourceType != gitSoundpackSourceType || existing.URL != url || existing.Ref != ref || existing.Subdir != cleanedSubdir || filepath.Clean(existing.Path) != filepath.Clean(clonePath) {
-			return fmt.Errorf("managed git soundpack %q already exists; use --replace to replace it", name)
-		}
-		playablePath := playablePathForRecord(existing)
-		if _, err := os.Stat(playablePath); err != nil {
-			return fmt.Errorf("managed git soundpack %q exists but is not accessible; use --replace to repair it: %w", name, err)
-		}
-		if !skipValidate {
-			if err := validateSoundpackInstallPath(playablePath); err != nil {
-				return fmt.Errorf("managed git soundpack %q exists but is not usable; use --replace to repair it: %w", name, err)
-			}
-		}
-		if err := updateConfigForManagedGitInstall(cmd, playablePath, clonePath, name, setDefault); err != nil {
-			return err
-		}
-		cmd.Printf("Managed git soundpack '%s' already exists; repaired config\n", name)
-		return nil
+	if exists && !req.replace {
+		return repairExistingGitSoundpack(cmd, req, existing, cleanedSubdir, clonePath)
 	}
 
 	if info, statErr := os.Stat(clonePath); statErr == nil {
@@ -235,29 +243,32 @@ func runSoundpackAdd(cmd *cobra.Command, source, requestedName, ref, subdir stri
 	stagingPresent := true
 	defer func() {
 		if stagingPresent {
-			_ = removeManagedGitClone(stagingPath)
+			if err := removeManagedGitClone(stagingPath); err != nil {
+				slog.Warn("failed to remove staging clone", "path", stagingPath, "error", err)
+			}
 		}
 	}()
-	if _, err := runGit("", "clone", url, stagingPath); err != nil {
+	ctx := commandContext(cmd)
+	if _, err := runGit(ctx, "", "clone", "--", req.url, stagingPath); err != nil {
 		return fmt.Errorf("failed to clone soundpack repo: %w", err)
 	}
-	if ref != "" {
-		if _, err := runGit(stagingPath, "checkout", ref); err != nil {
-			return fmt.Errorf("failed to check out ref %q: %w", ref, err)
+	if req.ref != "" {
+		if err := checkoutGitRef(ctx, stagingPath, req.ref); err != nil {
+			return fmt.Errorf("failed to check out ref %q: %w", req.ref, err)
 		}
 	}
 
-	stagedPlayablePath, err := determineGitSoundpackPath(stagingPath, name, subdir)
+	stagedPlayablePath, err := determineGitSoundpackPath(stagingPath, name, req.subdir)
 	if err != nil {
 		return err
 	}
-	if !skipValidate {
+	if !req.skipValidate {
 		if err := validateSoundpackInstallPath(stagedPlayablePath); err != nil {
 			return fmt.Errorf("validation failed: %w", err)
 		}
 	}
 
-	commit, err := currentGitCommit(stagingPath)
+	commit, err := currentGitCommit(ctx, stagingPath)
 	if err != nil {
 		return err
 	}
@@ -272,54 +283,11 @@ func runSoundpackAdd(cmd *cobra.Command, source, requestedName, ref, subdir stri
 	if exists && existing.InstalledAt != "" {
 		installedAt = existing.InstalledAt
 	}
-	registryLock, err := lockSoundpackRegistry()
-	if err != nil {
-		return err
-	}
-	registryLocked := true
-	defer func() {
-		if registryLocked {
-			_ = registryLock.Unlock()
-		}
-	}()
-	registry, err = loadSoundpackRegistry()
-	if err != nil {
-		return err
-	}
-	backupPath := ""
-	if _, statErr := os.Stat(clonePath); statErr == nil {
-		backupPath = stagingPath + ".previous"
-		if err := os.Rename(clonePath, backupPath); err != nil {
-			return fmt.Errorf("failed to preserve existing managed clone: %w", err)
-		}
-	} else if !os.IsNotExist(statErr) {
-		return fmt.Errorf("failed to inspect managed clone before activation: %w", statErr)
-	}
-	if err := os.Rename(stagingPath, clonePath); err != nil {
-		if backupPath != "" {
-			if restoreErr := os.Rename(backupPath, clonePath); restoreErr != nil {
-				return fmt.Errorf("failed to activate managed clone: %w; previous clone remains at %s because restoration failed: %v", err, backupPath, restoreErr)
-			}
-		}
-		return fmt.Errorf("failed to activate managed clone: %w", err)
-	}
-	stagingPresent = false
-	rollbackClone := func() error {
-		if err := removeManagedGitClone(clonePath); err != nil {
-			return err
-		}
-		if backupPath != "" {
-			if err := os.Rename(backupPath, clonePath); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-	registry.Packs[name] = gitSoundpackRecord{
+	record := gitSoundpackRecord{
 		Name:           name,
 		SourceType:     gitSoundpackSourceType,
-		URL:            url,
-		Ref:            ref,
+		URL:            req.url,
+		Ref:            req.ref,
 		ResolvedCommit: commit,
 		Subdir:         cleanedSubdir,
 		Path:           clonePath,
@@ -327,27 +295,100 @@ func runSoundpackAdd(cmd *cobra.Command, source, requestedName, ref, subdir stri
 		UpdatedAt:      now,
 	}
 
-	if err := saveSoundpackRegistry(registry); err != nil {
-		if rollbackErr := rollbackClone(); rollbackErr != nil {
-			return fmt.Errorf("%w (also failed to restore previous clone: %v)", err, rollbackErr)
+	backupPath := ""
+	activated := false
+	err = withRegistry(func(registry *soundpackRegistry) error {
+		var activateErr error
+		backupPath, activateErr = activateManagedClone(stagingPath, clonePath)
+		if activateErr != nil {
+			return activateErr
+		}
+		stagingPresent = false
+		activated = true
+		registry.Packs[name] = record
+		return nil
+	})
+	if err != nil {
+		if activated {
+			if rollbackErr := rollbackManagedClone(clonePath, backupPath); rollbackErr != nil {
+				return fmt.Errorf("%w (also failed to restore previous clone: %w)", err, rollbackErr)
+			}
 		}
 		return err
 	}
-	if err := registryLock.Unlock(); err != nil {
-		return fmt.Errorf("failed to release soundpack registry lock: %w", err)
-	}
-	registryLocked = false
 	if backupPath != "" {
 		if err := removeManagedGitClone(backupPath); err != nil {
 			slog.Warn("failed to remove previous managed clone backup", "path", backupPath, "error", err)
 		}
 	}
-	if err := updateConfigForManagedGitInstall(cmd, playablePath, clonePath, name, setDefault); err != nil {
+	if err := updateConfigForManagedGitInstall(cmd, playablePath, clonePath, name, req.setDefault); err != nil {
 		return err
 	}
 
-	cmd.Printf("Added git soundpack '%s' from %s\n", name, source)
+	cmd.Printf("Added git soundpack '%s' from %s\n", name, req.source)
 	cmd.Printf("Path: %s\n", playablePath)
+	return nil
+}
+
+// repairExistingGitSoundpack handles `add` for a name that is already
+// registered with the same source: it re-checks the clone and repairs the
+// config entry instead of cloning again.
+func repairExistingGitSoundpack(cmd *cobra.Command, req gitAddRequest, existing gitSoundpackRecord, cleanedSubdir, clonePath string) error {
+	name := req.name
+	if existing.SourceType != gitSoundpackSourceType || existing.URL != req.url || existing.Ref != req.ref || existing.Subdir != cleanedSubdir || filepath.Clean(existing.Path) != filepath.Clean(clonePath) {
+		return fmt.Errorf("managed git soundpack %q already exists; use --replace to replace it", name)
+	}
+	playablePath := playablePathForRecord(existing)
+	if _, err := os.Stat(playablePath); err != nil {
+		return fmt.Errorf("managed git soundpack %q exists but is not accessible; use --replace to repair it: %w", name, err)
+	}
+	if !req.skipValidate {
+		if err := validateSoundpackInstallPath(playablePath); err != nil {
+			return fmt.Errorf("managed git soundpack %q exists but is not usable; use --replace to repair it: %w", name, err)
+		}
+	}
+	if err := updateConfigForManagedGitInstall(cmd, playablePath, clonePath, name, req.setDefault); err != nil {
+		return err
+	}
+	cmd.Printf("Managed git soundpack '%s' already exists; repaired config\n", name)
+	return nil
+}
+
+// activateManagedClone moves stagingPath to clonePath, first moving any
+// existing clone aside. It returns the backup path, or "" when there was
+// no previous clone. On failure the previous clone is restored.
+func activateManagedClone(stagingPath, clonePath string) (string, error) {
+	backupPath := ""
+	if _, statErr := os.Stat(clonePath); statErr == nil {
+		backupPath = stagingPath + ".previous"
+		if err := os.Rename(clonePath, backupPath); err != nil {
+			return "", fmt.Errorf("failed to preserve existing managed clone: %w", err)
+		}
+	} else if !os.IsNotExist(statErr) {
+		return "", fmt.Errorf("failed to inspect managed clone before activation: %w", statErr)
+	}
+	if err := os.Rename(stagingPath, clonePath); err != nil {
+		if backupPath != "" {
+			if restoreErr := os.Rename(backupPath, clonePath); restoreErr != nil {
+				return "", fmt.Errorf("failed to activate managed clone: %w; previous clone remains at %s because restoration failed: %w", err, backupPath, restoreErr)
+			}
+		}
+		return "", fmt.Errorf("failed to activate managed clone: %w", err)
+	}
+	return backupPath, nil
+}
+
+// rollbackManagedClone undoes activateManagedClone: it removes the new
+// clone and moves the backup (if any) back into place.
+func rollbackManagedClone(clonePath, backupPath string) error {
+	if err := removeManagedGitClone(clonePath); err != nil {
+		return fmt.Errorf("failed to remove new clone: %w", err)
+	}
+	if backupPath != "" {
+		if err := os.Rename(backupPath, clonePath); err != nil {
+			return fmt.Errorf("failed to restore previous clone from %s: %w", backupPath, err)
+		}
+	}
 	return nil
 }
 
@@ -371,7 +412,7 @@ func runSoundpackUpdate(cmd *cobra.Command, name string, all, force bool) error 
 	}
 
 	for _, packName := range names {
-		updated, err := updateRegisteredGitSoundpack(packName, force)
+		updated, err := updateRegisteredGitSoundpack(commandContext(cmd), packName, force)
 		if err != nil {
 			return err
 		}
@@ -381,56 +422,29 @@ func runSoundpackUpdate(cmd *cobra.Command, name string, all, force bool) error 
 	return nil
 }
 
-func updateRegisteredGitSoundpack(name string, force bool) (gitSoundpackRecord, error) {
-	nameLock, err := lockSoundpackName(name)
-	if err != nil {
-		return gitSoundpackRecord{}, err
-	}
-	defer func() {
-		if unlockErr := nameLock.Unlock(); unlockErr != nil {
-			slog.Warn("failed to release soundpack name lock", "name", name, "error", unlockErr)
+func updateRegisteredGitSoundpack(ctx context.Context, name string, force bool) (gitSoundpackRecord, error) {
+	var updated gitSoundpackRecord
+	err := withNameLock(name, func() error {
+		record, exists, err := readRecord(name)
+		if err != nil {
+			return err
 		}
-	}()
-
-	registryLock, err := lockSoundpackRegistry()
-	if err != nil {
-		return gitSoundpackRecord{}, err
-	}
-	registry, err := loadSoundpackRegistry()
-	if err != nil {
-		_ = registryLock.Unlock()
-		return gitSoundpackRecord{}, err
-	}
-	record, exists := registry.Packs[name]
-	if unlockErr := registryLock.Unlock(); unlockErr != nil {
-		return gitSoundpackRecord{}, fmt.Errorf("failed to release soundpack registry lock: %w", unlockErr)
-	}
-	if !exists {
-		return gitSoundpackRecord{}, fmt.Errorf("managed git soundpack %q not found", name)
-	}
-
-	updated, err := updateGitSoundpack(record, force)
-	if err != nil {
-		return gitSoundpackRecord{}, err
-	}
-	registryLock, err = lockSoundpackRegistry()
-	if err != nil {
-		return gitSoundpackRecord{}, err
-	}
-	defer func() {
-		if unlockErr := registryLock.Unlock(); unlockErr != nil {
-			slog.Warn("failed to release soundpack registry lock", "error", unlockErr)
+		if !exists {
+			return fmt.Errorf("managed git soundpack %q not found", name)
 		}
-	}()
-	registry, err = loadSoundpackRegistry()
+		updated, err = updateGitSoundpack(ctx, record, force)
+		if err != nil {
+			return err
+		}
+		return withRegistry(func(registry *soundpackRegistry) error {
+			if _, exists := registry.Packs[name]; !exists {
+				return fmt.Errorf("managed git soundpack %q was removed during update", name)
+			}
+			registry.Packs[name] = updated
+			return nil
+		})
+	})
 	if err != nil {
-		return gitSoundpackRecord{}, err
-	}
-	if _, exists := registry.Packs[name]; !exists {
-		return gitSoundpackRecord{}, fmt.Errorf("managed git soundpack %q was removed during update", name)
-	}
-	registry.Packs[name] = updated
-	if err := saveSoundpackRegistry(registry); err != nil {
 		return gitSoundpackRecord{}, err
 	}
 	return updated, nil
@@ -440,27 +454,17 @@ func runSoundpackRemove(cmd *cobra.Command, name string, keepFiles, force bool) 
 	if err := validateConfigMutationTarget(cmd); err != nil {
 		return fmt.Errorf("failed to load config before removing soundpack: %w", err)
 	}
-	nameLock, err := lockSoundpackName(name)
+	return withNameLock(name, func() error {
+		return removeGitSoundpack(cmd, name, keepFiles, force)
+	})
+}
+
+// removeGitSoundpack deletes a managed git soundpack's clone, registry
+// record and config entries. The caller holds the per-name lock.
+func removeGitSoundpack(cmd *cobra.Command, name string, keepFiles, force bool) error {
+	record, exists, err := readRecord(name)
 	if err != nil {
 		return err
-	}
-	defer func() {
-		if unlockErr := nameLock.Unlock(); unlockErr != nil {
-			slog.Warn("failed to release soundpack name lock", "name", name, "error", unlockErr)
-		}
-	}()
-	registryLock, err := lockSoundpackRegistry()
-	if err != nil {
-		return err
-	}
-	registry, err := loadSoundpackRegistry()
-	if err != nil {
-		_ = registryLock.Unlock()
-		return err
-	}
-	record, exists := registry.Packs[name]
-	if unlockErr := registryLock.Unlock(); unlockErr != nil {
-		return fmt.Errorf("failed to release soundpack registry lock: %w", unlockErr)
 	}
 	if !exists {
 		clonePath := filepath.Join(gitSoundpackBaseDir(), name)
@@ -485,28 +489,12 @@ func runSoundpackRemove(cmd *cobra.Command, name string, keepFiles, force bool) 
 		}
 	}
 
-	registryLock, err = lockSoundpackRegistry()
-	if err != nil {
+	if err := withRegistry(func(registry *soundpackRegistry) error {
+		delete(registry.Packs, name)
+		return nil
+	}); err != nil {
 		return err
 	}
-	registryLocked := true
-	defer func() {
-		if registryLocked {
-			_ = registryLock.Unlock()
-		}
-	}()
-	registry, err = loadSoundpackRegistry()
-	if err != nil {
-		return err
-	}
-	delete(registry.Packs, name)
-	if err := saveSoundpackRegistry(registry); err != nil {
-		return err
-	}
-	if err := registryLock.Unlock(); err != nil {
-		return fmt.Errorf("failed to release soundpack registry lock: %w", err)
-	}
-	registryLocked = false
 	if _, err := removeConfigSoundpackPath(cmd, playablePath, record.Path, name); err != nil {
 		return err
 	}
@@ -544,7 +532,7 @@ func runSoundpackStatus(cmd *cobra.Command, name string) error {
 		state := "missing"
 		if _, err := os.Stat(record.Path); err == nil {
 			state = "clean"
-			dirty, err := gitWorktreeDirty(record.Path)
+			dirty, err := gitWorktreeDirty(commandContext(cmd), record.Path)
 			if err != nil {
 				state = "error"
 			} else if dirty {
@@ -562,12 +550,15 @@ func runSoundpackStatus(cmd *cobra.Command, name string) error {
 	return nil
 }
 
-func updateGitSoundpack(record gitSoundpackRecord, force bool) (gitSoundpackRecord, error) {
+func updateGitSoundpack(ctx context.Context, record gitSoundpackRecord, force bool) (gitSoundpackRecord, error) {
+	if err := validateGitRef(record.Ref); err != nil {
+		return record, fmt.Errorf("managed git soundpack %q has an invalid ref: %w", record.Name, err)
+	}
 	if _, err := os.Stat(record.Path); err != nil {
 		return record, fmt.Errorf("managed clone for %q is missing: %w", record.Name, err)
 	}
 
-	dirty, err := gitWorktreeDirty(record.Path)
+	dirty, err := gitWorktreeDirty(ctx, record.Path)
 	if err != nil {
 		return record, err
 	}
@@ -575,42 +566,51 @@ func updateGitSoundpack(record gitSoundpackRecord, force bool) (gitSoundpackReco
 		if !force {
 			return record, fmt.Errorf("managed clone for %q has local changes; use --force to discard them", record.Name)
 		}
-		if _, err := runGit(record.Path, "reset", "--hard"); err != nil {
+		if _, err := runGit(ctx, record.Path, "reset", "--hard"); err != nil {
 			return record, err
 		}
-		if _, err := runGit(record.Path, "clean", "-fd"); err != nil {
+		if _, err := runGit(ctx, record.Path, "clean", "-fd"); err != nil {
 			return record, err
 		}
 	}
 
 	previousCommit := record.ResolvedCommit
 	if previousCommit == "" {
-		previousCommit, _ = currentGitCommit(record.Path)
+		// Without a known-good commit a failed update could not be rolled
+		// back, so refuse to start.
+		previousCommit, err = currentGitCommit(ctx, record.Path)
+		if err != nil {
+			return record, fmt.Errorf("cannot determine current commit for %q: %w", record.Name, err)
+		}
 	}
 
-	if _, err := runGit(record.Path, "fetch", "--all", "--tags", "--prune"); err != nil {
+	if _, err := runGit(ctx, record.Path, "fetch", "--all", "--tags", "--prune"); err != nil {
 		return record, fmt.Errorf("failed to fetch updates for %q: %w", record.Name, err)
 	}
 	if record.Ref != "" {
-		if _, err := runGit(record.Path, "checkout", record.Ref); err != nil {
+		if err := checkoutGitRef(ctx, record.Path, record.Ref); err != nil {
 			return record, fmt.Errorf("failed to check out ref %q for %q: %w", record.Ref, record.Name, err)
 		}
 	}
-	if branch, _ := currentGitBranch(record.Path); branch != "" {
-		if _, err := runGit(record.Path, "pull", "--ff-only"); err != nil {
+	branch, err := currentGitBranch(ctx, record.Path)
+	if err != nil {
+		return record, fmt.Errorf("failed to inspect branch of %q: %w", record.Name, err)
+	}
+	if branch != "" {
+		if _, err := runGit(ctx, record.Path, "pull", "--ff-only"); err != nil {
 			return record, fmt.Errorf("failed to update %q: %w", record.Name, err)
 		}
 	}
 
 	playablePath := playablePathForRecord(record)
 	if err := validateSoundpackInstallPath(playablePath); err != nil {
-		if previousCommit != "" {
-			_, _ = runGit(record.Path, "reset", "--hard", previousCommit)
+		if _, resetErr := runGit(ctx, record.Path, "reset", "--hard", previousCommit); resetErr != nil {
+			return record, fmt.Errorf("validation failed after update for %q: %w (rollback to %s also failed: %w)", record.Name, err, shortCommit(previousCommit), resetErr)
 		}
 		return record, fmt.Errorf("validation failed after update for %q: %w", record.Name, err)
 	}
 
-	commit, err := currentGitCommit(record.Path)
+	commit, err := currentGitCommit(ctx, record.Path)
 	if err != nil {
 		return record, err
 	}
@@ -629,40 +629,16 @@ func discoverManagedGitSoundpacks() []soundpackInfo {
 	packs := make([]soundpackInfo, 0, len(registry.Packs))
 	for _, record := range registry.Packs {
 		playablePath := playablePathForRecord(record)
-		info, err := os.Stat(playablePath)
-		if err != nil {
+		if _, err := os.Stat(playablePath); err != nil {
 			continue
 		}
-		count := 0
-		if info.IsDir() {
-			count = countAudioFiles(playablePath)
-		} else if strings.HasSuffix(strings.ToLower(playablePath), ".json") {
-			count = countJSONMappings(playablePath)
-		}
 		packs = append(packs, soundpackInfo{
-			Name:       record.Name,
-			Type:       "git",
-			SoundCount: count,
-			Path:       playablePath,
+			Name: record.Name,
+			Type: "git",
+			Path: playablePath,
 		})
 	}
 	return packs
-}
-
-func findManagedGitSoundpackPath(name string) string {
-	registry, err := loadSoundpackRegistry()
-	if err != nil {
-		return ""
-	}
-	record, exists := registry.Packs[name]
-	if !exists {
-		return ""
-	}
-	playablePath := playablePathForRecord(record)
-	if _, err := os.Stat(playablePath); err != nil {
-		return ""
-	}
-	return playablePath
 }
 
 func loadSoundpackRegistry() (*soundpackRegistry, error) {
@@ -753,6 +729,63 @@ func lockSoundpackName(name string) (*flock.Flock, error) {
 	return lock, nil
 }
 
+// withNameLock runs fn while holding the per-name operation lock, so add,
+// update, remove and install of one name never interleave.
+func withNameLock(name string, fn func() error) error {
+	lock, err := lockSoundpackName(name)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if unlockErr := lock.Unlock(); unlockErr != nil {
+			slog.Warn("failed to release soundpack name lock", "name", name, "error", unlockErr)
+		}
+	}()
+	return fn()
+}
+
+// underRegistryLock runs fn on the registry loaded under the registry lock.
+func underRegistryLock(fn func(*soundpackRegistry) error) error {
+	lock, err := lockSoundpackRegistry()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if unlockErr := lock.Unlock(); unlockErr != nil {
+			slog.Warn("failed to release soundpack registry lock", "error", unlockErr)
+		}
+	}()
+	registry, err := loadSoundpackRegistry()
+	if err != nil {
+		return err
+	}
+	return fn(registry)
+}
+
+// withRegistry is the registry's locked read-modify-write: it loads the
+// registry under the registry lock, lets fn mutate it, and saves it when fn
+// returns nil. Nothing is saved when fn fails.
+func withRegistry(fn func(*soundpackRegistry) error) error {
+	return underRegistryLock(func(registry *soundpackRegistry) error {
+		if err := fn(registry); err != nil {
+			return err
+		}
+		return saveSoundpackRegistry(registry)
+	})
+}
+
+// readRecord returns the registry record for name, read under the
+// registry lock.
+func readRecord(name string) (gitSoundpackRecord, bool, error) {
+	var record gitSoundpackRecord
+	var exists bool
+	err := underRegistryLock(func(registry *soundpackRegistry) error {
+		record, exists = registry.Packs[name]
+		return nil
+	})
+	return record, exists, err
+}
+
 func gitSoundpackBaseDir() string {
 	return filepath.Join(xdg.DataHome, "claudio", "soundpack-repos")
 }
@@ -789,20 +822,21 @@ func playablePathForRecord(record gitSoundpackRecord) string {
 	return filepath.Join(record.Path, filepath.FromSlash(record.Subdir))
 }
 
+// validateSoundpackInstallPath fails when the pack at playablePath is
+// unreadable, malformed, or has broken or unsafe mappings.
 func validateSoundpackInstallPath(playablePath string) error {
 	info, err := os.Stat(playablePath)
 	if err != nil {
 		return fmt.Errorf("cannot access soundpack path: %w", err)
 	}
-	if info.IsDir() {
-		_, err = validateDirectorySoundpack(playablePath)
+	if !info.IsDir() && !strings.HasSuffix(strings.ToLower(playablePath), ".json") {
+		return fmt.Errorf("unsupported soundpack path: %s", playablePath)
+	}
+	result, err := validateSoundpackPath(playablePath)
+	if err != nil {
 		return err
 	}
-	if strings.HasSuffix(strings.ToLower(playablePath), ".json") {
-		_, err = validateJSONSoundpackFile(playablePath)
-		return err
-	}
-	return fmt.Errorf("unsupported soundpack path: %s", playablePath)
+	return result.Err()
 }
 
 var errNoSoundpackConfigChange = errors.New("soundpack config has no matching entry")
@@ -888,14 +922,38 @@ func requireGit() error {
 	return nil
 }
 
-func runGit(dir string, args ...string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
+// gitCommandTimeout bounds every git invocation so a hung remote cannot
+// wedge the CLI.
+const gitCommandTimeout = 2 * time.Minute
 
+// gitCommand builds a non-interactive git invocation. GIT_TERMINAL_PROMPT=0
+// makes git fail instead of blocking on a credential prompt nobody can
+// answer (hooks and detached workers have no terminal).
+func gitCommand(ctx context.Context, dir string, args ...string) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	if dir != "" {
 		cmd.Dir = dir
 	}
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	return cmd
+}
+
+// commandContext returns the cobra command's context, or Background when
+// the command was run without one.
+func commandContext(cmd *cobra.Command) context.Context {
+	if cmd != nil {
+		if ctx := cmd.Context(); ctx != nil {
+			return ctx
+		}
+	}
+	return context.Background()
+}
+
+func runGit(ctx context.Context, dir string, args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, gitCommandTimeout)
+	defer cancel()
+
+	cmd := gitCommand(ctx, dir, args...)
 	output, err := cmd.CombinedOutput()
 	text := strings.TrimSpace(string(output))
 	if ctx.Err() == context.DeadlineExceeded {
@@ -910,24 +968,65 @@ func runGit(dir string, args ...string) (string, error) {
 	return text, nil
 }
 
-func currentGitCommit(repoPath string) (string, error) {
-	commit, err := runGit(repoPath, "rev-parse", "HEAD")
+// validateGitRef rejects refs git would parse as an option. Refs come from
+// the --ref flag and from the registry file, which is attacker-influenced.
+func validateGitRef(ref string) error {
+	if strings.HasPrefix(ref, "-") {
+		return fmt.Errorf("invalid git ref %q: refs may not start with '-'", ref)
+	}
+	return nil
+}
+
+// checkoutGitRef detaches HEAD at ref. The remote-tracking branch
+// (origin/<ref>) wins over a local name so branch refs advance after a
+// fetch; tags and commit ids resolve directly. --detach makes git treat the
+// argument as a commit, never as a pathspec.
+func checkoutGitRef(ctx context.Context, repoPath, ref string) error {
+	if err := validateGitRef(ref); err != nil {
+		return err
+	}
+	commit, err := resolveGitRef(ctx, repoPath, ref)
+	if err != nil {
+		return err
+	}
+	_, err = runGit(ctx, repoPath, "checkout", "--detach", commit)
+	return err
+}
+
+func resolveGitRef(ctx context.Context, repoPath, ref string) (string, error) {
+	for _, candidate := range []string{"refs/remotes/origin/" + ref, ref} {
+		commit, err := runGit(ctx, repoPath, "rev-parse", "--verify", "--quiet", candidate+"^{commit}")
+		if err == nil && commit != "" {
+			return commit, nil
+		}
+	}
+	return "", fmt.Errorf("cannot resolve git ref %q", ref)
+}
+
+func currentGitCommit(ctx context.Context, repoPath string) (string, error) {
+	commit, err := runGit(ctx, repoPath, "rev-parse", "HEAD")
 	if err != nil {
 		return "", err
 	}
 	return strings.TrimSpace(commit), nil
 }
 
-func currentGitBranch(repoPath string) (string, error) {
-	branch, err := runGit(repoPath, "symbolic-ref", "--short", "-q", "HEAD")
+func currentGitBranch(ctx context.Context, repoPath string) (string, error) {
+	branch, err := runGit(ctx, repoPath, "symbolic-ref", "--short", "-q", "HEAD")
 	if err != nil {
+		// With -q a detached HEAD exits 1 with no output; that means "no
+		// branch", not failure. Anything else is a real error.
+		var exitErr *exec.ExitError
+		if branch == "" && errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+			return "", nil
+		}
 		return "", err
 	}
 	return strings.TrimSpace(branch), nil
 }
 
-func gitWorktreeDirty(repoPath string) (bool, error) {
-	status, err := runGit(repoPath, "status", "--porcelain")
+func gitWorktreeDirty(ctx context.Context, repoPath string) (bool, error) {
+	status, err := runGit(ctx, repoPath, "status", "--porcelain")
 	if err != nil {
 		return false, err
 	}

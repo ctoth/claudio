@@ -60,3 +60,16 @@ func TestDirectoryResolverPrefersExactWAVFileOverAlternateFormats(t *testing.T) 
 		t.Fatalf("expected exact wav path %s, got %s", wavFile, path)
 	}
 }
+
+func TestIsAudioExtMatchesDecodableExtensions(t *testing.T) {
+	for _, ext := range []string{".wav", ".mp3", ".mpeg", ".aiff", ".aif", ".WAV", ".Aif"} {
+		if !IsAudioExt(ext) {
+			t.Errorf("IsAudioExt(%q) = false, want true", ext)
+		}
+	}
+	for _, ext := range []string{"", ".txt", ".json", "wav", ".ogg"} {
+		if IsAudioExt(ext) {
+			t.Errorf("IsAudioExt(%q) = true, want false", ext)
+		}
+	}
+}
