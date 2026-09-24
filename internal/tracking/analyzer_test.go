@@ -564,8 +564,7 @@ func TestGetCategoryDistribution(t *testing.T) {
 	}
 
 	for _, event := range testEvents {
-		categoryInt := categoryStringToInt(event.category)
-		contextJSON := `{"Category":` + string(rune(categoryInt+48)) + `,"ToolName":"Test"}`
+		contextJSON := fmt.Sprintf(`{"Category":%q,"ToolName":"Test"}`, event.category)
 
 		for i := 0; i < event.count; i++ {
 			_, err = db.Exec(`

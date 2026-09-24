@@ -25,7 +25,7 @@ func TestLoadConfigDiscoversConfigOnInjectedFilesystem(t *testing.T) {
 	}
 
 	cm := NewConfigManagerWithFilesystem(memFS)
-	cm.xdg = &MockXDGDirs{configPaths: []string{configPath}}
+	cm.configPaths = func() []string { return []string{configPath} }
 	got, err := cm.LoadConfig()
 	if err != nil {
 		t.Fatalf("LoadConfig failed: %v", err)

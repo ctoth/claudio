@@ -9,113 +9,62 @@ import (
 	"github.com/adrg/xdg"
 )
 
-// XDGDirs provides XDG Base Directory compliant paths for Claudio
-type XDGDirs struct{}
+// appDir is Claudio's subdirectory under every XDG base directory.
+const appDir = "claudio"
 
-// NewXDGDirs creates a new XDG directory manager
-func NewXDGDirs() *XDGDirs {
-	slog.Debug("creating new XDG directory manager")
-	return &XDGDirs{}
-}
-
-// GetSoundpackPaths returns prioritized paths where soundpacks can be found
-// Returns paths in search order: user data dir, then system data dirs
-func (x *XDGDirs) GetSoundpackPaths(soundpackID string) []string {
-	var paths []string
-
-	baseDir := "claudio/soundpacks"
-	if soundpackID != "" {
-		baseDir = filepath.Join(baseDir, soundpackID)
+// ConfigPaths returns where a claudio config file can be found, in search
+// order: the user config dir, then each system config dir.
+func ConfigPaths(filename string) []string {
+	paths := []string{UserConfigPath(filename)}
+	for _, dir := range xdg.ConfigDirs {
+		paths = append(paths, filepath.Join(dir, appDir, filename))
 	}
-
-	// User data directory (highest priority)
-	userPath := filepath.Join(xdg.DataHome, baseDir)
-	paths = append(paths, userPath)
-
-	// System data directories (fallback)
-	for _, dataDir := range xdg.DataDirs {
-		systemPath := filepath.Join(dataDir, baseDir)
-		paths = append(paths, systemPath)
-	}
-
-	slog.Debug("generated soundpack paths",
-		"soundpack_id", soundpackID,
-		"total_paths", len(paths),
-		"user_path", userPath,
-		"system_paths", len(xdg.DataDirs))
-
 	return paths
 }
 
-// GetCachePath returns the cache directory path for a specific purpose
-func (x *XDGDirs) GetCachePath(purpose string) string {
-	baseDir := "claudio"
-	if purpose != "" {
-		baseDir = filepath.Join(baseDir, purpose)
-	}
-
-	cachePath := filepath.Join(xdg.CacheHome, baseDir)
-
-	slog.Debug("generated cache path",
-		"purpose", purpose,
-		"cache_path", cachePath)
-
-	return cachePath
+// UserConfigPath joins elem under the user's claudio config directory
+// ($XDG_CONFIG_HOME/claudio), the one place claudio writes config state.
+func UserConfigPath(elem ...string) string {
+	return filepath.Join(append([]string{xdg.ConfigHome, appDir}, elem...)...)
 }
 
-// GetConfigPaths returns prioritized paths where config files can be found
-// Returns paths in search order: user config dir, then system config dirs
-func (x *XDGDirs) GetConfigPaths(filename string) []string {
-	var paths []string
-
-	baseDir := "claudio"
-
-	// User config directory (highest priority)
-	userConfigPath := filepath.Join(xdg.ConfigHome, baseDir)
-	if filename != "" {
-		userConfigPath = filepath.Join(userConfigPath, filename)
+// SoundpackPaths returns where soundpack soundpackID can be found, in
+// search order: the user data dir, then each system data dir. An empty ID
+// yields the soundpacks directories themselves.
+func SoundpackPaths(soundpackID string) []string {
+	paths := []string{UserDataPath("soundpacks", soundpackID)}
+	for _, dir := range xdg.DataDirs {
+		paths = append(paths, filepath.Join(dir, appDir, "soundpacks", soundpackID))
 	}
-	paths = append(paths, userConfigPath)
-
-	// System config directories (fallback)
-	for _, configDir := range xdg.ConfigDirs {
-		systemConfigPath := filepath.Join(configDir, baseDir)
-		if filename != "" {
-			systemConfigPath = filepath.Join(systemConfigPath, filename)
-		}
-		paths = append(paths, systemConfigPath)
-	}
-
-	slog.Debug("generated config paths",
-		"filename", filename,
-		"total_paths", len(paths),
-		"user_path", userConfigPath,
-		"system_paths", len(xdg.ConfigDirs))
-
 	return paths
+}
+
+// UserDataPath joins elem under the user's claudio data directory
+// ($XDG_DATA_HOME/claudio), where installed and cloned soundpacks live.
+func UserDataPath(elem ...string) string {
+	return filepath.Join(append([]string{xdg.DataHome, appDir}, elem...)...)
+}
+
+// CachePath joins elem under claudio's cache directory
+// ($XDG_CACHE_HOME/claudio): logs, the tracking database, extracted sounds.
+func CachePath(elem ...string) string {
+	return filepath.Join(append([]string{xdg.CacheHome, appDir}, elem...)...)
 }
 
 // CreateCacheDir creates the cache directory for a specific purpose
-func (x *XDGDirs) CreateCacheDir(purpose string) error {
-	cachePath := x.GetCachePath(purpose)
-
-	slog.Debug("creating cache directory", "path", cachePath)
-
-	err := os.MkdirAll(cachePath, 0755)
-	if err != nil {
-		slog.Error("failed to create cache directory", "path", cachePath, "error", err)
+func CreateCacheDir(purpose string) error {
+	cachePath := CachePath(purpose)
+	if err := os.MkdirAll(cachePath, 0755); err != nil {
 		return err
 	}
-
-	slog.Info("cache directory created successfully", "path", cachePath)
+	slog.Debug("cache directory ready", "path", cachePath)
 	return nil
 }
 
 // FindSoundFile searches for a sound file in soundpack directories
 // Returns the full path to the first existing file, or empty string if not found
-func (x *XDGDirs) FindSoundFile(soundpackID, relativePath string) string {
+func FindSoundFile(soundpackID, relativePath string) string {
 	if soundpackID == "" || relativePath == "" {
-		slog.Debug("empty soundpack ID or relative path", "soundpack_id", soundpackID, "relative_path", relativePath)
 		return ""
 	}
 
@@ -126,39 +75,13 @@ func (x *XDGDirs) FindSoundFile(soundpackID, relativePath string) string {
 		return ""
 	}
 
-	soundpackPaths := x.GetSoundpackPaths(soundpackID)
-
-	slog.Debug("searching for sound file",
-		"soundpack_id", soundpackID,
-		"relative_path", relativePath,
-		"search_paths", len(soundpackPaths))
-
-	for i, basePath := range soundpackPaths {
+	for _, basePath := range SoundpackPaths(soundpackID) {
 		fullPath := filepath.Join(basePath, relativePath)
-
-		slog.Debug("checking sound file path",
-			"path_index", i,
-			"base_path", basePath,
-			"full_path", fullPath)
-
 		if _, err := os.Stat(fullPath); err == nil {
-			slog.Info("sound file found",
-				"soundpack_id", soundpackID,
-				"relative_path", relativePath,
-				"full_path", fullPath,
-				"path_index", i)
+			slog.Debug("sound file found", "soundpack_id", soundpackID, "full_path", fullPath)
 			return fullPath
-		} else {
-			slog.Debug("sound file not found at path",
-				"full_path", fullPath,
-				"error", err)
 		}
 	}
-
-	slog.Debug("sound file not found in any path",
-		"soundpack_id", soundpackID,
-		"relative_path", relativePath)
-
 	return ""
 }
 

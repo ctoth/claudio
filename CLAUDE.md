@@ -183,7 +183,7 @@ rm -f claudio
      (`~/Library/Application Support`, `%LOCALAPPDATA%`); see
      `docs/configuration.md` for the full per-platform search list.
    - Environment variable precedence: CLI flag > env var > config file > default.
-   - Production env vars (full reference in `docs/cli-reference.md`): `CLAUDIO_VOLUME`,
+   - Production env vars (full reference in `docs/configuration.md`): `CLAUDIO_VOLUME`,
      `CLAUDIO_ENABLED`, `CLAUDIO_SOUNDPACK`, `CLAUDIO_LOG_LEVEL`,
      `CLAUDIO_AUDIO_BACKEND`, `CLAUDIO_FILE_LOGGING`, `CLAUDIO_SOUND_TRACKING`,
      `CLAUDIO_SOUND_TRACKING_DB`.
@@ -330,7 +330,7 @@ TDD: Short description of what was implemented
 
 - Hook Logger: `cmd/hook-logger/` — captures real Claude Code hook JSON for debugging
 - Architectural Debt Log: `docs/architectural-debt.md` — known shape problems left for scoped fixes (excluded from the docs site)
-- Embedded Soundpacks: `internal/config/` (windows.json, wsl.json, darwin.json, linux.json, plus `embedded_sounds/*.wav`)
+- Embedded Soundpacks: `internal/config/` (windows.json, darwin.json, linux.json — the WSL pack is derived from windows.json at load time — plus `embedded_sounds/*.wav`)
 - User-installed soundpacks: `~/.local/share/claudio/soundpacks/<id>/` (XDG data dir; Windows uses Windows-native XDG mapping)
 - Log Files: `~/.cache/claudio/logs/claudio.log` — default file logging location
 

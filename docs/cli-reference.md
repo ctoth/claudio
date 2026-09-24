@@ -420,11 +420,11 @@ claudio completion zsh
 
 Subcommand failures return exit code `1`.
 
-In hook mode, Claudio exits `1` before playback for an unparseable payload, a
-config file that fails validation, an out-of-range `CLAUDIO_VOLUME` or
-`--volume`, and an audio backend that cannot be resolved. A `--config` path
-that is missing or invalid is the exception: Claudio logs a warning and
-continues with defaults. Once the payload is accepted, missing sounds and
+In hook mode, Claudio exits `1` before playback for an unparseable payload, an
+out-of-range `CLAUDIO_VOLUME` or `--volume`, and an audio backend that cannot
+be resolved. A config file is never fatal: a missing or empty one means
+defaults, and one that cannot be parsed or fails validation prints a single
+`Warning:` line and Claudio continues with defaults. Once the payload is accepted, missing sounds and
 playback errors are only logged.
 
 ## See Also

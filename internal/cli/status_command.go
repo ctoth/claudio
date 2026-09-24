@@ -51,10 +51,9 @@ func runStatusE(cmd *cobra.Command, _ []string) error {
 	// we can report its location. We don't use the writable path —
 	// for status we want to show the first FOUND config, mirroring
 	// the search order in LoadConfig.
-	configPathDisplay, cfg, err := loadConfigForStatus(cmd, cli)
-	if err != nil {
-		return err
-	}
+	loaded := loadConfig(cmd, cli)
+	loaded.warnIgnored(cmd)
+	configPathDisplay, cfg := describeConfigFile(loaded), loaded.Config
 
 	// Apply env overrides so the report reflects runtime-effective values.
 	cfg = cli.configManager.ApplyEnvironmentOverrides(cfg)
@@ -109,28 +108,19 @@ func runStatusE(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
-// loadConfigForStatus reports the configured file path (for display)
-// and the loaded config. Search order matches LoadConfig: --config
-// flag wins; else first XDG path that exists; else defaults.
-func loadConfigForStatus(cmd *cobra.Command, cli *CLI) (string, *config.Config, error) {
-	if flag, _ := cmd.Flags().GetString("config"); flag != "" {
-		cfg, err := cli.configManager.LoadFromFile(flag)
-		if err != nil {
-			return flag, nil, fmt.Errorf("load --config %s: %w", flag, err)
-		}
-		return flag, cfg, nil
+// describeConfigFile is the status line for which config file is in effect,
+// matching what hook mode does with the same file.
+func describeConfigFile(l configLoad) string {
+	switch {
+	case l.Path == "":
+		return "(none - using defaults)"
+	case l.Missing:
+		return l.Path + " (not found - using defaults)"
+	case l.Err != nil:
+		return l.Path + " (invalid, ignored - using defaults)"
+	default:
+		return l.Path
 	}
-	paths := config.NewXDGDirs().GetConfigPaths("config.json")
-	for _, p := range paths {
-		if _, err := os.Stat(p); err == nil {
-			cfg, err := cli.configManager.LoadFromFile(p)
-			if err != nil {
-				return p, nil, fmt.Errorf("load %s: %w", p, err)
-			}
-			return p, cfg, nil
-		}
-	}
-	return "(none - using defaults)", cli.configManager.GetDefaultConfig(), nil
 }
 
 // describeVolume returns a printable value and a source annotation

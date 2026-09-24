@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/tj/go-naturaldate"
+
+	"claudio.click/internal/hooks"
 )
 
 // QueryFilter represents common query structure for all analyze commands
@@ -20,7 +22,6 @@ type QueryFilter struct {
 	// Content filters
 	Tool      string // Filter by specific tool
 	Category  string // Filter by category (success/error/loading)
-	Soundpack string // Filter by soundpack name/path
 	SessionID string // Filter by specific session
 
 	// Output control
@@ -70,7 +71,8 @@ func (q *QueryFilter) ApplyTimeFilter(now time.Time) (startUnix, endUnix int64) 
 
 // BuildWhereClause constructs SQL WHERE clause and arguments from QueryFilter
 // Using simple string building for reliability and predictability
-func (q *QueryFilter) BuildWhereClause() (string, []interface{}) {
+// An unknown Category is an error rather than a filter that matches nothing.
+func (q *QueryFilter) BuildWhereClause() (string, []interface{}, error) {
 	var clauses []string
 	var args []interface{}
 
@@ -96,24 +98,20 @@ func (q *QueryFilter) BuildWhereClause() (string, []interface{}) {
 		args = append(args, q.Tool)
 	}
 
-	// Category filter (stored in context JSON)
+	// Category filter (stored in context JSON, legacy rows as an int)
 	if q.Category != "" {
-		// Map category string to integer for JSON lookup
-		categoryInt := categoryStringToInt(q.Category)
-		clauses = append(clauses, "JSON_EXTRACT(context, '$.Category') = ?")
-		args = append(args, categoryInt)
+		category, err := hooks.ParseEventCategory(q.Category)
+		if err != nil {
+			return "", nil, err
+		}
+		clauses = append(clauses, categorySQL("context")+" = ?")
+		args = append(args, category.String())
 	}
 
 	// Session filter
 	if q.SessionID != "" {
 		clauses = append(clauses, "session_id = ?")
 		args = append(args, q.SessionID)
-	}
-
-	// Soundpack filter (would be added when soundpack tracking is implemented)
-	if q.Soundpack != "" {
-		clauses = append(clauses, "JSON_EXTRACT(context, '$.SoundpackName') = ?")
-		args = append(args, q.Soundpack)
 	}
 
 	// Join with AND
@@ -124,7 +122,22 @@ func (q *QueryFilter) BuildWhereClause() (string, []interface{}) {
 
 	slog.Debug("built where clause", "clause", whereClause, "arg_count", len(args))
 
-	return whereClause, args
+	return whereClause, args, nil
+}
+
+// categorySQL is an SQL expression yielding the category name stored in a
+// hook_events.context column. Current rows store the name; rows recorded
+// before categories were names store the iota int, which is mapped here so
+// old and new rows filter and group together.
+func categorySQL(contextCol string) string {
+	extract := fmt.Sprintf("JSON_EXTRACT(%s, '$.Category')", contextCol)
+	var b strings.Builder
+	b.WriteString("CASE " + extract)
+	for _, c := range hooks.Categories() {
+		fmt.Fprintf(&b, " WHEN %d THEN '%s'", int(c), c)
+	}
+	b.WriteString(" ELSE " + extract + " END")
+	return b.String()
 }
 
 // DatePresets lists the canonical preset names ParseDatePreset accepts, for
@@ -205,25 +218,4 @@ func beginningOfWeek(t time.Time) time.Time {
 // beginningOfMonth returns time at start of month (1st day 00:00:00)
 func beginningOfMonth(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, t.Location())
-}
-
-// categoryStringToInt converts category string to integer representation for database queries
-func categoryStringToInt(category string) int {
-	switch category {
-	case "loading":
-		return 0
-	case "success":
-		return 1
-	case "error":
-		return 2
-	case "interactive":
-		return 3
-	case "completion":
-		return 4
-	case "system":
-		return 5
-	default:
-		slog.Warn("unknown category string, using 0 (loading)", "category", category)
-		return 0 // Default to loading
-	}
 }

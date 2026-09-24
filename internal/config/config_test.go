@@ -77,11 +77,7 @@ func TestLoadConfigAutoDiscovery(t *testing.T) {
 	}
 
 	// Mock the XDG config paths to point to our temp directory
-	originalXDG := mgr.xdg
-	mockXDG := &MockXDGDirs{
-		configPaths: []string{configFile},
-	}
-	mgr.xdg = mockXDG
+	mgr.configPaths = func() []string { return []string{configFile} }
 
 	// Test auto-discovery - should find and load our config
 	loadedConfig, err := mgr.LoadConfig()
@@ -104,35 +100,7 @@ func TestLoadConfigAutoDiscovery(t *testing.T) {
 		t.Errorf("Expected %d soundpack paths, got %d", len(testConfig.SoundpackPaths), len(loadedConfig.SoundpackPaths))
 	}
 
-	// Restore original XDG
-	mgr.xdg = originalXDG
-
 	t.Logf("Auto-discovery test passed: loaded config %+v", loadedConfig)
-}
-
-// MockXDGDirs is a mock implementation for testing
-type MockXDGDirs struct {
-	configPaths []string
-}
-
-func (m *MockXDGDirs) GetConfigPaths(filename string) []string {
-	return m.configPaths
-}
-
-func (m *MockXDGDirs) GetSoundpackPaths(soundpackID string) []string {
-	return []string{}
-}
-
-func (m *MockXDGDirs) GetCachePath(purpose string) string {
-	return "/tmp/test-cache"
-}
-
-func (m *MockXDGDirs) CreateCacheDir(purpose string) error {
-	return nil
-}
-
-func (m *MockXDGDirs) FindSoundFile(soundpackID, relativePath string) string {
-	return ""
 }
 
 func TestLoadConfigFromFile(t *testing.T) {
@@ -866,7 +834,7 @@ func TestXDG_LogPath(t *testing.T) {
 
 	// Test with empty filename - should use XDG cache path
 	resolved = mgr.ResolveLogFilePath("")
-	expectedPath := filepath.Join(mgr.xdg.GetCachePath("logs"), "claudio.log")
+	expectedPath := filepath.Join(CachePath("logs"), "claudio.log")
 	if resolved != expectedPath {
 		t.Errorf("ResolveLogFilePath with empty filename = %q, expected %q", resolved, expectedPath)
 	}
@@ -878,8 +846,8 @@ func TestXDG_LogPath(t *testing.T) {
 	}
 
 	// Test that different purposes create different cache paths
-	otherCachePath := mgr.xdg.GetCachePath("other")
-	logCachePath := mgr.xdg.GetCachePath("logs")
+	otherCachePath := CachePath("other")
+	logCachePath := CachePath("logs")
 	if otherCachePath == logCachePath {
 		t.Error("Different cache purposes should create different paths")
 	}

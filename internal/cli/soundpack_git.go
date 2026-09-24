@@ -17,7 +17,6 @@ import (
 	"claudio.click/internal/config"
 	"claudio.click/internal/safeio"
 	"claudio.click/internal/soundpack"
-	"github.com/adrg/xdg"
 	"github.com/gofrs/flock"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
@@ -693,7 +692,7 @@ func saveSoundpackRegistry(registry *soundpackRegistry) error {
 }
 
 func soundpackRegistryPath() string {
-	return filepath.Join(xdg.ConfigHome, "claudio", "soundpacks.json")
+	return config.UserConfigPath("soundpacks.json")
 }
 
 func lockSoundpackRegistry() (*flock.Flock, error) {
@@ -787,7 +786,7 @@ func readRecord(name string) (gitSoundpackRecord, bool, error) {
 }
 
 func gitSoundpackBaseDir() string {
-	return filepath.Join(xdg.DataHome, "claudio", "soundpack-repos")
+	return config.UserDataPath("soundpack-repos")
 }
 
 func determineGitSoundpackPath(clonePath, name, subdir string) (string, error) {

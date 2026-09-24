@@ -24,28 +24,78 @@ const (
 	Silent
 )
 
+// categoryNames is the stable on-disk and CLI name of each category,
+// indexed by its value.
+var categoryNames = [...]string{
+	Loading:     "loading",
+	Success:     "success",
+	Error:       "error",
+	Interactive: "interactive",
+	Completion:  "completion",
+	System:      "system",
+	Silent:      "silent",
+}
+
+func (c EventCategory) valid() bool {
+	return c >= 0 && int(c) < len(categoryNames)
+}
+
 func (c EventCategory) String() string {
-	switch c {
-	case Loading:
-		return "loading"
-	case Success:
-		return "success"
-	case Error:
-		return "error"
-	case Interactive:
-		return "interactive"
-	case Completion:
-		slog.Debug("EventCategory.String() returning completion")
-		return "completion"
-	case System:
-		slog.Debug("EventCategory.String() returning system")
-		return "system"
-	case Silent:
-		return "silent"
-	default:
+	if !c.valid() {
 		slog.Warn("EventCategory.String() received unknown category", "category", int(c))
 		return "unknown"
 	}
+	return categoryNames[c]
+}
+
+// Categories returns every EventCategory in value order.
+func Categories() []EventCategory {
+	out := make([]EventCategory, len(categoryNames))
+	for i := range categoryNames {
+		out[i] = EventCategory(i)
+	}
+	return out
+}
+
+// ParseEventCategory maps a category name ("success", "silent", ...) back to
+// its EventCategory. Unknown names are an error listing the valid ones.
+func ParseEventCategory(name string) (EventCategory, error) {
+	if i := slices.Index(categoryNames[:], name); i >= 0 {
+		return EventCategory(i), nil
+	}
+	return 0, fmt.Errorf("unknown category %q: must be one of %s", name, strings.Join(categoryNames[:], ", "))
+}
+
+// MarshalText stores a category as its stable name, so JSON encodes it as
+// a string ("success") rather than the iota int.
+func (c EventCategory) MarshalText() ([]byte, error) {
+	if !c.valid() {
+		return nil, fmt.Errorf("cannot marshal unknown category %d", int(c))
+	}
+	return []byte(categoryNames[c]), nil
+}
+
+// UnmarshalJSON accepts the stable name and, for rows recorded before
+// categories were names, the legacy iota int.
+func (c *EventCategory) UnmarshalJSON(data []byte) error {
+	var name string
+	if err := json.Unmarshal(data, &name); err == nil {
+		parsed, err := ParseEventCategory(name)
+		if err != nil {
+			return err
+		}
+		*c = parsed
+		return nil
+	}
+	var n int
+	if err := json.Unmarshal(data, &n); err != nil {
+		return fmt.Errorf("category must be a name or legacy int, got %s", data)
+	}
+	if !EventCategory(n).valid() {
+		return fmt.Errorf("unknown legacy category %d", n)
+	}
+	*c = EventCategory(n)
+	return nil
 }
 
 // HookEvent represents a parsed agent hook event.
@@ -65,15 +115,19 @@ type HookEvent struct {
 }
 
 // EventContext provides processed context for sound mapping
+//
+// The JSON keys are explicit because the tracking database stores this
+// struct as JSON and queries it by key; renaming a field must not change
+// the on-disk format.
 type EventContext struct {
-	Category     EventCategory
-	ToolName     string
-	OriginalTool string // Original tool before command extraction (for fallback)
-	IsSuccess    bool
-	HasError     bool
-	SoundHint    string
-	FileType     string
-	Operation    string
+	Category     EventCategory `json:"Category"`
+	ToolName     string        `json:"ToolName"`
+	OriginalTool string        `json:"OriginalTool"` // Original tool before command extraction (for fallback)
+	IsSuccess    bool          `json:"IsSuccess"`
+	HasError     bool          `json:"HasError"`
+	SoundHint    string        `json:"SoundHint"`
+	FileType     string        `json:"FileType"`
+	Operation    string        `json:"Operation"`
 }
 
 // CommandInfo represents parsed command information from Bash tool input

@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/adrg/xdg"
+	"claudio.click/internal/config"
 	"modernc.org/sqlite"
 )
 
@@ -298,7 +298,7 @@ func buildDSN(dbPath string) string {
 }
 
 // GetDatabasePath returns the XDG-compliant path for the sounds database:
-// <xdg.CacheHome>/claudio/sounds.db, the same cache root as the log file.
+// config.CachePath("sounds.db"), the same cache root as the log file.
 //
 // Earlier releases used os.UserCacheDir, which differs from
 // xdg.CacheHome on Windows (%LOCALAPPDATA% vs %LOCALAPPDATA%\cache) and on
@@ -327,7 +327,7 @@ func GetDatabasePath() (string, error) {
 // DefaultDatabasePath returns the default database path without creating
 // directories or migrating a legacy database, for display (claudio status).
 func DefaultDatabasePath() string {
-	return filepath.Join(xdg.CacheHome, "claudio", "sounds.db")
+	return config.CachePath("sounds.db")
 }
 
 // legacyDatabasePath reports the pre-XDG database location when it holds a

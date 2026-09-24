@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 	"log/slog"
-	"os"
 
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
@@ -24,34 +23,23 @@ func resolveWritableConfigPath(cmd *cobra.Command, _ *CLI) (string, error) {
 	if flag, _ := cmd.Flags().GetString("config"); flag != "" {
 		return flag, nil
 	}
-	paths := config.NewXDGDirs().GetConfigPaths("config.json")
+	paths := config.ConfigPaths("config.json")
 	if len(paths) == 0 {
 		return "", fmt.Errorf("no XDG config path available")
 	}
 	return paths[0], nil
 }
 
-// loadConfigForVerb loads the config from the given path. When it is missing,
-// implicit targets use XDG discovery; explicit --config targets use defaults.
-// A parse/validate error is surfaced to the caller — writing on top of an unreadable
-// file would silently lose state the user might still want to recover.
-func loadConfigForVerb(cmd *cobra.Command, cli *CLI, configPath string) (*config.Config, error) {
-	if _, err := os.Stat(configPath); err != nil {
-		if os.IsNotExist(err) {
-			if explicitPath, _ := cmd.Flags().GetString("config"); explicitPath == "" {
-				slog.Debug("user config missing; loading effective XDG config", "path", configPath)
-				return cli.configManager.LoadConfig()
-			}
-			slog.Debug("config file missing; using defaults for verb load", "path", configPath)
-			return cli.configManager.GetDefaultConfig(), nil
-		}
-		return nil, fmt.Errorf("stat config %s: %w", configPath, err)
+// loadConfigForVerb loads the config a read-modify-write command starts
+// from, with the shared loadConfig policy: a missing file means defaults.
+// An unusable file is an error here, unlike read-only commands — writing on
+// top of it would silently lose state the user might still want to recover.
+func loadConfigForVerb(cmd *cobra.Command, cli *CLI) (*config.Config, error) {
+	loaded := loadConfig(cmd, cli)
+	if loaded.Err != nil {
+		return nil, fmt.Errorf("load %w", loaded.Err)
 	}
-	cfg, err := cli.configManager.LoadFromFile(configPath)
-	if err != nil {
-		return nil, fmt.Errorf("load config %s: %w", configPath, err)
-	}
-	return cfg, nil
+	return loaded.Config, nil
 }
 
 // mutateConfigForCommand performs one locked read-modify-write operation on
@@ -77,7 +65,7 @@ func mutateConfigForCommand(cmd *cobra.Command, mutate func(*config.Config) erro
 		}
 	}()
 
-	cfg, err := loadConfigForVerb(cmd, cli, configPath)
+	cfg, err := loadConfigForVerb(cmd, cli)
 	if err != nil {
 		return err
 	}
@@ -113,6 +101,6 @@ func validateConfigMutationTarget(cmd *cobra.Command) error {
 			slog.Warn("failed to release config validation lock", "path", configPath, "error", unlockErr)
 		}
 	}()
-	_, err = loadConfigForVerb(cmd, cli, configPath)
+	_, err = loadConfigForVerb(cmd, cli)
 	return err
 }

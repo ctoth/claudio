@@ -150,7 +150,6 @@ func hasVersionFlag(args []string) bool {
 // loadAndValidateConfig loads configuration from flags and files, applies overrides, and validates
 func loadAndValidateConfig(cmd *cobra.Command, cli *CLI) (*config.Config, error) {
 	// Get flag values
-	configFile, _ := cmd.Flags().GetString("config")
 	volumeStr, _ := cmd.Flags().GetString("volume")
 	soundpackFlag, _ := cmd.Flags().GetString("soundpack")
 	silent, _ := cmd.Flags().GetBool("silent")
@@ -170,24 +169,10 @@ func loadAndValidateConfig(cmd *cobra.Command, cli *CLI) (*config.Config, error)
 		}
 	}
 
-	// Load configuration
-	var cfg *config.Config
-	var err error
-	if configFile != "" {
-		cfg, err = cli.configManager.LoadFromFile(configFile)
-		if err != nil {
-			// If config file doesn't exist, use defaults
-			slog.Warn("config file not found, using defaults", "file", configFile, "error", err)
-			cfg = cli.configManager.GetDefaultConfig()
-		}
-	} else {
-		cfg, err = cli.configManager.LoadConfig()
-		if err != nil {
-			cmd.PrintErrf("Error loading config: %v\n", err)
-			slog.Error("config load failed", "error", err)
-			return nil, fmt.Errorf("error loading config: %w", err)
-		}
-	}
+	// Load configuration. An unusable file is a warning, never a failed hook.
+	loaded := loadConfig(cmd, cli)
+	loaded.warnIgnored(cmd)
+	cfg := loaded.Config
 
 	// Apply environment overrides
 	cfg = cli.configManager.ApplyEnvironmentOverrides(cfg)
@@ -211,8 +196,7 @@ func loadAndValidateConfig(cmd *cobra.Command, cli *CLI) (*config.Config, error)
 	}
 
 	// Validate final configuration
-	err = cli.configManager.ValidateConfig(cfg)
-	if err != nil {
+	if err := cli.configManager.ValidateConfig(cfg); err != nil {
 		cmd.PrintErrf("Error: invalid configuration: %v\n", err)
 		slog.Error("config validation failed", "error", err)
 		return nil, fmt.Errorf("invalid configuration: %w", err)
@@ -230,8 +214,7 @@ func initializeAudioSystem(cmd *cobra.Command, cli *CLI, cfg *config.Config) err
 		"enabled", cfg.Enabled)
 
 	// Initialize unified soundpack resolver with auto-detection
-	xdgDirs := config.NewXDGDirs()
-	soundpackPaths := xdgDirs.GetSoundpackPaths(cfg.DefaultSoundpack)
+	soundpackPaths := config.SoundpackPaths(cfg.DefaultSoundpack)
 	soundpackPaths = append(soundpackPaths, cfg.SoundpackPaths...)
 
 	// Check if configured soundpack exists before trying to create mapper
@@ -932,7 +915,6 @@ func loadEmbeddedPlatformSoundpack(identifier string) (soundpack.PathMapper, err
 }
 
 func embeddedPlatformSoundpackBasePaths(filename string, data []byte) []string {
-	xdgDirs := config.NewXDGDirs()
 	ids := []string{}
 
 	if spFile, err := soundpack.PeekJSONSoundpackFromBytes(data); err == nil {
@@ -948,7 +930,7 @@ func embeddedPlatformSoundpackBasePaths(filename string, data []byte) []string {
 	seen := make(map[string]struct{})
 	var paths []string
 	for _, id := range ids {
-		for _, path := range xdgDirs.GetSoundpackPaths(id) {
+		for _, path := range config.SoundpackPaths(id) {
 			cleaned := filepath.Clean(path)
 			if _, exists := seen[cleaned]; exists {
 				continue
@@ -987,7 +969,7 @@ func ensureEmbeddedDefaultSoundsExtracted(data []byte) string {
 		return ""
 	}
 
-	destDir := config.NewXDGDirs().GetCachePath(filepath.Join("embedded-soundpacks", spFile.Name))
+	destDir := config.CachePath("embedded-soundpacks", spFile.Name)
 	var wrote bool
 	for _, value := range spFile.Mappings {
 		soundBytes, err := config.GetEmbeddedSoundData(value)

@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/adrg/xdg"
 )
 
 func TestRunStoresSanitizedUniquePrivateFilesInUserCache(t *testing.T) {
@@ -106,22 +108,16 @@ func isolateUserCache(t *testing.T) string {
 	t.Setenv("USERPROFILE", root)
 	t.Setenv("LOCALAPPDATA", root)
 	t.Setenv("XDG_CACHE_HOME", root)
+	xdg.Reload()
+	t.Cleanup(xdg.Reload)
 
-	cacheRoot, err := os.UserCacheDir()
-	if err != nil {
-		t.Fatalf("resolve user cache directory: %v", err)
-	}
-	if !pathWithin(root, cacheRoot) {
-		t.Fatalf("user cache directory %q is outside temporary root %q", cacheRoot, root)
+	// Hook logs share claudio's XDG cache root (not os.UserCacheDir,
+	// which differs from it on Windows and macOS).
+	cacheRoot := xdg.CacheHome
+	if filepath.Clean(cacheRoot) != filepath.Clean(root) {
+		t.Fatalf("XDG cache home %q, want %q", cacheRoot, root)
 	}
 	return cacheRoot
-}
-
-func pathWithin(root, path string) bool {
-	relative, err := filepath.Rel(root, path)
-	return err == nil && relative != ".." &&
-		!strings.HasPrefix(relative, ".."+string(filepath.Separator)) &&
-		!filepath.IsAbs(relative)
 }
 
 func assertPermissions(t *testing.T, path string, want os.FileMode) {

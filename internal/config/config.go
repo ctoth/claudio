@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -10,7 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strconv"
+	"slices"
 	"strings"
 
 	"github.com/spf13/afero"
@@ -18,7 +19,9 @@ import (
 	"claudio.click/internal/platform"
 )
 
-//go:embed windows.json wsl.json darwin.json linux.json
+// wsl.json is not embedded: it is derived from windows.json (wsl_pack.go).
+//
+//go:embed windows.json darwin.json linux.json
 var platformSoundpacks embed.FS
 
 // embeddedSounds holds the synthesized default WAV tones that back the
@@ -52,36 +55,47 @@ type Config struct {
 	SoundTracking    *SoundTrackingConfig `json:"sound_tracking,omitempty"` // Sound tracking configuration
 }
 
-// XDGInterface defines the interface for XDG directory operations
-type XDGInterface interface {
-	GetConfigPaths(filename string) []string
-	GetSoundpackPaths(soundpackID string) []string
-	GetCachePath(purpose string) string
-	CreateCacheDir(purpose string) error
-	FindSoundFile(soundpackID, relativePath string) string
+// Clone returns a deep copy of c: pointer fields and slices are duplicated
+// so mutating the copy never affects the original.
+func (c *Config) Clone() *Config {
+	clone := *c
+	if c.Volume != nil {
+		v := *c.Volume
+		clone.Volume = &v
+	}
+	if c.SoundpackPaths != nil {
+		clone.SoundpackPaths = append([]string(nil), c.SoundpackPaths...)
+	}
+	if c.FileLogging != nil {
+		fl := *c.FileLogging
+		clone.FileLogging = &fl
+	}
+	if c.SoundTracking != nil {
+		st := *c.SoundTracking
+		clone.SoundTracking = &st
+	}
+	return &clone
 }
 
 // ConfigManager handles loading, saving, and validating configuration
 type ConfigManager struct {
-	xdg XDGInterface
-	fs  afero.Fs
+	// configPaths lists config files in search order; tests replace it.
+	configPaths func() []string
+	fs          afero.Fs
 }
+
+func defaultConfigPaths() []string { return ConfigPaths("config.json") }
 
 // NewConfigManager creates a new configuration manager
 func NewConfigManager() *ConfigManager {
-	slog.Debug("creating new config manager")
-	return &ConfigManager{
-		xdg: NewXDGDirs(),
-		fs:  afero.NewOsFs(), // Production uses real filesystem
-	}
+	return NewConfigManagerWithFilesystem(afero.NewOsFs()) // Production uses real filesystem
 }
 
 // NewConfigManagerWithFilesystem creates a new configuration manager with custom filesystem
 func NewConfigManagerWithFilesystem(fs afero.Fs) *ConfigManager {
-	slog.Debug("creating new config manager with custom filesystem")
 	return &ConfigManager{
-		xdg: NewXDGDirs(),
-		fs:  fs,
+		configPaths: defaultConfigPaths,
+		fs:          fs,
 	}
 }
 
@@ -130,10 +144,18 @@ func (cm *ConfigManager) GetDefaultConfig() *Config {
 func (cm *ConfigManager) LoadFromFile(filePath string) (*Config, error) {
 	slog.Debug("loading config from file", "file_path", filePath)
 
+	// Failures are returned, not logged: callers decide whether a bad file
+	// is fatal (write paths) or a warning (hook mode), and log it once.
 	data, err := afero.ReadFile(cm.fs, filePath)
 	if err != nil {
-		slog.Error("failed to read config file", "file_path", filePath, "error", err)
 		return nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	// An empty file (including --config NUL or /dev/null) holds no
+	// settings, so it means defaults rather than a JSON syntax error.
+	if len(bytes.TrimSpace(data)) == 0 {
+		slog.Debug("config file is empty; using defaults", "file_path", filePath)
+		data = []byte("{}")
 	}
 
 	// Decode on top of the defaults so keys the file omits keep their default
@@ -143,18 +165,14 @@ func (cm *ConfigManager) LoadFromFile(filePath string) (*Config, error) {
 	// lets `claudio volume` report that no volume is persisted.
 	config := *cm.GetDefaultConfig()
 	config.Volume = nil
-	err = json.Unmarshal(data, &config)
-	if err != nil {
-		slog.Error("failed to parse config JSON", "file_path", filePath, "error", err)
+	if err := json.Unmarshal(data, &config); err != nil {
 		return nil, fmt.Errorf("failed to parse config JSON: %w", err)
 	}
 
 	config.AudioBackend = migrateLegacyAudioBackend(config.AudioBackend, filePath)
 
-	err = cm.ValidateConfig(&config)
-	if err != nil {
-		slog.Error("config validation failed", "file_path", filePath, "error", err)
-		return nil, fmt.Errorf("config validation failed: %w", err)
+	if err := cm.ValidateConfig(&config); err != nil {
+		return nil, err
 	}
 
 	slog.Debug("config loaded successfully",
@@ -208,26 +226,24 @@ func (cm *ConfigManager) WriteConfig(filePath string, config *Config) error {
 
 // LoadConfig loads configuration using XDG path discovery
 func (cm *ConfigManager) LoadConfig() (*Config, error) {
-	slog.Debug("loading config using XDG path discovery")
+	path := cm.FindConfigFile()
+	if path == "" {
+		slog.Debug("no config file found, using defaults")
+		return cm.GetDefaultConfig(), nil
+	}
+	return cm.LoadFromFile(path)
+}
 
-	configPaths := cm.xdg.GetConfigPaths("config.json")
-
-	slog.Debug("searching for config file", "paths", configPaths)
-
-	// Try to load from each path in priority order
-	for i, configPath := range configPaths {
-		slog.Debug("checking config path", "path_index", i, "path", configPath)
-
+// FindConfigFile returns the first XDG config.json that exists, in search
+// order, or "" when there is none.
+func (cm *ConfigManager) FindConfigFile() string {
+	for _, configPath := range cm.configPaths() {
 		if _, err := cm.fs.Stat(configPath); err == nil {
 			slog.Debug("found config file", "path", configPath)
-			return cm.LoadFromFile(configPath)
-		} else {
-			slog.Debug("config file not found", "path", configPath, "error", err)
+			return configPath
 		}
 	}
-
-	slog.Debug("no config file found, using defaults")
-	return cm.GetDefaultConfig(), nil
+	return ""
 }
 
 // ValidateConfig validates configuration values
@@ -295,7 +311,7 @@ func (cm *ConfigManager) ValidateConfig(config *Config) error {
 
 	if len(errors) > 0 {
 		errMsg := strings.Join(errors, "; ")
-		slog.Error("config validation failed", "errors", errMsg)
+		slog.Debug("config validation failed", "errors", errMsg)
 		return fmt.Errorf("config validation failed: %s", errMsg)
 	}
 
@@ -348,68 +364,9 @@ func (cm *ConfigManager) MergeConfigs(base, override *Config) *Config {
 func (cm *ConfigManager) ApplyEnvironmentOverrides(config *Config) *Config {
 	slog.Debug("applying environment variable overrides")
 
-	// Create a copy to modify
-	result := *config
-
-	// CLAUDIO_VOLUME
-	if volStr := os.Getenv("CLAUDIO_VOLUME"); volStr != "" {
-		if vol, err := strconv.ParseFloat(volStr, 64); err == nil {
-			result.Volume = &vol
-			slog.Debug("applied volume override from environment", "value", vol)
-		} else {
-			slog.Warn("invalid CLAUDIO_VOLUME environment variable", "value", volStr, "error", err)
-		}
-	}
-
-	// CLAUDIO_SOUNDPACK
-	if soundpack := os.Getenv("CLAUDIO_SOUNDPACK"); soundpack != "" {
-		result.DefaultSoundpack = soundpack
-		slog.Debug("applied soundpack override from environment", "value", soundpack)
-	}
-
-	// CLAUDIO_ENABLED
-	if enabledStr := os.Getenv("CLAUDIO_ENABLED"); enabledStr != "" {
-		if enabled, err := strconv.ParseBool(enabledStr); err == nil {
-			result.Enabled = enabled
-			slog.Debug("applied enabled override from environment", "value", enabled)
-		} else {
-			slog.Warn("invalid CLAUDIO_ENABLED environment variable", "value", enabledStr, "error", err)
-		}
-	}
-
-	// CLAUDIO_LOG_LEVEL
-	if logLevel := os.Getenv("CLAUDIO_LOG_LEVEL"); logLevel != "" {
-		result.LogLevel = logLevel
-		slog.Debug("applied log level override from environment", "value", logLevel)
-	}
-
-	// CLAUDIO_AUDIO_BACKEND
-	if audioBackend := os.Getenv("CLAUDIO_AUDIO_BACKEND"); audioBackend != "" {
-		audioBackend = migrateLegacyAudioBackend(audioBackend, "CLAUDIO_AUDIO_BACKEND")
-		// Validate the backend before applying
-		if cm.IsValidAudioBackend(audioBackend) {
-			result.AudioBackend = audioBackend
-			slog.Debug("applied audio backend override from environment", "value", audioBackend)
-		} else {
-			slog.Warn("invalid CLAUDIO_AUDIO_BACKEND environment variable", "value", audioBackend)
-		}
-	}
-
-	// CLAUDIO_FILE_LOGGING — opt-out switch so test environments can
-	// disable the lumberjack file handle that would otherwise block
-	// t.TempDir() cleanup on Windows. Recognised values match
-	// strconv.ParseBool ("1"/"0", "true"/"false", etc.).
-	if fileLoggingStr := os.Getenv("CLAUDIO_FILE_LOGGING"); fileLoggingStr != "" {
-		if enabled, err := strconv.ParseBool(fileLoggingStr); err == nil {
-			if result.FileLogging == nil {
-				result.FileLogging = &FileLoggingConfig{}
-			}
-			result.FileLogging.Enabled = enabled
-			slog.Debug("applied file_logging override from environment", "value", enabled)
-		} else {
-			slog.Warn("invalid CLAUDIO_FILE_LOGGING environment variable", "value", fileLoggingStr, "error", err)
-		}
-	}
+	// Deep copy so overrides never write through into the caller's config.
+	result := config.Clone()
+	applyEnvVars(result, configEnvVars)
 
 	// Apply sound tracking environment overrides
 	if result.SoundTracking == nil {
@@ -418,7 +375,7 @@ func (cm *ConfigManager) ApplyEnvironmentOverrides(config *Config) *Config {
 	result.SoundTracking = ApplySoundTrackingEnvironmentOverrides(result.SoundTracking)
 
 	slog.Debug("environment overrides applied")
-	return &result
+	return result
 }
 
 // ApplyLogLevel configures slog with the specified log level
@@ -466,7 +423,7 @@ func (cm *ConfigManager) ResolveLogFilePath(filename string) string {
 	}
 
 	// Use XDG cache directory for log files
-	return filepath.Join(cm.xdg.GetCachePath("logs"), "claudio.log")
+	return CachePath("logs", "claudio.log")
 }
 
 // ApplyLogLevelWithWriter configures slog with the specified log level and custom writer (for testing)
@@ -512,7 +469,15 @@ func (cm *ConfigManager) ApplyLogLevelWithWriter(logLevel string, writer io.Writ
 // it is listed here so cli tests can set cfg.AudioBackend = "fake" without
 // tripping ConfigManager.ValidateConfig.
 func (cm *ConfigManager) GetSupportedAudioBackends() []string {
-	return []string{"auto", "system_command", "oto", "fake"}
+	return slices.Clone(supportedAudioBackends)
+}
+
+var supportedAudioBackends = []string{"auto", "system_command", "oto", "fake"}
+
+// isSupportedAudioBackend reports whether backend is one of the
+// GetSupportedAudioBackends names (empty means auto and is accepted).
+func isSupportedAudioBackend(backend string) bool {
+	return backend == "" || slices.Contains(supportedAudioBackends, backend)
 }
 
 // legacyAudioBackends maps removed backend names to their replacements so a
@@ -532,29 +497,22 @@ func migrateLegacyAudioBackend(backend, source string) string {
 
 // IsValidAudioBackend checks if an audio backend type is supported
 func (cm *ConfigManager) IsValidAudioBackend(backend string) bool {
-	// Empty string is valid (defaults to auto)
-	if backend == "" {
-		return true
-	}
-
-	supported := cm.GetSupportedAudioBackends()
-	for _, supportedBackend := range supported {
-		if backend == supportedBackend {
-			return true
-		}
-	}
-	return false
+	return isSupportedAudioBackend(backend)
 }
 
 // hasEmbeddedPlatformFile checks if an embedded platform soundpack file exists
 func hasEmbeddedPlatformFile(filename string) bool {
-	_, err := platformSoundpacks.Open(filename)
+	_, err := GetEmbeddedPlatformSoundpackData(filename)
 	return err == nil
 }
 
 // GetEmbeddedPlatformSoundpackData reads embedded platform soundpack data
 func GetEmbeddedPlatformSoundpackData(filename string) ([]byte, error) {
-	data, err := platformSoundpacks.ReadFile(filename)
+	read := platformSoundpacks.ReadFile
+	if filename == wslPackFile {
+		read = func(string) ([]byte, error) { return wslPackData() }
+	}
+	data, err := read(filename)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read embedded platform soundpack file '%s': %w", filename, err)
 	}
