@@ -88,3 +88,19 @@ func repoRoot(t *testing.T) string {
 		dir = parent
 	}
 }
+
+// The embedded default WAVs are generator output: config.go carries a
+// generate directive, and CI regenerates them and fails on any drift.
+func TestEmbeddedSoundsAreRegeneratedInCI(t *testing.T) {
+	root := repoRoot(t)
+	config := readRepoFile(t, root, "internal/config/config.go")
+	if !strings.Contains(config, "//go:generate go -C embedded_sounds run generate.go") {
+		t.Fatal("internal/config/config.go has no go:generate line for embedded_sounds/generate.go")
+	}
+	workflow := readRepoFile(t, root, ".github/workflows/ci.yml")
+	gen := strings.Index(workflow, "go generate ./internal/config/...")
+	diff := strings.Index(workflow, "git diff --exit-code")
+	if gen < 0 || diff < gen {
+		t.Fatal("CI does not run go generate ./internal/config/... followed by git diff --exit-code")
+	}
+}

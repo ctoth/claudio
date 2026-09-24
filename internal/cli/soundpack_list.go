@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"log/slog"
+	"strconv"
 
 	"github.com/spf13/cobra"
 )
@@ -27,12 +28,7 @@ Shows name, type (embedded/json/directory), sound count, and path for each pack.
 func runSoundpackList(cmd *cobra.Command) error {
 	slog.Debug("running soundpack list")
 
-	packs, err := discoverSoundpacks()
-	if err != nil {
-		return fmt.Errorf("failed to discover soundpacks: %w", err)
-	}
-
-	packs = withSoundCounts(packs)
+	packs := withSoundCounts(discoverSoundpacks())
 	slog.Info("discovered soundpacks", "count", len(packs))
 
 	// Calculate column widths for tabular formatting
@@ -46,7 +42,7 @@ func runSoundpackList(cmd *cobra.Command) error {
 		if len(p.Type) > typeWidth {
 			typeWidth = len(p.Type)
 		}
-		countStr := fmt.Sprintf("%d", p.SoundCount)
+		countStr := strconv.Itoa(p.SoundCount)
 		if len(countStr) > soundsWidth {
 			soundsWidth = len(countStr)
 		}
@@ -63,7 +59,7 @@ func runSoundpackList(cmd *cobra.Command) error {
 
 	// Print rows
 	for _, p := range packs {
-		cmd.Printf(format, p.Name, p.Type, fmt.Sprintf("%d", p.SoundCount), p.Path)
+		cmd.Printf(format, p.Name, p.Type, strconv.Itoa(p.SoundCount), p.Path)
 	}
 
 	return nil

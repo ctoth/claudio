@@ -27,8 +27,12 @@ var platformSoundpacks embed.FS
 // native-Linux platform pack. Unlike Windows/macOS — which point at system
 // sound files that always exist — a bare Linux box ships no guaranteed WAVs,
 // so linux.json references these by bare filename and they are extracted to
-// the cache dir at load time. Regenerate with embedded_sounds/generate.go.
+// the cache dir at load time. They are generated: run
+// `go generate ./internal/config/...` after editing embedded_sounds/generate.go
+// (it writes into its own directory, hence go -C). CI regenerates them and
+// fails if the committed files differ.
 //
+//go:generate go -C embedded_sounds run generate.go
 //go:embed embedded_sounds/*.wav
 var embeddedSounds embed.FS
 
@@ -222,13 +226,7 @@ func (cm *ConfigManager) ValidateConfig(config *Config) error {
 	// Validate log level
 	validLogLevels := []string{"debug", "info", "warn", "error"}
 	if config.LogLevel != "" {
-		valid := false
-		for _, level := range validLogLevels {
-			if config.LogLevel == level {
-				valid = true
-				break
-			}
-		}
+		valid := slices.Contains(validLogLevels, config.LogLevel)
 		if !valid {
 			errors = append(errors, fmt.Sprintf("invalid log level '%s', must be one of: %s",
 				config.LogLevel, strings.Join(validLogLevels, ", ")))

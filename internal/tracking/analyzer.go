@@ -2,6 +2,7 @@ package tracking
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -21,7 +22,7 @@ type MissingSound struct {
 // GetMissingSounds queries the database for sounds that were requested but not found
 func GetMissingSounds(db *sql.DB, filter QueryFilter) ([]MissingSound, error) {
 	if db == nil {
-		return nil, fmt.Errorf("database connection is nil")
+		return nil, errors.New("database connection is nil")
 	}
 
 	// Build the base query for missing sounds
@@ -95,9 +96,9 @@ func GetMissingSounds(db *sql.DB, filter QueryFilter) ([]MissingSound, error) {
 }
 
 // GetMissingSoundsSummary returns summary statistics about missing sounds
-func GetMissingSoundsSummary(db *sql.DB, filter QueryFilter) (map[string]interface{}, error) {
+func GetMissingSoundsSummary(db *sql.DB, filter QueryFilter) (map[string]any, error) {
 	if db == nil {
-		return nil, fmt.Errorf("database connection is nil")
+		return nil, errors.New("database connection is nil")
 	}
 
 	// Build summary query
@@ -125,7 +126,7 @@ func GetMissingSoundsSummary(db *sql.DB, filter QueryFilter) (map[string]interfa
 		return nil, fmt.Errorf("failed to query missing sounds summary: %w", err)
 	}
 
-	summary := map[string]interface{}{
+	summary := map[string]any{
 		"unique_missing_sounds":     uniqueSounds,
 		"total_missing_requests":    totalRequests,
 		"tools_with_missing_sounds": toolsWithMissing,
@@ -201,7 +202,7 @@ type ChainTypeStatistic struct {
 // GetSoundUsage returns statistics about actual sound playback
 func GetSoundUsage(db *sql.DB, filter QueryFilter) ([]SoundUsage, error) {
 	if db == nil {
-		return nil, fmt.Errorf("database connection is nil")
+		return nil, errors.New("database connection is nil")
 	}
 
 	// Build query to get sound usage statistics
@@ -276,7 +277,7 @@ func GetSoundUsage(db *sql.DB, filter QueryFilter) ([]SoundUsage, error) {
 // GetUsageSummary returns overall usage statistics
 func GetUsageSummary(db *sql.DB, filter QueryFilter) (*UsageSummary, error) {
 	if db == nil {
-		return nil, fmt.Errorf("database connection is nil")
+		return nil, errors.New("database connection is nil")
 	}
 
 	// Build query for summary statistics
@@ -316,7 +317,7 @@ func GetUsageSummary(db *sql.DB, filter QueryFilter) (*UsageSummary, error) {
 // came from.
 func GetChainTypeStatistics(db *sql.DB, filter QueryFilter) ([]ChainTypeStatistic, error) {
 	if db == nil {
-		return nil, fmt.Errorf("database connection is nil")
+		return nil, errors.New("database connection is nil")
 	}
 
 	baseQuery := `

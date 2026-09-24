@@ -746,7 +746,7 @@ func TestAnalyzeUsageCommandWithSummaryAndFallbacks(t *testing.T) {
 	}
 
 	for _, event := range testEvents {
-		for i := 0; i < event.count; i++ {
+		for i := range event.count {
 			contextJSON := `{"Category":1,"ToolName":"Test"}`
 			_, err = db.Exec(`
 				INSERT INTO hook_events (timestamp, session_id, tool_name, selected_path, chain_type, context)

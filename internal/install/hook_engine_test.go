@@ -9,14 +9,14 @@ import (
 // agent's shape.
 func userSettingsFor(agent Agent) SettingsMap {
 	if agent == AgentCopilot {
-		return SettingsMap{"theme": "dark", "hooks": map[string]interface{}{
-			"PreToolUse": []interface{}{map[string]interface{}{"type": "command", "command": "echo user"}},
+		return SettingsMap{"theme": "dark", "hooks": map[string]any{
+			"PreToolUse": []any{map[string]any{"type": "command", "command": "echo user"}},
 		}}
 	}
-	return SettingsMap{"theme": "dark", "hooks": map[string]interface{}{
-		"PreToolUse": []interface{}{map[string]interface{}{
+	return SettingsMap{"theme": "dark", "hooks": map[string]any{
+		"PreToolUse": []any{map[string]any{
 			"matcher": "Bash",
-			"hooks":   []interface{}{map[string]interface{}{"type": "command", "command": "echo user"}},
+			"hooks":   []any{map[string]any{"type": "command", "command": "echo user"}},
 		}},
 	}}
 }
@@ -59,10 +59,10 @@ func TestRemoveAgentHooksRejectsNonConcreteAgent(t *testing.T) {
 }
 
 func TestClaudioHookNamesIsSortedAndIgnoresUserHooks(t *testing.T) {
-	settings := SettingsMap{"hooks": map[string]interface{}{
+	settings := SettingsMap{"hooks": map[string]any{
 		"Stop":       "claudio",
 		"Other":      "echo hi",
-		"PreToolUse": []interface{}{map[string]interface{}{"type": "command", "command": "/opt/claudio"}},
+		"PreToolUse": []any{map[string]any{"type": "command", "command": "/opt/claudio"}},
 		"Weird":      float64(3),
 	}}
 	if got, want := ClaudioHookNames(&settings), []string{"PreToolUse", "Stop"}; !reflect.DeepEqual(got, want) {
@@ -91,10 +91,10 @@ func TestIsClaudioHookFormats(t *testing.T) {
 	if IsClaudioHook("/usr/bin/other") {
 		t.Error("non-claudio command must not be recognized")
 	}
-	arr := []interface{}{
-		map[string]interface{}{
-			"hooks": []interface{}{
-				map[string]interface{}{"command": "/opt/claudio"},
+	arr := []any{
+		map[string]any{
+			"hooks": []any{
+				map[string]any{"command": "/opt/claudio"},
 			},
 		},
 	}
@@ -106,38 +106,38 @@ func TestIsClaudioHookFormats(t *testing.T) {
 func TestIsClaudioHookFindsClaudioInMergedHookArrays(t *testing.T) {
 	cases := []struct {
 		name string
-		arr  []interface{}
+		arr  []any
 	}{
 		{
 			name: "claudio after existing hook",
-			arr: []interface{}{
-				map[string]interface{}{
+			arr: []any{
+				map[string]any{
 					"matcher": ".*",
-					"hooks": []interface{}{
-						map[string]interface{}{"command": "/usr/bin/logger"},
+					"hooks": []any{
+						map[string]any{"command": "/usr/bin/logger"},
 					},
 				},
-				map[string]interface{}{
+				map[string]any{
 					"matcher": "*",
-					"hooks": []interface{}{
-						map[string]interface{}{"command": "/usr/local/bin/claudio"},
+					"hooks": []any{
+						map[string]any{"command": "/usr/local/bin/claudio"},
 					},
 				},
 			},
 		},
 		{
 			name: "claudio before existing hook",
-			arr: []interface{}{
-				map[string]interface{}{
+			arr: []any{
+				map[string]any{
 					"matcher": "*",
-					"hooks": []interface{}{
-						map[string]interface{}{"command": `C:\tools\claudio.exe`},
+					"hooks": []any{
+						map[string]any{"command": `C:\tools\claudio.exe`},
 					},
 				},
-				map[string]interface{}{
+				map[string]any{
 					"matcher": ".*",
-					"hooks": []interface{}{
-						map[string]interface{}{"command": "/usr/bin/logger"},
+					"hooks": []any{
+						map[string]any{"command": "/usr/bin/logger"},
 					},
 				},
 			},
@@ -194,29 +194,29 @@ func TestHookCommandQuotingAndRecognitionBranches(t *testing.T) {
 }
 
 func TestHookArrayDetectionAdditionalBranches(t *testing.T) {
-	if IsClaudioHook([]interface{}{}) {
+	if IsClaudioHook([]any{}) {
 		t.Error("empty hook array must not be recognized")
 	}
-	if IsClaudioHook([]interface{}{"raw", map[string]interface{}{"hooks": []interface{}{}}}) {
+	if IsClaudioHook([]any{"raw", map[string]any{"hooks": []any{}}}) {
 		t.Error("array without claudio command must not be recognized")
 	}
 
-	directCommand := map[string]interface{}{"command": "/opt/claudio"}
-	if !IsClaudioHook([]interface{}{directCommand}) {
+	directCommand := map[string]any{"command": "/opt/claudio"}
+	if !IsClaudioHook([]any{directCommand}) {
 		t.Error("direct command item should be recognized")
 	}
-	noHookArray := map[string]interface{}{"matcher": "*"}
-	if IsClaudioHook([]interface{}{noHookArray}) {
+	noHookArray := map[string]any{"matcher": "*"}
+	if IsClaudioHook([]any{noHookArray}) {
 		t.Error("item without hooks array must not be recognized")
 	}
-	nestedCommand := map[string]interface{}{
-		"hooks": []interface{}{
+	nestedCommand := map[string]any{
+		"hooks": []any{
 			"raw-hook",
-			map[string]interface{}{"command": 42},
-			map[string]interface{}{"command": "/opt/claudio"},
+			map[string]any{"command": 42},
+			map[string]any{"command": "/opt/claudio"},
 		},
 	}
-	if !IsClaudioHook([]interface{}{nestedCommand}) {
+	if !IsClaudioHook([]any{nestedCommand}) {
 		t.Error("nested claudio command should be recognized")
 	}
 }

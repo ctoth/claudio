@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -33,8 +34,8 @@ var embeddedPlatformSoundpackFiles = []string{"windows.json", "wsl.json", "darwi
 // discoverSoundpacks lists every soundpack reachable by name, using the
 // soundpack_paths of the effective XDG config. See
 // discoverSoundpacksWithPaths for the order.
-func discoverSoundpacks() ([]soundpackInfo, error) {
-	return discoverSoundpacksWithPaths(configuredSoundpackPaths()), nil
+func discoverSoundpacks() []soundpackInfo {
+	return discoverSoundpacksWithPaths(configuredSoundpackPaths())
 }
 
 // discoverSoundpacksWithPaths lists every soundpack reachable by name, in
@@ -119,7 +120,7 @@ func discoverEmbeddedSoundpacks() ([]soundpackInfo, error) {
 	}
 
 	if len(packs) == 0 {
-		return nil, fmt.Errorf("no embedded platform soundpacks found")
+		return nil, errors.New("no embedded platform soundpacks found")
 	}
 
 	return packs, nil
@@ -345,7 +346,7 @@ func ExtractAllSoundKeys() ([]string, error) {
 	}
 
 	if len(keySet) == 0 {
-		return nil, fmt.Errorf("no sound keys found in any embedded platform soundpack")
+		return nil, errors.New("no sound keys found in any embedded platform soundpack")
 	}
 
 	// Convert to sorted slice
@@ -377,8 +378,8 @@ func detectPlatformFile() string {
 // Keys like "loading/bash-start.wav" -> "loading"
 // Keys like "default.wav" -> "default"
 func categoryFromKey(key string) string {
-	if idx := strings.Index(key, "/"); idx >= 0 {
-		return key[:idx]
+	if category, _, ok := strings.Cut(key, "/"); ok {
+		return category
 	}
 	// Root-level keys like "default.wav"
 	return strings.TrimSuffix(key, filepath.Ext(key))

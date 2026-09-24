@@ -130,7 +130,7 @@ func lockRegistry() (*flock.Flock, error) {
 	}
 	lock, err := safeio.LockFile(path + ".lock")
 	if errors.Is(err, safeio.ErrLockHeld) {
-		return nil, fmt.Errorf("another soundpack registry write is already running")
+		return nil, errors.New("another soundpack registry write is already running")
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to lock soundpack registry: %w", err)

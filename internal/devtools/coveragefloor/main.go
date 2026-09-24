@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -69,7 +70,7 @@ func runCoverage(goBinary, pkg string) (string, error) {
 func parseCoverage(output string) (float64, error) {
 	match := coveragePattern.FindStringSubmatch(output)
 	if match == nil {
-		return 0, fmt.Errorf("missing coverage line")
+		return 0, errors.New("missing coverage line")
 	}
 	return strconv.ParseFloat(match[1], 64)
 }

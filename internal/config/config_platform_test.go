@@ -56,11 +56,12 @@ func TestGetPlatformSoundpackExecutableDirectory(t *testing.T) {
 			platformResult := mgr.GetPlatformSoundpack(execDir)
 			t.Logf("Platform detection result: %s", platformResult)
 
-			if platformResult == "default" {
+			switch platformResult {
+			case "default":
 				t.Error("TDD: GetPlatformSoundpack should find wsl.json next to executable in WSL, but returned 'default'")
-			} else if platformResult == wslJsonPath {
+			case wslJsonPath:
 				t.Log("TDD GREEN: Platform detection successfully found wsl.json next to executable!")
-			} else {
+			default:
 				t.Logf("Platform detection returned: %s (expected: %s)", platformResult, wslJsonPath)
 			}
 		} else {

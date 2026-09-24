@@ -55,7 +55,7 @@ func categoryNames(groups []CategoryGroup) []string {
 func TestOutputMissingSoundsToleratesPartialSummary(t *testing.T) {
 	sounds := []tracking.MissingSound{{Path: "x.wav", RequestCount: 1, Category: "success", ToolName: "Bash"}}
 	var out bytes.Buffer
-	summary := map[string]interface{}{"unique_missing_sounds": 1}
+	summary := map[string]any{"unique_missing_sounds": 1}
 	if err := outputMissingSoundsHierarchical(&out, sounds, summary, tracking.QueryFilter{}); err != nil {
 		t.Fatalf("outputMissingSoundsHierarchical: %v", err)
 	}

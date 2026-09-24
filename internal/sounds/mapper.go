@@ -381,10 +381,8 @@ func normalizeName(name string) string {
 	for _, r := range normalized {
 		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
 			result.WriteRune(r)
-		} else if r != '-' { // Don't replace existing hyphens
-			result.WriteRune('-')
 		} else {
-			result.WriteRune(r) // Keep existing hyphens
+			result.WriteRune('-') // existing hyphens stay hyphens
 		}
 	}
 

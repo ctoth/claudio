@@ -32,7 +32,7 @@ func TestReadSettingsFile(t *testing.T) {
 	settingsPath := "/test/settings.json"
 	testSettings := SettingsMap{
 		"version": "1.0",
-		"hooks": map[string]interface{}{
+		"hooks": map[string]any{
 			"PreToolUse": "test",
 		},
 	}
@@ -75,12 +75,12 @@ func TestWriteSettingsFile(t *testing.T) {
 	testSettings := SettingsMap{
 		"volume":    0.7,
 		"soundpack": "test-pack",
-		"hooks": map[string]interface{}{
-			"PostToolUse": []interface{}{
-				map[string]interface{}{
+		"hooks": map[string]any{
+			"PostToolUse": []any{
+				map[string]any{
 					"matcher": ".*",
-					"hooks": []interface{}{
-						map[string]interface{}{
+					"hooks": []any{
+						map[string]any{
 							"type":    "command",
 							"command": "claudio",
 						},
@@ -168,9 +168,9 @@ func TestReadWriteRoundTrip(t *testing.T) {
 	settingsPath := "/roundtrip/settings.json"
 	originalSettings := SettingsMap{
 		"test_roundtrip": true,
-		"complex_data": map[string]interface{}{
-			"nested": map[string]interface{}{
-				"array":  []interface{}{1, 2, 3},
+		"complex_data": map[string]any{
+			"nested": map[string]any{
+				"array":  []any{1, 2, 3},
 				"string": "test",
 			},
 		},
@@ -193,12 +193,12 @@ func TestReadWriteRoundTrip(t *testing.T) {
 		t.Error("Round-trip failed for boolean value")
 	}
 
-	complexData, ok := (*readSettings)["complex_data"].(map[string]interface{})
+	complexData, ok := (*readSettings)["complex_data"].(map[string]any)
 	if !ok {
 		t.Fatal("Complex data structure not preserved")
 	}
 
-	nested, ok := complexData["nested"].(map[string]interface{})
+	nested, ok := complexData["nested"].(map[string]any)
 	if !ok {
 		t.Fatal("Nested structure not preserved")
 	}

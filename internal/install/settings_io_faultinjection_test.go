@@ -155,7 +155,6 @@ func TestWriteSettingsFile_FaultInjection(t *testing.T) {
 }`)
 
 	for _, r := range rows {
-		r := r
 		t.Run(r.name, func(t *testing.T) {
 			memFS := afero.NewMemMapFs()
 			if err := memFS.MkdirAll(dir, 0755); err != nil {
@@ -262,9 +261,7 @@ func TestWriteSettingsFile_ConcurrentWritersSerialise(t *testing.T) {
 
 	holderReady := make(chan struct{})
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		lock, err := LockSettingsDir(settingsPath)
 		if err != nil {
 			close(holderReady)
@@ -280,11 +277,9 @@ func TestWriteSettingsFile_ConcurrentWritersSerialise(t *testing.T) {
 			writeErr = unlockErr
 		}
 		resultsCh <- result{label: "holder", err: writeErr}
-	}()
+	})
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		<-holderReady
 		lock, err := LockSettingsDir(settingsPath)
 		if err != nil {
@@ -295,7 +290,7 @@ func TestWriteSettingsFile_ConcurrentWritersSerialise(t *testing.T) {
 		settings := SettingsMap{"writer": "contender"}
 		writeErr := WriteSettingsFile(osFS, settingsPath, &settings)
 		resultsCh <- result{label: "contender", err: writeErr}
-	}()
+	})
 
 	done := make(chan struct{})
 	go func() {

@@ -1,9 +1,11 @@
 package soundpack
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -25,17 +27,15 @@ import (
 // in addition to the GOOS-aware check.
 func validateMappingValue(value, baseDir string) (resolved string, err error) {
 	if value == "" {
-		return "", fmt.Errorf("empty mapping value")
+		return "", errors.New("empty mapping value")
 	}
 	if isAnyPlatformAbsolute(value) {
 		return "", fmt.Errorf("absolute paths not allowed: %q", value)
 	}
 	// Reject `..` segments BEFORE Clean — Clean would resolve `a/../b` to
 	// `b` and silently lose the traversal attempt.
-	for _, seg := range strings.Split(filepath.ToSlash(value), "/") {
-		if seg == ".." {
-			return "", fmt.Errorf("path traversal not allowed: %q", value)
-		}
+	if slices.Contains(strings.Split(filepath.ToSlash(value), "/"), "..") {
+		return "", fmt.Errorf("path traversal not allowed: %q", value)
 	}
 	cleaned := filepath.Clean(filepath.Join(baseDir, value))
 	// Defense in depth — Clean+Join should already have prevented escape,

@@ -3,6 +3,7 @@ package safeio
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -75,7 +76,7 @@ func ReadJSONBounded(r io.Reader, max int64, deadline time.Duration, kind string
 				return out, nil
 			}
 			if c.err != nil {
-				if c.err == io.EOF {
+				if errors.Is(c.err, io.EOF) {
 					return out, nil
 				}
 				return nil, fmt.Errorf("read %s: %w", kind, c.err)

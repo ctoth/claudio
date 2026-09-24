@@ -56,17 +56,13 @@ func TestInstallCommandsHelp(t *testing.T) {
 // TestInstallCommandsCreatesDirectory verifies the ~/.claude/commands/ directory is created
 func TestInstallCommandsCreatesDirectory(t *testing.T) {
 	// Create a temporary directory to act as home
-	tmpHome, err := os.MkdirTemp("", "claudio-test-home-*")
-	if err != nil {
-		t.Fatalf("failed to create temp home: %v", err)
-	}
-	defer os.RemoveAll(tmpHome)
+	tmpHome := t.TempDir()
 
 	// Call the internal function with custom home
 	commandsDir := filepath.Join(tmpHome, ".claude", "commands")
 	claudioMdPath := filepath.Join(commandsDir, "claudio.md")
 
-	err = installClaudeCommandAt(commandsDir, claudioMdPath)
+	err := installClaudeCommandAt(commandsDir, claudioMdPath)
 	if err != nil {
 		t.Fatalf("installClaudeCommandAt failed: %v", err)
 	}
@@ -85,17 +81,13 @@ func TestInstallCommandsCreatesDirectory(t *testing.T) {
 // TestInstallCommandsFileContent verifies the claudio.md content is correct
 func TestInstallCommandsFileContent(t *testing.T) {
 	// Create a temporary directory to act as home
-	tmpHome, err := os.MkdirTemp("", "claudio-test-home-*")
-	if err != nil {
-		t.Fatalf("failed to create temp home: %v", err)
-	}
-	defer os.RemoveAll(tmpHome)
+	tmpHome := t.TempDir()
 
 	// Call the internal function with custom home
 	commandsDir := filepath.Join(tmpHome, ".claude", "commands")
 	claudioMdPath := filepath.Join(commandsDir, "claudio.md")
 
-	err = installClaudeCommandAt(commandsDir, claudioMdPath)
+	err := installClaudeCommandAt(commandsDir, claudioMdPath)
 	if err != nil {
 		t.Fatalf("installClaudeCommandAt failed: %v", err)
 	}
@@ -145,11 +137,7 @@ func TestInstallCommandsFileContent(t *testing.T) {
 // TestInstallCommandsOutputMessage verifies the success message is printed
 func TestInstallCommandsOutputMessage(t *testing.T) {
 	// Create a temporary directory to act as home
-	tmpHome, err := os.MkdirTemp("", "claudio-test-home-*")
-	if err != nil {
-		t.Fatalf("failed to create temp home: %v", err)
-	}
-	defer os.RemoveAll(tmpHome)
+	tmpHome := t.TempDir()
 
 	// Set HOME env var for the test
 	t.Setenv("HOME", tmpHome)
@@ -161,7 +149,7 @@ func TestInstallCommandsOutputMessage(t *testing.T) {
 	cmd.SetOut(&stdout)
 	cmd.SetArgs([]string{})
 
-	err = cmd.Execute()
+	err := cmd.Execute()
 	if err != nil {
 		t.Fatalf("install-commands failed: %v", err)
 	}
@@ -286,17 +274,13 @@ func TestInstallCommandsAntigravityInstallsSkillAndCLICommand(t *testing.T) {
 // TestInstallCommandsIdempotent verifies running twice doesn't cause errors
 func TestInstallCommandsIdempotent(t *testing.T) {
 	// Create a temporary directory to act as home
-	tmpHome, err := os.MkdirTemp("", "claudio-test-home-*")
-	if err != nil {
-		t.Fatalf("failed to create temp home: %v", err)
-	}
-	defer os.RemoveAll(tmpHome)
+	tmpHome := t.TempDir()
 
 	commandsDir := filepath.Join(tmpHome, ".claude", "commands")
 	claudioMdPath := filepath.Join(commandsDir, "claudio.md")
 
 	// First install
-	err = installClaudeCommandAt(commandsDir, claudioMdPath)
+	err := installClaudeCommandAt(commandsDir, claudioMdPath)
 	if err != nil {
 		t.Fatalf("first installClaudeCommandAt failed: %v", err)
 	}

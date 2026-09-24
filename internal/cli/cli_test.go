@@ -952,7 +952,7 @@ func TestSetupLogging_DualOutputWithExistingVerboseHandler(t *testing.T) {
 
 	// Use a manually-managed tempdir so we can guarantee slog is reset
 	// before the directory is removed.
-	logDir, err := os.MkdirTemp("", "claudio-setuplogging-")
+	logDir, err := os.MkdirTemp("", "claudio-setuplogging-") //nolint:usetesting // t.TempDir fails the test if lumberjack still holds the log open on Windows
 	if err != nil {
 		t.Fatalf("mkdir temp: %v", err)
 	}
@@ -1059,7 +1059,7 @@ func TestProcessHookEventRecordsToolNameAsString(t *testing.T) {
 		EventName:    "PostToolUse",
 		ToolName:     stringPtr("Bash"),
 		ToolResponse: &resp,
-	}, cfg, &bytes.Buffer{}, &bytes.Buffer{})
+	}, cfg)
 
 	var toolName string
 	if err := db.QueryRow("SELECT tool_name FROM hook_events WHERE session_id = ?", "tool-name-string").Scan(&toolName); err != nil {

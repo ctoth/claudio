@@ -60,9 +60,9 @@ func newSoundpackUpdateCommand() *cobra.Command {
 				return nil
 			}
 			if all && len(args) > 0 {
-				return fmt.Errorf("use either --all or a soundpack name, not both")
+				return errors.New("use either --all or a soundpack name, not both")
 			}
-			return fmt.Errorf("provide a soundpack name or --all")
+			return errors.New("provide a soundpack name or --all")
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := ""

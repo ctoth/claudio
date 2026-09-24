@@ -109,16 +109,16 @@ func runHookCommand(t *testing.T, verb, agent string) {
 	}
 }
 
-func decodeJSONObject(t *testing.T, data []byte) map[string]interface{} {
+func decodeJSONObject(t *testing.T, data []byte) map[string]any {
 	t.Helper()
-	var m map[string]interface{}
+	var m map[string]any
 	if err := json.Unmarshal(data, &m); err != nil {
 		t.Fatal(err)
 	}
 	return m
 }
 
-func readJSONObject(t *testing.T, path string) map[string]interface{} {
+func readJSONObject(t *testing.T, path string) map[string]any {
 	t.Helper()
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -129,20 +129,20 @@ func readJSONObject(t *testing.T, path string) map[string]interface{} {
 
 // hookNamesWithClaudio lists hook events whose value mentions a claudio
 // command, using only the public recognizer.
-func hookNamesWithClaudio(settings map[string]interface{}) []string {
-	hooks, _ := settings["hooks"].(map[string]interface{})
+func hookNamesWithClaudio(settings map[string]any) []string {
+	hooks, _ := settings["hooks"].(map[string]any)
 	var names []string
 	for name, value := range hooks {
 		data, _ := json.Marshal(value)
-		var entries []map[string]interface{}
+		var entries []map[string]any
 		_ = json.Unmarshal(data, &entries)
 		for _, entry := range entries {
 			if cmd, ok := entry["command"].(string); ok && install.IsClaudioCommandString(cmd) {
 				names = append(names, name)
 			}
-			inner, _ := entry["hooks"].([]interface{})
+			inner, _ := entry["hooks"].([]any)
 			for _, h := range inner {
-				if m, ok := h.(map[string]interface{}); ok {
+				if m, ok := h.(map[string]any); ok {
 					if cmd, ok := m["command"].(string); ok && install.IsClaudioCommandString(cmd) {
 						names = append(names, name)
 					}

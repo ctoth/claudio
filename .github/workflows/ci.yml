@@ -49,6 +49,11 @@ jobs:
             exit 1
           fi
 
+      - name: Check generated embedded sounds are up to date
+        run: |
+          go generate ./internal/config/...
+          git diff --exit-code
+
       - uses: golangci/golangci-lint-action@v9
         with:
           version: v2.12.2

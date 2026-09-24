@@ -1,7 +1,25 @@
 version: "2"
 
 linters:
+  enable:
+    - modernize
+    - usetesting
+    - errorlint
+    - intrange
+    - perfsprint
+    - gocritic
+    - unparam
+    - dupl
+    - sloglint
   settings:
+    dupl:
+      threshold: 150
+    sloglint:
+      no-mixed-args: true
+      key-naming-case: snake
+      # "error" is the only error key (#44).
+      forbidden-keys:
+        - err
     staticcheck:
       checks:
         - all
@@ -19,3 +37,8 @@ linters:
       - common-false-positives
       - legacy
       - std-error-handling
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

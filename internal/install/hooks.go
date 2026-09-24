@@ -2,8 +2,10 @@ package install
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,7 +14,7 @@ import (
 )
 
 // HooksMap represents an agent settings hooks section.
-type HooksMap map[string]interface{}
+type HooksMap map[string]any
 
 // executableRecognizer decides whether a basename refers to the claudio
 // executable. Production matches only claudio and claudio.exe. End-to-end
@@ -67,7 +69,7 @@ func GenerateCodexHookSpecs(executablePath string) []captainhook.HookSpec {
 
 // GenerateClaudioHooksForAgent creates hook configuration for the given agent
 // using its registry and config shape.
-func GenerateClaudioHooksForAgent(executablePath string, agent Agent) (interface{}, error) {
+func GenerateClaudioHooksForAgent(executablePath string, agent Agent) (any, error) {
 	spec, err := agent.concreteSpec()
 	if err != nil {
 		return nil, err
@@ -77,8 +79,8 @@ func GenerateClaudioHooksForAgent(executablePath string, agent Agent) (interface
 	hooks := make(HooksMap)
 
 	// Helper function to create hook config structure
-	createHookConfig := func(hookDef HookDefinition) interface{} {
-		commandConfig := map[string]interface{}{
+	createHookConfig := func(hookDef HookDefinition) any {
+		commandConfig := map[string]any{
 			"type":    "command",
 			"command": spec.hookCommand(executablePath, hookDef.Name),
 		}
@@ -90,13 +92,13 @@ func GenerateClaudioHooksForAgent(executablePath string, agent Agent) (interface
 		}
 
 		if spec.shape == shapeFlatCommands {
-			return []interface{}{commandConfig}
+			return []any{commandConfig}
 		}
 
-		return []interface{}{
-			map[string]interface{}{
+		return []any{
+			map[string]any{
 				"matcher": spec.matcher,
-				"hooks": []interface{}{
+				"hooks": []any{
 					commandConfig,
 				},
 			},
@@ -147,21 +149,21 @@ func getHookNamesList(hooks HooksMap) []string {
 // MergeHooksIntoSettings merges Claudio hooks into existing Claude Code settings
 // Creates a deep copy of existing settings and safely merges hooks without modifying originals
 // Preserves existing non-Claudio hooks and all other settings
-func MergeHooksIntoSettings(existingSettings *SettingsMap, claudioHooks interface{}) (*SettingsMap, error) {
+func MergeHooksIntoSettings(existingSettings *SettingsMap, claudioHooks any) (*SettingsMap, error) {
 	// Validate inputs
 	if existingSettings == nil {
-		return nil, fmt.Errorf("settings cannot be nil")
+		return nil, errors.New("settings cannot be nil")
 	}
 
 	if claudioHooks == nil {
-		return nil, fmt.Errorf("hooks cannot be nil")
+		return nil, errors.New("hooks cannot be nil")
 	}
 
 	// Validate Claudio hooks type
 	claudioHooksMap, ok := claudioHooks.(HooksMap)
 	if !ok {
 		// Try to convert from map[string]interface{}
-		if genericMap, isGeneric := claudioHooks.(map[string]interface{}); isGeneric {
+		if genericMap, isGeneric := claudioHooks.(map[string]any); isGeneric {
 			claudioHooksMap = HooksMap(genericMap)
 		} else {
 			return nil, fmt.Errorf("invalid hooks type: expected map[string]interface{}, got %T", claudioHooks)
@@ -178,7 +180,7 @@ func MergeHooksIntoSettings(existingSettings *SettingsMap, claudioHooks interfac
 	var existingHooks HooksMap
 	if hooksInterface, exists := (*settingsCopy)["hooks"]; exists {
 		// Validate existing hooks type
-		if hooksMap, ok := hooksInterface.(map[string]interface{}); ok {
+		if hooksMap, ok := hooksInterface.(map[string]any); ok {
 			existingHooks = HooksMap(hooksMap)
 		} else {
 			return nil, fmt.Errorf("existing hooks invalid: expected map[string]interface{}, got %T", hooksInterface)
@@ -193,9 +195,7 @@ func MergeHooksIntoSettings(existingSettings *SettingsMap, claudioHooks interfac
 	mergedHooks := make(HooksMap)
 
 	// First, copy all existing hooks
-	for hookName, hookValue := range existingHooks {
-		mergedHooks[hookName] = hookValue
-	}
+	maps.Copy(mergedHooks, existingHooks)
 
 	// Then, add/update Claudio hooks with strip-and-replace merging.
 	// mergeHookValues now handles both cases uniformly: it strips any
@@ -218,7 +218,7 @@ func MergeHooksIntoSettings(existingSettings *SettingsMap, claudioHooks interfac
 	}
 
 	// Update the hooks section in the settings copy
-	(*settingsCopy)["hooks"] = map[string]interface{}(mergedHooks)
+	(*settingsCopy)["hooks"] = map[string]any(mergedHooks)
 
 	slog.Info("completed hook merge",
 		"total_hooks", len(mergedHooks),
@@ -255,34 +255,34 @@ func deepCopySettings(original *SettingsMap) (*SettingsMap, error) {
 //
 // An existing value that is neither a string nor an array is an error: it
 // is not a hook shape claudio understands, so it must not be rewritten.
-func mergeHookValues(existingValue, claudioValue interface{}) (interface{}, error) {
-	claudioArray, ok := claudioValue.([]interface{})
+func mergeHookValues(existingValue, claudioValue any) (any, error) {
+	claudioArray, ok := claudioValue.([]any)
 	if !ok {
 		return nil, fmt.Errorf("claudio hook value must be an array, got %T", claudioValue)
 	}
 
-	var existingArray []interface{}
+	var existingArray []any
 	switch v := existingValue.(type) {
 	case string:
-		existingArray = []interface{}{
-			map[string]interface{}{
+		existingArray = []any{
+			map[string]any{
 				"matcher": ".*",
-				"hooks": []interface{}{
-					map[string]interface{}{
+				"hooks": []any{
+					map[string]any{
 						"type":    "command",
 						"command": v,
 					},
 				},
 			},
 		}
-	case []interface{}:
+	case []any:
 		existingArray = v
 	default:
 		return nil, fmt.Errorf("unsupported existing hook value: expected a string or an array, got %T", existingValue)
 	}
 
 	kept, _ := stripClaudioEntries(existingArray)
-	merged := make([]interface{}, 0, len(kept)+len(claudioArray))
+	merged := make([]any, 0, len(kept)+len(claudioArray))
 	merged = append(merged, kept...)
 	merged = append(merged, claudioArray...)
 

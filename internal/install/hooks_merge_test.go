@@ -6,7 +6,7 @@ import (
 )
 
 // Helper function for merge tests to generate hooks with test parameters
-func generateTestHooksForMerge() (interface{}, error) {
+func generateTestHooksForMerge() (any, error) {
 	// Use mock executable path to prevent config corruption during tests
 	mockExecPath := "/test/mock/claudio"
 	return GenerateClaudioHooksForAgent(mockExecPath, AgentClaude)
@@ -29,7 +29,7 @@ func TestMergeHooksIdempotent(t *testing.T) {
 			existingSettings: &SettingsMap{
 				"version": "1.0",
 				"plugins": []string{"plugin1", "plugin2"},
-				"config": map[string]interface{}{
+				"config": map[string]any{
 					"debug":   true,
 					"timeout": 30,
 				},
@@ -39,7 +39,7 @@ func TestMergeHooksIdempotent(t *testing.T) {
 		{
 			name: "settings with existing empty hooks",
 			existingSettings: &SettingsMap{
-				"hooks":   map[string]interface{}{},
+				"hooks":   map[string]any{},
 				"version": "1.0",
 			},
 			expectError: false,
@@ -47,7 +47,7 @@ func TestMergeHooksIdempotent(t *testing.T) {
 		{
 			name: "settings with existing Claudio hooks (idempotent case)",
 			existingSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					// Using old string format to test backward compatibility
 					"PreToolUse":       "claudio",
 					"PostToolUse":      "claudio",
@@ -108,7 +108,7 @@ func TestMergeHooksIdempotent(t *testing.T) {
 
 			// Verify Claudio hooks are present
 			if hooks, exists := (*result3)["hooks"]; exists {
-				hooksMap, ok := hooks.(map[string]interface{})
+				hooksMap, ok := hooks.(map[string]any)
 				if !ok {
 					t.Errorf("Hooks should be a map, got: %T", hooks)
 				} else {
@@ -141,7 +141,7 @@ func TestMergeHooksPreservesExisting(t *testing.T) {
 		{
 			name: "preserve existing hooks",
 			existingSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"PreCommit":  "git diff --check",
 					"PostCommit": "git push origin main",
 					"CustomHook": "echo 'custom'",
@@ -158,7 +158,7 @@ func TestMergeHooksPreservesExisting(t *testing.T) {
 		{
 			name: "preserve mixed existing and Claudio hooks",
 			existingSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"PreToolUse":  "claudio",             // Existing Claudio hook (should be preserved)
 					"PreCommit":   "git diff",            // Custom hook (should be preserved)
 					"PostToolUse": "custom-sound-player", // Conflicting hook (should be resolved)
@@ -174,17 +174,17 @@ func TestMergeHooksPreservesExisting(t *testing.T) {
 		{
 			name: "preserve complex nested settings",
 			existingSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"CustomHook": "echo test",
 				},
-				"config": map[string]interface{}{
-					"nested": map[string]interface{}{
-						"deep": map[string]interface{}{
+				"config": map[string]any{
+					"nested": map[string]any{
+						"deep": map[string]any{
 							"value": "preserved",
 						},
 					},
 				},
-				"arrays": []interface{}{"item1", "item2"},
+				"arrays": []any{"item1", "item2"},
 			},
 			expectPreservedKeys: []string{"config", "arrays"},
 			expectPreservedHooks: map[string]string{
@@ -228,7 +228,7 @@ func TestMergeHooksPreservesExisting(t *testing.T) {
 
 			// Verify preserved hooks
 			if hooks, exists := (*result)["hooks"]; exists {
-				hooksMap, ok := hooks.(map[string]interface{})
+				hooksMap, ok := hooks.(map[string]any)
 				if !ok {
 					t.Errorf("Hooks should be a map, got: %T", hooks)
 				} else {
@@ -245,7 +245,7 @@ func TestMergeHooksPreservesExisting(t *testing.T) {
 
 			// Verify Claudio hooks are also present
 			if hooks, exists := (*result)["hooks"]; exists {
-				hooksMap, ok := hooks.(map[string]interface{})
+				hooksMap, ok := hooks.(map[string]any)
 				if ok {
 					claudioHookNames := enabledHookNames(AgentClaude)
 					for _, hookName := range claudioHookNames {
@@ -266,10 +266,10 @@ func TestMergeHooksPreservesExisting(t *testing.T) {
 
 func TestMergeHooksReplacesCopilotDirectCommandEntries(t *testing.T) {
 	existing := &SettingsMap{
-		"hooks": map[string]interface{}{
-			"PreToolUse": []interface{}{
-				map[string]interface{}{"type": "command", "command": "/usr/bin/logger"},
-				map[string]interface{}{"type": "command", "command": "/old/claudio --hook-agent copilot"},
+		"hooks": map[string]any{
+			"PreToolUse": []any{
+				map[string]any{"type": "command", "command": "/usr/bin/logger"},
+				map[string]any{"type": "command", "command": "/old/claudio --hook-agent copilot"},
 			},
 		},
 	}
@@ -283,16 +283,16 @@ func TestMergeHooksReplacesCopilotDirectCommandEntries(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	hooksMap := (*merged)["hooks"].(map[string]interface{})
-	arr := hooksMap["PreToolUse"].([]interface{})
+	hooksMap := (*merged)["hooks"].(map[string]any)
+	arr := hooksMap["PreToolUse"].([]any)
 	if len(arr) != 2 {
 		t.Fatalf("merged PreToolUse length = %d, want preserved custom + new Claudio hook: %v", len(arr), arr)
 	}
-	first := arr[0].(map[string]interface{})
+	first := arr[0].(map[string]any)
 	if first["command"] != "/usr/bin/logger" {
 		t.Fatalf("first command = %v, want preserved logger", first["command"])
 	}
-	second := arr[1].(map[string]interface{})
+	second := arr[1].(map[string]any)
 	if second["command"] != "/new/claudio --hook-agent copilot" {
 		t.Fatalf("second command = %v, want new Claudio command", second["command"])
 	}
@@ -303,14 +303,14 @@ func TestMergeHooksErrorHandling(t *testing.T) {
 	testCases := []struct {
 		name             string
 		existingSettings *SettingsMap
-		claudioHooks     interface{}
+		claudioHooks     any
 		expectError      bool
 		errorMsg         string
 	}{
 		{
 			name:             "nil existing settings",
 			existingSettings: nil,
-			claudioHooks:     map[string]interface{}{"PreToolUse": "claudio"},
+			claudioHooks:     map[string]any{"PreToolUse": "claudio"},
 			expectError:      true,
 			errorMsg:         "settings cannot be nil",
 		},
@@ -333,7 +333,7 @@ func TestMergeHooksErrorHandling(t *testing.T) {
 			existingSettings: &SettingsMap{
 				"hooks": "not a map",
 			},
-			claudioHooks: map[string]interface{}{"PreToolUse": "claudio"},
+			claudioHooks: map[string]any{"PreToolUse": "claudio"},
 			expectError:  true,
 			errorMsg:     "existing hooks invalid",
 		},
@@ -369,11 +369,11 @@ func TestMergeHooksErrorHandling(t *testing.T) {
 func TestMergeHooksDeepCopy(t *testing.T) {
 	// TDD RED: Test that merge creates deep copies and doesn't modify original settings
 	original := &SettingsMap{
-		"hooks": map[string]interface{}{
+		"hooks": map[string]any{
 			"ExistingHook": "existing-command",
 		},
-		"config": map[string]interface{}{
-			"nested": map[string]interface{}{
+		"config": map[string]any{
+			"nested": map[string]any{
 				"value": "original",
 			},
 		},
@@ -420,7 +420,7 @@ func TestMergeHooksDeepCopy(t *testing.T) {
 
 	// Modify result to verify it doesn't affect original
 	if resultHooks, exists := (*result)["hooks"]; exists {
-		if hooksMap, ok := resultHooks.(map[string]interface{}); ok {
+		if hooksMap, ok := resultHooks.(map[string]any); ok {
 			hooksMap["TestModification"] = "test-value"
 		}
 	}
@@ -461,19 +461,19 @@ func TestMergeHookValues(t *testing.T) {
 	// TDD RED: Test the mergeHookValues function in isolation
 	testCases := []struct {
 		name          string
-		existingValue interface{}
-		claudioValue  interface{}
+		existingValue any
+		claudioValue  any
 		expectedCount int // expected number of commands in result
 		expectError   bool
 	}{
 		{
 			name:          "merge string hook with claudio array",
 			existingValue: "git add .",
-			claudioValue: []interface{}{
-				map[string]interface{}{
+			claudioValue: []any{
+				map[string]any{
 					"matcher": ".*",
-					"hooks": []interface{}{
-						map[string]interface{}{
+					"hooks": []any{
+						map[string]any{
 							"type":    "command",
 							"command": "claudio",
 						},
@@ -485,22 +485,22 @@ func TestMergeHookValues(t *testing.T) {
 		},
 		{
 			name: "merge array hook with claudio array",
-			existingValue: []interface{}{
-				map[string]interface{}{
+			existingValue: []any{
+				map[string]any{
 					"matcher": ".*",
-					"hooks": []interface{}{
-						map[string]interface{}{
+					"hooks": []any{
+						map[string]any{
 							"type":    "command",
 							"command": "existing-cmd",
 						},
 					},
 				},
 			},
-			claudioValue: []interface{}{
-				map[string]interface{}{
+			claudioValue: []any{
+				map[string]any{
 					"matcher": ".*",
-					"hooks": []interface{}{
-						map[string]interface{}{
+					"hooks": []any{
+						map[string]any{
 							"type":    "command",
 							"command": "claudio",
 						},
@@ -513,11 +513,11 @@ func TestMergeHookValues(t *testing.T) {
 		{
 			name:          "claudio hook with claudio hook should not duplicate",
 			existingValue: "claudio",
-			claudioValue: []interface{}{
-				map[string]interface{}{
+			claudioValue: []any{
+				map[string]any{
 					"matcher": ".*",
-					"hooks": []interface{}{
-						map[string]interface{}{
+					"hooks": []any{
+						map[string]any{
 							"type":    "command",
 							"command": "claudio",
 						},
@@ -529,26 +529,26 @@ func TestMergeHookValues(t *testing.T) {
 		},
 		{
 			name: "complex existing array with multiple commands",
-			existingValue: []interface{}{
-				map[string]interface{}{
+			existingValue: []any{
+				map[string]any{
 					"matcher": ".*",
-					"hooks": []interface{}{
-						map[string]interface{}{
+					"hooks": []any{
+						map[string]any{
 							"type":    "command",
 							"command": "cmd1",
 						},
-						map[string]interface{}{
+						map[string]any{
 							"type":    "command",
 							"command": "cmd2",
 						},
 					},
 				},
 			},
-			claudioValue: []interface{}{
-				map[string]interface{}{
+			claudioValue: []any{
+				map[string]any{
 					"matcher": ".*",
-					"hooks": []interface{}{
-						map[string]interface{}{
+					"hooks": []any{
+						map[string]any{
 							"type":    "command",
 							"command": "claudio",
 						},
@@ -569,7 +569,7 @@ func TestMergeHookValues(t *testing.T) {
 			}
 
 			// Result should always be in array format
-			resultArray, ok := result.([]interface{})
+			resultArray, ok := result.([]any)
 			if !ok {
 				t.Errorf("mergeHookValues should return array format, got: %T", result)
 				return
@@ -578,8 +578,8 @@ func TestMergeHookValues(t *testing.T) {
 			// Count total commands in the result
 			totalCommands := 0
 			for _, item := range resultArray {
-				if config, ok := item.(map[string]interface{}); ok {
-					if hooksInItem, ok := config["hooks"].([]interface{}); ok {
+				if config, ok := item.(map[string]any); ok {
+					if hooksInItem, ok := config["hooks"].([]any); ok {
 						totalCommands += len(hooksInItem)
 					}
 				}
@@ -606,7 +606,7 @@ func TestMergeHooksWithExistingNonClaudioHooks(t *testing.T) {
 		{
 			name: "merge single existing string hook with claudio",
 			existingSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"PostToolUse": "git add .",
 				},
 			},
@@ -618,7 +618,7 @@ func TestMergeHooksWithExistingNonClaudioHooks(t *testing.T) {
 		{
 			name: "merge multiple existing hooks with claudio",
 			existingSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"PostToolUse": "custom-script.sh",
 					"PreToolUse":  "echo 'starting'",
 				},
@@ -632,12 +632,12 @@ func TestMergeHooksWithExistingNonClaudioHooks(t *testing.T) {
 		{
 			name: "merge existing array hook with claudio",
 			existingSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
-					"PostToolUse": []interface{}{
-						map[string]interface{}{
+				"hooks": map[string]any{
+					"PostToolUse": []any{
+						map[string]any{
 							"matcher": ".*",
-							"hooks": []interface{}{
-								map[string]interface{}{
+							"hooks": []any{
+								map[string]any{
 									"type":    "command",
 									"command": "existing-command",
 								},
@@ -654,7 +654,7 @@ func TestMergeHooksWithExistingNonClaudioHooks(t *testing.T) {
 		{
 			name: "existing claudio hook should not duplicate",
 			existingSettings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"PostToolUse": "claudio",
 				},
 			},
@@ -668,23 +668,23 @@ func TestMergeHooksWithExistingNonClaudioHooks(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Generate mock Claudio hooks with known structure
-			mockClaudioHooks := map[string]interface{}{
-				"PostToolUse": []interface{}{
-					map[string]interface{}{
+			mockClaudioHooks := map[string]any{
+				"PostToolUse": []any{
+					map[string]any{
 						"matcher": ".*",
-						"hooks": []interface{}{
-							map[string]interface{}{
+						"hooks": []any{
+							map[string]any{
 								"type":    "command",
 								"command": "/test/mock/claudio",
 							},
 						},
 					},
 				},
-				"PreToolUse": []interface{}{
-					map[string]interface{}{
+				"PreToolUse": []any{
+					map[string]any{
 						"matcher": ".*",
-						"hooks": []interface{}{
-							map[string]interface{}{
+						"hooks": []any{
+							map[string]any{
 								"type":    "command",
 								"command": "/test/mock/claudio",
 							},
@@ -720,7 +720,7 @@ func TestMergeHooksWithExistingNonClaudioHooks(t *testing.T) {
 				return
 			}
 
-			hooksMap, ok := hooks.(map[string]interface{})
+			hooksMap, ok := hooks.(map[string]any)
 			if !ok {
 				t.Errorf("Hooks should be a map, got: %T", hooks)
 				return
@@ -735,7 +735,7 @@ func TestMergeHooksWithExistingNonClaudioHooks(t *testing.T) {
 				}
 
 				// Hook should be in array format after merging
-				hookArray, ok := hookValue.([]interface{})
+				hookArray, ok := hookValue.([]any)
 				if !ok {
 					t.Errorf("Hook '%s' should be array format after merge, got: %T", hookName, hookValue)
 					continue
@@ -744,8 +744,8 @@ func TestMergeHooksWithExistingNonClaudioHooks(t *testing.T) {
 				// Count total commands in the array
 				totalCommands := 0
 				for _, item := range hookArray {
-					if config, ok := item.(map[string]interface{}); ok {
-						if hooksInItem, ok := config["hooks"].([]interface{}); ok {
+					if config, ok := item.(map[string]any); ok {
+						if hooksInItem, ok := config["hooks"].([]any); ok {
 							totalCommands += len(hooksInItem)
 						}
 					}
@@ -766,11 +766,11 @@ func TestMergeHooksWithExistingNonClaudioHooks(t *testing.T) {
 // - MergeHooksIntoSettings(existing *SettingsMap, claudioHooks interface{}) (*SettingsMap, error)
 
 // claudioArrayEntry returns a hook array element with a single claudio command.
-func claudioArrayEntry(cmd string) map[string]interface{} {
-	return map[string]interface{}{
+func claudioArrayEntry(cmd string) map[string]any {
+	return map[string]any{
 		"matcher": ".*",
-		"hooks": []interface{}{
-			map[string]interface{}{
+		"hooks": []any{
+			map[string]any{
 				"type":    "command",
 				"command": cmd,
 			},
@@ -778,34 +778,37 @@ func claudioArrayEntry(cmd string) map[string]interface{} {
 	}
 }
 
-// customArrayEntry returns a hook array element with a single non-claudio
-// command. The matcher value is parametrised so callers can distinguish their
-// entries when asserting preservation.
-func customArrayEntry(matcher, cmd string) map[string]interface{} {
-	return map[string]interface{}{
+// customHookCommand is the non-claudio command the merge tests must preserve.
+const customHookCommand = "/usr/local/bin/custom"
+
+// customArrayEntry returns a hook array element with the single non-claudio
+// command customHookCommand. The matcher value is parametrised so callers can
+// distinguish their entries when asserting preservation.
+func customArrayEntry(matcher string) map[string]any {
+	return map[string]any{
 		"matcher": matcher,
-		"hooks": []interface{}{
-			map[string]interface{}{
+		"hooks": []any{
+			map[string]any{
 				"type":    "command",
-				"command": cmd,
+				"command": customHookCommand,
 			},
 		},
 	}
 }
 
-func countCommandsInHookValue(t *testing.T, v interface{}) int {
+func countCommandsInHookValue(t *testing.T, v any) int {
 	t.Helper()
-	arr, ok := v.([]interface{})
+	arr, ok := v.([]any)
 	if !ok {
 		t.Fatalf("expected []interface{} hook value, got %T", v)
 	}
 	count := 0
 	for _, item := range arr {
-		m, ok := item.(map[string]interface{})
+		m, ok := item.(map[string]any)
 		if !ok {
 			continue
 		}
-		hooks, ok := m["hooks"].([]interface{})
+		hooks, ok := m["hooks"].([]any)
 		if !ok {
 			continue
 		}
@@ -819,8 +822,8 @@ func countCommandsInHookValue(t *testing.T, v interface{}) int {
 // scan would have returned false here, and the merge path would have appended
 // a second claudio block.
 func TestIsClaudioHookMultiMatcherArray(t *testing.T) {
-	value := []interface{}{
-		customArrayEntry(".*", "/usr/local/bin/custom"),
+	value := []any{
+		customArrayEntry(".*"),
 		claudioArrayEntry("/usr/local/bin/claudio"),
 	}
 	if !IsClaudioHook(value) {
@@ -831,12 +834,12 @@ func TestIsClaudioHookMultiMatcherArray(t *testing.T) {
 // TestIsClaudioHookMultiHookInsideMatcher verifies the predicate scans every
 // inner hook inside a matcher block, not just hooks[0].
 func TestIsClaudioHookMultiHookInsideMatcher(t *testing.T) {
-	value := []interface{}{
-		map[string]interface{}{
+	value := []any{
+		map[string]any{
 			"matcher": ".*",
-			"hooks": []interface{}{
-				map[string]interface{}{"type": "command", "command": "/usr/local/bin/custom"},
-				map[string]interface{}{"type": "command", "command": "/usr/local/bin/claudio"},
+			"hooks": []any{
+				map[string]any{"type": "command", "command": customHookCommand},
+				map[string]any{"type": "command", "command": "/usr/local/bin/claudio"},
 			},
 		},
 	}
@@ -853,16 +856,16 @@ func TestMergeHooksIdempotent_CustomThenClaudio(t *testing.T) {
 	const claudioCmd = "/test/mock/claudio"
 
 	existing := &SettingsMap{
-		"hooks": map[string]interface{}{
-			"PostToolUse": []interface{}{
-				customArrayEntry(".*", "/usr/local/bin/custom"),
+		"hooks": map[string]any{
+			"PostToolUse": []any{
+				customArrayEntry(".*"),
 				claudioArrayEntry(claudioCmd),
 			},
 		},
 	}
 
-	claudioHooks := map[string]interface{}{
-		"PostToolUse": []interface{}{claudioArrayEntry(claudioCmd)},
+	claudioHooks := map[string]any{
+		"PostToolUse": []any{claudioArrayEntry(claudioCmd)},
 	}
 
 	first, err := MergeHooksIntoSettings(existing, claudioHooks)
@@ -870,8 +873,8 @@ func TestMergeHooksIdempotent_CustomThenClaudio(t *testing.T) {
 		t.Fatalf("first merge failed: %v", err)
 	}
 
-	firstHooks, _ := (*first)["hooks"].(map[string]interface{})
-	firstArr, ok := firstHooks["PostToolUse"].([]interface{})
+	firstHooks, _ := (*first)["hooks"].(map[string]any)
+	firstArr, ok := firstHooks["PostToolUse"].([]any)
 	if !ok {
 		t.Fatalf("expected PostToolUse to be []interface{}, got %T", firstHooks["PostToolUse"])
 	}
@@ -899,19 +902,18 @@ func TestMergeHooksIdempotent_CustomThenClaudio(t *testing.T) {
 // claudio-only value, deleting the user's custom hook.
 func TestMergeHooksIdempotent_ClaudioThenCustom(t *testing.T) {
 	const claudioCmd = "/test/mock/claudio"
-	const customCmd = "/usr/local/bin/custom"
 
 	existing := &SettingsMap{
-		"hooks": map[string]interface{}{
-			"PostToolUse": []interface{}{
+		"hooks": map[string]any{
+			"PostToolUse": []any{
 				claudioArrayEntry(claudioCmd),
-				customArrayEntry("custom-matcher", customCmd),
+				customArrayEntry("custom-matcher"),
 			},
 		},
 	}
 
-	claudioHooks := map[string]interface{}{
-		"PostToolUse": []interface{}{claudioArrayEntry(claudioCmd)},
+	claudioHooks := map[string]any{
+		"PostToolUse": []any{claudioArrayEntry(claudioCmd)},
 	}
 
 	merged, err := MergeHooksIntoSettings(existing, claudioHooks)
@@ -919,8 +921,8 @@ func TestMergeHooksIdempotent_ClaudioThenCustom(t *testing.T) {
 		t.Fatalf("merge failed: %v", err)
 	}
 
-	mergedHooks, _ := (*merged)["hooks"].(map[string]interface{})
-	arr, ok := mergedHooks["PostToolUse"].([]interface{})
+	mergedHooks, _ := (*merged)["hooks"].(map[string]any)
+	arr, ok := mergedHooks["PostToolUse"].([]any)
 	if !ok {
 		t.Fatalf("expected PostToolUse to be []interface{}, got %T", mergedHooks["PostToolUse"])
 	}
@@ -932,23 +934,23 @@ func TestMergeHooksIdempotent_ClaudioThenCustom(t *testing.T) {
 	// Verify the custom entry survived.
 	foundCustom := false
 	for _, item := range arr {
-		m, ok := item.(map[string]interface{})
+		m, ok := item.(map[string]any)
 		if !ok {
 			continue
 		}
-		hooks, _ := m["hooks"].([]interface{})
+		hooks, _ := m["hooks"].([]any)
 		for _, h := range hooks {
-			hm, ok := h.(map[string]interface{})
+			hm, ok := h.(map[string]any)
 			if !ok {
 				continue
 			}
-			if cmd, _ := hm["command"].(string); cmd == customCmd {
+			if cmd, _ := hm["command"].(string); cmd == customHookCommand {
 				foundCustom = true
 			}
 		}
 	}
 	if !foundCustom {
-		t.Errorf("custom hook %q was silently deleted by merge — data-loss bug regressed. Got: %v", customCmd, arr)
+		t.Errorf("custom hook %q was silently deleted by merge — data-loss bug regressed. Got: %v", customHookCommand, arr)
 	}
 
 	// Exactly one claudio entry.
@@ -963,20 +965,19 @@ func TestMergeHooksIdempotent_ClaudioThenCustom(t *testing.T) {
 // corrupted by the pre-fix code.
 func TestMergeHooksIdempotent_MultipleClaudio(t *testing.T) {
 	const claudioCmd = "/test/mock/claudio"
-	const customCmd = "/usr/local/bin/custom"
 
 	existing := &SettingsMap{
-		"hooks": map[string]interface{}{
-			"PostToolUse": []interface{}{
+		"hooks": map[string]any{
+			"PostToolUse": []any{
 				claudioArrayEntry(claudioCmd),
 				claudioArrayEntry(claudioCmd),
-				customArrayEntry("custom-matcher", customCmd),
+				customArrayEntry("custom-matcher"),
 			},
 		},
 	}
 
-	claudioHooks := map[string]interface{}{
-		"PostToolUse": []interface{}{claudioArrayEntry(claudioCmd)},
+	claudioHooks := map[string]any{
+		"PostToolUse": []any{claudioArrayEntry(claudioCmd)},
 	}
 
 	merged, err := MergeHooksIntoSettings(existing, claudioHooks)
@@ -984,8 +985,8 @@ func TestMergeHooksIdempotent_MultipleClaudio(t *testing.T) {
 		t.Fatalf("merge failed: %v", err)
 	}
 
-	mergedHooks, _ := (*merged)["hooks"].(map[string]interface{})
-	arr, ok := mergedHooks["PostToolUse"].([]interface{})
+	mergedHooks, _ := (*merged)["hooks"].(map[string]any)
+	arr, ok := mergedHooks["PostToolUse"].([]any)
 	if !ok {
 		t.Fatalf("expected PostToolUse to be []interface{}, got %T", mergedHooks["PostToolUse"])
 	}
@@ -998,13 +999,13 @@ func TestMergeHooksIdempotent_MultipleClaudio(t *testing.T) {
 	claudioCommands := 0
 	customFound := false
 	for _, item := range arr {
-		m, ok := item.(map[string]interface{})
+		m, ok := item.(map[string]any)
 		if !ok {
 			continue
 		}
-		hooks, _ := m["hooks"].([]interface{})
+		hooks, _ := m["hooks"].([]any)
 		for _, h := range hooks {
-			hm, ok := h.(map[string]interface{})
+			hm, ok := h.(map[string]any)
 			if !ok {
 				continue
 			}
@@ -1012,7 +1013,7 @@ func TestMergeHooksIdempotent_MultipleClaudio(t *testing.T) {
 			if cmd == claudioCmd {
 				claudioCommands++
 			}
-			if cmd == customCmd {
+			if cmd == customHookCommand {
 				customFound = true
 			}
 		}
@@ -1021,7 +1022,7 @@ func TestMergeHooksIdempotent_MultipleClaudio(t *testing.T) {
 		t.Errorf("expected exactly 1 claudio command after collapse, got %d", claudioCommands)
 	}
 	if !customFound {
-		t.Errorf("custom command %q was lost during multi-claudio collapse", customCmd)
+		t.Errorf("custom command %q was lost during multi-claudio collapse", customHookCommand)
 	}
 }
 
@@ -1038,21 +1039,21 @@ func TestMergeHooksIdempotent_ClaudioSiblingNonClaudio(t *testing.T) {
 	const userCmd = "/usr/local/bin/user-lint"
 
 	existing := &SettingsMap{
-		"hooks": map[string]interface{}{
-			"PostToolUse": []interface{}{
-				map[string]interface{}{
+		"hooks": map[string]any{
+			"PostToolUse": []any{
+				map[string]any{
 					"matcher": ".*",
-					"hooks": []interface{}{
-						map[string]interface{}{"type": "command", "command": claudioCmd},
-						map[string]interface{}{"type": "command", "command": userCmd},
+					"hooks": []any{
+						map[string]any{"type": "command", "command": claudioCmd},
+						map[string]any{"type": "command", "command": userCmd},
 					},
 				},
 			},
 		},
 	}
 
-	claudioHooks := map[string]interface{}{
-		"PostToolUse": []interface{}{claudioArrayEntry(claudioCmd)},
+	claudioHooks := map[string]any{
+		"PostToolUse": []any{claudioArrayEntry(claudioCmd)},
 	}
 
 	merged, err := MergeHooksIntoSettings(existing, claudioHooks)
@@ -1062,8 +1063,8 @@ func TestMergeHooksIdempotent_ClaudioSiblingNonClaudio(t *testing.T) {
 
 	// Inspect the merged result: the user-lint command must survive somewhere
 	// in the PostToolUse array. The Claudio command must appear exactly once.
-	mergedHooks, _ := (*merged)["hooks"].(map[string]interface{})
-	arr, ok := mergedHooks["PostToolUse"].([]interface{})
+	mergedHooks, _ := (*merged)["hooks"].(map[string]any)
+	arr, ok := mergedHooks["PostToolUse"].([]any)
 	if !ok {
 		t.Fatalf("expected PostToolUse to be []interface{}, got %T", mergedHooks["PostToolUse"])
 	}
@@ -1071,13 +1072,13 @@ func TestMergeHooksIdempotent_ClaudioSiblingNonClaudio(t *testing.T) {
 	userFound := false
 	claudioCount := 0
 	for _, item := range arr {
-		m, ok := item.(map[string]interface{})
+		m, ok := item.(map[string]any)
 		if !ok {
 			continue
 		}
-		hooks, _ := m["hooks"].([]interface{})
+		hooks, _ := m["hooks"].([]any)
 		for _, h := range hooks {
-			hm, ok := h.(map[string]interface{})
+			hm, ok := h.(map[string]any)
 			if !ok {
 				continue
 			}
@@ -1113,7 +1114,7 @@ func TestMergeHookValuesStringFormatExisting(t *testing.T) {
 	// Existing hook in legacy string format (non-claudio) must be preserved
 	// and merged into array form alongside the claudio command.
 	existing := &SettingsMap{
-		"hooks": map[string]interface{}{
+		"hooks": map[string]any{
 			"PreToolUse": "/usr/bin/other-tool",
 		},
 	}
@@ -1125,16 +1126,16 @@ func TestMergeHookValuesStringFormatExisting(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	hooksSection := (*merged)["hooks"].(map[string]interface{})
-	arr, ok := hooksSection["PreToolUse"].([]interface{})
+	hooksSection := (*merged)["hooks"].(map[string]any)
+	arr, ok := hooksSection["PreToolUse"].([]any)
 	if !ok {
 		t.Fatalf("expected PreToolUse merged into array, got %T", hooksSection["PreToolUse"])
 	}
 	foundOther, foundClaudio := false, false
 	for _, e := range arr {
-		cfg := e.(map[string]interface{})
-		for _, h := range cfg["hooks"].([]interface{}) {
-			switch h.(map[string]interface{})["command"] {
+		cfg := e.(map[string]any)
+		for _, h := range cfg["hooks"].([]any) {
+			switch h.(map[string]any)["command"] {
 			case "/usr/bin/other-tool":
 				foundOther = true
 			case "/usr/local/bin/claudio":
@@ -1149,18 +1150,18 @@ func TestMergeHookValuesStringFormatExisting(t *testing.T) {
 
 func TestMergeHooksRefreshesClaudioWithoutDroppingExistingHooks(t *testing.T) {
 	existing := &SettingsMap{
-		"hooks": map[string]interface{}{
-			"PreToolUse": []interface{}{
-				map[string]interface{}{
+		"hooks": map[string]any{
+			"PreToolUse": []any{
+				map[string]any{
 					"matcher": ".*",
-					"hooks": []interface{}{
-						map[string]interface{}{"command": "/usr/bin/logger"},
+					"hooks": []any{
+						map[string]any{"command": "/usr/bin/logger"},
 					},
 				},
-				map[string]interface{}{
+				map[string]any{
 					"matcher": "*",
-					"hooks": []interface{}{
-						map[string]interface{}{"command": "/old/claudio"},
+					"hooks": []any{
+						map[string]any{"command": "/old/claudio"},
 					},
 				},
 			},
@@ -1174,16 +1175,16 @@ func TestMergeHooksRefreshesClaudioWithoutDroppingExistingHooks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	hooksSection := (*merged)["hooks"].(map[string]interface{})
-	arr := hooksSection["PreToolUse"].([]interface{})
+	hooksSection := (*merged)["hooks"].(map[string]any)
+	arr := hooksSection["PreToolUse"].([]any)
 
 	foundLogger := false
 	foundOldClaudio := false
 	foundNewClaudio := false
 	for _, e := range arr {
-		cfg := e.(map[string]interface{})
-		for _, h := range cfg["hooks"].([]interface{}) {
-			switch h.(map[string]interface{})["command"] {
+		cfg := e.(map[string]any)
+		for _, h := range cfg["hooks"].([]any) {
+			switch h.(map[string]any)["command"] {
 			case "/usr/bin/logger":
 				foundLogger = true
 			case "/old/claudio":
@@ -1205,30 +1206,30 @@ func TestMergeHooksRefreshesClaudioWithoutDroppingExistingHooks(t *testing.T) {
 }
 
 func TestMergeHookValuesPreservesNonClaudioEntriesWhileRefreshingClaudio(t *testing.T) {
-	entries := []interface{}{
+	entries := []any{
 		"raw-entry",
-		map[string]interface{}{"matcher": "*"},
-		map[string]interface{}{
+		map[string]any{"matcher": "*"},
+		map[string]any{
 			"matcher": "mixed",
-			"hooks": []interface{}{
+			"hooks": []any{
 				"raw-hook",
-				map[string]interface{}{"command": 42},
-				map[string]interface{}{"command": "/old/claudio"},
-				map[string]interface{}{"command": "/usr/bin/logger"},
+				map[string]any{"command": 42},
+				map[string]any{"command": "/old/claudio"},
+				map[string]any{"command": "/usr/bin/logger"},
 			},
 		},
-		map[string]interface{}{
+		map[string]any{
 			"matcher": "claudio-only",
-			"hooks": []interface{}{
-				map[string]interface{}{"command": "/old/claudio"},
+			"hooks": []any{
+				map[string]any{"command": "/old/claudio"},
 			},
 		},
 	}
-	claudioValue := []interface{}{
-		map[string]interface{}{
+	claudioValue := []any{
+		map[string]any{
 			"matcher": "*",
-			"hooks": []interface{}{
-				map[string]interface{}{"command": "/new/claudio"},
+			"hooks": []any{
+				map[string]any{"command": "/new/claudio"},
 			},
 		},
 	}
@@ -1237,7 +1238,7 @@ func TestMergeHookValuesPreservesNonClaudioEntriesWhileRefreshingClaudio(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	filtered := merged.([]interface{})
+	filtered := merged.([]any)
 	if len(filtered) != 4 {
 		t.Fatalf("merged entry count = %d, want 4: %#v", len(filtered), filtered)
 	}
@@ -1248,11 +1249,11 @@ func TestMergeHookValuesPreservesNonClaudioEntriesWhileRefreshingClaudio(t *test
 	foundRawHook := false
 	foundNumericCommand := false
 	for _, entry := range filtered {
-		cfg, ok := entry.(map[string]interface{})
+		cfg, ok := entry.(map[string]any)
 		if !ok {
 			continue
 		}
-		hooksList, ok := cfg["hooks"].([]interface{})
+		hooksList, ok := cfg["hooks"].([]any)
 		if !ok {
 			continue
 		}
@@ -1261,7 +1262,7 @@ func TestMergeHookValuesPreservesNonClaudioEntriesWhileRefreshingClaudio(t *test
 				foundRawHook = true
 				continue
 			}
-			cmd, ok := hook.(map[string]interface{})
+			cmd, ok := hook.(map[string]any)
 			if !ok {
 				continue
 			}
@@ -1298,7 +1299,7 @@ func TestMergeHooksMarshalErrorPropagates(t *testing.T) {
 }
 
 func TestMergeHookValuesRejectsNonArrayClaudioValue(t *testing.T) {
-	if got, err := mergeHookValues([]interface{}{}, "not-array"); err == nil {
+	if got, err := mergeHookValues([]any{}, "not-array"); err == nil {
 		t.Errorf("mergeHookValues returned %v, want error for non-array claudio value", got)
 	}
 }

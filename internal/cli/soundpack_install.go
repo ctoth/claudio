@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"claudio.click/internal/config"
@@ -137,13 +138,7 @@ func (c *CLI) installSoundpackFiles(cmd *cobra.Command, srcPath, name string, is
 func (c *CLI) updateConfigForInstall(cmd *cobra.Command, installPath, name string, setDefault bool) error {
 	slog.Debug("updating config for install", "install_path", installPath, "name", name, "set_default", setDefault)
 	return c.mutateConfigForCommand(cmd, func(cfg *config.Config) error {
-		pathExists := false
-		for _, p := range cfg.SoundpackPaths {
-			if p == installPath {
-				pathExists = true
-				break
-			}
-		}
+		pathExists := slices.Contains(cfg.SoundpackPaths, installPath)
 		if !pathExists {
 			cfg.SoundpackPaths = append(cfg.SoundpackPaths, installPath)
 		}

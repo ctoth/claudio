@@ -172,7 +172,7 @@ func TestParsePreToolUse(t *testing.T) {
 	}
 
 	// Verify tool input structure
-	var toolInput map[string]interface{}
+	var toolInput map[string]any
 	err = json.Unmarshal(*event.ToolInput, &toolInput)
 	if err != nil {
 		t.Fatalf("Failed to unmarshal ToolInput: %v", err)
@@ -215,7 +215,7 @@ func TestParsePostToolUseBash(t *testing.T) {
 	}
 
 	// Parse tool response
-	var response map[string]interface{}
+	var response map[string]any
 	err = json.Unmarshal(*event.ToolResponse, &response)
 	if err != nil {
 		t.Fatalf("Failed to unmarshal ToolResponse: %v", err)
@@ -248,7 +248,7 @@ func TestParsePostToolUseGrep(t *testing.T) {
 	}
 
 	// Parse tool response
-	var response map[string]interface{}
+	var response map[string]any
 	err = json.Unmarshal(*event.ToolResponse, &response)
 	if err != nil {
 		t.Fatalf("Failed to unmarshal ToolResponse: %v", err)

@@ -2,6 +2,7 @@ package soundpack
 
 import (
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -135,10 +136,5 @@ func TestProperty_DotDotAlwaysRejected(t *testing.T) {
 // here so the property can confirm a generated value still contains a
 // traversal segment after Join.
 func containsDotDotSegment(value string) bool {
-	for _, seg := range strings.Split(filepath.ToSlash(value), "/") {
-		if seg == ".." {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(strings.Split(filepath.ToSlash(value), "/"), "..")
 }

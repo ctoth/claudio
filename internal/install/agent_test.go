@@ -1,7 +1,6 @@
 package install
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -198,15 +197,7 @@ func TestAgentBestConfigPathRejectsUnresolvedAgents(t *testing.T) {
 }
 
 func TestFindBestPathReturnsExistingFile(t *testing.T) {
-	dir := t.TempDir()
-	orig, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Chdir(dir); err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = os.Chdir(orig) }()
+	t.Chdir(t.TempDir())
 
 	// Codex project scope: ./.codex/hooks.json
 	if err := afero.NewOsFs().MkdirAll(".codex", 0755); err != nil {

@@ -21,7 +21,7 @@ func TestRootCommandExists(t *testing.T) {
 	}
 
 	// Verify it's actually a cobra command
-	if _, ok := interface{}(cli.rootCmd).(*cobra.Command); !ok {
+	if _, ok := any(cli.rootCmd).(*cobra.Command); !ok {
 		t.Fatal("CLI.rootCmd is not a *cobra.Command")
 	}
 

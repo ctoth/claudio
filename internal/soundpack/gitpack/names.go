@@ -1,6 +1,7 @@
 package gitpack
 
 import (
+	"errors"
 	"fmt"
 	"path"
 	"path/filepath"
@@ -20,11 +21,10 @@ func NameFromURL(url string) string {
 func ExpandSource(source string) (string, error) {
 	source = strings.TrimSpace(source)
 	if source == "" {
-		return "", fmt.Errorf("git source cannot be empty")
+		return "", errors.New("git source cannot be empty")
 	}
 
-	if strings.HasPrefix(source, "gh:") {
-		repo := strings.TrimPrefix(source, "gh:")
+	if repo, ok := strings.CutPrefix(source, "gh:"); ok {
 		if err := validateGitHubAliasRepo(repo); err != nil {
 			return "", err
 		}
@@ -36,11 +36,11 @@ func ExpandSource(source string) (string, error) {
 
 func validateGitHubAliasRepo(repo string) error {
 	if repo == "" {
-		return fmt.Errorf("gh alias must be in the form gh:owner/repo")
+		return errors.New("gh alias must be in the form gh:owner/repo")
 	}
 	parts := strings.Split(repo, "/")
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return fmt.Errorf("gh alias must be in the form gh:owner/repo")
+		return errors.New("gh alias must be in the form gh:owner/repo")
 	}
 	for _, part := range parts {
 		if part == "." || part == ".." || sanitizeName(part) != part {
@@ -72,7 +72,7 @@ func sanitizeName(name string) string {
 // ValidateName rejects names that are not safe as a single path element.
 func ValidateName(name string) error {
 	if name == "" {
-		return fmt.Errorf("soundpack name cannot be empty")
+		return errors.New("soundpack name cannot be empty")
 	}
 	if name != sanitizeName(name) {
 		return fmt.Errorf("soundpack name %q may only contain letters, numbers, '.', '_', and '-'", name)
@@ -90,7 +90,7 @@ func ValidateSubdir(subdir string) error {
 	}
 	cleaned := filepath.Clean(subdir)
 	if filepath.IsAbs(cleaned) || cleaned == "." || cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(filepath.Separator)) {
-		return fmt.Errorf("subdir must be a relative path inside the repository")
+		return errors.New("subdir must be a relative path inside the repository")
 	}
 	return nil
 }

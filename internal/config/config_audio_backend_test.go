@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"log/slog"
+	"slices"
 	"strings"
 	"testing"
 
@@ -188,13 +189,7 @@ func TestGetSupportedAudioBackends(t *testing.T) {
 	}
 
 	for _, expected := range expectedBackends {
-		found := false
-		for _, actual := range supported {
-			if actual == expected {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(supported, expected)
 		if !found {
 			t.Errorf("expected backend '%s' not found in supported list: %v", expected, supported)
 		}

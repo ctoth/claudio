@@ -13,7 +13,7 @@ import (
 // RequireGit fails when no git executable is on PATH.
 func RequireGit() error {
 	if _, err := exec.LookPath("git"); err != nil {
-		return fmt.Errorf("git executable not found in PATH")
+		return errors.New("git executable not found in PATH")
 	}
 	return nil
 }

@@ -279,7 +279,7 @@ func TestJSONSoundpackLoading(t *testing.T) {
 
 		// Use relative mapping values; the untrusted loader resolves them
 		// under the JSON file's directory.
-		soundpackData := map[string]interface{}{
+		soundpackData := map[string]any{
 			"name":        "test-soundpack",
 			"description": "Test soundpack for unit tests",
 			"mappings": map[string]string{
@@ -366,7 +366,7 @@ func TestJSONSoundpackLoading(t *testing.T) {
 			t.Fatalf("Failed to create test sound file: %v", err)
 		}
 
-		soundpackData := map[string]interface{}{
+		soundpackData := map[string]any{
 			"name": "relative-soundpack",
 			"mappings": map[string]string{
 				"success/success.wav": filepath.Join("sounds", "success.wav"),
@@ -437,7 +437,7 @@ func TestJSONSoundpackLoading(t *testing.T) {
 		}
 
 		// Use relative mapping values to the basenames in tempDir.
-		soundpackData := map[string]interface{}{
+		soundpackData := map[string]any{
 			"name": "fallback-test",
 			"mappings": map[string]string{
 				"success/bash-specific.wav": filepath.Base(bashSpecific),
@@ -540,7 +540,7 @@ func TestSoundpackFactory(t *testing.T) {
 		}
 
 		// Untrusted loader requires relative mapping values; use basename.
-		soundpackData := map[string]interface{}{
+		soundpackData := map[string]any{
 			"name": "json-test-soundpack",
 			"mappings": map[string]string{
 				"success/bash.wav": filepath.Base(soundFile),
@@ -592,7 +592,7 @@ func TestSoundpackFactory(t *testing.T) {
 		}
 
 		// Untrusted loader requires relative mapping values; use basename.
-		soundpackData := map[string]interface{}{
+		soundpackData := map[string]any{
 			"name": "extension-test",
 			"mappings": map[string]string{
 				"default.wav": filepath.Base(soundFile),
@@ -684,7 +684,7 @@ func TestLoadJSONSoundpackFromBytes(t *testing.T) {
 
 		// Build JSON with RELATIVE mapping values (the new untrusted
 		// loader rejects absolute paths).
-		soundpackData := map[string]interface{}{
+		soundpackData := map[string]any{
 			"name":        "test-soundpack-from-bytes",
 			"description": "Test soundpack for LoadJSONSoundpackFromBytes",
 			"version":     "1.0.0",

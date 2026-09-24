@@ -348,7 +348,7 @@ func processHookInput(cmd *cobra.Command, cli *CLI, cfg *config.Config, inputDat
 		"tool_name", getStringPtr(hookEvent.ToolName))
 
 	// Process hook event.
-	cli.processHookEvent(hookEvent, cfg, cmd.OutOrStdout(), cmd.ErrOrStderr())
+	cli.processHookEvent(hookEvent, cfg)
 
 	return nil
 }
@@ -464,7 +464,7 @@ func setupDefaultCommandLogging(stderr io.Writer) {
 }
 
 // processHookEvent processes the parsed hook event
-func (c *CLI) processHookEvent(hookEvent *hooks.HookEvent, cfg *config.Config, stdout, stderr io.Writer) {
+func (c *CLI) processHookEvent(hookEvent *hooks.HookEvent, cfg *config.Config) {
 	// Extract hook context directly from event
 	eventCtx := hookEvent.GetContext()
 
@@ -521,7 +521,7 @@ func (c *CLI) processHookEvent(hookEvent *hooks.HookEvent, cfg *config.Config, s
 
 	// Play sound if audio is enabled
 	if cfg.Enabled && c.audioBackend != nil {
-		err := c.playSoundWithBackend(result.SelectedPath, cfg.EffectiveVolume())
+		err := c.playSoundWithBackend(result.SelectedPath)
 		if err != nil {
 			slog.Error("sound playback failed", "sound_path", result.SelectedPath, "error", err)
 			return
@@ -533,7 +533,7 @@ func (c *CLI) processHookEvent(hookEvent *hooks.HookEvent, cfg *config.Config, s
 }
 
 // playSoundWithBackend plays the specified sound file using the configured audio backend
-func (c *CLI) playSoundWithBackend(soundPath string, volume float64) error {
+func (c *CLI) playSoundWithBackend(soundPath string) error {
 	// Use unified soundpack resolver to resolve sound file path
 	fullPath, err := c.soundpackResolver.ResolveSound(soundPath)
 	if err != nil {
@@ -739,8 +739,8 @@ func embeddedPlatformSoundpackBasePaths(filename string, data []byte) []string {
 
 	if spFile, err := soundpack.PeekJSONSoundpackFromBytes(data); err == nil {
 		ids = append(ids, spFile.Name)
-		if strings.HasSuffix(spFile.Name, "-default") {
-			ids = append(ids, strings.TrimSuffix(spFile.Name, "-default"))
+		if base, ok := strings.CutSuffix(spFile.Name, "-default"); ok {
+			ids = append(ids, base)
 		}
 	}
 

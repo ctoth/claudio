@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -53,7 +54,7 @@ func (d *DBHook) RecordEvent(
 	// was "the recorder was called with nothing." That row is useless to
 	// analytics and silently mis-represents reality. Chunk 13 analyst F3.
 	if eventCtx == nil {
-		return fmt.Errorf("RecordEvent: nil eventCtx; refusing to insert a context-less row")
+		return errors.New("RecordEvent: nil eventCtx; refusing to insert a context-less row")
 	}
 
 	tx, err := d.db.BeginTx(ctx, nil)

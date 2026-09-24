@@ -68,10 +68,7 @@ func TestEverySoundpackUseAcceptsResolvesAtRuntime(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	packs, err := discoverSoundpacks()
-	if err != nil {
-		t.Fatal(err)
-	}
+	packs := discoverSoundpacks()
 	checked := 0
 	for _, pack := range packs {
 		if pack.Type == "embedded" {

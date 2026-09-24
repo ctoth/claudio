@@ -216,16 +216,16 @@ func TestSettingsContainClaudioHooks(t *testing.T) {
 	}{
 		{name: "nil settings", settings: nil, want: false},
 		{name: "missing hooks", settings: &SettingsMap{}, want: false},
-		{name: "hooks not map", settings: &SettingsMap{"hooks": []interface{}{}}, want: false},
+		{name: "hooks not map", settings: &SettingsMap{"hooks": []any{}}, want: false},
 		{
 			name: "non claudio hook",
 			settings: &SettingsMap{
-				"hooks": map[string]interface{}{
-					"PreToolUse": []interface{}{
-						map[string]interface{}{
+				"hooks": map[string]any{
+					"PreToolUse": []any{
+						map[string]any{
 							"matcher": "*",
-							"hooks": []interface{}{
-								map[string]interface{}{"command": "/usr/bin/logger"},
+							"hooks": []any{
+								map[string]any{"command": "/usr/bin/logger"},
 							},
 						},
 					},
@@ -236,7 +236,7 @@ func TestSettingsContainClaudioHooks(t *testing.T) {
 		{
 			name: "legacy claudio string hook",
 			settings: &SettingsMap{
-				"hooks": map[string]interface{}{
+				"hooks": map[string]any{
 					"PreToolUse": "/usr/local/bin/claudio",
 				},
 			},

@@ -21,11 +21,8 @@ func (o *oversizedReader) Read(p []byte) (int, error) {
 	if o.remaining <= 0 {
 		return 0, io.EOF
 	}
-	n := int64(len(p))
-	if n > o.remaining {
-		n = o.remaining
-	}
-	for i := int64(0); i < n; i++ {
+	n := min(int64(len(p)), o.remaining)
+	for i := range n {
 		// Cycle alphanumerics so the bytes are valid stream bytes but
 		// not parseable JSON.
 		p[i] = 'x'

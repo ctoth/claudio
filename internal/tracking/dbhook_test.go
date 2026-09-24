@@ -369,16 +369,14 @@ func TestRecordEvent_ConcurrentCallers_RaceClean(t *testing.T) {
 	const N = 50
 	var wg sync.WaitGroup
 	errCh := make(chan error, N)
-	for i := 0; i < N; i++ {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
+	for range N {
+		wg.Go(func() {
 			eventCtx := &hooks.EventContext{Category: hooks.Success, ToolName: "tool"}
 			lookups := []Lookup{{Path: "success/x.wav", Sequence: 1, Found: true}}
 			if err := hook.RecordEvent(context.Background(), eventCtx, "posttool", lookups, "success/x.wav"); err != nil {
 				errCh <- err
 			}
-		}(i)
+		})
 	}
 	wg.Wait()
 	close(errCh)
