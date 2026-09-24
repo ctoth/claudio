@@ -14,6 +14,8 @@ import (
 func isolateCache(t *testing.T) (xdgCache, legacyCache string) {
 	t.Helper()
 	root := t.TempDir()
+	// Registered before t.Setenv so it runs after the env is restored (#92).
+	t.Cleanup(xdg.Reload)
 	xdgCache = filepath.Join(root, "xdg-cache")
 	t.Setenv("XDG_CACHE_HOME", xdgCache)
 	if runtime.GOOS == "windows" {
@@ -24,8 +26,20 @@ func isolateCache(t *testing.T) (xdgCache, legacyCache string) {
 		legacyCache = xdgCache
 	}
 	xdg.Reload()
-	t.Cleanup(xdg.Reload)
 	return xdgCache, legacyCache
+}
+
+// TestIsolateCacheRestoresXDGAfterTest pins issue #92: a stale xdg.CacheHome
+// after isolateCache made a later GetDatabasePath migrate the developer's
+// real sounds.db into the deleted temp dir.
+func TestIsolateCacheRestoresXDGAfterTest(t *testing.T) {
+	before := xdg.CacheHome
+	t.Run("isolated", func(t *testing.T) {
+		isolateCache(t)
+	})
+	if xdg.CacheHome != before {
+		t.Errorf("xdg.CacheHome = %q after the isolated test, want %q", xdg.CacheHome, before)
+	}
 }
 
 // The database must live under the same cache root as the log file

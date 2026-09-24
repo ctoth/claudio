@@ -101,15 +101,28 @@ func TestRunDoesNotEchoOrSaveInvalidPayload(t *testing.T) {
 	}
 }
 
+// TestIsolateUserCacheRestoresXDGAfterTest pins issue #92: once a test using
+// isolateUserCache ends, xdg.CacheHome must not point at the deleted sandbox.
+func TestIsolateUserCacheRestoresXDGAfterTest(t *testing.T) {
+	before := xdg.CacheHome
+	t.Run("isolated", func(t *testing.T) {
+		isolateUserCache(t)
+	})
+	if xdg.CacheHome != before {
+		t.Errorf("xdg.CacheHome = %q after the isolated test, want %q", xdg.CacheHome, before)
+	}
+}
+
 func isolateUserCache(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
+	// Registered before t.Setenv so it runs after the env is restored (#92).
+	t.Cleanup(xdg.Reload)
 	t.Setenv("HOME", root)
 	t.Setenv("USERPROFILE", root)
 	t.Setenv("LOCALAPPDATA", root)
 	t.Setenv("XDG_CACHE_HOME", root)
 	xdg.Reload()
-	t.Cleanup(xdg.Reload)
 
 	// Hook logs share claudio's XDG cache root (not os.UserCacheDir,
 	// which differs from it on Windows and macOS).

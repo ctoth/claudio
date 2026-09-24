@@ -64,6 +64,26 @@ func TestIsolateXDG_ReloadsXDG(t *testing.T) {
 	}
 }
 
+// TestIsolateXDG_RestoresXDGAfterTest pins issue #92: once a test using
+// IsolateXDG ends, adrg/xdg must point back at the real environment, not at
+// the deleted sandbox. A stale CacheHome let a later GetDatabasePath migrate
+// the developer's real sounds.db into a dead temp dir.
+func TestIsolateXDG_RestoresXDGAfterTest(t *testing.T) {
+	before := []string{xdg.CacheHome, xdg.DataHome, xdg.ConfigHome}
+
+	var root string
+	t.Run("isolated", func(t *testing.T) {
+		root = IsolateXDG(t)
+	})
+
+	after := []string{xdg.CacheHome, xdg.DataHome, xdg.ConfigHome}
+	for i, name := range []string{"CacheHome", "DataHome", "ConfigHome"} {
+		if after[i] != before[i] {
+			t.Errorf("xdg.%s = %q after the isolated test, want %q (sandbox root %q)", name, after[i], before[i], root)
+		}
+	}
+}
+
 func TestIsolateXDG_TwoCallsGetSeparateRoots(t *testing.T) {
 	// Each subtest gets its own t.TempDir() so its sandbox is independent.
 	var root1, root2 string
