@@ -468,6 +468,46 @@ func TestSoundpackValidate_MissingFiles(t *testing.T) {
 	}
 }
 
+// TestSoundpackValidate_AbsolutePathExitsNonZero pins issue #85: a JSON
+// pack whose mapping points at an existing file by absolute path must fail
+// validate, because the hook-time loader refuses to load it.
+func TestSoundpackValidate_AbsolutePathExitsNonZero(t *testing.T) {
+	tmpDir := t.TempDir()
+	realFile := filepath.Join(tmpDir, "git-start.wav")
+	wavfixture.Write(t, realFile)
+
+	spFile := soundpack.JSONSoundpackFile{
+		Name: "absolute-pack",
+		Mappings: map[string]string{
+			"loading/git-start.wav": realFile,
+		},
+	}
+	jsonData, err := json.MarshalIndent(spFile, "", "  ")
+	if err != nil {
+		t.Fatalf("failed to marshal JSON: %v", err)
+	}
+	jsonPath := filepath.Join(tmpDir, "pack.json")
+	if err := os.WriteFile(jsonPath, jsonData, 0644); err != nil {
+		t.Fatalf("failed to write JSON: %v", err)
+	}
+
+	cli := NewCLI()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	exitCode := cli.Run([]string{"claudio", "soundpack", "validate", jsonPath}, nil, stdout, stderr)
+
+	if exitCode == 0 {
+		t.Fatalf("expected non-zero exit for absolute mapping, stdout: %s", stdout.String())
+	}
+	output := stdout.String()
+	if !strings.Contains(output, "Unsafe References") || !strings.Contains(output, "absolute paths not allowed") {
+		t.Errorf("expected unsafe absolute-path report, got: %s", output)
+	}
+	if !strings.Contains(output, "0/107") {
+		t.Errorf("absolute mapping must not count as coverage, got: %s", output)
+	}
+}
+
 func TestSoundpackValidate_EmptyMappings(t *testing.T) {
 	tmpDir := t.TempDir()
 
