@@ -56,6 +56,7 @@ var agentSpecs = []agentSpec{
 	{
 		agent:        AgentClaude,
 		registry:     &AllHooks,
+		shape:        shapeMatcherGroups,
 		matcher:      ".*",
 		homeEnv:      "CLAUDE_CONFIG_DIR",
 		homeDir:      ".claude",
@@ -65,6 +66,7 @@ var agentSpecs = []agentSpec{
 	{
 		agent:        AgentCodex,
 		registry:     &CodexHooks,
+		shape:        shapeMatcherGroups,
 		matcher:      "*",
 		homeEnv:      "CODEX_HOME",
 		homeDir:      ".codex",
@@ -76,6 +78,7 @@ var agentSpecs = []agentSpec{
 	{
 		agent:         AgentGemini,
 		registry:      &GeminiHooks,
+		shape:         shapeMatcherGroups,
 		matcher:       "",
 		homeDir:       ".gemini",
 		globalFile:    "settings.json",
@@ -86,6 +89,7 @@ var agentSpecs = []agentSpec{
 	{
 		agent:         AgentQwen,
 		registry:      &QwenHooks,
+		shape:         shapeMatcherGroups,
 		matcher:       ".*",
 		homeDir:       ".qwen",
 		globalFile:    "settings.json",
