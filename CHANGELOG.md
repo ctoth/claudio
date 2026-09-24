@@ -11,9 +11,16 @@ release tags and current checkout history.
   with `CGO_ENABLED=0`.
 - Configs and `CLAUDIO_AUDIO_BACKEND` values that still say `malgo` load as
   `oto` and log a deprecation warning instead of failing validation.
-- Codex hooks are installed and removed through Captain Hook. Unrelated hook
-  commands in mixed groups are preserved, and both portable and
-  PowerShell-native commands are written.
+- Hooks for every agent (Claude Code, Codex, Gemini CLI, Qwen Code, GitHub
+  Copilot CLI) are installed and removed through Captain Hook v0.2.0.
+  Unrelated hook commands in mixed groups are preserved, and Codex gets both
+  portable and PowerShell-native commands.
+- Gemini CLI hook groups no longer carry an empty `"matcher": ""`; an absent
+  matcher matches every tool just the same.
+- A `null` hooks section or hook event installs as if it were empty instead
+  of failing.
+- A foreign legacy string hook on a GitHub Copilot CLI event is kept as a
+  plain command entry instead of being wrapped in a matcher group.
 - Claude Code settings and command paths honor `CLAUDE_CONFIG_DIR`.
 - A malformed config file no longer fails hooks: Claudio prints one warning
   and uses the defaults, and `claudio status` reports the file as
