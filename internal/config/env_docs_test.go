@@ -19,7 +19,8 @@ func documentedEnvVars(t *testing.T) []string {
 	if err != nil {
 		t.Fatalf("read configuration.md: %v", err)
 	}
-	section := string(cfgDoc)
+	// Git may check docs out with CRLF (core.autocrlf on Windows CI).
+	section := strings.ReplaceAll(string(cfgDoc), "\r\n", "\n")
 	start := strings.Index(section, "\n## Environment Variables\n")
 	if start < 0 {
 		t.Fatal("configuration.md has no '## Environment Variables' section")
