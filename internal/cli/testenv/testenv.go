@@ -27,9 +27,10 @@ import (
 // ApplyEnvironmentOverrides runs after every load path.
 //
 // Environment restoration is handled by t.Setenv (auto-restores via
-// t.Cleanup). A final xdg.Reload() is registered via t.Cleanup so the
-// xdg package's cached paths are reset back to the host environment
-// when the test ends.
+// t.Cleanup). A final xdg.Reload() is registered via t.Cleanup before any
+// t.Setenv, so it runs after the environment is restored and resets the
+// xdg package's cached paths back to the host environment when the test
+// ends.
 //
 // Returns the root sandbox directory for callers that need to construct
 // specific paths within it (e.g. config files under .config/claudio).
@@ -40,6 +41,11 @@ import (
 func IsolateXDG(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
+
+	// Cleanups run last-in, first-out: registering the reload before any
+	// t.Setenv makes it run after they restore the environment, so adrg/xdg
+	// re-reads the real paths rather than the deleted sandbox (#92).
+	t.Cleanup(func() { xdg.Reload() })
 
 	t.Setenv("HOME", root)
 	t.Setenv("USERPROFILE", root)
@@ -68,7 +74,6 @@ func IsolateXDG(t *testing.T) string {
 	t.Setenv("CLAUDIO_AUDIO_BACKEND", "oto")
 
 	xdg.Reload()
-	t.Cleanup(func() { xdg.Reload() })
 
 	return root
 }
