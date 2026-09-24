@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -34,52 +35,43 @@ type CLI struct {
 	trackingDB        *sql.DB // Optional tracking database
 }
 
-// NewCLI creates a new CLI instance
+// NewCLI creates a new CLI instance. Command handlers are closures over
+// the returned *CLI, so they share its config manager and lazily opened
+// resources (resolver, audio backend, tracking DB) without a context lookup.
 func NewCLI() *CLI {
 	slog.Debug("creating new CLI instance")
+
+	c := &CLI{configManager: config.NewConfigManager()}
 
 	rootCmd := &cobra.Command{
 		Use:     "claudio",
 		Short:   "Coding-agent audio plugin",
 		Long:    "Claudio is a hook-based audio plugin for coding agents that plays contextual sounds based on tool usage and events.",
 		Version: Version,
-		RunE:    runStdinModeE, // Default behavior when no subcommand is provided
+		RunE:    c.runStdinMode, // Default behavior when no subcommand is provided
+		// Run prints a failed command's error once. Usage text is for
+		// --help only: on stdout an agent would read it as hook output.
+		SilenceErrors: true,
+		SilenceUsage:  true,
 	}
 	// Preserve the historical version output shape ("claudio version X (Version X)\n...")
 	// that downstream tooling and tests check against.
 	rootCmd.SetVersionTemplate("claudio version " + Version + " (Version " + Version + ")\nCoding-agent audio plugin - Hook-based sound system\n")
 
-	// Add install subcommand
-	installCmd := newInstallCommand()
-	rootCmd.AddCommand(installCmd)
-
-	// Add uninstall subcommand
-	uninstallCmd := newUninstallCommand()
-	rootCmd.AddCommand(uninstallCmd)
-
-	// Add analyze subcommand
-	analyzeCmd := newAnalyzeCommand()
-	rootCmd.AddCommand(analyzeCmd)
-
-	// Add soundpack subcommand
-	soundpackCmd := newSoundpackCommand()
-	rootCmd.AddCommand(soundpackCmd)
-
-	// Add volume subcommand
-	rootCmd.AddCommand(newVolumeCommand())
-
-	// Add mute / unmute subcommands
-	rootCmd.AddCommand(newMuteCommand())
-	rootCmd.AddCommand(newUnmuteCommand())
-
-	// Add status subcommand
-	rootCmd.AddCommand(newStatusCommand())
-
-	// Add install-commands subcommand (writes the /claudio slash command markdown)
-	rootCmd.AddCommand(newInstallCommandsCommand())
-
-	// Add uninstall-commands subcommand (removes the command artifact installed above)
-	rootCmd.AddCommand(newUninstallCommandsCommand())
+	rootCmd.AddCommand(
+		newInstallCommand(),
+		newUninstallCommand(),
+		newAnalyzeCommand(c),
+		newSoundpackCommand(c),
+		newVolumeCommand(c),
+		newMuteCommand(c),
+		newUnmuteCommand(c),
+		newStatusCommand(c),
+		// install-commands writes the /claudio slash command markdown;
+		// uninstall-commands removes it.
+		newInstallCommandsCommand(),
+		newUninstallCommandsCommand(),
+	)
 
 	// Add persistent flags to root command for backward compatibility
 	rootCmd.PersistentFlags().String("config", "", "Path to config file")
@@ -96,93 +88,42 @@ func NewCLI() *CLI {
 	_ = rootCmd.PersistentFlags().MarkHidden("hook-event")
 
 	// Note: cobra automatically registers a `--version` boolean flag (and
-	// short `-v`) once rootCmd.Version is set. We do not register a manual
-	// one, which previously required an args[1] short-circuit in Run().
+	// short `-v`) once rootCmd.Version is set.
 
-	return &CLI{
-		rootCmd:           rootCmd,
-		configManager:     nil, // Lazy initialization - only create when needed
-		soundpackResolver: nil, // Lazy initialization - only create when needed
-		audioBackend:      nil, // Lazy initialization - only create when needed
-		trackingDB:        nil, // Lazy initialization - only create when needed
-	}
-}
-
-// contextKey is a private type for context keys to avoid collisions (SA1029).
-type contextKey string
-
-const cliContextKey contextKey = "cli"
-
-// contextWithCLI stores CLI instance in context for command handlers
-func contextWithCLI(cli *CLI) context.Context {
-	return context.WithValue(context.Background(), cliContextKey, cli)
-}
-
-// cliFromContext extracts CLI instance from context
-func cliFromContext(ctx context.Context) *CLI {
-	if cli, ok := ctx.Value(cliContextKey).(*CLI); ok {
-		return cli
-	}
-	return nil
-}
-
-// hasVersionFlag reports whether --version or the short -v form appears
-// anywhere in argv. Used in Run() to gate initializeSystems so that
-// `claudio --silent --version` (and any other ordering) is as cheap as
-// `claudio --version` was previously when the flag was args[1].
-func hasVersionFlag(args []string) bool {
-	// Skip args[0] (program name).
-	for i := 1; i < len(args); i++ {
-		a := args[i]
-		if a == "--version" || a == "-v" {
-			return true
-		}
-		// Support `--version=...` and `-v=...` forms even though cobra
-		// treats them as boolean flags — defensive against future
-		// shape changes.
-		if strings.HasPrefix(a, "--version=") || strings.HasPrefix(a, "-v=") {
-			return true
-		}
-	}
-	return false
+	c.rootCmd = rootCmd
+	return c
 }
 
 // loadAndValidateConfig loads configuration from flags and files, applies overrides, and validates
-func loadAndValidateConfig(cmd *cobra.Command, cli *CLI) (*config.Config, error) {
+func (c *CLI) loadAndValidateConfig(cmd *cobra.Command) (*config.Config, error) {
 	// Get flag values
 	volumeStr, _ := cmd.Flags().GetString("volume")
 	soundpackFlag, _ := cmd.Flags().GetString("soundpack")
 	silent, _ := cmd.Flags().GetBool("silent")
 
-	// Validate volume flag early to match old behavior
+	// Parse the volume flag before loading anything; its range is checked
+	// with the rest of the final configuration below.
+	var volumeOverride *float64
 	if volumeStr != "" {
 		vol, err := strconv.ParseFloat(volumeStr, 64)
 		if err != nil {
-			cmd.PrintErrf("Error: invalid volume value '%s': %v\n", volumeStr, err)
-			slog.Error("invalid volume value", "value", volumeStr, "error", err)
 			return nil, fmt.Errorf("invalid volume value '%s': %w", volumeStr, err)
 		}
-		if vol < 0.0 || vol > 1.0 {
-			cmd.PrintErrf("Error: volume must be between 0.0 and 1.0, got %f\n", vol)
-			slog.Error("volume out of range", "value", vol)
-			return nil, fmt.Errorf("volume must be between 0.0 and 1.0, got %f", vol)
-		}
+		volumeOverride = &vol
 	}
 
 	// Load configuration. An unusable file is a warning, never a failed hook.
-	loaded := loadConfig(cmd, cli)
+	loaded := c.loadConfig(cmd)
 	loaded.warnIgnored(cmd)
 	cfg := loaded.Config
 
 	// Apply environment overrides
-	cfg = cli.configManager.ApplyEnvironmentOverrides(cfg)
+	cfg = c.configManager.ApplyEnvironmentOverrides(cfg)
 
 	// Apply command line overrides
-	if volumeStr != "" {
-		// Volume already validated above, just parse and apply
-		vol, _ := strconv.ParseFloat(volumeStr, 64)
-		cfg.Volume = &vol
-		slog.Debug("volume override applied", "value", vol)
+	if volumeOverride != nil {
+		cfg.Volume = volumeOverride
+		slog.Debug("volume override applied", "value", *volumeOverride)
 	}
 
 	if soundpackFlag != "" {
@@ -196,140 +137,126 @@ func loadAndValidateConfig(cmd *cobra.Command, cli *CLI) (*config.Config, error)
 	}
 
 	// Validate final configuration
-	if err := cli.configManager.ValidateConfig(cfg); err != nil {
-		cmd.PrintErrf("Error: invalid configuration: %v\n", err)
-		slog.Error("config validation failed", "error", err)
+	if err := c.configManager.ValidateConfig(cfg); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
 
 	return cfg, nil
 }
 
-// initializeAudioSystem sets up the soundpack resolver and audio backend
-func initializeAudioSystem(cmd *cobra.Command, cli *CLI, cfg *config.Config) error {
+// initializeAudioSystem sets up the soundpack resolver and, unless audio is
+// disabled, the audio backend.
+func (c *CLI) initializeAudioSystem(cfg *config.Config) error {
 	slog.Debug("initializing audio system",
 		"volume", cfg.Volume,
 		"soundpack", cfg.DefaultSoundpack,
 		"audio_backend", cfg.AudioBackend,
 		"enabled", cfg.Enabled)
 
-	// Initialize unified soundpack resolver with auto-detection
-	soundpackPaths := config.SoundpackPaths(cfg.DefaultSoundpack)
-	soundpackPaths = append(soundpackPaths, cfg.SoundpackPaths...)
-
-	// Check if configured soundpack exists before trying to create mapper
-	var mapper soundpack.PathMapper
-	var err error
-	var shouldTryPlatformFallback bool
-
-	// Check for embedded soundpack identifiers first
-	if strings.HasPrefix(cfg.DefaultSoundpack, "embedded:") {
-		// Load embedded soundpack directly
-		mapper, err = loadEmbeddedPlatformSoundpack(cfg.DefaultSoundpack)
-		if err != nil {
-			slog.Warn("failed to load embedded platform soundpack from config",
-				"identifier", cfg.DefaultSoundpack, "error", err)
-		}
-	} else if pack, ok := lookupSoundpack(cfg.DefaultSoundpack, cfg.SoundpackPaths); ok && pack.Type == soundpackTypeEmbedded {
-		mapper, err = loadEmbeddedPlatformSoundpack(pack.Identifier)
-		if err != nil {
-			slog.Warn("failed to load embedded platform soundpack from config name",
-				"name", cfg.DefaultSoundpack, "identifier", pack.Identifier, "error", err)
-		}
-	} else {
-		// A name resolves exactly as `soundpack list` shows it (the same
-		// lookup `soundpack use` validates against). Only a value that is
-		// not a known name is treated as a direct path.
-		resolvedPath := cfg.DefaultSoundpack
-		if ok {
-			slog.Debug("resolved soundpack name to path",
-				"name", cfg.DefaultSoundpack, "type", pack.Type, "path", pack.Path)
-			resolvedPath = pack.Path
-		}
-
-		// Check if resolved soundpack path exists
-		if _, statErr := os.Stat(resolvedPath); statErr != nil {
-			slog.Debug("configured soundpack not found, will try platform fallback",
-				"soundpack", cfg.DefaultSoundpack, "resolved", resolvedPath, "error", statErr)
-			shouldTryPlatformFallback = true
-		}
-
-		// Always try to create mapper first
-		mapper, err = soundpack.CreateSoundpackMapperWithBasePaths(
-			cfg.DefaultSoundpack,
-			resolvedPath,   // Try resolved path first
-			soundpackPaths, // Fallback to base directory search
-		)
-
-		// If the configured path doesn't exist, force platform fallback even if mapper creation succeeded
-		if shouldTryPlatformFallback && err == nil {
-			err = fmt.Errorf("configured soundpack path does not exist, trying platform fallback")
-		}
-	}
-
-	if err != nil {
-		slog.Debug("configured soundpack unavailable, trying platform JSON fallback",
-			"soundpack", cfg.DefaultSoundpack)
-
-		// Try platform JSON fallback (e.g., wsl.json, darwin.json, linux.json)
-		cfgMgr := config.NewConfigManager()
-		execDir := getPlatformExecutableDirectory()
-		platformSoundpack := cfgMgr.GetPlatformSoundpack(execDir)
-
-		if platformSoundpack != "default" {
-			slog.Debug("using platform-specific soundpack", "path", platformSoundpack)
-
-			var platformMapper soundpack.PathMapper
-			var platformErr error
-
-			if strings.HasPrefix(platformSoundpack, "embedded:") {
-				// Load from embedded content
-				platformMapper, platformErr = loadEmbeddedPlatformSoundpack(platformSoundpack)
-			} else {
-				// Load from file path (development scenario)
-				platformMapper, platformErr = soundpack.CreateSoundpackMapperWithBasePaths(
-					platformSoundpack,
-					platformSoundpack, // Platform JSON is already full path
-					[]string{},        // No additional paths needed
-				)
-			}
-
-			if platformErr == nil {
-				slog.Debug("platform soundpack loaded successfully", "identifier", platformSoundpack)
-				mapper = platformMapper
-			} else {
-				slog.Warn("platform soundpack failed to load",
-					"identifier", platformSoundpack,
-					"error", platformErr)
-				// Create empty directory mapper as final fallback
-				mapper = soundpack.NewDirectoryMapper("fallback", []string{})
-			}
-		} else {
-			slog.Debug("no platform soundpack found, using empty mapper")
-			// Create empty directory mapper as fallback to prevent crashes
-			mapper = soundpack.NewDirectoryMapper("fallback", []string{})
-		}
-	}
-
-	cli.soundpackResolver = soundpack.NewSoundpackResolver(mapper)
-
+	c.soundpackResolver = soundpack.NewSoundpackResolver(c.selectSoundpackMapper(cfg))
 	slog.Debug("soundpack resolver initialized",
 		"soundpack_name", cfg.DefaultSoundpack,
-		"resolver_type", cli.soundpackResolver.GetType(),
-		"resolver_name", cli.soundpackResolver.GetName())
+		"resolver_type", c.soundpackResolver.GetType(),
+		"resolver_name", c.soundpackResolver.GetName())
 
-	// Initialize audio backend system if not in silent mode
-	if cfg.Enabled {
-		err = cli.initializeAudioSystemWithBackend(cfg)
+	if !cfg.Enabled {
+		return nil
+	}
+	if err := c.initializeAudioSystemWithBackend(cfg); err != nil {
+		return fmt.Errorf("error initializing audio backend: %w", err)
+	}
+	slog.Debug("audio backend system initialized")
+	return nil
+}
+
+// embeddedSoundpackPrefix marks a soundpack source baked into the binary
+// ("embedded:<platform>.json") rather than a filesystem path.
+const embeddedSoundpackPrefix = "embedded:"
+
+func isEmbeddedSoundpack(source string) bool {
+	return strings.HasPrefix(source, embeddedSoundpackPrefix)
+}
+
+// errNoPlatformSoundpack reports that neither a platform JSON file next to
+// the executable nor an embedded platform pack exists.
+var errNoPlatformSoundpack = errors.New("no platform soundpack available")
+
+// selectSoundpackMapper returns the mapper for the configured soundpack,
+// falling back to the platform pack and then to an empty mapper, so a hook
+// never fails over a missing soundpack.
+func (c *CLI) selectSoundpackMapper(cfg *config.Config) soundpack.PathMapper {
+	mapper, err := configuredSoundpackMapper(cfg)
+	if err == nil {
+		return mapper
+	}
+	slog.Debug("configured soundpack unavailable, trying platform soundpack",
+		"soundpack", cfg.DefaultSoundpack, "error", err)
+
+	mapper, err = c.platformSoundpackMapper()
+	if err == nil {
+		return mapper
+	}
+	if errors.Is(err, errNoPlatformSoundpack) {
+		slog.Debug("no platform soundpack found, using empty mapper")
+	} else {
+		slog.Warn("platform soundpack failed to load", "error", err)
+	}
+	return soundpack.NewDirectoryMapper("fallback", []string{})
+}
+
+// resolveSoundpackSource turns a configured soundpack value into what to
+// load: an embedded identifier or a filesystem path. A known name resolves
+// exactly as `soundpack list` shows it (the lookup `soundpack use`
+// validates against); any other value is taken as a path.
+func resolveSoundpackSource(value string, configPaths []string) string {
+	if isEmbeddedSoundpack(value) {
+		return value
+	}
+	pack, ok := lookupSoundpack(value, configPaths)
+	if !ok {
+		return value
+	}
+	slog.Debug("resolved soundpack name", "name", value, "type", pack.Type, "path", pack.Path)
+	if pack.Type == soundpackTypeEmbedded {
+		return pack.Identifier
+	}
+	return pack.Path
+}
+
+// configuredSoundpackMapper loads cfg.DefaultSoundpack. A path that does
+// not exist is an error, so the caller falls back to the platform pack; a
+// path that exists but cannot be loaded as a pack is searched for by name
+// in the soundpack base directories.
+func configuredSoundpackMapper(cfg *config.Config) (soundpack.PathMapper, error) {
+	source := resolveSoundpackSource(cfg.DefaultSoundpack, cfg.SoundpackPaths)
+	if isEmbeddedSoundpack(source) {
+		mapper, err := loadEmbeddedPlatformSoundpack(source)
 		if err != nil {
-			cmd.PrintErrf("Error initializing audio backend: %v\n", err)
-			slog.Error("audio backend initialization failed", "error", err)
-			return fmt.Errorf("error initializing audio backend: %w", err)
+			slog.Warn("failed to load embedded platform soundpack from config",
+				"soundpack", cfg.DefaultSoundpack, "identifier", source, "error", err)
 		}
-		slog.Debug("audio backend system initialized")
+		return mapper, err
 	}
 
-	return nil
+	if _, err := os.Stat(source); err != nil {
+		return nil, fmt.Errorf("configured soundpack %q: %w", cfg.DefaultSoundpack, err)
+	}
+	basePaths := append(config.SoundpackPaths(cfg.DefaultSoundpack), cfg.SoundpackPaths...)
+	return soundpack.CreateSoundpackMapperWithBasePaths(cfg.DefaultSoundpack, source, basePaths)
+}
+
+// platformSoundpackMapper loads the platform pack: a platform JSON file next
+// to the executable (development builds) or the embedded one.
+func (c *CLI) platformSoundpackMapper() (soundpack.PathMapper, error) {
+	source := c.configManager.GetPlatformSoundpack(getPlatformExecutableDirectory())
+	switch {
+	case source == "default":
+		return nil, errNoPlatformSoundpack
+	case isEmbeddedSoundpack(source):
+		return loadEmbeddedPlatformSoundpack(source)
+	default:
+		return soundpack.CreateSoundpackMapper(source, source)
+	}
 }
 
 // initializeAudioSystemWithBackend creates and configures the audio backend
@@ -339,20 +266,14 @@ func (c *CLI) initializeAudioSystemWithBackend(cfg *config.Config) error {
 	// Create audio backend using package-level constructor
 	backend, err := audio.NewBackend(cfg.AudioBackend)
 	if err != nil {
-		slog.Error("failed to create audio backend", "backend_type", cfg.AudioBackend, "error", err)
 		return fmt.Errorf("failed to create audio backend '%s': %w", cfg.AudioBackend, err)
 	}
 
 	c.audioBackend = backend
 
-	// Set volume on backend (use default 0.5 if not set)
-	volume := 0.5
-	if cfg.Volume != nil {
-		volume = *cfg.Volume
-	}
+	volume := cfg.EffectiveVolume()
 	err = c.audioBackend.SetVolume(float32(volume))
 	if err != nil {
-		slog.Error("failed to set volume on backend", "volume", volume, "error", err)
 		return fmt.Errorf("failed to set volume on backend: %w", err)
 	}
 
@@ -409,10 +330,6 @@ func processHookInput(cmd *cobra.Command, cli *CLI, cfg *config.Config, inputDat
 	defaultEvent, _ := cmd.Flags().GetString("hook-event")
 	hookEvent, err := hooks.ParseHookEventWithDefault(inputData, defaultEvent)
 	if err != nil {
-		cmd.PrintErrf("Error: %v\n", err)
-		slog.Error("hook JSON parsing failed", "error", err)
-		// Already reported above; keep Cobra from printing it a second time.
-		cmd.SilenceErrors = true
 		return fmt.Errorf("error parsing hook JSON: %w", err)
 	}
 
@@ -427,23 +344,11 @@ func processHookInput(cmd *cobra.Command, cli *CLI, cfg *config.Config, inputDat
 	return nil
 }
 
-// runStdinModeE handles the default behavior of reading hook JSON from stdin
-func runStdinModeE(cmd *cobra.Command, args []string) error {
-	// Flags are parsed by now, so any error from here on is a runtime error,
-	// not a usage error. Cobra prints usage to the command's stdout, which
-	// agents read as hook output.
-	cmd.SilenceUsage = true
-
-	// Extract CLI instance from context
-	cli := cliFromContext(cmd.Context())
-	if cli == nil {
-		slog.Error("CLI instance not found in context")
-		return fmt.Errorf("CLI instance not found in context")
-	}
-
+// runStdinMode handles the default behavior of reading hook JSON from stdin
+func (c *CLI) runStdinMode(cmd *cobra.Command, _ []string) error {
 	// Load and validate configuration. (Note: --version is handled by
 	// cobra itself before RunE is invoked because rootCmd.Version is set.)
-	cfg, err := loadAndValidateConfig(cmd, cli)
+	cfg, err := c.loadAndValidateConfig(cmd)
 	if err != nil {
 		return err
 	}
@@ -454,8 +359,6 @@ func runStdinModeE(cmd *cobra.Command, args []string) error {
 	// Read hook input payload once so we can optionally detach.
 	inputData, err := readHookInput(cmd)
 	if err != nil {
-		cmd.PrintErrf("Error reading hook input: %v\n", err)
-		slog.Error("hook input read failed", "error", err)
 		return err
 	}
 
@@ -463,9 +366,6 @@ func runStdinModeE(cmd *cobra.Command, args []string) error {
 	// worker's stderr. This does not open a device or test playback.
 	if cfg.Enabled && len(inputData) > 0 {
 		if _, err := audio.ResolveBackend(cfg.AudioBackend); err != nil {
-			// Run logs the error once; Cobra usage would bury the remedy.
-			cmd.SilenceErrors = true
-			cmd.SilenceUsage = true
 			return err
 		}
 	}
@@ -473,8 +373,6 @@ func runStdinModeE(cmd *cobra.Command, args []string) error {
 	// Default behavior: detach hook processing so the invoking hook returns immediately.
 	if shouldDetachHookProcessing(cmd, cfg, inputData) {
 		if err := spawnDetachedHookWorker(cmd, inputData); err != nil {
-			cmd.PrintErrf("Error starting detached hook worker: %v\n", err)
-			slog.Error("detached hook worker start failed", "error", err)
 			return err
 		}
 		return writeJSONHookSuccessResponse(cmd, inputData)
@@ -484,16 +382,16 @@ func runStdinModeE(cmd *cobra.Command, args []string) error {
 	// already-loaded cfg so a user-supplied --config is honored
 	// (initializeTracking previously called LoadConfig itself, dropping
 	// the override).
-	cli.initializeTracking(cfg)
+	c.initializeTracking(cfg)
 
 	// Initialize audio and soundpack systems
-	err = initializeAudioSystem(cmd, cli, cfg)
+	err = c.initializeAudioSystem(cfg)
 	if err != nil {
 		return err
 	}
 
 	// Process hook input payload.
-	if err := processHookInput(cmd, cli, cfg, inputData); err != nil {
+	if err := processHookInput(cmd, c, cfg, inputData); err != nil {
 		return err
 	}
 	return writeJSONHookSuccessResponse(cmd, inputData)
@@ -516,33 +414,6 @@ func writeJSONHookSuccessResponse(cmd *cobra.Command, inputData []byte) error {
 // Run executes the CLI with the given arguments and I/O streams
 func (c *CLI) Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	slog.Debug("CLI run started", "args", args)
-
-	// --version (and -v) is now handled by cobra natively because
-	// rootCmd.Version is set in NewCLI. Cobra exits before RunE runs, but
-	// we still skip initializeSystems() (which constructs a configManager
-	// and XDG resolver) when the version flag is present anywhere on the
-	// command line — the previous args[1] short-circuit only fired when
-	// --version was literally args[1], so e.g. `claudio --silent --version`
-	// still spun up the config manager. Detecting the flag here keeps the
-	// observable "fast path" invariant covered by TestVersionFlagEarlyExit
-	// while letting cobra produce the actual output.
-	if hasVersionFlag(args) {
-		c.rootCmd.SetArgs(args[1:])
-		c.rootCmd.SetIn(stdin)
-		c.rootCmd.SetOut(stdout)
-		c.rootCmd.SetErr(stderr)
-		c.rootCmd.SetContext(contextWithCLI(c))
-		if err := c.rootCmd.Execute(); err != nil {
-			slog.Error("cobra execution failed", "error", err)
-			return 1
-		}
-		return 0
-	}
-
-	// Initialize systems only when actually needed (not for version flag)
-	slog.Debug("about to call initializeSystems()")
-	c.initializeSystems()
-	slog.Debug("initializeSystems() completed")
 	setupDefaultCommandLogging(stderr)
 
 	// Ensure resources are cleaned up on exit
@@ -561,21 +432,19 @@ func (c *CLI) Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 		}
 	}()
 
-	// Configure cobra to use the provided I/O streams
-	c.rootCmd.SetArgs(args[1:]) // Skip program name
+	c.rootCmd.SetArgs(args[1:])
 	c.rootCmd.SetIn(stdin)
 	c.rootCmd.SetOut(stdout)
 	c.rootCmd.SetErr(stderr)
 
-	// Store CLI instance for access in command handlers
-	c.rootCmd.SetContext(contextWithCLI(c))
-
-	// Execute cobra command
+	// Cobra's own error and usage printing is silenced on the root, so this
+	// is the only place a command error reaches stderr; the log record is
+	// WARN so the ERROR-only stderr handler does not repeat it.
 	if err := c.rootCmd.Execute(); err != nil {
-		slog.Error("cobra execution failed", "error", err)
+		fmt.Fprintf(stderr, "Error: %v\n", err)
+		slog.Warn("command failed", "error", err)
 		return 1
 	}
-
 	return 0
 }
 
@@ -583,31 +452,6 @@ func setupDefaultCommandLogging(stderr io.Writer) {
 	slog.SetDefault(slog.New(newStartupHandler(slog.NewTextHandler(stderr, &slog.HandlerOptions{
 		Level: slog.LevelError,
 	}))))
-}
-
-// initializeConfigManager initializes only the config manager early for log level configuration
-func (c *CLI) initializeConfigManager() {
-	if c.configManager == nil {
-		c.configManager = config.NewConfigManager()
-	}
-}
-
-// initializeSystems lazily initializes remaining CLI components when actually needed
-func (c *CLI) initializeSystems() {
-	slog.Debug("initializeSystems() called")
-	// Config manager should already be initialized
-	c.initializeConfigManager()
-
-	// Note: Tracking initialization is done later in runStdinModeE after logging is configured
-	// to avoid log messages appearing before the dual-level handler is set up
-
-	// Don't create a global SoundMapper here — it is built per-request in
-	// processHookEvent so each request gets its own session-scoped
-	// EventRecorder threaded through the soundpack PathObserver. (Chunk 14
-	// inverted the old SoundChecker hook ecosystem; this comment used to
-	// say "session-specific SoundChecker" — that type no longer exists.)
-	// soundpackResolver and audioBackend are initialized in
-	// initializeAudioSystem when needed.
 }
 
 // processHookEvent processes the parsed hook event
@@ -673,13 +517,8 @@ func (c *CLI) processHookEvent(hookEvent *hooks.HookEvent, cfg *config.Config, s
 
 	// Play sound if audio is enabled
 	if cfg.Enabled && c.audioBackend != nil {
-		playVolume := 0.5
-		if cfg.Volume != nil {
-			playVolume = *cfg.Volume
-		}
-		err := c.playSoundWithBackend(result.SelectedPath, playVolume)
+		err := c.playSoundWithBackend(result.SelectedPath, cfg.EffectiveVolume())
 		if err != nil {
-			fmt.Fprintf(stderr, "Error playing sound: %v\n", err)
 			slog.Error("sound playback failed", "sound_path", result.SelectedPath, "error", err)
 			return
 		}
@@ -710,7 +549,6 @@ func (c *CLI) playSoundWithBackend(soundPath string, volume float64) error {
 	ctx := context.Background()
 	err = c.audioBackend.Play(ctx, source)
 	if err != nil {
-		slog.Error("backend playback failed", "path", fullPath, "backend_type", fmt.Sprintf("%T", c.audioBackend), "error", err)
 		return fmt.Errorf("failed to play sound with backend: %w", err)
 	}
 
@@ -892,11 +730,11 @@ func getPlatformExecutableDirectory() string {
 
 // loadEmbeddedPlatformSoundpack loads a platform soundpack from embedded data
 func loadEmbeddedPlatformSoundpack(identifier string) (soundpack.PathMapper, error) {
-	if !strings.HasPrefix(identifier, "embedded:") {
+	filename, ok := strings.CutPrefix(identifier, embeddedSoundpackPrefix)
+	if !ok {
 		return nil, fmt.Errorf("invalid embedded soundpack identifier: %s", identifier)
 	}
 
-	filename := strings.TrimPrefix(identifier, "embedded:")
 	slog.Debug("loading embedded platform soundpack", "filename", filename)
 
 	data, err := config.GetEmbeddedPlatformSoundpackData(filename)

@@ -2,8 +2,9 @@ package audio
 
 import (
 	"context"
-	"errors"
 	"sync"
+
+	"claudio.click/internal/volume"
 )
 
 // FakeBackend is a test fake that records Play invocations and never
@@ -80,13 +81,13 @@ func (f *FakeBackend) IsPlaying() bool {
 }
 
 // SetVolume stores the supplied volume; range-checks to [0.0, 1.0].
-func (f *FakeBackend) SetVolume(volume float32) error {
-	if volume < 0.0 || volume > 1.0 {
-		return errors.New("volume out of range [0.0, 1.0]")
+func (f *FakeBackend) SetVolume(v float32) error {
+	if err := volume.Validate(float64(v)); err != nil {
+		return err
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.volume = volume
+	f.volume = v
 	return nil
 }
 

@@ -1120,7 +1120,7 @@ func TestSoundpackInstallCopiesRelativeAssetsAndHonorsExplicitConfig(t *testing.
 	}
 	cfg.Enabled = false
 	runtimeCLI := NewCLI()
-	if err := initializeAudioSystem(runtimeCLI.rootCmd, runtimeCLI, cfg); err != nil {
+	if err := runtimeCLI.initializeAudioSystem(cfg); err != nil {
 		t.Fatalf("installed --default pack did not initialize: %v", err)
 	}
 	if runtimeCLI.soundpackResolver.GetType() != "json" {

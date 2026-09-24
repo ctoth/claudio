@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"cmp"
 	"database/sql"
 	"fmt"
 	"io"
@@ -39,7 +40,7 @@ type Analysis struct {
 }
 
 // newAnalyzeCommand creates the analyze command with subcommands
-func newAnalyzeCommand() *cobra.Command {
+func newAnalyzeCommand(c *CLI) *cobra.Command {
 	analyzeCmd := &cobra.Command{
 		Use:   "analyze",
 		Short: "Analyze sound tracking data",
@@ -47,22 +48,74 @@ func newAnalyzeCommand() *cobra.Command {
 	}
 
 	// Add missing subcommand
-	analyzeCmd.AddCommand(newAnalyzeMissingCommand())
+	analyzeCmd.AddCommand(newAnalyzeMissingCommand(c))
 
 	// Add usage subcommand
-	analyzeCmd.AddCommand(newAnalyzeUsageCommand())
+	analyzeCmd.AddCommand(newAnalyzeUsageCommand(c))
 
 	return analyzeCmd
 }
 
-// newAnalyzeMissingCommand creates the analyze missing subcommand
-func newAnalyzeMissingCommand() *cobra.Command {
-	var days int
-	var tool string
-	var category string
-	var limit int
-	var preset string
+// analyzeFilterFlags are the query flags both analyze subcommands take.
+type analyzeFilterFlags struct {
+	days     int
+	tool     string
+	category string
+	limit    int
+	preset   string
+}
 
+func (f *analyzeFilterFlags) register(cmd *cobra.Command) {
+	cmd.Flags().IntVar(&f.days, "days", 7, "Number of days to analyze (0 = all time)")
+	cmd.Flags().StringVar(&f.tool, "tool", "", "Filter by specific tool name")
+	cmd.Flags().StringVar(&f.category, "category", "", "Filter by category ("+strings.Join(analyzeCategories, ", ")+")")
+	cmd.Flags().IntVar(&f.limit, "limit", 20, "Maximum number of results to show")
+	cmd.Flags().StringVar(&f.preset, "preset", "", "Date preset ("+strings.Join(tracking.DatePresets, ", ")+")")
+}
+
+// filter validates the flag values and returns the query they select,
+// most frequent first.
+func (f *analyzeFilterFlags) filter() (tracking.QueryFilter, error) {
+	if err := validateAnalyzeFilterValues(f.category, f.preset); err != nil {
+		return tracking.QueryFilter{}, err
+	}
+	return tracking.QueryFilter{
+		Days:       f.days,
+		Tool:       f.tool,
+		Category:   f.category,
+		Limit:      f.limit,
+		DatePreset: f.preset,
+		OrderBy:    "frequency",
+		OrderDesc:  true,
+	}, nil
+}
+
+// openAnalyzeDB validates the filter flags, loads the config (honoring
+// --config, so an override reaches the tracking database path) and opens
+// the tracking database. With tracking off it prints a hint and returns a
+// nil db: there is nothing to analyze, which is not an error.
+func (c *CLI) openAnalyzeDB(cmd *cobra.Command, flags *analyzeFilterFlags) (*sql.DB, tracking.QueryFilter, error) {
+	filter, err := flags.filter()
+	if err != nil {
+		return nil, filter, err
+	}
+	slog.Debug("running analyze command", "command", cmd.Name(), "filter", filter)
+
+	cfg, err := c.loadAndValidateConfig(cmd)
+	if err != nil {
+		return nil, filter, err
+	}
+	c.initializeTracking(cfg)
+	if c.trackingDB == nil {
+		fmt.Fprintln(cmd.OutOrStdout(), "Sound tracking is not enabled or database not available.")
+		fmt.Fprintln(cmd.OutOrStdout(), "Enable tracking with CLAUDIO_SOUND_TRACKING=true")
+	}
+	return c.trackingDB, filter, nil
+}
+
+// newAnalyzeMissingCommand creates the analyze missing subcommand
+func newAnalyzeMissingCommand(c *CLI) *cobra.Command {
+	var flags analyzeFilterFlags
 	missingCmd := &cobra.Command{
 		Use:   "missing",
 		Short: "Show missing sounds that were requested but not found",
@@ -81,160 +134,84 @@ Examples:
   claudio analyze missing --preset today    # Today only
   claudio analyze missing --tool Edit       # Edit tool only
   claudio analyze missing --category error  # Error sounds only`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runAnalyzeMissing(cmd, days, tool, category, limit, preset)
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return c.runAnalyzeMissing(cmd, &flags)
 		},
 	}
-
-	// Add flags - now consistent with analyze usage
-	missingCmd.Flags().IntVar(&days, "days", 7, "Number of days to analyze (0 = all time)")
-	missingCmd.Flags().StringVar(&tool, "tool", "", "Filter by specific tool name")
-	missingCmd.Flags().StringVar(&category, "category", "", "Filter by category ("+strings.Join(analyzeCategories, ", ")+")")
-	missingCmd.Flags().IntVar(&limit, "limit", 20, "Maximum number of results to show")
-	missingCmd.Flags().StringVar(&preset, "preset", "", "Date preset ("+strings.Join(tracking.DatePresets, ", ")+")")
-
+	flags.register(missingCmd)
 	return missingCmd
 }
 
 // runAnalyzeMissing executes the analyze missing command
-func runAnalyzeMissing(cmd *cobra.Command, days int, tool, category string, limit int, preset string) error {
-	slog.Debug("running analyze missing command", "days", days, "tool", tool, "category", category, "limit", limit, "preset", preset)
-	if err := validateAnalyzeFilterValues(category, preset); err != nil {
+func (c *CLI) runAnalyzeMissing(cmd *cobra.Command, flags *analyzeFilterFlags) error {
+	db, filter, err := c.openAnalyzeDB(cmd, flags)
+	if err != nil || db == nil {
 		return err
 	}
 
-	// Extract CLI instance from context
-	cli := cliFromContext(cmd.Context())
-	if cli == nil {
-		return fmt.Errorf("CLI instance not found in context")
-	}
-
-	// Load config (honoring --config) and pass to tracking init so the
-	// override reaches the tracking database path.
-	cli.initializeConfigManager()
-	cfg, cfgErr := loadAndValidateConfig(cmd, cli)
-	if cfgErr != nil {
-		return cfgErr
-	}
-	cli.initializeTracking(cfg)
-
-	// Check if tracking database is available
-	if cli.trackingDB == nil {
-		return fmt.Errorf("sound tracking is not enabled or database is not available")
-	}
-
-	// Build query filter using new common infrastructure
-	filter := tracking.QueryFilter{
-		Days:       days,
-		Tool:       tool,
-		Category:   category,
-		Limit:      limit,
-		DatePreset: preset,
-		OrderBy:    "frequency",
-		OrderDesc:  true,
-	}
-
-	// Get missing sounds data
-	missingSounds, err := tracking.GetMissingSounds(cli.trackingDB, filter)
+	missingSounds, err := tracking.GetMissingSounds(db, filter)
 	if err != nil {
-		slog.Error("failed to get missing sounds", "error", err)
 		return fmt.Errorf("failed to analyze missing sounds: %w", err)
 	}
 
 	// Get summary statistics
-	summary, err := tracking.GetMissingSoundsSummary(cli.trackingDB, filter)
+	summary, err := tracking.GetMissingSoundsSummary(db, filter)
 	if err != nil {
 		slog.Warn("failed to get missing sounds summary", "error", err)
 		// Continue without summary - not critical
 	}
 
-	// TDD Step 3 GREEN: Replace flat output with hierarchical tool-grouped output
 	return outputMissingSoundsHierarchical(cmd.OutOrStdout(), missingSounds, summary, filter)
 }
 
-// TDD Step 3 GREEN: groupByTool groups missing sounds by tool and category
+// groupByTool groups missing sounds by tool and category. Everything comes
+// back in display order: tools by total requests (descending) then name,
+// categories as sortCategories orders them, sounds by sortSoundsByRequestCount.
 func groupByTool(missingSounds []tracking.MissingSound) Analysis {
 	toolMap := make(map[string]map[string][]tracking.MissingSound) // tool -> category -> sounds
 	otherMap := make(map[string][]tracking.MissingSound)           // category -> sounds (for non-tool sounds)
 
-	// Group sounds by tool and category
 	for _, sound := range missingSounds {
-		if sound.ToolName != "" {
-			// Tool-specific sound
-			if toolMap[sound.ToolName] == nil {
-				toolMap[sound.ToolName] = make(map[string][]tracking.MissingSound)
-			}
-			toolMap[sound.ToolName][sound.Category] = append(toolMap[sound.ToolName][sound.Category], sound)
-		} else {
-			// Non-tool sound (goes to Other section)
+		if sound.ToolName == "" {
 			otherMap[sound.Category] = append(otherMap[sound.Category], sound)
+			continue
 		}
+		if toolMap[sound.ToolName] == nil {
+			toolMap[sound.ToolName] = make(map[string][]tracking.MissingSound)
+		}
+		toolMap[sound.ToolName][sound.Category] = append(toolMap[sound.ToolName][sound.Category], sound)
 	}
 
-	// Build tool groups
-	var tools []ToolGroup
+	tools := make([]ToolGroup, 0, len(toolMap))
 	for toolName, categoryMap := range toolMap {
-		var categories []CategoryGroup
-		toolTotal := 0
-		toolCount := 0
-
-		for categoryName, sounds := range categoryMap {
-			categoryTotal := 0
-			for _, sound := range sounds {
-				categoryTotal += sound.RequestCount
-			}
-
-			categories = append(categories, CategoryGroup{
-				Name:   categoryName,
-				Total:  categoryTotal,
-				Count:  len(sounds),
-				Sounds: sounds,
-			})
-
-			toolTotal += categoryTotal
-			toolCount += len(sounds)
+		tool := ToolGroup{Name: toolName, Categories: categoryGroups(categoryMap)}
+		for _, category := range tool.Categories {
+			tool.Total += category.Total
+			tool.Count += category.Count
 		}
-
-		tools = append(tools, ToolGroup{
-			Name:       toolName,
-			Total:      toolTotal,
-			Count:      toolCount,
-			Categories: categories,
-		})
+		tools = append(tools, tool)
 	}
+	slices.SortFunc(tools, func(a, b ToolGroup) int {
+		return cmp.Or(cmp.Compare(b.Total, a.Total), cmp.Compare(a.Name, b.Name))
+	})
 
-	// Build other groups
-	var other []CategoryGroup
-	for categoryName, sounds := range otherMap {
-		categoryTotal := 0
-		for _, sound := range sounds {
-			categoryTotal += sound.RequestCount
-		}
-
-		other = append(other, CategoryGroup{
-			Name:   categoryName,
-			Total:  categoryTotal,
-			Count:  len(sounds),
-			Sounds: sounds,
-		})
-	}
-
-	// Sort tools by total requests (descending)
-	for i := 0; i < len(tools); i++ {
-		for j := i + 1; j < len(tools); j++ {
-			if tools[j].Total > tools[i].Total {
-				tools[i], tools[j] = tools[j], tools[i]
-			}
-		}
-	}
-
-	return Analysis{
-		Tools: tools,
-		Other: other,
-	}
+	return Analysis{Tools: tools, Other: categoryGroups(otherMap)}
 }
 
-// TDD Step 3 GREEN: outputMissingSoundsHierarchical displays missing sounds grouped by tool
+// categoryGroups turns category -> sounds into sorted CategoryGroups.
+func categoryGroups(byCategory map[string][]tracking.MissingSound) []CategoryGroup {
+	groups := make([]CategoryGroup, 0, len(byCategory))
+	for name, sounds := range byCategory {
+		group := CategoryGroup{Name: name, Count: len(sounds), Sounds: sortSoundsByRequestCount(sounds)}
+		for _, sound := range sounds {
+			group.Total += sound.RequestCount
+		}
+		groups = append(groups, group)
+	}
+	return sortCategories(groups)
+}
+
+// outputMissingSoundsHierarchical displays missing sounds grouped by tool
 func outputMissingSoundsHierarchical(w io.Writer, sounds []tracking.MissingSound, summary map[string]interface{}, filter tracking.QueryFilter) error {
 	if len(sounds) == 0 {
 		// No missing sounds found
@@ -269,80 +246,27 @@ func outputMissingSoundsHierarchical(w io.Writer, sounds []tracking.MissingSound
 
 	fmt.Fprintf(w, "Missing Sounds by Tool (%s):\n\n", timeContext)
 
-	// Summary statistics if available
-	if summary != nil {
-		if uniqueCount, ok := summary["unique_missing_sounds"].(int); ok && uniqueCount > 0 {
-			totalRequests := summary["total_missing_requests"].(int)
+	// Summary statistics if available. Each key is checked: a missing or
+	// mistyped one skips its line instead of panicking.
+	if uniqueCount, ok := summary["unique_missing_sounds"].(int); ok && uniqueCount > 0 {
+		if totalRequests, ok := summary["total_missing_requests"].(int); ok {
 			fmt.Fprintf(w, "Found %d unique missing sounds with %d total requests\n", uniqueCount, totalRequests)
-
-			if toolCount, ok := summary["tools_with_missing_sounds"].(int); ok && toolCount > 0 {
-				fmt.Fprintf(w, "Across %d different tools\n", toolCount)
-			}
-			fmt.Fprintln(w)
 		}
+		if toolCount, ok := summary["tools_with_missing_sounds"].(int); ok && toolCount > 0 {
+			fmt.Fprintf(w, "Across %d different tools\n", toolCount)
+		}
+		fmt.Fprintln(w)
 	}
 
-	// Display tools grouped hierarchically with improved formatting
 	for _, tool := range analysis.Tools {
-		// Handle edge case: skip tools with no sounds (shouldn't happen, but defensive)
-		if tool.Count == 0 {
-			continue
-		}
-
 		fmt.Fprintf(w, "%s (total: %d requests, %d sounds):\n", tool.Name, tool.Total, tool.Count)
-
-		// Sort categories for consistent output (success, error, loading, etc.)
-		sortedCategories := sortCategories(tool.Categories)
-
-		for _, category := range sortedCategories {
-			fmt.Fprintf(w, "  %s (%d requests):\n", category.Name, category.Total)
-
-			// Sort sounds by request count (descending)
-			sortedSounds := sortSoundsByRequestCount(category.Sounds)
-
-			for _, sound := range sortedSounds {
-				// Handle edge case: truncate very long paths for better formatting
-				displayPath := sound.Path
-				if len(displayPath) > 35 {
-					displayPath = "..." + displayPath[len(displayPath)-32:]
-				}
-
-				// Better alignment: path padded to 35 chars, right-aligned request count
-				fmt.Fprintf(w, "    %-35s %3d requests\n", displayPath, sound.RequestCount)
-			}
-
-			if len(sortedCategories) > 1 {
-				fmt.Fprintln(w) // Space between categories only if multiple categories
-			}
-		}
+		printCategoryGroups(w, tool.Categories)
 		fmt.Fprintln(w) // Space between tools
 	}
 
-	// Display Other section if present with consistent formatting
 	if len(analysis.Other) > 0 {
 		fmt.Fprintln(w, "Other (non-tool sounds):")
-
-		sortedOtherCategories := sortCategories(analysis.Other)
-
-		for _, category := range sortedOtherCategories {
-			fmt.Fprintf(w, "  %s (%d requests):\n", category.Name, category.Total)
-
-			sortedOtherSounds := sortSoundsByRequestCount(category.Sounds)
-
-			for _, sound := range sortedOtherSounds {
-				// Handle edge case: truncate very long paths for better formatting
-				displayPath := sound.Path
-				if len(displayPath) > 35 {
-					displayPath = "..." + displayPath[len(displayPath)-32:]
-				}
-
-				fmt.Fprintf(w, "    %-35s %3d requests\n", displayPath, sound.RequestCount)
-			}
-
-			if len(sortedOtherCategories) > 1 {
-				fmt.Fprintln(w) // Space between categories only if multiple
-			}
-		}
+		printCategoryGroups(w, analysis.Other)
 		fmt.Fprintln(w) // Space after Other section
 	}
 
@@ -359,87 +283,63 @@ func outputMissingSoundsHierarchical(w io.Writer, sounds []tracking.MissingSound
 	return nil
 }
 
-// TDD Step 3 REFACTOR: Helper functions for consistent sorting and formatting
+// printCategoryGroups prints each category with its sounds, paths
+// truncated to 35 characters so the request counts line up.
+func printCategoryGroups(w io.Writer, categories []CategoryGroup) {
+	for _, category := range categories {
+		fmt.Fprintf(w, "  %s (%d requests):\n", category.Name, category.Total)
+		for _, sound := range category.Sounds {
+			displayPath := sound.Path
+			if len(displayPath) > 35 {
+				displayPath = "..." + displayPath[len(displayPath)-32:]
+			}
+			fmt.Fprintf(w, "    %-35s %3d requests\n", displayPath, sound.RequestCount)
+		}
+		if len(categories) > 1 {
+			fmt.Fprintln(w) // Space between categories only if multiple
+		}
+	}
+}
 
-// sortCategories sorts categories in a logical order for display
+// categoryDisplayOrder is the preferred category order; categories not
+// listed follow it.
+var categoryDisplayOrder = []string{"success", "error", "loading", "interactive", "completion", "system"}
+
+// sortCategories returns categories in display order: known categories in
+// categoryDisplayOrder, then the rest by total requests (descending) and
+// name.
 func sortCategories(categories []CategoryGroup) []CategoryGroup {
-	// Create a copy to avoid modifying original
-	sorted := make([]CategoryGroup, len(categories))
-	copy(sorted, categories)
-
-	// Define preferred order: success, error, loading, interactive, completion, system, others
-	categoryOrder := map[string]int{
-		"success":     1,
-		"error":       2,
-		"loading":     3,
-		"interactive": 4,
-		"completion":  5,
-		"system":      6,
-	}
-
-	// Sort by preferred order, then by total requests (descending), then by name
-	for i := 0; i < len(sorted); i++ {
-		for j := i + 1; j < len(sorted); j++ {
-			orderI := categoryOrder[sorted[i].Name]
-			orderJ := categoryOrder[sorted[j].Name]
-
-			// If both have defined order, use it
-			if orderI > 0 && orderJ > 0 {
-				if orderI > orderJ {
-					sorted[i], sorted[j] = sorted[j], sorted[i]
-				}
-			} else if orderI > 0 && orderJ == 0 {
-				// I has order, J doesn't - I comes first
-				continue
-			} else if orderI == 0 && orderJ > 0 {
-				// J has order, I doesn't - swap
-				sorted[i], sorted[j] = sorted[j], sorted[i]
-			} else {
-				// Neither has defined order - sort by total requests (desc), then by name
-				if sorted[j].Total > sorted[i].Total {
-					sorted[i], sorted[j] = sorted[j], sorted[i]
-				} else if sorted[j].Total == sorted[i].Total && sorted[j].Name < sorted[i].Name {
-					sorted[i], sorted[j] = sorted[j], sorted[i]
-				}
-			}
+	rank := func(name string) int {
+		if i := slices.Index(categoryDisplayOrder, name); i >= 0 {
+			return i
 		}
+		return len(categoryDisplayOrder)
 	}
-
+	sorted := slices.Clone(categories)
+	slices.SortFunc(sorted, func(a, b CategoryGroup) int {
+		return cmp.Or(
+			cmp.Compare(rank(a.Name), rank(b.Name)),
+			cmp.Compare(b.Total, a.Total),
+			cmp.Compare(a.Name, b.Name),
+		)
+	})
 	return sorted
 }
 
-// sortSoundsByRequestCount sorts sounds by request count (descending), then by path
+// sortSoundsByRequestCount returns sounds by request count (descending),
+// then by path.
 func sortSoundsByRequestCount(sounds []tracking.MissingSound) []tracking.MissingSound {
-	// Create a copy to avoid modifying original
-	sorted := make([]tracking.MissingSound, len(sounds))
-	copy(sorted, sounds)
-
-	// Sort by request count (descending), then by path (ascending) for tie-breaking
-	for i := 0; i < len(sorted); i++ {
-		for j := i + 1; j < len(sorted); j++ {
-			if sorted[j].RequestCount > sorted[i].RequestCount {
-				sorted[i], sorted[j] = sorted[j], sorted[i]
-			} else if sorted[j].RequestCount == sorted[i].RequestCount && sorted[j].Path < sorted[i].Path {
-				sorted[i], sorted[j] = sorted[j], sorted[i]
-			}
-		}
-	}
-
+	sorted := slices.Clone(sounds)
+	slices.SortFunc(sorted, func(a, b tracking.MissingSound) int {
+		return cmp.Or(cmp.Compare(b.RequestCount, a.RequestCount), cmp.Compare(a.Path, b.Path))
+	})
 	return sorted
 }
-
-// TDD RED: New analyze usage command implementation
 
 // newAnalyzeUsageCommand creates the analyze usage subcommand
-func newAnalyzeUsageCommand() *cobra.Command {
-	var days int
-	var tool string
-	var category string
-	var limit int
-	var preset string
-	var showChains bool
-	var showSummary bool
-
+func newAnalyzeUsageCommand(c *CLI) *cobra.Command {
+	var flags analyzeFilterFlags
+	var showChains, showSummary bool
 	usageCmd := &cobra.Command{
 		Use:   "usage",
 		Short: "Show actual sound usage patterns and statistics",
@@ -463,79 +363,35 @@ Examples:
   claudio analyze usage --category success # Success sounds only
   claudio analyze usage --show-chains     # Include chain-type statistics
   claudio analyze usage --show-summary    # Show summary statistics`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runAnalyzeUsage(cmd, days, tool, category, limit, preset, showChains, showSummary)
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return c.runAnalyzeUsage(cmd, &flags, showChains, showSummary)
 		},
 	}
-
-	// Add flags
-	usageCmd.Flags().IntVar(&days, "days", 7, "Number of days to analyze (0 = all time)")
-	usageCmd.Flags().StringVar(&tool, "tool", "", "Filter by specific tool name")
-	usageCmd.Flags().StringVar(&category, "category", "", "Filter by category ("+strings.Join(analyzeCategories, ", ")+")")
-	usageCmd.Flags().IntVar(&limit, "limit", 20, "Maximum number of results to show")
-	usageCmd.Flags().StringVar(&preset, "preset", "", "Date preset ("+strings.Join(tracking.DatePresets, ", ")+")")
+	flags.register(usageCmd)
 	usageCmd.Flags().BoolVar(&showChains, "show-chains", false, "Show per-chain-type statistics")
 	usageCmd.Flags().BoolVar(&showSummary, "show-summary", false, "Show usage summary statistics")
-
 	return usageCmd
 }
 
 // runAnalyzeUsage executes the analyze usage command
-func runAnalyzeUsage(cmd *cobra.Command, days int, tool, category string, limit int, preset string, showChains, showSummary bool) error {
-	slog.Debug("running analyze usage command", "days", days, "tool", tool, "category", category, "limit", limit, "preset", preset)
-	if err := validateAnalyzeFilterValues(category, preset); err != nil {
+func (c *CLI) runAnalyzeUsage(cmd *cobra.Command, flags *analyzeFilterFlags, showChains, showSummary bool) error {
+	db, filter, err := c.openAnalyzeDB(cmd, flags)
+	if err != nil || db == nil {
 		return err
 	}
 
-	// Extract CLI instance from context
-	cli := cliFromContext(cmd.Context())
-	if cli == nil {
-		return fmt.Errorf("CLI instance not found in context")
-	}
-
-	// Load config (honoring --config) and pass to tracking init so the
-	// override reaches the tracking database path.
-	cli.initializeConfigManager()
-	cfg, cfgErr := loadAndValidateConfig(cmd, cli)
-	if cfgErr != nil {
-		return cfgErr
-	}
-	cli.initializeTracking(cfg)
-
-	// Check if tracking database is available
-	if cli.trackingDB == nil {
-		fmt.Fprintln(cmd.OutOrStdout(), "Sound tracking is not enabled or database not available.")
-		fmt.Fprintln(cmd.OutOrStdout(), "Enable tracking with CLAUDIO_SOUND_TRACKING=true")
-		return nil
-	}
-
-	// Build query filter
-	filter := tracking.QueryFilter{
-		Days:       days,
-		Tool:       tool,
-		Category:   category,
-		Limit:      limit,
-		DatePreset: preset,
-		OrderBy:    "frequency",
-		OrderDesc:  true,
-	}
-
-	// Get sound usage statistics
-	usage, err := tracking.GetSoundUsage(cli.trackingDB, filter)
+	usage, err := tracking.GetSoundUsage(db, filter)
 	if err != nil {
 		return fmt.Errorf("failed to get sound usage: %w", err)
 	}
-
-	// Output results
-	if err := outputUsageStatistics(cmd.OutOrStdout(), usage, filter, showChains, showSummary, cli.trackingDB); err != nil {
+	if err := outputUsageStatistics(cmd.OutOrStdout(), usage, filter, showChains, showSummary, db); err != nil {
 		return fmt.Errorf("failed to output usage statistics: %w", err)
 	}
-
 	return nil
 }
 
 // outputUsageStatistics formats and outputs usage statistics
-func outputUsageStatistics(w io.Writer, usage []tracking.SoundUsage, filter tracking.QueryFilter, showChains, showSummary bool, db interface{}) error {
+func outputUsageStatistics(w io.Writer, usage []tracking.SoundUsage, filter tracking.QueryFilter, showChains, showSummary bool, db *sql.DB) error {
 	if len(usage) == 0 {
 		fmt.Fprintln(w, "No sound usage data found for the specified criteria.")
 
@@ -576,13 +432,12 @@ func outputUsageStatistics(w io.Writer, usage []tracking.SoundUsage, filter trac
 
 	// Show summary if requested
 	if showSummary {
-		if dbConn, ok := db.(*sql.DB); ok {
-			summary, err := tracking.GetUsageSummary(dbConn, filter)
-			if err == nil {
-				fmt.Fprintf(w, "Summary: %d total events, %d unique sounds\n\n",
-					summary.TotalEvents, summary.UniqueSounds)
-			}
+		summary, err := tracking.GetUsageSummary(db, filter)
+		if err != nil {
+			return fmt.Errorf("failed to get usage summary: %w", err)
 		}
+		fmt.Fprintf(w, "Summary: %d total events, %d unique sounds\n\n",
+			summary.TotalEvents, summary.UniqueSounds)
 	}
 
 	// Show most used sounds
@@ -619,21 +474,19 @@ func outputUsageStatistics(w io.Writer, usage []tracking.SoundUsage, filter trac
 
 	// Show per-chain-type statistics if requested
 	if showChains {
-		if dbConn, ok := db.(*sql.DB); ok {
-			fmt.Fprintln(w, "\nChain Type Statistics:")
-			fmt.Fprintln(w, "----------------------")
-
-			chainStats, err := tracking.GetChainTypeStatistics(dbConn, filter)
-			if err == nil {
-				for _, stat := range chainStats {
-					label := stat.ChainType
-					if label == "" {
-						label = "(unrecorded)"
-					}
-					fmt.Fprintf(w, "%s: %d events (%.1f%%), avg depth %.1f\n",
-						label, stat.EventCount, stat.Percentage, stat.AvgDepth)
-				}
+		chainStats, err := tracking.GetChainTypeStatistics(db, filter)
+		if err != nil {
+			return fmt.Errorf("failed to get chain type statistics: %w", err)
+		}
+		fmt.Fprintln(w, "\nChain Type Statistics:")
+		fmt.Fprintln(w, "----------------------")
+		for _, stat := range chainStats {
+			label := stat.ChainType
+			if label == "" {
+				label = "(unrecorded)"
 			}
+			fmt.Fprintf(w, "%s: %d events (%.1f%%), avg depth %.1f\n",
+				label, stat.EventCount, stat.Percentage, stat.AvgDepth)
 		}
 	}
 

@@ -3,14 +3,13 @@ package cli
 import (
 	"fmt"
 	"log/slog"
-	"math"
 	"os"
 	"strconv"
 
-	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 
 	"claudio.click/internal/config"
+	"claudio.click/internal/volume"
 )
 
 // newVolumeCommand returns the `claudio volume [LEVEL]` subcommand.
@@ -23,7 +22,7 @@ import (
 // Note: the persistent `--volume` flag is for transient overrides on
 // the hook/stdin path; this subcommand persists the value.
 // CLAUDIO_VOLUME env var still takes precedence at runtime.
-func newVolumeCommand() *cobra.Command {
+func newVolumeCommand(c *CLI) *cobra.Command {
 	return &cobra.Command{
 		Use:   "volume [LEVEL]",
 		Short: "Get or set the persistent volume preference",
@@ -37,25 +36,14 @@ precedence at runtime over the persisted value. The transient
 "--volume" flag also overrides the persisted value for a single hook
 invocation.`,
 		Args: cobra.MaximumNArgs(1),
-		RunE: runVolumeE,
+		RunE: c.runVolume,
 	}
 }
 
-func runVolumeE(cmd *cobra.Command, args []string) error {
-	cli := cliFromContext(cmd.Context())
-	if cli == nil {
-		return fmt.Errorf("CLI instance not found in context")
-	}
-	cli.initializeConfigManager()
-
-	configPath, err := resolveWritableConfigPath(cmd, cli)
-	if err != nil {
-		return err
-	}
-
+func (c *CLI) runVolume(cmd *cobra.Command, args []string) error {
 	// Read-only path: print and return.
 	if len(args) == 0 {
-		cfg, err := loadConfigForVerb(cmd, cli)
+		cfg, err := c.loadConfigForVerb(cmd)
 		if err != nil {
 			return err
 		}
@@ -63,14 +51,9 @@ func runVolumeE(cmd *cobra.Command, args []string) error {
 		// invocations actually use, and what `claudio status` reports.
 		// WRITE path below intentionally does NOT do this — persistence
 		// must be deterministic regardless of env state.
-		cfg = cli.configManager.ApplyEnvironmentOverrides(cfg)
-		if cfg.Volume == nil {
-			fmt.Fprintln(cmd.OutOrStdout(), "volume: default (no persisted setting)")
-		} else if os.Getenv("CLAUDIO_VOLUME") != "" {
-			fmt.Fprintf(cmd.OutOrStdout(), "volume: %.2f (from CLAUDIO_VOLUME)\n", *cfg.Volume)
-		} else {
-			fmt.Fprintf(cmd.OutOrStdout(), "volume: %.2f\n", *cfg.Volume)
-		}
+		cfg = c.configManager.ApplyEnvironmentOverrides(cfg)
+		value, source := describeVolume(cfg)
+		fmt.Fprintf(cmd.OutOrStdout(), "volume: %s (%s)\n", value, source)
 		return nil
 	}
 
@@ -79,41 +62,38 @@ func runVolumeE(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("invalid volume %q: must be a float between 0.0 and 1.0", args[0])
 	}
-	if math.IsNaN(v) || math.IsInf(v, 0) {
-		return fmt.Errorf("invalid volume %q: must be a finite float between 0.0 and 1.0", args[0])
-	}
-	if v < 0.0 || v > 1.0 {
-		return fmt.Errorf("volume must be between 0.0 and 1.0, got %f", v)
-	}
-
-	lock, err := config.LockConfigDir(configPath)
-	if err != nil {
+	if err := volume.Validate(v); err != nil {
 		return err
 	}
-	defer func() {
-		if err := lock.Unlock(); err != nil {
-			slog.Warn("failed to release config lock", "err", err)
+
+	previous := "default"
+	if err := c.mutateConfigForCommand(cmd, func(cfg *config.Config) error {
+		if cfg.Volume != nil {
+			previous = fmt.Sprintf("%.2f", *cfg.Volume)
 		}
-	}()
-
-	cfg, err := loadConfigForVerb(cmd, cli)
-	if err != nil {
-		return err
-	}
-
-	var previous string
-	if cfg.Volume == nil {
-		previous = "default"
-	} else {
-		previous = fmt.Sprintf("%.2f", *cfg.Volume)
-	}
-
-	cfg.Volume = &v
-	if err := config.WriteConfigFile(afero.NewOsFs(), configPath, cfg); err != nil {
-		return fmt.Errorf("save config: %w", err)
+		cfg.Volume = &v
+		return nil
+	}); err != nil {
+		return fmt.Errorf("failed to update config: %w", err)
 	}
 
 	fmt.Fprintf(cmd.OutOrStdout(), "volume: %s -> %.2f\n", previous, v)
-	slog.Info("volume persisted", "path", configPath, "previous", previous, "value", v)
+	slog.Info("volume persisted", "previous", previous, "value", v)
 	return nil
+}
+
+// describeVolume returns a printable value and a source annotation
+// (env / file / default), shared by `volume` and `status`.
+func describeVolume(cfg *config.Config) (string, string) {
+	// If CLAUDIO_VOLUME is set in the environment, ApplyEnvironmentOverrides
+	// already set cfg.Volume from it — annotate accordingly.
+	if envVol := os.Getenv("CLAUDIO_VOLUME"); envVol != "" {
+		if cfg.Volume != nil {
+			return fmt.Sprintf("%.2f", *cfg.Volume), "from CLAUDIO_VOLUME"
+		}
+	}
+	if cfg.Volume == nil {
+		return "default", "no persisted setting"
+	}
+	return fmt.Sprintf("%.2f", *cfg.Volume), "from config.json"
 }

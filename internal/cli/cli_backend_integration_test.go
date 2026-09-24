@@ -55,7 +55,6 @@ func TestCLIInitializeAudioSystemWithBackend(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cli := NewCLI()
-			cli.initializeSystems()
 
 			// Create test config with specific backend
 			cfg := cli.configManager.GetDefaultConfig()
@@ -98,14 +97,13 @@ func TestCLIInitializeAudioSystemWithBackend(t *testing.T) {
 
 func TestCLIPlaySoundWithBackend(t *testing.T) {
 	cli := NewCLI()
-	cli.initializeSystems()
 
 	// Initialize with oto backend for testing
 	cfg := cli.configManager.GetDefaultConfig()
 	cfg.AudioBackend = "oto"
 
 	// Need to initialize soundpack resolver for playSoundWithBackend to work
-	err := initializeAudioSystem(nil, cli, cfg)
+	err := cli.initializeAudioSystem(cfg)
 	if err != nil {
 		t.Fatalf("failed to initialize audio system: %v", err)
 	}
@@ -146,7 +144,6 @@ func TestCLIBackendFactoryIntegration(t *testing.T) {
 
 func TestCLIBackendLifecycleManagement(t *testing.T) {
 	cli := NewCLI()
-	cli.initializeSystems()
 
 	cfg := cli.configManager.GetDefaultConfig()
 	cfg.AudioBackend = "oto"
@@ -176,7 +173,6 @@ func TestCLIBackendLifecycleManagement(t *testing.T) {
 
 func TestCLIVolumeControlWithBackend(t *testing.T) {
 	cli := NewCLI()
-	cli.initializeSystems()
 
 	cfg := cli.configManager.GetDefaultConfig()
 	cfg.AudioBackend = "oto"
@@ -210,7 +206,6 @@ func TestCLIVolumeControlWithBackend(t *testing.T) {
 
 func TestCLIConfigBackendValidation(t *testing.T) {
 	cli := NewCLI()
-	cli.initializeSystems()
 
 	// Test that config validation includes backend validation
 	cfg := cli.configManager.GetDefaultConfig()
@@ -255,7 +250,6 @@ func getType(v interface{}) string {
 // TestCLIAIFFSupportViaUnifiedSystem verifies AIFF support works through CLI
 func TestCLIAIFFSupportViaUnifiedSystem(t *testing.T) {
 	cli := NewCLI()
-	cli.initializeSystems()
 
 	// Initialize with oto backend for testing
 	cfg := cli.configManager.GetDefaultConfig()

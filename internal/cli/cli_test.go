@@ -467,7 +467,7 @@ func TestCLISilentMode(t *testing.T) {
 	t.Logf("Silent mode output: %s", stdout.String())
 
 	// Closes review finding #57 / Chunk 18 analyst F4: silent mode
-	// disables the audio init path entirely (cli.initializeSystems
+	// disables the audio init path entirely (initializeAudioSystem
 	// only constructs a backend when cfg.Enabled is true; --silent
 	// flips Enabled to false). The meaningful invariant is therefore
 	// *either*:
@@ -793,7 +793,6 @@ func TestHookProcessingLoggingIsolated(t *testing.T) {
 	// This provides more reliable, focused testing of logging behavior
 
 	cli := NewCLI()
-	cli.initializeSystems()
 
 	// Load config with silent mode to avoid audio initialization
 	cfg := cli.configManager.GetDefaultConfig()
@@ -1124,7 +1123,7 @@ func createMinimalWAV() []byte {
 
 // TestVersionFlagAtAnyPosition covers finding #49: the manual args[1]
 // short-circuit only matched when --version was literally args[1]. With
-// rootCmd.Version set and hasVersionFlag scanning all args, the version
+// rootCmd.Version set, cobra handles the flag anywhere in argv, and the version
 // fast path now fires for `claudio --silent --version` too.
 func TestVersionFlagAtAnyPosition(t *testing.T) {
 	testenv.IsolateXDG(t)

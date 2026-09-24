@@ -48,7 +48,7 @@ func GetMissingSounds(db *sql.DB, filter QueryFilter) ([]MissingSound, error) {
 	// requested by several tools and must not inherit an arbitrary context.
 	baseQuery += `
 		GROUP BY pl.path, category, context_tool
-		ORDER BY request_count DESC`
+		ORDER BY request_count DESC, pl.path, category, context_tool`
 
 	// Add limit if specified
 	if filter.Limit > 0 {
@@ -75,18 +75,7 @@ func GetMissingSounds(db *sql.DB, filter QueryFilter) ([]MissingSound, error) {
 
 		// Parse tools string (comma-separated)
 		if toolsStr.Valid && toolsStr.String != "" {
-			// Split the comma-separated tools and deduplicate
-			toolMap := make(map[string]bool)
-			for _, tool := range parseCommaSeparated(toolsStr.String) {
-				if tool != "" {
-					toolMap[tool] = true
-				}
-			}
-
-			// Convert back to slice
-			for tool := range toolMap {
-				sound.Tools = append(sound.Tools, tool)
-			}
+			sound.Tools = sortedUnique(parseCommaSeparated(toolsStr.String))
 		}
 
 		sound.Category = categoryName(category)
@@ -305,7 +294,7 @@ func GetSoundUsage(db *sql.DB, filter QueryFilter) ([]SoundUsage, error) {
 
 	baseQuery += `
 		GROUP BY he.selected_path
-		ORDER BY play_count DESC`
+		ORDER BY play_count DESC, he.selected_path`
 
 	// Apply limit
 	if filter.Limit > 0 {
@@ -403,7 +392,7 @@ func GetToolUsageStats(db *sql.DB, filter QueryFilter) ([]ToolUsageStats, error)
 
 	baseQuery += `
 		GROUP BY JSON_EXTRACT(he.context, '$.ToolName')
-		ORDER BY usage_count DESC`
+		ORDER BY usage_count DESC, tool_name`
 
 	// Apply limit
 	if filter.Limit > 0 {
@@ -432,11 +421,11 @@ func GetToolUsageStats(db *sql.DB, filter QueryFilter) ([]ToolUsageStats, error)
 
 		// Parse categories (comma-separated names), dropping unknown values
 		if categoriesStr.Valid {
-			for _, name := range parseCommaSeparated(categoriesStr.String) {
-				if _, err := hooks.ParseEventCategory(name); err == nil && !slices.Contains(stats.Categories, name) {
-					stats.Categories = append(stats.Categories, name)
-				}
-			}
+			known := slices.DeleteFunc(parseCommaSeparated(categoriesStr.String), func(name string) bool {
+				_, err := hooks.ParseEventCategory(name)
+				return err != nil
+			})
+			stats.Categories = sortedUnique(known)
 		}
 
 		results = append(results, stats)
@@ -483,7 +472,7 @@ func GetChainTypeStatistics(db *sql.DB, filter QueryFilter) ([]ChainTypeStatisti
 
 	baseQuery += `
 		GROUP BY COALESCE(he.chain_type, '')
-		ORDER BY event_count DESC`
+		ORDER BY event_count DESC, chain_type`
 
 	rows, err := db.Query(baseQuery, args...)
 	if err != nil {
@@ -541,7 +530,7 @@ func GetCategoryDistribution(db *sql.DB, filter QueryFilter) ([]CategoryDistribu
 
 	baseQuery += `
 		GROUP BY category
-		ORDER BY count DESC`
+		ORDER BY count DESC, category`
 
 	rows, err := db.Query(baseQuery, args...)
 	if err != nil {
@@ -582,4 +571,15 @@ func GetCategoryDistribution(db *sql.DB, filter QueryFilter) ([]CategoryDistribu
 	}
 
 	return results, nil
+}
+
+// sortedUnique returns the non-empty values of s, sorted and deduplicated.
+// GROUP_CONCAT order is unspecified, so sorting keeps output stable.
+func sortedUnique(s []string) []string {
+	s = slices.DeleteFunc(s, func(v string) bool { return v == "" })
+	if len(s) == 0 {
+		return nil
+	}
+	slices.Sort(s)
+	return slices.Compact(s)
 }

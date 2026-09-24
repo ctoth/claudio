@@ -84,7 +84,6 @@ func validateJSONSoundpackFile(path string) (validateResult, error) {
 	// runtime will load.
 	v, err := soundpack.ValidateJSONSoundpack(path)
 	if err != nil {
-		slog.Error("failed to load JSON soundpack", "path", path, "error", err)
 		return validateResult{}, fmt.Errorf("failed to load JSON soundpack: %w", err)
 	}
 
@@ -92,7 +91,6 @@ func validateJSONSoundpackFile(path string) (validateResult, error) {
 
 	allKeys, err := ExtractAllSoundKeys()
 	if err != nil {
-		slog.Error("failed to extract all sound keys", "error", err)
 		return validateResult{}, fmt.Errorf("failed to extract sound keys: %w", err)
 	}
 
@@ -165,7 +163,6 @@ func validateDirectorySoundpack(dirPath string) (validateResult, error) {
 	// Get all known keys
 	allKeys, err := ExtractAllSoundKeys()
 	if err != nil {
-		slog.Error("failed to extract all sound keys", "error", err)
 		return validateResult{}, fmt.Errorf("failed to extract sound keys: %w", err)
 	}
 

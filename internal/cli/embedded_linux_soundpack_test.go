@@ -53,7 +53,7 @@ func TestInitializeAudioSystemUsesBareEmbeddedLinuxSoundpack(t *testing.T) {
 		Enabled:          false,
 	}
 
-	if err := initializeAudioSystem(cli.rootCmd, cli, cfg); err != nil {
+	if err := cli.initializeAudioSystem(cfg); err != nil {
 		t.Fatalf("initializeAudioSystem returned error: %v", err)
 	}
 	if cli.soundpackResolver == nil {

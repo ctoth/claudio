@@ -50,14 +50,12 @@ func runSoundpackInit(cmd *cobra.Command, name, dir string, fromPlatform bool) e
 
 	// Overwrite protection: fail if file already exists
 	if _, err := os.Stat(outputPath); err == nil {
-		slog.Error("target file already exists", "path", outputPath)
 		return fmt.Errorf("file already exists: %s", outputPath)
 	}
 
 	// Extract all known sound keys from embedded platform JSONs
 	keys, err := ExtractAllSoundKeys()
 	if err != nil {
-		slog.Error("failed to extract sound keys", "error", err)
 		return fmt.Errorf("failed to extract sound keys: %w", err)
 	}
 	slog.Info("extracted sound keys", "count", len(keys))
@@ -102,19 +100,16 @@ func runSoundpackInit(cmd *cobra.Command, name, dir string, fromPlatform bool) e
 	// Marshal to JSON with sorted keys (Go's json.Marshal sorts map keys by default)
 	jsonData, err := json.MarshalIndent(spFile, "", "  ")
 	if err != nil {
-		slog.Error("failed to marshal JSON", "error", err)
 		return fmt.Errorf("failed to marshal JSON: %w", err)
 	}
 
 	// Ensure output directory exists
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		slog.Error("failed to create output directory", "dir", dir, "error", err)
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
 	// Write file
 	if err := os.WriteFile(outputPath, jsonData, 0644); err != nil {
-		slog.Error("failed to write file", "path", outputPath, "error", err)
 		return fmt.Errorf("failed to write file: %w", err)
 	}
 

@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"claudio.click/internal/volume"
 )
 
 // SystemCommandBackend implements AudioBackend using system commands like paplay
@@ -72,20 +74,10 @@ func (scb *SystemCommandBackend) IsPlaying() bool {
 }
 
 // SetVolume sets the volume level (0.0 to 1.0)
-func (scb *SystemCommandBackend) SetVolume(volume float32) error {
-	// NaN evaluates as false for both bounds checks (NaN<0.0 and NaN>1.0
-	// both false), so reject non-finite values BEFORE the range check.
-	// Otherwise NaN/Inf would slip through and reach the subprocess argv
-	// (e.g. 'afplay -v NaN' or 'ffplay -volume <minint>').
-	v64 := float64(volume)
-	if math.IsNaN(v64) || math.IsInf(v64, 0) {
-		err := fmt.Errorf("volume must be a finite float between 0.0 and 1.0; got %v", volume)
-		slog.Error("invalid volume setting", "volume", volume, "error", err)
-		return err
-	}
-	if volume < 0.0 || volume > 1.0 {
-		err := fmt.Errorf("invalid volume level: %f (must be 0.0-1.0)", volume)
-		slog.Error("invalid volume setting", "volume", volume, "error", err)
+func (scb *SystemCommandBackend) SetVolume(v float32) error {
+	// Non-finite values would otherwise reach the player argv
+	// (e.g. 'afplay -v NaN').
+	if err := volume.Validate(float64(v)); err != nil {
 		return err
 	}
 
@@ -97,8 +89,8 @@ func (scb *SystemCommandBackend) SetVolume(volume float32) error {
 	}
 
 	oldVolume := scb.volume
-	scb.volume = volume
-	slog.Debug("volume changed", "old_volume", oldVolume, "new_volume", volume)
+	scb.volume = v
+	slog.Debug("volume changed", "old_volume", oldVolume, "new_volume", v)
 	return nil
 }
 
