@@ -46,25 +46,54 @@ var powerShellSingleQuoteEscaper = strings.NewReplacer(
 	"\u201b", "\u201b\u201b",
 )
 
-// GenerateCodexHookSpecs returns Claudio's desired Codex hooks in the shared
-// Captain Hook representation.
-func GenerateCodexHookSpecs(executablePath string) []captainhook.HookSpec {
-	executablePath = strings.ReplaceAll(executablePath, `\`, "/")
-	command := quoteCommandArg(executablePath)
-	// PowerShell double quotes expand dollar signs and backticks in paths.
-	commandWindows := "& '" + powerShellSingleQuoteEscaper.Replace(executablePath) + "'"
-
-	hooks := AgentCodex.EnabledHooks()
+// GenerateHookSpecs returns the agent's claudio hooks in captain-hook's
+// representation, one spec per enabled hook in registry order.
+func GenerateHookSpecs(executablePath string, agent Agent) ([]captainhook.HookSpec, error) {
+	spec, err := agent.concreteSpec()
+	if err != nil {
+		return nil, err
+	}
+	hooks := agent.EnabledHooks()
 	specs := make([]captainhook.HookSpec, 0, len(hooks))
 	for _, hook := range hooks {
-		specs = append(specs, captainhook.HookSpec{
-			Event:          hook.Name,
-			Matcher:        AgentCodex.Matcher(),
-			Command:        command,
-			CommandWindows: commandWindows,
-		})
+		specs = append(specs, spec.hookSpec(executablePath, hook.Name))
 	}
-	return specs
+	slog.Debug("generated claudio hook specs", "agent", agent, "hook_count", len(specs))
+	return specs, nil
+}
+
+// hookSpec returns the captain-hook spec for one of the agent's events.
+func (s agentSpec) hookSpec(executablePath, event string) captainhook.HookSpec {
+	hs := captainhook.HookSpec{
+		Event:   event,
+		Matcher: s.matcher,
+		Command: s.hookCommand(executablePath, event),
+		Flat:    s.shape == shapeFlatCommands,
+	}
+	if s.powerShellCommand {
+		hs.Command, hs.CommandWindows = powerShellHookCommands(executablePath)
+	}
+	extra := make(map[string]any)
+	if s.commandName != "" {
+		extra["name"] = s.commandName
+	}
+	if s.timeoutSec > 0 {
+		extra["timeoutSec"] = s.timeoutSec
+	}
+	if len(extra) > 0 {
+		hs.Extra = extra
+	}
+	return hs
+}
+
+// powerShellHookCommands returns the portable command and the Windows
+// PowerShell override for an agent that runs hooks through PowerShell on
+// Windows. Both use forward slashes. PowerShell double quotes expand dollar
+// signs and backticks in paths, so the override single-quotes the path.
+func powerShellHookCommands(executablePath string) (command, commandWindows string) {
+	executablePath = strings.ReplaceAll(executablePath, `\`, "/")
+	return quoteCommandArg(executablePath),
+		"& '" + powerShellSingleQuoteEscaper.Replace(executablePath) + "'"
 }
 
 // GenerateClaudioHooksForAgent creates hook configuration for the given agent

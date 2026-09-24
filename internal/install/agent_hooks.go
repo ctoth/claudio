@@ -19,10 +19,14 @@ func InstallAgentHooks(settings *SettingsMap, agent Agent, executablePath string
 		if err != nil {
 			return nil, fmt.Errorf("failed to copy settings: %w", err)
 		}
+		specs, err := GenerateHookSpecs(executablePath, agent)
+		if err != nil {
+			return nil, err
+		}
 		captainSettings := captainhook.SettingsMap(*copied)
 		if err := captainhook.Install(
 			&captainSettings,
-			GenerateCodexHookSpecs(executablePath),
+			specs,
 			captainhook.IdentityFunc(IsClaudioCommandString),
 		); err != nil {
 			return nil, fmt.Errorf("failed to install %s hooks: %w", agent, err)
