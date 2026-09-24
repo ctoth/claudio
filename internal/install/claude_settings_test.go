@@ -1,6 +1,7 @@
 package install
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -538,6 +539,14 @@ func TestFindClaudeSettingsEnvironmentIntegration(t *testing.T) {
 			defer cleanup()
 
 			paths, err := AgentClaude.ConfigPaths(tc.scope)
+			if tc.envVars["HOME"] == "" && runtime.GOOS != "windows" {
+				// USERPROFILE is a Windows-only home source; elsewhere an
+				// empty HOME means there is no home directory at all.
+				if !errors.Is(err, errNoHomeDirectory) {
+					t.Errorf("ConfigPaths error = %v, want errNoHomeDirectory", err)
+				}
+				return
+			}
 			if err != nil {
 				t.Errorf("FindClaudeSettingsPaths failed: %v", err)
 				return
