@@ -50,6 +50,18 @@ func TestIsolateXDG_ReloadsXDG(t *testing.T) {
 	if !strings.HasPrefix(xdg.ConfigHome, root) {
 		t.Errorf("xdg.ConfigHome=%q is not under sandbox root=%q", xdg.ConfigHome, root)
 	}
+	// System dirs (/usr/local/share, /etc/xdg on Linux) must not leak the
+	// host's installed soundpacks or configs into tests.
+	for _, dir := range xdg.DataDirs {
+		if !strings.HasPrefix(dir, root) {
+			t.Errorf("xdg.DataDirs entry %q is not under sandbox root=%q", dir, root)
+		}
+	}
+	for _, dir := range xdg.ConfigDirs {
+		if !strings.HasPrefix(dir, root) {
+			t.Errorf("xdg.ConfigDirs entry %q is not under sandbox root=%q", dir, root)
+		}
+	}
 }
 
 func TestIsolateXDG_TwoCallsGetSeparateRoots(t *testing.T) {
