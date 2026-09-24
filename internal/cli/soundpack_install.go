@@ -137,7 +137,7 @@ func (c *CLI) installSoundpackFiles(cmd *cobra.Command, srcPath, name string, is
 // updateConfigForInstall loads the config, adds the install path, optionally sets default, and saves.
 func (c *CLI) updateConfigForInstall(cmd *cobra.Command, installPath, name string, setDefault bool) error {
 	slog.Debug("updating config for install", "install_path", installPath, "name", name, "set_default", setDefault)
-	return c.mutateConfigForCommand(cmd, func(cfg *config.Config) error {
+	return c.mutateSoundpackConfig(cmd, func(cfg *config.Config) error {
 		pathExists := slices.Contains(cfg.SoundpackPaths, installPath)
 		if !pathExists {
 			cfg.SoundpackPaths = append(cfg.SoundpackPaths, installPath)

@@ -15,6 +15,7 @@ import (
 	"claudio.click/internal/config"
 	"claudio.click/internal/platform"
 	"claudio.click/internal/soundpack"
+	"github.com/spf13/cobra"
 )
 
 // soundpackInfo holds metadata about a discovered soundpack. Used by both
@@ -212,6 +213,45 @@ func discoverXDGSoundpacks() []soundpackInfo {
 	}
 
 	return packs
+}
+
+// mutateSoundpackConfig applies mutate like mutateConfigForCommand, then
+// drops soundpack_paths entries that no longer exist and reports each one.
+// Soundpack commands prune here rather than the hook path, which only skips
+// missing entries: rewriting config belongs to explicit commands.
+func (c *CLI) mutateSoundpackConfig(cmd *cobra.Command, mutate func(*config.Config) error) error {
+	var pruned []string
+	if err := c.mutateConfigForCommand(cmd, func(cfg *config.Config) error {
+		if err := mutate(cfg); err != nil {
+			return err
+		}
+		pruned = pruneMissingSoundpackPaths(cfg)
+		return nil
+	}); err != nil {
+		return err
+	}
+	for _, path := range pruned {
+		cmd.Printf("Removed missing soundpack path from config: %s\n", path)
+	}
+	return nil
+}
+
+// pruneMissingSoundpackPaths removes the soundpack_paths entries that do not
+// exist and returns them. Entries that fail to stat for any other reason,
+// such as permissions, are kept.
+func pruneMissingSoundpackPaths(cfg *config.Config) []string {
+	var pruned []string
+	kept := make([]string, 0, len(cfg.SoundpackPaths))
+	for _, path := range cfg.SoundpackPaths {
+		if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
+			slog.Info("pruning missing soundpack_paths entry", "path", path)
+			pruned = append(pruned, path)
+			continue
+		}
+		kept = append(kept, path)
+	}
+	cfg.SoundpackPaths = kept
+	return pruned
 }
 
 // discoverConfigSoundpacks lists the packs at config soundpack_paths entries.

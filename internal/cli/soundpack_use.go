@@ -37,7 +37,7 @@ func (c *CLI) runSoundpackUse(cmd *cobra.Command, name string) error {
 
 	alreadyActive := false
 	var notFound error
-	if err := c.mutateConfigForCommand(cmd, func(cfg *config.Config) error {
+	if err := c.mutateSoundpackConfig(cmd, func(cfg *config.Config) error {
 		// Validate against the same soundpack_paths the runtime will read,
 		// using the runtime's own lookup.
 		if _, ok := lookupSoundpack(name, cfg.SoundpackPaths); !ok {

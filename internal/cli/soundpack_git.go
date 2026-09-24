@@ -278,7 +278,7 @@ func validateSoundpackInstallPath(playablePath string) error {
 var errNoSoundpackConfigChange = errors.New("soundpack config has no matching entry")
 
 func (c *CLI) updateConfigForManagedGitInstall(cmd *cobra.Command, playablePath, clonePath, name string, setDefault bool) error {
-	return c.mutateConfigForCommand(cmd, func(cfg *config.Config) error {
+	return c.mutateSoundpackConfig(cmd, func(cfg *config.Config) error {
 		filtered := make([]string, 0, len(cfg.SoundpackPaths)+1)
 		for _, existingPath := range cfg.SoundpackPaths {
 			if samePathOrWithin(existingPath, clonePath) {
@@ -297,7 +297,7 @@ func (c *CLI) updateConfigForManagedGitInstall(cmd *cobra.Command, playablePath,
 
 func (c *CLI) removeConfigSoundpackPath(cmd *cobra.Command, playablePath, clonePath, removedName string) (bool, error) {
 	changed := false
-	err := c.mutateConfigForCommand(cmd, func(cfg *config.Config) error {
+	err := c.mutateSoundpackConfig(cmd, func(cfg *config.Config) error {
 		filtered := make([]string, 0, len(cfg.SoundpackPaths))
 		for _, existingPath := range cfg.SoundpackPaths {
 			if samePathOrWithin(existingPath, playablePath) || samePathOrWithin(existingPath, clonePath) {
