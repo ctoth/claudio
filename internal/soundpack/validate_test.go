@@ -75,6 +75,27 @@ func TestValidateJSONSoundpackClassifiesMappings(t *testing.T) {
 	}
 }
 
+// A manifest named relative to the working directory (`claudio soundpack
+// validate pack.json`) must validate like its absolute spelling: the
+// symlink check must not compare a relative resolved path against an
+// absolute root and report a regular file as escaping.
+func TestValidateJSONSoundpackAcceptsRelativeManifestPath(t *testing.T) {
+	packDir := t.TempDir()
+	touch(t, filepath.Join(packDir, "success", "git-success.wav"))
+	writeValidateFixture(t, packDir, map[string]string{
+		"success/git-success.wav": "success/git-success.wav",
+	})
+	t.Chdir(packDir)
+
+	v, err := ValidateJSONSoundpack("soundpack.json")
+	if err != nil {
+		t.Fatalf("ValidateJSONSoundpack: %v", err)
+	}
+	if err := v.Err(); err != nil {
+		t.Fatalf("relative manifest path failed validation: %v (unsafe=%v)", err, v.Unsafe)
+	}
+}
+
 func TestValidateJSONSoundpackCleanPackHasNoError(t *testing.T) {
 	packDir := t.TempDir()
 	touch(t, filepath.Join(packDir, "ok.wav"))
