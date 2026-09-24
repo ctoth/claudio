@@ -9,8 +9,7 @@
               "name": "claudio",
               "type": "command"
             }
-          ],
-          "matcher": ""
+          ]
         }
       ],
       "AfterModel": [
@@ -21,8 +20,7 @@
               "name": "claudio",
               "type": "command"
             }
-          ],
-          "matcher": ""
+          ]
         }
       ],
       "AfterTool": [
@@ -33,8 +31,7 @@
               "name": "claudio",
               "type": "command"
             }
-          ],
-          "matcher": ""
+          ]
         }
       ],
       "BeforeAgent": [
@@ -45,8 +42,7 @@
               "name": "claudio",
               "type": "command"
             }
-          ],
-          "matcher": ""
+          ]
         }
       ],
       "BeforeModel": [
@@ -57,8 +53,7 @@
               "name": "claudio",
               "type": "command"
             }
-          ],
-          "matcher": ""
+          ]
         }
       ],
       "BeforeTool": [
@@ -69,8 +64,7 @@
               "name": "claudio",
               "type": "command"
             }
-          ],
-          "matcher": ""
+          ]
         }
       ],
       "BeforeToolSelection": [
@@ -81,8 +75,7 @@
               "name": "claudio",
               "type": "command"
             }
-          ],
-          "matcher": ""
+          ]
         }
       ],
       "Notification": [
@@ -93,8 +86,7 @@
               "name": "claudio",
               "type": "command"
             }
-          ],
-          "matcher": ""
+          ]
         }
       ],
       "PreCompress": [
@@ -105,8 +97,7 @@
               "name": "claudio",
               "type": "command"
             }
-          ],
-          "matcher": ""
+          ]
         }
       ],
       "SessionEnd": [
@@ -117,8 +108,7 @@
               "name": "claudio",
               "type": "command"
             }
-          ],
-          "matcher": ""
+          ]
         }
       ],
       "SessionStart": [
@@ -129,8 +119,7 @@
               "name": "claudio",
               "type": "command"
             }
-          ],
-          "matcher": ""
+          ]
         }
       ]
     },

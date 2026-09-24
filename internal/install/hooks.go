@@ -1,20 +1,13 @@
 package install
 
 import (
-	"encoding/json"
-	"errors"
-	"fmt"
 	"log/slog"
-	"maps"
 	"os"
 	"path/filepath"
 	"strings"
 
 	captainhook "github.com/ctoth/captain-hook"
 )
-
-// HooksMap represents an agent settings hooks section.
-type HooksMap map[string]any
 
 // executableRecognizer decides whether a basename refers to the claudio
 // executable. Production matches only claudio and claudio.exe. End-to-end
@@ -96,57 +89,6 @@ func powerShellHookCommands(executablePath string) (command, commandWindows stri
 		"& '" + powerShellSingleQuoteEscaper.Replace(executablePath) + "'"
 }
 
-// GenerateClaudioHooksForAgent creates hook configuration for the given agent
-// using its registry and config shape.
-func GenerateClaudioHooksForAgent(executablePath string, agent Agent) (any, error) {
-	spec, err := agent.concreteSpec()
-	if err != nil {
-		return nil, err
-	}
-	enabledHooks := agent.EnabledHooks()
-
-	hooks := make(HooksMap)
-
-	// Helper function to create hook config structure
-	createHookConfig := func(hookDef HookDefinition) any {
-		commandConfig := map[string]any{
-			"type":    "command",
-			"command": spec.hookCommand(executablePath, hookDef.Name),
-		}
-		if spec.commandName != "" {
-			commandConfig["name"] = spec.commandName
-		}
-		if spec.timeoutSec > 0 {
-			commandConfig["timeoutSec"] = spec.timeoutSec
-		}
-
-		if spec.shape == shapeFlatCommands {
-			return []any{commandConfig}
-		}
-
-		return []any{
-			map[string]any{
-				"matcher": spec.matcher,
-				"hooks": []any{
-					commandConfig,
-				},
-			},
-		}
-	}
-
-	// Generate hooks for all enabled hooks in the agent's registry
-	for _, hookDef := range enabledHooks {
-		hooks[hookDef.Name] = createHookConfig(hookDef)
-	}
-
-	slog.Info("generated Claudio hooks configuration",
-		"agent", agent,
-		"hook_count", len(hooks),
-		"hooks", getHookNamesList(hooks))
-
-	return hooks, nil
-}
-
 // hookCommand returns the command string the agent runs for hookName.
 func (s agentSpec) hookCommand(executablePath, hookName string) string {
 	if !s.hookAgentFlag {
@@ -166,164 +108,10 @@ func quoteCommandArg(arg string) string {
 	return `"` + strings.ReplaceAll(arg, `"`, `\"`) + `"`
 }
 
-// getHookNamesList returns a list of hook names for logging
-func getHookNamesList(hooks HooksMap) []string {
-	names := make([]string, 0, len(hooks))
-	for name := range hooks {
-		names = append(names, name)
-	}
-	return names
-}
-
-// MergeHooksIntoSettings merges Claudio hooks into existing Claude Code settings
-// Creates a deep copy of existing settings and safely merges hooks without modifying originals
-// Preserves existing non-Claudio hooks and all other settings
-func MergeHooksIntoSettings(existingSettings *SettingsMap, claudioHooks any) (*SettingsMap, error) {
-	// Validate inputs
-	if existingSettings == nil {
-		return nil, errors.New("settings cannot be nil")
-	}
-
-	if claudioHooks == nil {
-		return nil, errors.New("hooks cannot be nil")
-	}
-
-	// Validate Claudio hooks type
-	claudioHooksMap, ok := claudioHooks.(HooksMap)
-	if !ok {
-		// Try to convert from map[string]interface{}
-		if genericMap, isGeneric := claudioHooks.(map[string]any); isGeneric {
-			claudioHooksMap = HooksMap(genericMap)
-		} else {
-			return nil, fmt.Errorf("invalid hooks type: expected map[string]interface{}, got %T", claudioHooks)
-		}
-	}
-
-	// Create deep copy of existing settings using JSON round-trip
-	settingsCopy, err := deepCopySettings(existingSettings)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create deep copy of settings: %w", err)
-	}
-
-	// Get or create hooks section in the copy
-	var existingHooks HooksMap
-	if hooksInterface, exists := (*settingsCopy)["hooks"]; exists {
-		// Validate existing hooks type
-		if hooksMap, ok := hooksInterface.(map[string]any); ok {
-			existingHooks = HooksMap(hooksMap)
-		} else {
-			return nil, fmt.Errorf("existing hooks invalid: expected map[string]interface{}, got %T", hooksInterface)
-		}
-	} else {
-		// Create new hooks section
-		existingHooks = make(HooksMap)
-	}
-
-	// Merge Claudio hooks into existing hooks
-	// This preserves existing hooks while adding/updating Claudio hooks
-	mergedHooks := make(HooksMap)
-
-	// First, copy all existing hooks
-	maps.Copy(mergedHooks, existingHooks)
-
-	// Then, add/update Claudio hooks with strip-and-replace merging.
-	// mergeHookValues now handles both cases uniformly: it strips any
-	// pre-existing Claudio entries from the existing array and appends the
-	// new Claudio entries. This preserves the user's non-Claudio entries
-	// regardless of ordering and is idempotent across repeated merges.
-	for hookName, claudioValue := range claudioHooksMap {
-		if existingValue, exists := mergedHooks[hookName]; exists {
-			merged, err := mergeHookValues(existingValue, claudioValue)
-			if err != nil {
-				return nil, fmt.Errorf("hook %s: %w", hookName, err)
-			}
-			mergedHooks[hookName] = merged
-			slog.Debug("merged existing hook with Claudio (strip-and-replace)",
-				"hook_name", hookName)
-		} else {
-			// No conflict - add new Claudio hook
-			mergedHooks[hookName] = claudioValue
-		}
-	}
-
-	// Update the hooks section in the settings copy
-	(*settingsCopy)["hooks"] = map[string]any(mergedHooks)
-
-	slog.Info("completed hook merge",
-		"total_hooks", len(mergedHooks),
-		"claudio_hooks_merged", len(claudioHooksMap))
-
-	return settingsCopy, nil
-}
-
-// deepCopySettings creates a deep copy of settings using JSON round-trip
-// This ensures that modifications to the copy don't affect the original
-func deepCopySettings(original *SettingsMap) (*SettingsMap, error) {
-	// Marshal to JSON
-	jsonData, err := json.Marshal(original)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal original settings: %w", err)
-	}
-
-	// Unmarshal to new copy
-	var copy SettingsMap
-	err = json.Unmarshal(jsonData, &copy)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal settings copy: %w", err)
-	}
-
-	return &copy, nil
-}
-
-// mergeHookValues merges an existing hook value with a Claudio hook value.
-// It strips any pre-existing claudio entries (stripClaudioEntries, the same
-// engine uninstall uses) and appends the new claudio entries, so the merge
-// is idempotent regardless of element ordering and never touches the
-// user's own entries. A legacy string value is converted to one matcher
-// group first.
-//
-// An existing value that is neither a string nor an array is an error: it
-// is not a hook shape claudio understands, so it must not be rewritten.
-func mergeHookValues(existingValue, claudioValue any) (any, error) {
-	claudioArray, ok := claudioValue.([]any)
-	if !ok {
-		return nil, fmt.Errorf("claudio hook value must be an array, got %T", claudioValue)
-	}
-
-	var existingArray []any
-	switch v := existingValue.(type) {
-	case string:
-		existingArray = []any{
-			map[string]any{
-				"matcher": ".*",
-				"hooks": []any{
-					map[string]any{
-						"type":    "command",
-						"command": v,
-					},
-				},
-			},
-		}
-	case []any:
-		existingArray = v
-	default:
-		return nil, fmt.Errorf("unsupported existing hook value: expected a string or an array, got %T", existingValue)
-	}
-
-	kept, _ := stripClaudioEntries(existingArray)
-	merged := make([]any, 0, len(kept)+len(claudioArray))
-	merged = append(merged, kept...)
-	merged = append(merged, claudioArray...)
-
-	return merged, nil
-}
-
 // IsClaudioCommandString reports whether a command string refers to the
-// claudio executable. Shared between IsClaudioHook, the merge filter,
-// and the uninstall package's hook detection so the three predicates
-// cannot drift apart. (Chunk 3 analyst F1: previously install and
-// uninstall maintained two recognizers with divergent code shapes;
-// they happened to agree on production inputs only by accident.)
+// claudio executable. It is the identity captain-hook uses to find
+// claudio's commands, so install, uninstall and detection all share one
+// recognizer.
 func IsClaudioCommandString(cmdStr string) bool {
 	cmdStr = strings.TrimSpace(cmdStr)
 	if cmdStr == "" {

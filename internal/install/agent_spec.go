@@ -44,8 +44,6 @@ type agentSpec struct {
 	// timeoutSec is written as the command entry's "timeoutSec" when > 0.
 	timeoutSec int
 
-	// captainHook routes install/uninstall through the captain-hook module.
-	captainHook bool
 	// powerShellCommand writes a forward-slash, quoted command plus a
 	// PowerShell commandWindows override (Codex runs hooks through
 	// PowerShell on Windows).
@@ -76,7 +74,6 @@ var agentSpecs = []agentSpec{
 		homeDir:           ".codex",
 		globalFile:        "hooks.json",
 		projectPaths:      []string{filepath.Join(".codex", "hooks.json")},
-		captainHook:       true,
 		powerShellCommand: true,
 		trustHint:         "Run /hooks in Codex to trust the claudio hook.",
 	},
