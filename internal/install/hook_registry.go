@@ -267,3 +267,25 @@ var CopilotHooks = []HookDefinition{
 	{Name: "PermissionRequest", Category: hooks.Interactive, Description: "Play sounds for Copilot permission requests", DefaultEnabled: true},
 	{Name: "ErrorOccurred", Category: hooks.Error, Description: "Play sounds for Copilot execution errors", DefaultEnabled: true},
 }
+
+// CommandCodeHooks are the events Command Code's settings.json hooks support.
+// Its payloads are Claude Code shaped, so no hook-agent flag is needed.
+var CommandCodeHooks = []HookDefinition{
+	{Name: "PreToolUse", Category: hooks.Loading, Description: "Play loading sounds before Command Code tool execution", DefaultEnabled: true},
+	{Name: "PostToolUse", Category: hooks.Success, Description: "Play success/error sounds after Command Code tool execution", DefaultEnabled: true},
+	{Name: "Stop", Category: hooks.Completion, Description: "Play sounds when Command Code finishes responding", DefaultEnabled: true},
+	{Name: "SessionStart", Category: hooks.System, Description: "Play sounds when a Command Code session starts or resumes", DefaultEnabled: true},
+}
+
+// OpenCodeHooks are the Claude Code event names the OpenCode plugin sends.
+// OpenCode has no settings hooks; the plugin maps its own events to these.
+var OpenCodeHooks = []HookDefinition{
+	{Name: "SessionStart", Category: hooks.System, Description: "Play sounds when an OpenCode session is created", DefaultEnabled: true},
+	{Name: "UserPromptSubmit", Category: hooks.Interactive, Description: "Play interaction sounds when user submits prompts", DefaultEnabled: true},
+	{Name: "PreToolUse", Category: hooks.Loading, Description: "Play loading sounds before OpenCode tool execution", DefaultEnabled: true},
+	{Name: "PostToolUse", Category: hooks.Success, Description: "Play success/error sounds after OpenCode tool execution", DefaultEnabled: true},
+	{Name: "PermissionRequest", Category: hooks.Interactive, Description: "Play sounds for OpenCode permission requests", DefaultEnabled: true},
+	{Name: "PostCompact", Category: hooks.System, Description: "Play sounds after OpenCode context compaction", DefaultEnabled: true},
+	{Name: "Stop", Category: hooks.Completion, Description: "Play sounds when OpenCode goes idle", DefaultEnabled: true},
+	{Name: "StopFailure", Category: hooks.Error, Description: "Play error sounds when an OpenCode session errors", DefaultEnabled: true},
+}

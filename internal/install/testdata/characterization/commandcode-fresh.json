@@ -1,0 +1,56 @@
+{
+  "installed": {
+    "hooks": {
+      "PostToolUse": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "type": "command"
+            }
+          ]
+        }
+      ],
+      "PreToolUse": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "type": "command"
+            }
+          ]
+        }
+      ],
+      "SessionStart": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "type": "command"
+            }
+          ]
+        }
+      ],
+      "Stop": [
+        {
+          "hooks": [
+            {
+              "command": "/usr/local/bin/claudio",
+              "type": "command"
+            }
+          ]
+        }
+      ]
+    },
+    "theme": "dark"
+  },
+  "removed": {
+    "theme": "dark"
+  },
+  "removedNames": [
+    "PostToolUse",
+    "PreToolUse",
+    "SessionStart",
+    "Stop"
+  ]
+}

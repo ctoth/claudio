@@ -37,7 +37,7 @@ func TestParseAgentInvalid(t *testing.T) {
 
 func TestConcreteAgents(t *testing.T) {
 	got := ConcreteAgents()
-	want := []Agent{AgentClaude, AgentCodex, AgentGemini, AgentQwen, AgentCopilot}
+	want := []Agent{AgentClaude, AgentCodex, AgentGemini, AgentQwen, AgentCopilot, AgentCommandCode, AgentOpenCode}
 	if len(got) != len(want) {
 		t.Fatalf("ConcreteAgents() length = %d, want %d", len(got), len(want))
 	}

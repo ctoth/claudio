@@ -79,7 +79,8 @@ claudio install
 ```
 
 This is the default: `--agent auto --scope global`. An agent counts as
-detected when its command (`claude`, `codex`, `gemini`, `qwen`, or `copilot`)
+detected when its command (`claude`, `codex`, `gemini`, `qwen`, `copilot`,
+`commandcode`, or `opencode`)
 is on `PATH`, its settings directory exists, or its settings file already
 contains Claudio hooks. Every detected agent gets its hook set. If nothing is
 detected, the command fails and asks you to pick an agent with `--agent`.
@@ -198,6 +199,50 @@ Project scope writes `./.github/copilot/settings.local.json`. If that file
 does not exist but `./.github/copilot/settings.json` does, Claudio writes to the
 existing file instead.
 
+## Command Code Hooks
+
+Install global Command Code hooks:
+
+```bash
+claudio install --agent commandcode --scope global
+```
+
+Install hooks only for the current project:
+
+```bash
+claudio install --agent commandcode --scope project
+```
+
+Global scope writes `~/.commandcode/settings.json`. Project scope writes
+`./.commandcode/settings.json`. Command Code supports `PreToolUse`,
+`PostToolUse`, `Stop`, and `SessionStart`; Claudio installs all four without a
+matcher, because Command Code never fires a `Stop` or `SessionStart` group
+that has one. Restart Command Code after installing. Non-interactive
+`commandcode -p` runs do not fire `SessionStart`.
+
+## OpenCode Plugin
+
+OpenCode has no settings hooks, so Claudio installs a small JavaScript
+plugin instead:
+
+```bash
+claudio install --agent opencode --scope global
+claudio install --agent opencode --scope project
+```
+
+Global scope writes `~/.config/opencode/plugins/claudio.js`, or
+`$OPENCODE_CONFIG_DIR/plugins/claudio.js` when `OPENCODE_CONFIG_DIR` is set.
+Project scope writes `./.opencode/plugins/claudio.js`. The plugin maps
+OpenCode events to Claude Code hook events and pipes them to Claudio:
+`session.created` becomes `SessionStart` (or `SubagentStart` for a child
+session), `chat.message` becomes `UserPromptSubmit`, `tool.execute.before` and
+`tool.execute.after` become `PreToolUse` and `PostToolUse` (a non-zero bash
+exit plays the error sound), `permission.asked` becomes `PermissionRequest`,
+`session.compacted` becomes `PostCompact`, `session.idle` becomes `Stop` (or
+`SubagentStop`), and `session.error` becomes `StopFailure`. When both a global
+and a project plugin are installed, only one plays. Uninstall deletes the file
+only if Claudio wrote it. Restart OpenCode after installing.
+
 ## Inspect Before Writing
 
 Dry run, which prints the target settings path and the hooks that would be
@@ -210,6 +255,8 @@ claudio install --agent codex --scope global --dry-run
 claudio install --agent gemini --scope global --dry-run
 claudio install --agent qwen --scope global --dry-run
 claudio install --agent copilot --scope global --dry-run
+claudio install --agent commandcode --scope global --dry-run
+claudio install --agent opencode --scope global --dry-run
 ```
 
 Print only the target agent and settings path:

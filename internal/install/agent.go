@@ -16,6 +16,9 @@ const (
 	AgentGemini  Agent = "gemini"
 	AgentQwen    Agent = "qwen"
 	AgentCopilot Agent = "copilot"
+	// AgentCommandCode is named after Command Code's "commandcode" binary.
+	AgentCommandCode Agent = "commandcode"
+	AgentOpenCode    Agent = "opencode"
 )
 
 const (
@@ -30,7 +33,7 @@ func ParseAgent(s string) (Agent, error) {
 	if agent == AgentAuto || agent == AgentAll || agent.IsConcrete() {
 		return agent, nil
 	}
-	return "", fmt.Errorf("invalid agent '%s': must be 'auto', 'claude', 'codex', 'gemini', 'qwen', 'copilot', or 'all'", s)
+	return "", fmt.Errorf("invalid agent '%s': must be 'auto', 'claude', 'codex', 'gemini', 'qwen', 'copilot', 'commandcode', 'opencode', or 'all'", s)
 }
 
 // String returns the agent's string form.

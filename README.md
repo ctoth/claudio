@@ -1,8 +1,8 @@
 # Claudio
 
 Claudio is a hook-driven audio layer for coding agents. It listens to hook
-events from Claude Code, OpenAI Codex CLI, Gemini CLI, Qwen Code, and GitHub
-Copilot CLI, maps the event to a contextual sound, and plays that sound without
+events from Claude Code, OpenAI Codex CLI, Gemini CLI, Qwen Code, GitHub Copilot CLI,
+Command Code, and OpenCode, maps the event to a contextual sound, and plays that sound without
 making the agent wait for playback.
 
 It can play different sounds for tool starts, tool successes, tool failures,
@@ -36,7 +36,8 @@ claudio install
 ```
 
 `claudio install` uses `--agent auto --scope global` by default. It detects
-Claude Code, Codex CLI, Gemini CLI, Qwen Code, and GitHub Copilot CLI, then
+Claude Code, Codex CLI, Gemini CLI, Qwen Code, GitHub Copilot CLI, Command
+Code, and OpenCode, then
 installs hooks for the agents it finds. To force a single agent:
 
 ```bash
@@ -45,10 +46,13 @@ claudio install --agent codex --scope global
 claudio install --agent gemini --scope global
 claudio install --agent qwen --scope global
 claudio install --agent copilot --scope global
+claudio install --agent commandcode --scope global
+claudio install --agent opencode --scope global
 ```
 
 After Codex hook installation, run `/hooks` in Codex and trust the Claudio
-hook. Use `--scope project` instead of `--scope global` when you want hooks only
+hook. OpenCode has no settings hooks, so `--agent opencode` writes a small
+plugin to `~/.config/opencode/plugins/claudio.js` instead. Use `--scope project` instead of `--scope global` when you want hooks only
 for the current repository. For Claude Code, a global install writes to
 `$CLAUDE_CONFIG_DIR/settings.json` when that variable is set, and to
 `~/.claude/settings.json` otherwise.
