@@ -1,0 +1,78 @@
+{
+  "installed": {
+    "hooks": {
+      "PostToolUse": [
+        {
+          "hooks": [
+            {
+              "command": "C:/Program Files/claudio/claudio.exe",
+              "type": "command"
+            }
+          ]
+        }
+      ],
+      "PreToolUse": [
+        {
+          "hooks": [
+            {
+              "command": "echo user",
+              "type": "command"
+            }
+          ],
+          "matcher": "Bash"
+        },
+        {
+          "hooks": [
+            {
+              "command": "C:/Program Files/claudio/claudio.exe",
+              "type": "command"
+            }
+          ]
+        }
+      ],
+      "SessionStart": [
+        {
+          "hooks": [
+            {
+              "command": "C:/Program Files/claudio/claudio.exe",
+              "type": "command"
+            }
+          ]
+        }
+      ],
+      "Stop": [
+        {
+          "hooks": [
+            {
+              "command": "C:/Program Files/claudio/claudio.exe",
+              "type": "command"
+            }
+          ]
+        }
+      ]
+    },
+    "theme": "dark"
+  },
+  "removed": {
+    "hooks": {
+      "PreToolUse": [
+        {
+          "hooks": [
+            {
+              "command": "echo user",
+              "type": "command"
+            }
+          ],
+          "matcher": "Bash"
+        }
+      ]
+    },
+    "theme": "dark"
+  },
+  "removedNames": [
+    "PostToolUse",
+    "PreToolUse",
+    "SessionStart",
+    "Stop"
+  ]
+}

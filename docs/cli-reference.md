@@ -46,8 +46,8 @@ A payload that is not valid JSON or lacks a required field exits with code `1`.
 
 ## `claudio install`
 
-Installs hooks for Claude Code, Codex CLI, Gemini CLI, Qwen Code, or GitHub
-Copilot CLI.
+Installs hooks for Claude Code, Codex CLI, Gemini CLI, Qwen Code, GitHub
+Copilot CLI, or Command Code, or the OpenCode plugin.
 
 ```bash
 claudio install [flags]
@@ -57,7 +57,7 @@ Flags:
 
 | Flag | Default | Meaning |
 | --- | --- | --- |
-| `--agent`, `-a` | `auto` | `auto`, `all`, `claude`, `codex`, `gemini`, `qwen`, or `copilot`. |
+| `--agent`, `-a` | `auto` | `auto`, `all`, `claude`, `codex`, `gemini`, `qwen`, `copilot`, `commandcode`, or `opencode`. |
 | `--scope`, `-s` | `global` | `global` or `project`. |
 | `--dry-run`, `-d` | false | Show what would happen without writing. |
 | `--print`, `-p` | false | Print the mode, scope, target agent, and settings path. |
@@ -89,8 +89,8 @@ Codex users must trust the hook with `/hooks` after installation.
 
 ## `claudio uninstall`
 
-Removes Claudio hooks for Claude Code, Codex CLI, Gemini CLI, Qwen Code, or
-GitHub Copilot CLI.
+Removes Claudio hooks for Claude Code, Codex CLI, Gemini CLI, Qwen Code,
+GitHub Copilot CLI, or Command Code, or the OpenCode plugin.
 
 ```bash
 claudio uninstall [flags]
@@ -100,7 +100,7 @@ Flags match `install`:
 
 | Flag | Default | Meaning |
 | --- | --- | --- |
-| `--agent`, `-a` | `auto` | `auto`, `all`, `claude`, `codex`, `gemini`, `qwen`, or `copilot`. |
+| `--agent`, `-a` | `auto` | `auto`, `all`, `claude`, `codex`, `gemini`, `qwen`, `copilot`, `commandcode`, or `opencode`. |
 | `--scope`, `-s` | `global` | `global` or `project`. |
 | `--dry-run`, `-d` | false | Show what would be removed. |
 | `--print`, `-p` | false | Print the mode, scope, target agent, and settings path. |

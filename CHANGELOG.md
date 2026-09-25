@@ -5,6 +5,16 @@ release tags and current checkout history.
 
 ## Unreleased
 
+### Added
+- `claudio install --agent commandcode` installs hooks into Command Code's
+  `settings.json` (`PreToolUse`, `PostToolUse`, `Stop`, `SessionStart`).
+  Command Code's `shell_command` tool and its separate `args` list are
+  parsed like Bash, so `git commit` still gets its own sound.
+- `claudio install --agent opencode` writes an OpenCode plugin that forwards
+  session, prompt, tool, permission, compaction, idle, error and subagent
+  events to Claudio. A global and a project plugin never play twice, and
+  uninstall only deletes a plugin Claudio wrote.
+
 ### Changed
 - Replaced the malgo (miniaudio) backend with Oto. Native playback no longer
   needs cgo or a C compiler on any platform, and release binaries are built

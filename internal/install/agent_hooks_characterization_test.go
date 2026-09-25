@@ -80,6 +80,9 @@ func canonicalJSON(t *testing.T, v any) []byte {
 // the starting settings minus claudio together with the removed events.
 func TestAgentHooksCharacterization(t *testing.T) {
 	for _, agent := range ConcreteAgents() {
+		if agent.UsesPluginFile() {
+			continue // covered by TestOpenCodePlugin
+		}
 		for _, tc := range characterizationCases {
 			t.Run(string(agent)+"/"+tc.name, func(t *testing.T) {
 				start := tc.settings(agent)

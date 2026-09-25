@@ -58,6 +58,12 @@ func runUninstallCommand(cmd *cobra.Command, flags *hookTargetFlags) error {
 
 // claudioHooksIn lists the claudio hook names in the target's settings.
 func claudioHooksIn(target install.AgentTarget) ([]string, error) {
+	if target.Agent.UsesPluginFile() {
+		if install.HasOpenCodePlugin(target.ConfigPath) {
+			return target.Agent.HookNames(), nil
+		}
+		return nil, nil
+	}
 	settings, err := install.ReadSettingsFile(afero.NewOsFs(), target.ConfigPath)
 	if err != nil {
 		return nil, err

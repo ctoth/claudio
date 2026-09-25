@@ -1,8 +1,8 @@
 ---
 layout: default
 title: "Claudio"
-description: "Hook-based audio feedback for Claude Code, OpenAI Codex CLI, Gemini CLI, Qwen Code, and GitHub Copilot CLI."
-keywords: "Claude Code, Codex CLI, Gemini CLI, Qwen Code, GitHub Copilot CLI, hooks, audio feedback, soundpacks, developer tools"
+description: "Hook-based audio feedback for Claude Code, OpenAI Codex CLI, Gemini CLI, Qwen Code, GitHub Copilot CLI, Command Code, and OpenCode."
+keywords: "Claude Code, Codex CLI, Gemini CLI, Qwen Code, GitHub Copilot CLI, Command Code, OpenCode, hooks, audio feedback, soundpacks, developer tools"
 canonical_url: "https://claudio.click"
 ---
 
@@ -31,7 +31,8 @@ claudio status
 ```
 
 `claudio install` uses `--agent auto --scope global` by default. It detects
-Claude Code, Codex CLI, Gemini CLI, Qwen Code, and GitHub Copilot CLI, then
+Claude Code, Codex CLI, Gemini CLI, Qwen Code, GitHub Copilot CLI, Command
+Code, and OpenCode, then
 installs hooks for the agents it finds.
 
 For Codex, trust the hook after installation:
@@ -52,6 +53,8 @@ and preserves non-Claudio hooks.
 | Gemini | `claudio install --agent gemini` | `~/.gemini/settings.json` | `./.gemini/settings.json` |
 | Qwen Code | `claudio install --agent qwen` | `~/.qwen/settings.json` | `./.qwen/settings.json` |
 | GitHub Copilot CLI | `claudio install --agent copilot` | `~/.copilot/settings.json` | `./.github/copilot/settings.local.json` |
+| Command Code | `claudio install --agent commandcode` | `~/.commandcode/settings.json` | `./.commandcode/settings.json` |
+| OpenCode (plugin file) | `claudio install --agent opencode` | `$OPENCODE_CONFIG_DIR/plugins/claudio.js` or `~/.config/opencode/plugins/claudio.js` | `./.opencode/plugins/claudio.js` |
 
 Antigravity support is command-artifact only:
 
@@ -157,6 +160,17 @@ GitHub Copilot CLI installs these default-enabled hooks:
 - `Notification`
 - `PermissionRequest`
 - `ErrorOccurred`
+
+Command Code installs these default-enabled hooks:
+
+- `PreToolUse`
+- `PostToolUse`
+- `Stop`
+- `SessionStart`
+
+The OpenCode plugin sends `SessionStart`, `UserPromptSubmit`, `PreToolUse`,
+`PostToolUse`, `PermissionRequest`, `PostCompact`, `Stop`, `StopFailure`,
+`SubagentStart`, and `SubagentStop`.
 
 ## How Sound Selection Works
 

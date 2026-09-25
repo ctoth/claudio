@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/afero"
 )
 
-const NoSupportedAgentsDetectedMessage = "No supported agents detected. Install Claude Code, Codex CLI, Gemini CLI, Qwen Code, or GitHub Copilot CLI, or rerun with --agent claude, --agent codex, --agent gemini, --agent qwen, --agent copilot, or --agent all."
+const NoSupportedAgentsDetectedMessage = "No supported agents detected. Install Claude Code, Codex CLI, Gemini CLI, Qwen Code, GitHub Copilot CLI, Command Code, or OpenCode, or rerun with --agent claude, --agent codex, --agent gemini, --agent qwen, --agent copilot, --agent commandcode, --agent opencode, or --agent all."
 
 // AgentTarget is one concrete agent config file selected for install or uninstall.
 type AgentTarget struct {
@@ -124,6 +124,12 @@ func hasExistingClaudioHooks(agent Agent, scope string) bool {
 	}
 	fsys := afero.NewOsFs()
 	for _, path := range paths {
+		if agent.UsesPluginFile() {
+			if HasOpenCodePlugin(path) {
+				return true
+			}
+			continue
+		}
 		if !pathExists(path) {
 			continue
 		}

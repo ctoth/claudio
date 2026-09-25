@@ -13,6 +13,9 @@ import (
 func RunUninstallWorkflow(filesystem afero.Fs, target AgentTarget) error {
 	settingsPath := target.ConfigPath
 	slog.Info("starting Claudio uninstall workflow", "agent", target.Agent, "settings_path", settingsPath)
+	if target.Agent.UsesPluginFile() {
+		return RemoveOpenCodePlugin(settingsPath)
+	}
 
 	exists, err := afero.Exists(filesystem, settingsPath)
 	if err != nil {

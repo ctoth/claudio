@@ -30,7 +30,7 @@ type hookTargetHelp struct {
 func (f *hookTargetFlags) register(cmd *cobra.Command, help hookTargetHelp) {
 	flags := cmd.Flags()
 	flags.StringVarP(&f.scope, "scope", "s", install.ScopeGlobal, help.scope+": 'global' for user-wide settings, 'project' for project-specific settings")
-	flags.StringVarP(&f.agent, "agent", "a", string(install.AgentAuto), "Target agent: 'auto', 'claude', 'codex', 'gemini', 'qwen', 'copilot', or 'all'")
+	flags.StringVarP(&f.agent, "agent", "a", string(install.AgentAuto), "Target agent: 'auto', 'claude', 'codex', 'gemini', 'qwen', 'copilot', 'commandcode', 'opencode', or 'all'")
 	flags.BoolVarP(&f.dryRun, "dry-run", "d", false, help.dryRun)
 	flags.BoolVarP(&f.quiet, "quiet", "q", false, "Suppress output (no progress messages)")
 	flags.BoolVarP(&f.print, "print", "p", false, help.print)
