@@ -84,6 +84,21 @@ func TestUninstallCommandDefaultsToClaude(t *testing.T) {
 	}
 }
 
+func TestOpenCodeUninstallReportsNoPlugin(t *testing.T) {
+	t.Setenv("OPENCODE_CONFIG_DIR", t.TempDir())
+	cmd := newUninstallCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"--agent", "opencode"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "No claudio hooks found to remove") {
+		t.Fatalf("misleading uninstall output: %s", out.String())
+	}
+}
+
 func addFakeUninstallAgentBinary(t *testing.T, dir string, name string) {
 	t.Helper()
 	if runtime.GOOS == "windows" {

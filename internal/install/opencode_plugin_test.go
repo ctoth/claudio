@@ -2,12 +2,53 @@ package install
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/spf13/afero"
 )
+
+func TestOpenCodePluginProjectPrecedence(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node is needed to execute the generated plugin")
+	}
+	root := t.TempDir()
+	global := filepath.Join(root, "global", "claudio.js")
+	project := filepath.Join(root, "repo", ".opencode", "plugins", "claudio.js")
+	for _, path := range []string{global, project} {
+		if err := WriteOpenCodePlugin(path, "claudio"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(root, "package.json"), []byte(`{"type":"module"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	worktree := filepath.Join(root, "repo")
+	directory := filepath.Join(worktree, "sub")
+	if err := os.MkdirAll(directory, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	script := `import { pathToFileURL } from "node:url";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+const [globalPath, projectPath, directory, worktree] = process.argv.slice(1);
+const load = async (path) => (await import(pathToFileURL(path))).ClaudioPlugin({ directory, worktree });
+const active = (hooks) => Object.keys(hooks).length > 0;
+if (active(await load(globalPath)) || !active(await load(projectPath))) throw Error("project copy must win from subdirectory");
+writeFileSync(projectPath, "export const Mine = () => ({});\n");
+const outside = join(dirname(worktree), ".opencode", "plugins", "claudio.js");
+mkdirSync(dirname(outside), { recursive: true });
+writeFileSync(outside, readFileSync(globalPath));
+if (!active(await load(globalPath))) throw Error("foreign project file silenced global plugin");
+`
+	output, err := exec.Command(node, "--input-type=module", "-e", script, global, project, directory, worktree).CombinedOutput()
+	if err != nil {
+		t.Fatalf("generated plugin check: %v\n%s", err, output)
+	}
+}
 
 // TestOpenCodePluginDetectionAndUninstallWorkflow covers the plugin branches
 // of auto-detection and the uninstall workflow, using OPENCODE_CONFIG_DIR.
@@ -91,7 +132,7 @@ func TestOpenCodePluginTemplateGuards(t *testing.T) {
 	// decided on every load.
 	for _, want := range []string{
 		`".opencode", "plugins", "claudio.js"`,
-		"existsSync(projectPlugin)",
+		"readFileSync(projectPlugin",
 		"fileURLToPath(import.meta.url)",
 	} {
 		if !strings.Contains(source, want) {

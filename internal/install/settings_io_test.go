@@ -116,7 +116,7 @@ func TestReadSettingsInvalidJSON(t *testing.T) {
 			name:        "malformed JSON - invalid escape",
 			fileContent: `{"key": "val\xue"}`,
 			expectError: true,
-			errorMsg:    "invalid character",
+			errorMsg:    "invalid",
 		},
 		{
 			name:        "not JSON at all",

@@ -198,6 +198,11 @@ func (s agentSpec) configDir() (string, error) {
 			return dir, nil
 		}
 	}
+	if s.agent == AgentOpenCode {
+		if dir := strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME")); dir != "" {
+			return filepath.Join(dir, "opencode"), nil
+		}
+	}
 	home, err := HomeDir()
 	if err != nil {
 		return "", err

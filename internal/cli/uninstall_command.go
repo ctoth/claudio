@@ -72,7 +72,11 @@ func claudioHooksIn(target install.AgentTarget) ([]string, error) {
 }
 
 func runUninstallTargets(cmd *cobra.Command, flags *hookTargetFlags, scope string, targets []install.AgentTarget) error {
+	removed := false
 	err := flags.applyToTargets(cmd, "Uninstalling", scope, targets, func(target install.AgentTarget) error {
+		if !target.Agent.UsesPluginFile() || install.HasOpenCodePlugin(target.ConfigPath) {
+			removed = true
+		}
 		if err := install.RunUninstallWorkflow(afero.NewOsFs(), target); err != nil {
 			return fmt.Errorf("uninstall failed for %s: %w", target.Agent, err)
 		}
@@ -80,6 +84,10 @@ func runUninstallTargets(cmd *cobra.Command, flags *hookTargetFlags, scope strin
 	})
 	if err != nil {
 		return err
+	}
+	if !removed {
+		cmd.Printf("No claudio hooks found to remove.\n")
+		return nil
 	}
 
 	if flags.quiet {

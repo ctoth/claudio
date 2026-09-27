@@ -20,8 +20,8 @@ const openCodePluginMarker = "// claudio OpenCode plugin: written by `claudio in
 // Claude Code shaped hook payloads. __CLAUDIO__ becomes a JS string literal.
 const openCodePluginTemplate = openCodePluginMarker + `
 import { spawn } from "node:child_process"
-import { existsSync } from "node:fs"
-import { join } from "node:path"
+import { readFileSync } from "node:fs"
+import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const CLAUDIO = __CLAUDIO__
@@ -36,13 +36,20 @@ function send(payload) {
   } catch {}
 }
 
-export const ClaudioPlugin = async ({ directory }) => {
+export const ClaudioPlugin = async ({ directory, worktree }) => {
   // Global and project installs both load for the same directory. The
   // project copy wins; the global copy stands down when one exists. This is
   // decided on every load, so project reloads and extra directories keep
   // playing instead of being silenced by a stale process-wide guard.
-  const projectPlugin = directory ? join(directory, ".opencode", "plugins", "claudio.js") : ""
-  if (projectPlugin && fileURLToPath(import.meta.url) !== projectPlugin && existsSync(projectPlugin)) return {}
+  for (let dir = directory; dir; dir = dirname(dir)) {
+    const projectPlugin = join(dir, ".opencode", "plugins", "claudio.js")
+    if (fileURLToPath(import.meta.url) !== projectPlugin) {
+      try {
+        if (readFileSync(projectPlugin, "utf8").startsWith(__MARKER__)) return {}
+      } catch {}
+    }
+    if (dir === worktree || dirname(dir) === dir) break
+  }
   const subagents = new Set()
   const hook = (event, sessionID, extra = {}) =>
     send({ hook_event_name: event, session_id: sessionID || "opencode", cwd: directory, ...extra })
@@ -94,7 +101,9 @@ export const ClaudioPlugin = async ({ directory }) => {
 // OpenCodePluginSource returns the plugin source that runs executablePath.
 func OpenCodePluginSource(executablePath string) string {
 	literal, _ := json.Marshal(executablePath) // a string always marshals
-	return strings.Replace(openCodePluginTemplate, "__CLAUDIO__", string(literal), 1)
+	marker, _ := json.Marshal(openCodePluginMarker + "\n")
+	source := strings.Replace(openCodePluginTemplate, "__CLAUDIO__", string(literal), 1)
+	return strings.Replace(source, "__MARKER__", string(marker), 1)
 }
 
 // WriteOpenCodePlugin writes (or rewrites) the claudio plugin at path. It
