@@ -20,6 +20,9 @@ const openCodePluginMarker = "// claudio OpenCode plugin: written by `claudio in
 // Claude Code shaped hook payloads. __CLAUDIO__ becomes a JS string literal.
 const openCodePluginTemplate = openCodePluginMarker + `
 import { spawn } from "node:child_process"
+import { existsSync } from "node:fs"
+import { join } from "node:path"
+import { fileURLToPath } from "node:url"
 
 const CLAUDIO = __CLAUDIO__
 
@@ -34,9 +37,12 @@ function send(payload) {
 }
 
 export const ClaudioPlugin = async ({ directory }) => {
-  // Global and project installs both load; only the first one plays.
-  if (globalThis.__claudioPlugin) return {}
-  globalThis.__claudioPlugin = true
+  // Global and project installs both load for the same directory. The
+  // project copy wins; the global copy stands down when one exists. This is
+  // decided on every load, so project reloads and extra directories keep
+  // playing instead of being silenced by a stale process-wide guard.
+  const projectPlugin = directory ? join(directory, ".opencode", "plugins", "claudio.js") : ""
+  if (projectPlugin && fileURLToPath(import.meta.url) !== projectPlugin && existsSync(projectPlugin)) return {}
   const subagents = new Set()
   const hook = (event, sessionID, extra = {}) =>
     send({ hook_event_name: event, session_id: sessionID || "opencode", cwd: directory, ...extra })
@@ -68,7 +74,9 @@ export const ClaudioPlugin = async ({ directory }) => {
           hook(subagents.has(p.sessionID) ? "SubagentStop" : "Stop", p.sessionID)
           break
         case "session.error":
-          hook("StopFailure", p.sessionID)
+          // Esc interrupts surface as MessageAbortedError; only real
+          // failures should play the error sound.
+          if (p.error?.name !== "MessageAbortedError") hook("StopFailure", p.sessionID)
           break
         case "session.compacted":
           hook("PostCompact", p.sessionID)
@@ -89,8 +97,14 @@ func OpenCodePluginSource(executablePath string) string {
 	return strings.Replace(openCodePluginTemplate, "__CLAUDIO__", string(literal), 1)
 }
 
-// WriteOpenCodePlugin writes (or rewrites) the claudio plugin at path.
+// WriteOpenCodePlugin writes (or rewrites) the claudio plugin at path. It
+// refuses to overwrite a claudio.js that claudio did not write, so install
+// never silently replaces the user's own plugin (which a later uninstall
+// would then delete).
 func WriteOpenCodePlugin(path, executablePath string) error {
+	if _, err := os.Stat(path); err == nil && !HasOpenCodePlugin(path) {
+		return fmt.Errorf("refusing to overwrite %s: not written by claudio", path)
+	}
 	source := OpenCodePluginSource(executablePath)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("failed to create plugin directory: %w", err)

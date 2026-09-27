@@ -44,6 +44,67 @@ func TestWriteOpenCodePluginFailsWhenDirectoryIsAFile(t *testing.T) {
 	}
 }
 
+func TestWriteOpenCodePluginRefusesForeignFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "plugins", "claudio.js")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// A claudio.js the user wrote themselves must survive install.
+	if err := os.WriteFile(path, []byte("export const Mine = async () => ({})\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteOpenCodePlugin(path, "/usr/local/bin/claudio"); err == nil {
+		t.Fatal("expected an error when claudio.js was not written by claudio")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "export const Mine = async () => ({})\n" {
+		t.Errorf("user plugin was modified:\n%s", data)
+	}
+}
+
+func TestWriteOpenCodePluginRewritesOwnFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "plugins", "claudio.js")
+	if err := WriteOpenCodePlugin(path, "/usr/local/bin/claudio"); err != nil {
+		t.Fatal(err)
+	}
+	// Rewriting our own plugin (e.g. after the executable moved) still works.
+	if err := WriteOpenCodePlugin(path, "/opt/claudio/claudio"); err != nil {
+		t.Fatalf("rewriting our own plugin: %v", err)
+	}
+	if !HasOpenCodePlugin(path) {
+		t.Fatal("HasOpenCodePlugin = false after rewrite")
+	}
+}
+
+func TestOpenCodePluginTemplateGuards(t *testing.T) {
+	source := OpenCodePluginSource("/usr/local/bin/claudio")
+
+	// The stale process-wide guard must be gone: it silenced every load
+	// after the first, including project reloads and extra directories.
+	if strings.Contains(source, "__claudioPlugin") {
+		t.Error("template still uses the process-wide __claudioPlugin guard")
+	}
+	// Instead, the global copy stands down when a project copy exists,
+	// decided on every load.
+	for _, want := range []string{
+		`".opencode", "plugins", "claudio.js"`,
+		"existsSync(projectPlugin)",
+		"fileURLToPath(import.meta.url)",
+	} {
+		if !strings.Contains(source, want) {
+			t.Errorf("template missing project-copy stand-down logic %q", want)
+		}
+	}
+	// Esc interrupts arrive as MessageAbortedError and must not play the
+	// error sound.
+	if !strings.Contains(source, `p.error?.name !== "MessageAbortedError"`) {
+		t.Error("template does not skip MessageAbortedError on session.error")
+	}
+}
+
 func TestOpenCodePlugin(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "plugins", "claudio.js")
 	exe := `C:\Program Files\claudio\claudio.exe`
