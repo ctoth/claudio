@@ -50,6 +50,59 @@ if (!active(await load(globalPath))) throw Error("foreign project file silenced 
 	}
 }
 
+// TestOpenCodePluginNearestCopyWins loads the plugins through a symlinked
+// path (as macOS does with /var -> /private/var) and with nested project
+// installs: exactly one copy, the nearest to the directory, must play.
+func TestOpenCodePluginNearestCopyWins(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node is needed to execute the generated plugin")
+	}
+	root := t.TempDir()
+	real := filepath.Join(root, "real")
+	global := filepath.Join(real, "global", "claudio.js")
+	outer := filepath.Join(real, "repo", ".opencode", "plugins", "claudio.js")
+	nested := filepath.Join(real, "repo", "sub", ".opencode", "plugins", "claudio.js")
+	for _, path := range []string{global, outer, nested} {
+		if err := WriteOpenCodePlugin(path, "claudio"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, dir := range []string{filepath.Join(real, "repo", "sub", "deep"), filepath.Join(real, "repo", "other")} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(root, "package.json"), []byte(`{"type":"module"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	script := `import { pathToFileURL } from "node:url";
+import { symlinkSync } from "node:fs";
+import { join } from "node:path";
+const [root] = process.argv.slice(1);
+const link = join(root, "link");
+symlinkSync(join(root, "real"), link, "junction");
+const worktree = join(link, "repo");
+const copies = {
+  global: join(link, "global", "claudio.js"),
+  outer: join(worktree, ".opencode", "plugins", "claudio.js"),
+  nested: join(worktree, "sub", ".opencode", "plugins", "claudio.js"),
+};
+for (const [directory, want] of [[join(worktree, "sub", "deep"), "nested"], [join(worktree, "other"), "outer"]]) {
+  const playing = [];
+  for (const [name, path] of Object.entries(copies)) {
+    const hooks = await (await import(pathToFileURL(path))).ClaudioPlugin({ directory, worktree });
+    if (Object.keys(hooks).length > 0) playing.push(name);
+  }
+  if (playing.join() !== want) throw Error(directory + ": playing [" + playing + "], want [" + want + "]");
+}
+`
+	output, err := exec.Command(node, "--input-type=module", "-e", script, root).CombinedOutput()
+	if err != nil {
+		t.Fatalf("generated plugin check: %v\n%s", err, output)
+	}
+}
+
 // TestOpenCodePluginDetectionAndUninstallWorkflow covers the plugin branches
 // of auto-detection and the uninstall workflow, using OPENCODE_CONFIG_DIR.
 func TestOpenCodePluginDetectionAndUninstallWorkflow(t *testing.T) {

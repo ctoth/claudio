@@ -20,7 +20,7 @@ const openCodePluginMarker = "// claudio OpenCode plugin: written by `claudio in
 // Claude Code shaped hook payloads. __CLAUDIO__ becomes a JS string literal.
 const openCodePluginTemplate = openCodePluginMarker + `
 import { spawn } from "node:child_process"
-import { readFileSync } from "node:fs"
+import { readFileSync, realpathSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -37,17 +37,21 @@ function send(payload) {
 }
 
 export const ClaudioPlugin = async ({ directory, worktree }) => {
-  // Global and project installs both load for the same directory. The
-  // project copy wins; the global copy stands down when one exists. This is
-  // decided on every load, so project reloads and extra directories keep
-  // playing instead of being silenced by a stale process-wide guard.
+  // Global and project installs (possibly nested) all load for the same
+  // directory. The claudio copy nearest to the directory plays and every
+  // other copy stands down. Paths are compared after resolving symlinks,
+  // because import.meta.url is already resolved. This is decided on every
+  // load, so project reloads and extra directories keep playing instead of
+  // being silenced by a stale process-wide guard.
+  const self = realpathSync(fileURLToPath(import.meta.url))
   for (let dir = directory; dir; dir = dirname(dir)) {
     const projectPlugin = join(dir, ".opencode", "plugins", "claudio.js")
-    if (fileURLToPath(import.meta.url) !== projectPlugin) {
-      try {
-        if (readFileSync(projectPlugin, "utf8").startsWith(__MARKER__)) return {}
-      } catch {}
-    }
+    try {
+      if (readFileSync(projectPlugin, "utf8").startsWith(__MARKER__)) {
+        if (realpathSync(projectPlugin) !== self) return {}
+        break
+      }
+    } catch {}
     if (dir === worktree || dirname(dir) === dir) break
   }
   const subagents = new Set()
@@ -101,7 +105,7 @@ export const ClaudioPlugin = async ({ directory, worktree }) => {
 // OpenCodePluginSource returns the plugin source that runs executablePath.
 func OpenCodePluginSource(executablePath string) string {
 	literal, _ := json.Marshal(executablePath) // a string always marshals
-	marker, _ := json.Marshal(openCodePluginMarker + "\n")
+	marker, _ := json.Marshal(openCodePluginMarker)
 	source := strings.Replace(openCodePluginTemplate, "__CLAUDIO__", string(literal), 1)
 	return strings.Replace(source, "__MARKER__", string(marker), 1)
 }
