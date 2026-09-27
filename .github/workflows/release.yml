@@ -5,7 +5,12 @@ on:
     tags: ["v*"]
 
 permissions:
-  contents: write
+  contents: read
+
+# Do not interrupt an in-progress publication for this tag.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   CGO_ENABLED: "0"
@@ -13,12 +18,16 @@ env:
 jobs:
   version-check:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: go.mod
+          cache: false
 
       - name: Verify tag matches binary version
         shell: bash
@@ -32,6 +41,7 @@ jobs:
 
   release:
     needs: version-check
+    timeout-minutes: 20
     strategy:
       matrix:
         include:
@@ -49,11 +59,14 @@ jobs:
             suffix: ".exe"
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: go.mod
+          cache: false
 
       - name: Vet
         run: go vet ./...
@@ -68,19 +81,25 @@ jobs:
         run: go build -ldflags "-s -w" -o claudio-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }} ./cmd/claudio
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: claudio-${{ matrix.goos }}-${{ matrix.goarch }}
           path: claudio-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }}
+          if-no-files-found: error
 
   publish:
     needs: release
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           path: artifacts
 
@@ -88,7 +107,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${{ github.ref_name }}" \
-            --title "${{ github.ref_name }}" \
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
             --generate-notes \
             artifacts/claudio-*/*
