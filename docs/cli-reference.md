@@ -168,7 +168,7 @@ claudio status
   audio backend:  auto -> oto (available; playback not tested)
   file logging:   enabled (/home/me/.cache/claudio/logs/claudio.log)
   tracking:       enabled (/home/me/.cache/claudio/sounds.db)
-  version:        1.14.0
+  version:        1.15.0
 ```
 
 The `audio backend` line shows what `auto` resolves to and whether that backend
