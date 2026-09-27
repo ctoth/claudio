@@ -268,8 +268,8 @@ can be inspected via `claudio soundpack list`.
 Beyond the default stdin-mode hook executor, claudio ships these subcommands
 (registered in `internal/cli/cli.go`):
 
-- `claudio install` / `claudio uninstall` — manage Claude Code, Codex, Gemini CLI, Qwen Code, and
-  GitHub Copilot CLI hooks
+- `claudio install` / `claudio uninstall` — manage Claude Code, Codex, Gemini CLI, Qwen Code,
+  GitHub Copilot CLI, and Command Code hooks, and the OpenCode plugin
 - `claudio install-commands` / `claudio uninstall-commands` — manage the
   Claude Code `/claudio` slash command, Codex `$claudio` skill, or Antigravity
   skill/CLI command artifacts

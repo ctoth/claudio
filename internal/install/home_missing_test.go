@@ -10,7 +10,7 @@ import (
 // the per-agent config-home overrides.
 func clearHomeEnv(t *testing.T) {
 	t.Helper()
-	for _, key := range []string{"HOME", "USERPROFILE", "HOMEDRIVE", "HOMEPATH", "CLAUDE_CONFIG_DIR", "CODEX_HOME", "COPILOT_HOME"} {
+	for _, key := range []string{"HOME", "USERPROFILE", "HOMEDRIVE", "HOMEPATH", "CLAUDE_CONFIG_DIR", "CODEX_HOME", "COPILOT_HOME", "OPENCODE_CONFIG_DIR", "XDG_CONFIG_HOME"} {
 		t.Setenv(key, "")
 	}
 }

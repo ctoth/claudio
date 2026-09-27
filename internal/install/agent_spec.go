@@ -51,6 +51,9 @@ type agentSpec struct {
 	// trustHint is printed after install when the agent needs the user to
 	// trust new hooks.
 	trustHint string
+	// pluginFile means the config path is a claudio-owned OpenCode plugin
+	// file written whole, not a settings file claudio merges hooks into.
+	pluginFile bool
 }
 
 // agentSpecs lists every concrete agent in install/detection order.
@@ -115,6 +118,28 @@ var agentSpecs = []agentSpec{
 		eventFlagHooks: map[string]bool{"subagentStart": true},
 		timeoutSec:     30,
 	},
+	{
+		// Command Code tests matchers against SHELL/READ/WRITE/EDIT and never
+		// fires a Stop or SessionStart group that has one, so none is written.
+		agent:        AgentCommandCode,
+		registry:     &CommandCodeHooks,
+		shape:        shapeMatcherGroups,
+		matcher:      "",
+		homeDir:      ".commandcode",
+		globalFile:   "settings.json",
+		projectPaths: []string{filepath.Join(".commandcode", "settings.json")},
+		trustHint:    "Restart Command Code to load the claudio hooks.",
+	},
+	{
+		agent:        AgentOpenCode,
+		registry:     &OpenCodeHooks,
+		homeEnv:      "OPENCODE_CONFIG_DIR",
+		homeDir:      filepath.Join(".config", "opencode"),
+		globalFile:   filepath.Join("plugins", "claudio.js"),
+		projectPaths: []string{filepath.Join(".opencode", "plugins", "claudio.js")},
+		pluginFile:   true,
+		trustHint:    "Restart OpenCode to load the claudio plugin.",
+	},
 }
 
 // spec returns the agent's descriptor; ok is false for auto, all and
@@ -173,6 +198,11 @@ func (s agentSpec) configDir() (string, error) {
 			return dir, nil
 		}
 	}
+	if s.agent == AgentOpenCode {
+		if dir := strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME")); dir != "" {
+			return filepath.Join(dir, "opencode"), nil
+		}
+	}
 	home, err := HomeDir()
 	if err != nil {
 		return "", err
@@ -200,6 +230,13 @@ func (a Agent) BestConfigPath(scope string) (string, error) {
 		}
 	}
 	return paths[0], nil
+}
+
+// UsesPluginFile reports whether the agent's config path is a claudio-owned
+// plugin file rather than a settings file with hooks merged in.
+func (a Agent) UsesPluginFile() bool {
+	s, _ := a.spec()
+	return s.pluginFile
 }
 
 // TrustHint returns the message to print after installing hooks for the

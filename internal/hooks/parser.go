@@ -399,7 +399,7 @@ func normalizeToolName(toolName string) string {
 	key := strings.ToLower(strings.TrimSpace(toolName))
 	key = strings.ReplaceAll(key, "-", "_")
 	switch key {
-	case "bash", "shell", "powershell", "run_shell_command":
+	case "bash", "shell", "powershell", "run_shell_command", "shell_command":
 		return "Bash"
 	case "write", "writefile", "write_file", "create":
 		return "Write"
@@ -409,7 +409,7 @@ func normalizeToolName(toolName string) string {
 		return "MultiEdit"
 	case "read", "readfile", "read_file", "read_many_files", "view":
 		return "Read"
-	case "ls", "list_directory":
+	case "ls", "list", "list_directory":
 		return "LS"
 	case "grep", "grep_search":
 		return "Grep"
@@ -584,8 +584,16 @@ func (e *HookEvent) extractCommandInfo() CommandInfo {
 		return CommandInfo{}
 	}
 
-	// Split command string into words
+	// Split command string into words. Command Code passes arguments
+	// separately in "args".
 	words := strings.Fields(strings.TrimSpace(command))
+	if args, ok := input["args"].([]any); ok {
+		for _, arg := range args {
+			if s, ok := arg.(string); ok {
+				words = append(words, s)
+			}
+		}
+	}
 	if len(words) == 0 {
 		return CommandInfo{}
 	}

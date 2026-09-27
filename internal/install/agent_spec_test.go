@@ -47,6 +47,28 @@ func TestAgentHomeEnvIsTrimmedForEveryAgent(t *testing.T) {
 	}
 }
 
+func TestOpenCodeXDGConfigHome(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OPENCODE_CONFIG_DIR", "")
+	t.Setenv("XDG_CONFIG_HOME", root)
+	paths, err := AgentOpenCode.ConfigPaths(ScopeGlobal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(root, "opencode", "plugins", "claudio.js"); len(paths) != 1 || paths[0] != want {
+		t.Fatalf("paths = %v, want [%s]", paths, want)
+	}
+	custom := t.TempDir()
+	t.Setenv("OPENCODE_CONFIG_DIR", custom)
+	paths, err = AgentOpenCode.ConfigPaths(ScopeGlobal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(custom, "plugins", "claudio.js"); len(paths) != 1 || paths[0] != want {
+		t.Fatalf("override paths = %v, want [%s]", paths, want)
+	}
+}
+
 func mustSpec(t *testing.T, a Agent) agentSpec {
 	t.Helper()
 	s, ok := a.spec()

@@ -619,6 +619,8 @@ func TestNormalizeToolNameAliases(t *testing.T) {
 		"multi-edit":                 "MultiEdit",
 		"read-many-files":            "Read",
 		"list-directory":             "LS",
+		"list":                       "LS",
+		"shell_command":              "Bash",
 		"glob":                       "Glob",
 		"web-fetch":                  "WebFetch",
 		"google-web-search":          "WebSearch",

@@ -136,6 +136,14 @@ func runInstallWorkflow(agent install.Agent, scope string, settingsPath string) 
 		return fmt.Errorf("failed to get executable path: %w", err)
 	}
 
+	if agent.UsesPluginFile() {
+		if err := install.WriteOpenCodePlugin(settingsPath, execPath); err != nil {
+			return fmt.Errorf("install: %w", err)
+		}
+		slog.Info("Claudio plugin written", "agent", agent, "plugin_path", settingsPath)
+		return nil
+	}
+
 	err = install.ModifySettings(afero.NewOsFs(), settingsPath, func(settings *install.SettingsMap) (*install.SettingsMap, error) {
 		return install.InstallAgentHooks(settings, agent, execPath)
 	})
