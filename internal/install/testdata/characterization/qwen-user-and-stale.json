@@ -1,7 +1,31 @@
 {
   "installed": {
     "hooks": {
+      "InstructionsLoaded": [
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent qwen",
+              "name": "claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
       "Notification": [
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent qwen",
+              "name": "claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "PermissionDenied": [
         {
           "hooks": [
             {
@@ -26,6 +50,18 @@
         }
       ],
       "PostCompact": [
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent qwen",
+              "name": "claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "PostToolBatch": [
         {
           "hooks": [
             {
@@ -83,6 +119,18 @@
           ],
           "matcher": "Bash"
         },
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent qwen",
+              "name": "claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
+      "SessionDelete": [
         {
           "hooks": [
             {
@@ -190,6 +238,18 @@
           "matcher": ".*"
         }
       ],
+      "UserPromptExpansion": [
+        {
+          "hooks": [
+            {
+              "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent qwen",
+              "name": "claudio",
+              "type": "command"
+            }
+          ],
+          "matcher": ".*"
+        }
+      ],
       "UserPromptSubmit": [
         {
           "hooks": [
@@ -222,13 +282,17 @@
     "theme": "dark"
   },
   "removedNames": [
+    "InstructionsLoaded",
     "Notification",
+    "PermissionDenied",
     "PermissionRequest",
     "PostCompact",
+    "PostToolBatch",
     "PostToolUse",
     "PostToolUseFailure",
     "PreCompact",
     "PreToolUse",
+    "SessionDelete",
     "SessionEnd",
     "SessionStart",
     "Stop",
@@ -237,6 +301,7 @@
     "SubagentStop",
     "TodoCompleted",
     "TodoCreated",
+    "UserPromptExpansion",
     "UserPromptSubmit"
   ]
 }

@@ -1,194 +1,106 @@
 package install
 
 import (
+	"maps"
+	"regexp"
+	"slices"
 	"testing"
 
 	"claudio.click/internal/hooks"
+	captainhook "github.com/ctoth/captain-hook"
 )
 
-func TestHookCategoriesMatchParser(t *testing.T) {
-	allHooks := AllHooks
-
-	expectedCategories := map[string]hooks.EventCategory{
-		"PreToolUse":          hooks.Loading,
-		"PostToolUse":         hooks.Success, // Note: PostToolUse can be Success or Error, using Success as default
-		"PostToolUseFailure":  hooks.Error,
-		"PostToolBatch":       hooks.Success,
-		"UserPromptSubmit":    hooks.Interactive,
-		"UserPromptExpansion": hooks.Interactive,
-		"Notification":        hooks.Interactive,
-		"MessageDisplay":      hooks.Silent,
-		"Stop":                hooks.Completion,
-		"StopFailure":         hooks.Error,
-		"PermissionRequest":   hooks.Interactive,
-		"PermissionDenied":    hooks.Error,
-		"Setup":               hooks.System,
-		"SubagentStart":       hooks.Loading,
-		"SubagentStop":        hooks.Completion,
-		"TaskCreated":         hooks.Loading,
-		"TaskCompleted":       hooks.Completion,
-		"TeammateIdle":        hooks.Interactive,
-		"InstructionsLoaded":  hooks.System,
-		"ConfigChange":        hooks.System,
-		"CwdChanged":          hooks.System,
-		"FileChanged":         hooks.System,
-		"WorktreeCreate":      hooks.System,
-		"WorktreeRemove":      hooks.System,
-		"PreCompact":          hooks.System,
-		"PostCompact":         hooks.System,
-		"SessionStart":        hooks.System,
-		"SessionEnd":          hooks.Interactive,
-		"Elicitation":         hooks.Interactive,
-		"ElicitationResult":   hooks.Interactive,
-	}
-
-	for _, hook := range allHooks {
-		expectedCategory, exists := expectedCategories[hook.Name]
-		if !exists {
-			t.Errorf("No expected category defined for hook '%s'", hook.Name)
-			continue
-		}
-
-		if hook.Category != expectedCategory {
-			t.Errorf("Hook '%s' has category %v, expected %v",
-				hook.Name, hook.Category, expectedCategory)
-		}
-	}
+// catalogAgents maps claudio's settings-hook agents to captain-hook's catalog.
+var catalogAgents = map[Agent]captainhook.Agent{
+	AgentClaude:      captainhook.AgentClaude,
+	AgentCodex:       captainhook.AgentCodex,
+	AgentGemini:      captainhook.AgentGemini,
+	AgentQwen:        captainhook.AgentQwen,
+	AgentCopilot:     captainhook.AgentCopilot,
+	AgentCommandCode: captainhook.AgentCommandCode,
 }
 
-func TestHookDescriptionsNonEmpty(t *testing.T) {
-	// TDD RED: Test that all hook descriptions are non-empty
-	allHooks := AllHooks
-
-	for _, hook := range allHooks {
-		if hook.Description == "" {
-			t.Errorf("Hook '%s' has empty description", hook.Name)
+func TestRegistryFollowsCatalog(t *testing.T) {
+	for agent, catalogAgent := range catalogAgents {
+		catalog, ok := captainhook.Lookup(catalogAgent)
+		if !ok {
+			t.Fatalf("catalog has no %s", catalogAgent)
+		}
+		var want []string
+		for _, event := range catalog.Events {
+			want = append(want, event.Key())
+		}
+		if got := agent.HookNames(); !slices.Equal(got, want) {
+			t.Errorf("%s hook names = %v, want catalog keys %v", agent, got, want)
 		}
 	}
 }
 
 func TestDefaultEnabledStatus(t *testing.T) {
-	allHooks := AllHooks
-	disabled := defaultDisabledClaudeHookNames()
-
-	for _, hook := range allHooks {
-		if disabled[hook.Name] {
-			if hook.DefaultEnabled {
-				t.Errorf("Hook '%s' should be disabled by default", hook.Name)
+	disabled := map[string]bool{"FileChanged": true, "MessageDisplay": true}
+	for _, agent := range ConcreteAgents() {
+		for _, hook := range agent.Registry() {
+			if hook.DefaultEnabled == disabled[hook.Name] {
+				t.Errorf("%s %s: DefaultEnabled = %v", agent, hook.Name, hook.DefaultEnabled)
 			}
-			continue
-		}
-		if !hook.DefaultEnabled {
-			t.Errorf("Hook '%s' is not enabled by default", hook.Name)
 		}
 	}
 }
 
-func TestClaudeRegistryTracksCurrentHookEvents(t *testing.T) {
-	want := map[string]bool{}
-	for _, name := range expectedClaudeHookNames() {
-		want[name] = true
-	}
-	got := map[string]bool{}
-	for _, h := range AllHooks {
-		got[h.Name] = true
-	}
-	if len(got) != len(want) {
-		t.Errorf("claude registry has %d events, want %d", len(got), len(want))
-	}
-	for name := range want {
-		if !got[name] {
-			t.Errorf("claude registry missing %q", name)
+// Every event claudio installs must map to a sound. An unmapped event falls
+// through to the "unknown" context and plays a generic sound.
+func TestEveryRegisteredEventHasASoundMapping(t *testing.T) {
+	for _, agent := range ConcreteAgents() {
+		for _, hook := range agent.Registry() {
+			event := &hooks.HookEvent{EventName: hooks.NormalizeEventName(hook.Name)}
+			if ctx := event.GetContext(); ctx.Operation == "unknown" {
+				t.Errorf("%s %s has no sound mapping in internal/hooks/parser.go", agent, hook.Name)
+			}
 		}
 	}
 }
 
-func TestCodexRegistryContents(t *testing.T) {
-	want := map[string]bool{
-		"PreToolUse": true, "PostToolUse": true, "UserPromptSubmit": true,
-		"Stop": true, "SubagentStop": true, "SubagentStart": true,
-		"PreCompact": true, "PostCompact": true, "SessionStart": true,
-		"PermissionRequest": true,
+// Copilot events with no PascalCase key send camelCase payloads, so the
+// hook command names the event itself.
+func TestCopilotCamelCaseOnlyEventsPassTheirName(t *testing.T) {
+	flagged := map[string]bool{}
+	for _, hook := range AgentCopilot.Registry() {
+		flagged[hook.Name] = hook.EventFlag
 	}
-	got := map[string]bool{}
-	for _, h := range CodexHooks {
-		got[h.Name] = true
-	}
-	if len(got) != len(want) {
-		t.Errorf("codex registry has %d events, want %d", len(got), len(want))
-	}
-	for name := range want {
-		if !got[name] {
-			t.Errorf("codex registry missing %q", name)
+	for _, name := range []string{"notification", "subagentStart", "userPromptTransformed"} {
+		if !flagged[name] {
+			t.Errorf("copilot %s should pass --hook-event", name)
 		}
 	}
-	if got["Notification"] || got["SessionEnd"] {
-		t.Error("codex registry must not contain Notification or SessionEnd")
-	}
-}
-
-func TestQwenRegistryContents(t *testing.T) {
-	want := map[string]bool{
-		"PreToolUse": true, "PostToolUse": true, "PostToolUseFailure": true,
-		"UserPromptSubmit": true, "SessionStart": true, "SessionEnd": true,
-		"Stop": true, "StopFailure": true, "SubagentStart": true,
-		"SubagentStop": true, "PreCompact": true, "PostCompact": true,
-		"Notification": true, "PermissionRequest": true,
-		"TodoCreated": true, "TodoCompleted": true,
-	}
-	got := map[string]bool{}
-	for _, h := range QwenHooks {
-		got[h.Name] = true
-	}
-	if len(got) != len(want) {
-		t.Errorf("qwen registry has %d events, want %d", len(got), len(want))
-	}
-	for name := range want {
-		if !got[name] {
-			t.Errorf("qwen registry missing %q", name)
+	for _, name := range []string{"Stop", "PreToolUse", "SessionStart"} {
+		if flagged[name] {
+			t.Errorf("copilot %s has a PascalCase key and should not pass --hook-event", name)
 		}
 	}
 }
 
-func expectedClaudeHookNames() []string {
-	return []string{
-		"SessionStart",
-		"Setup",
-		"UserPromptSubmit",
-		"UserPromptExpansion",
-		"PreToolUse",
-		"PermissionRequest",
-		"PermissionDenied",
-		"PostToolUse",
-		"PostToolUseFailure",
-		"PostToolBatch",
-		"Notification",
-		"MessageDisplay",
-		"SubagentStart",
-		"SubagentStop",
-		"TaskCreated",
-		"TaskCompleted",
-		"Stop",
-		"StopFailure",
-		"TeammateIdle",
-		"InstructionsLoaded",
-		"ConfigChange",
-		"CwdChanged",
-		"FileChanged",
-		"WorktreeCreate",
-		"WorktreeRemove",
-		"PreCompact",
-		"PostCompact",
-		"Elicitation",
-		"ElicitationResult",
-		"SessionEnd",
+func TestCatalogRegistryUnknownAgentIsEmpty(t *testing.T) {
+	if got := catalogRegistry("bogus", false); got != nil {
+		t.Errorf("catalogRegistry(bogus) = %v, want nil", got)
 	}
 }
 
-func defaultDisabledClaudeHookNames() map[string]bool {
-	return map[string]bool{
-		"FileChanged":    true,
-		"MessageDisplay": true,
+// OpenCodeHooks must list exactly the events the plugin sends.
+func TestOpenCodeRegistryMatchesPluginEvents(t *testing.T) {
+	sent := map[string]bool{}
+	for _, m := range regexp.MustCompile(`hook\(\s*(?:[^,]*\?\s*)?"(\w+)"(?:\s*:\s*"(\w+)")?`).FindAllStringSubmatch(OpenCodePluginSource("claudio"), -1) {
+		for _, name := range m[1:] {
+			if name != "" {
+				sent[name] = true
+			}
+		}
+	}
+	listed := map[string]bool{}
+	for _, name := range AgentOpenCode.HookNames() {
+		listed[name] = true
+	}
+	if !maps.Equal(sent, listed) {
+		t.Errorf("OpenCodeHooks = %v, plugin sends %v", slices.Sorted(maps.Keys(listed)), slices.Sorted(maps.Keys(sent)))
 	}
 }
 
@@ -199,44 +111,4 @@ func enabledHookNames(agent Agent) []string {
 		names[i] = definition.Name
 	}
 	return names
-}
-
-func TestCopilotRegistryContents(t *testing.T) {
-	want := map[string]bool{
-		"PreToolUse": true, "PostToolUse": true, "PostToolUseFailure": true,
-		"UserPromptSubmit": true, "SessionStart": true, "SessionEnd": true,
-		"Stop": true, "SubagentStop": true, "PreCompact": true,
-		"subagentStart": true, "Notification": true, "PermissionRequest": true,
-		"ErrorOccurred": true,
-	}
-	got := map[string]bool{}
-	for _, h := range CopilotHooks {
-		got[h.Name] = true
-	}
-	if len(got) != len(want) {
-		t.Errorf("copilot registry has %d events, want %d", len(got), len(want))
-	}
-	for name := range want {
-		if !got[name] {
-			t.Errorf("copilot registry missing %q", name)
-		}
-	}
-}
-
-func TestAgentEnabledHooksAndNames(t *testing.T) {
-	if len(AgentCodex.EnabledHooks()) != len(CodexHooks) {
-		t.Errorf("expected all codex hooks enabled by default")
-	}
-	if len(AgentCodex.HookNames()) != 10 {
-		t.Errorf("expected 10 codex hook names, got %d", len(AgentCodex.HookNames()))
-	}
-	if len(AgentClaude.HookNames()) != len(AllHooks) {
-		t.Errorf("claude hook names mismatch")
-	}
-	if len(AgentQwen.HookNames()) != len(QwenHooks) {
-		t.Errorf("qwen hook names mismatch")
-	}
-	if len(AgentCopilot.HookNames()) != len(CopilotHooks) {
-		t.Errorf("copilot hook names mismatch")
-	}
 }

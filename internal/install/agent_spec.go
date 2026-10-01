@@ -5,26 +5,19 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-)
 
-// hookShape is how an agent's settings file lays out one hook event.
-type hookShape int
-
-const (
-	// shapeMatcherGroups is [{"matcher": m, "hooks": [{command...}]}].
-	shapeMatcherGroups hookShape = iota
-	// shapeFlatCommands is [{command...}] (GitHub Copilot CLI).
-	shapeFlatCommands
+	captainhook "github.com/ctoth/captain-hook"
 )
 
 // agentSpec describes everything install/uninstall needs to know about one
 // concrete agent. Adding an agent means adding one entry to agentSpecs.
 type agentSpec struct {
 	agent Agent
-	// registry points at the package-level hook list so it is read at call time.
-	registry *[]HookDefinition
-	matcher  string
-	shape    hookShape
+	// catalogAgent names the agent in captain-hook's event catalog, which
+	// supplies its hook events and settings layout. Empty for OpenCode,
+	// whose plugin events are claudio's own (OpenCodeHooks).
+	catalogAgent captainhook.Agent
+	matcher      string
 
 	// homeEnv names the variable that replaces <home>/homeDir when set
 	// (whitespace-trimmed; blank means unset). Empty when the agent has none.
@@ -37,8 +30,10 @@ type agentSpec struct {
 
 	// hookAgentFlag appends "--hook-agent <agent>" to the hook command.
 	hookAgentFlag bool
-	// eventFlagHooks get "--hook-event <name>" appended to the hook command.
-	eventFlagHooks map[string]bool
+	// flagCamelCaseEvents appends "--hook-event <name>" to the command of
+	// events with no PascalCase key, whose camelCase payloads may not
+	// name the event (GitHub Copilot CLI).
+	flagCamelCaseEvents bool
 	// commandName is written as the command entry's "name" when non-empty.
 	commandName string
 	// timeoutSec is written as the command entry's "timeoutSec" when > 0.
@@ -60,8 +55,7 @@ type agentSpec struct {
 var agentSpecs = []agentSpec{
 	{
 		agent:        AgentClaude,
-		registry:     &AllHooks,
-		shape:        shapeMatcherGroups,
+		catalogAgent: captainhook.AgentClaude,
 		matcher:      ".*",
 		homeEnv:      "CLAUDE_CONFIG_DIR",
 		homeDir:      ".claude",
@@ -70,8 +64,7 @@ var agentSpecs = []agentSpec{
 	},
 	{
 		agent:             AgentCodex,
-		registry:          &CodexHooks,
-		shape:             shapeMatcherGroups,
+		catalogAgent:      captainhook.AgentCodex,
 		matcher:           "*",
 		homeEnv:           "CODEX_HOME",
 		homeDir:           ".codex",
@@ -82,8 +75,7 @@ var agentSpecs = []agentSpec{
 	},
 	{
 		agent:         AgentGemini,
-		registry:      &GeminiHooks,
-		shape:         shapeMatcherGroups,
+		catalogAgent:  captainhook.AgentGemini,
 		matcher:       "",
 		homeDir:       ".gemini",
 		globalFile:    "settings.json",
@@ -93,8 +85,7 @@ var agentSpecs = []agentSpec{
 	},
 	{
 		agent:         AgentQwen,
-		registry:      &QwenHooks,
-		shape:         shapeMatcherGroups,
+		catalogAgent:  captainhook.AgentQwen,
 		matcher:       ".*",
 		homeDir:       ".qwen",
 		globalFile:    "settings.json",
@@ -103,27 +94,25 @@ var agentSpecs = []agentSpec{
 		commandName:   "claudio",
 	},
 	{
-		agent:      AgentCopilot,
-		registry:   &CopilotHooks,
-		matcher:    "",
-		shape:      shapeFlatCommands,
-		homeEnv:    "COPILOT_HOME",
-		homeDir:    ".copilot",
-		globalFile: "settings.json",
+		agent:        AgentCopilot,
+		catalogAgent: captainhook.AgentCopilot,
+		matcher:      "",
+		homeEnv:      "COPILOT_HOME",
+		homeDir:      ".copilot",
+		globalFile:   "settings.json",
 		projectPaths: []string{
 			filepath.Join(".github", "copilot", "settings.local.json"),
 			filepath.Join(".github", "copilot", "settings.json"),
 		},
-		hookAgentFlag:  true,
-		eventFlagHooks: map[string]bool{"subagentStart": true},
-		timeoutSec:     30,
+		hookAgentFlag:       true,
+		flagCamelCaseEvents: true,
+		timeoutSec:          30,
 	},
 	{
 		// Command Code tests matchers against SHELL/READ/WRITE/EDIT and never
 		// fires a Stop or SessionStart group that has one, so none is written.
 		agent:        AgentCommandCode,
-		registry:     &CommandCodeHooks,
-		shape:        shapeMatcherGroups,
+		catalogAgent: captainhook.AgentCommandCode,
 		matcher:      "",
 		homeDir:      ".commandcode",
 		globalFile:   "settings.json",
@@ -132,7 +121,6 @@ var agentSpecs = []agentSpec{
 	},
 	{
 		agent:        AgentOpenCode,
-		registry:     &OpenCodeHooks,
 		homeEnv:      "OPENCODE_CONFIG_DIR",
 		homeDir:      filepath.Join(".config", "opencode"),
 		globalFile:   filepath.Join("plugins", "claudio.js"),

@@ -239,7 +239,11 @@ session), `chat.message` becomes `UserPromptSubmit`, `tool.execute.before` and
 `tool.execute.after` become `PreToolUse` and `PostToolUse` (a non-zero bash
 exit plays the error sound), `permission.asked` becomes `PermissionRequest`,
 `session.compacted` becomes `PostCompact`, `session.idle` becomes `Stop` (or
-`SubagentStop`), and `session.error` becomes `StopFailure`. When both a global
+`SubagentStop`), and `session.error` becomes `StopFailure`. It also forwards
+`experimental.session.compacting` as `PreCompact`, `command.execute.before` as
+`UserPromptExpansion`, `session.deleted` as `SessionDelete`, a rejected
+`permission.replied` as `PermissionDenied`, and new or newly completed todos
+in `todo.updated` as `TodoCreated` and `TodoCompleted`. When both a global
 and a project plugin are installed, only one plays. Uninstall deletes the file
 only if Claudio wrote it. Restart OpenCode after installing.
 
@@ -273,9 +277,14 @@ claudio install --quiet
 
 The installer holds an advisory lock while it reads, merges, writes, and
 verifies the settings file. Hooks from other tools are left alone; earlier
-Claudio entries are replaced with the current form, so reinstalling is safe.
+Claudio entries are replaced with the current form, and Claudio entries under
+events it no longer installs are removed, so reinstalling is safe.
 
 ## Installed Hook Sets
+
+Each agent's event list comes from the event catalog in
+[Captain Hook](https://github.com/ctoth/captain-hook), which records the docs
+or source version it was checked against.
 
 Claude Code defaults:
 
@@ -302,32 +311,37 @@ Claude Code defaults:
 | `InstructionsLoaded` | system |
 | `ConfigChange` | system |
 | `CwdChanged` | system |
+| `DirectoryAdded` | system |
 | `WorktreeCreate` | system |
 | `WorktreeRemove` | system |
 | `PreCompact` | system |
 | `PostCompact` | system |
+| `PreModelSwitch` | system |
+| `PostModelSwitch` | system |
 | `Elicitation` | interactive |
 | `ElicitationResult` | interactive |
 | `SessionEnd` | interactive |
 
-`MessageDisplay` and `FileChanged` are known to Claudio but not installed.
-Add them to your settings by hand only if you want audio for streamed text or
-broad file change events.
+`MessageDisplay` and `FileChanged` are known to Claudio but not installed, for
+Claude Code or for Qwen Code. Add them to your settings by hand only if you
+want audio for streamed text or broad file change events.
 
 Codex defaults:
 
 | Hook | Category |
 | --- | --- |
 | `PreToolUse` | loading |
+| `PermissionRequest` | interactive |
 | `PostToolUse` | success or error |
-| `UserPromptSubmit` | interactive |
-| `Stop` | completion |
-| `SubagentStop` | completion |
-| `SubagentStart` | loading |
 | `PreCompact` | system |
 | `PostCompact` | system |
 | `SessionStart` | system |
-| `PermissionRequest` | interactive |
+| `SessionEnd` | interactive |
+| `UserPromptSubmit` | interactive |
+| `SubagentStart` | loading |
+| `SubagentStop` | completion |
+| `Stop` | completion |
+| `Interrupt` | interactive |
 
 Gemini defaults:
 
@@ -352,37 +366,48 @@ Qwen Code defaults:
 | `PreToolUse` | loading |
 | `PostToolUse` | success |
 | `PostToolUseFailure` | error |
+| `PostToolBatch` | success |
+| `Notification` | interactive |
 | `UserPromptSubmit` | interactive |
+| `UserPromptExpansion` | interactive |
 | `SessionStart` | system |
-| `SessionEnd` | interactive |
 | `Stop` | completion |
-| `StopFailure` | error |
 | `SubagentStart` | loading |
 | `SubagentStop` | completion |
 | `PreCompact` | system |
 | `PostCompact` | system |
-| `Notification` | interactive |
+| `SessionEnd` | interactive |
+| `SessionDelete` | interactive |
 | `PermissionRequest` | interactive |
+| `PermissionDenied` | error |
+| `StopFailure` | error |
 | `TodoCreated` | loading |
 | `TodoCompleted` | completion |
+| `InstructionsLoaded` | system |
 
-GitHub Copilot CLI defaults:
+GitHub Copilot CLI defaults. PascalCase keys get VS Code-compatible
+snake_case payloads; the three camelCase keys have no PascalCase form, so
+Claudio passes their event name on the command line:
 
 | Hook | Category |
 | --- | --- |
+| `SessionStart` | system |
+| `SessionEnd` | interactive |
+| `UserPromptSubmit` | interactive |
+| `userPromptTransformed` | silent |
 | `PreToolUse` | loading |
 | `PostToolUse` | success |
 | `PostToolUseFailure` | error |
-| `UserPromptSubmit` | interactive |
-| `SessionStart` | system |
-| `SessionEnd` | interactive |
 | `Stop` | completion |
 | `subagentStart` | loading |
 | `SubagentStop` | completion |
-| `PreCompact` | system |
-| `Notification` | interactive |
-| `PermissionRequest` | interactive |
 | `ErrorOccurred` | error |
+| `PreCompact` | system |
+| `PermissionRequest` | interactive |
+| `notification` | interactive |
+
+`userPromptTransformed` fires right after every `UserPromptSubmit`, so it is
+installed silent rather than playing the prompt sound twice.
 
 ## Optional Agent Commands
 

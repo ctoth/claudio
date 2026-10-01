@@ -19,8 +19,9 @@ func captainSettings(settings *SettingsMap) *captainhook.SettingsMap {
 }
 
 // InstallAgentHooks returns settings with the agent's claudio hooks
-// installed, replacing any claudio entries already present. The input
-// settings are not modified.
+// installed, replacing any claudio entries already present, including ones
+// under events this version no longer installs. The input settings are not
+// modified.
 func InstallAgentHooks(settings *SettingsMap, agent Agent, executablePath string) (*SettingsMap, error) {
 	specs, err := GenerateHookSpecs(executablePath, agent)
 	if err != nil {
@@ -33,6 +34,9 @@ func InstallAgentHooks(settings *SettingsMap, agent Agent, executablePath string
 	if err != nil {
 		return nil, fmt.Errorf("failed to copy settings: %w", err)
 	}
+	// Install only replaces claudio entries in the events it writes, so
+	// strip every claudio entry first.
+	captainhook.Uninstall(captainSettings(copied), claudioIdentity)
 	if err := captainhook.Install(captainSettings(copied), specs, claudioIdentity); err != nil {
 		return nil, fmt.Errorf("failed to install %s hooks: %w", agent, err)
 	}

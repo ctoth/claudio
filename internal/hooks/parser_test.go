@@ -516,6 +516,31 @@ func TestParseHookEventWithDefaultNormalizesCopilotSubagentStart(t *testing.T) {
 	}
 }
 
+// Copilot documents only the camelCase notification and
+// userPromptTransformed keys, so claudio passes the key with --hook-event.
+func TestParseHookEventWithDefaultNormalizesCopilotCamelCaseEvents(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		defaultEvent, payload, wantName, wantOperation string
+	}{
+		{"notification", `{"sessionId": "s", "cwd": "/tmp", "message": "Waiting for input"}`, "Notification", "notification"},
+		{"notification", `{"sessionId": "s", "cwd": "/tmp", "hook_event_name": "Notification", "message": "hi"}`, "Notification", "notification"},
+		{"userPromptTransformed", `{"sessionId": "s", "cwd": "/tmp", "prompt": "hi", "transformedPrompt": "hi"}`, "UserPromptTransformed", "prompt-transformed"},
+	}
+	for _, tc := range tests {
+		event, err := ParseHookEventWithDefault([]byte(tc.payload), tc.defaultEvent)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.defaultEvent, err)
+		}
+		if event.EventName != tc.wantName {
+			t.Errorf("%s: event name = %q, want %q", tc.defaultEvent, event.EventName, tc.wantName)
+		}
+		if got := event.GetContext().Operation; got != tc.wantOperation {
+			t.Errorf("%s: operation = %q, want %q", tc.defaultEvent, got, tc.wantOperation)
+		}
+	}
+}
+
 func TestExtractFileExtension(t *testing.T) {
 	t.Parallel()
 	cases := map[string]string{

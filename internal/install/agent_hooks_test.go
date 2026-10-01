@@ -30,6 +30,36 @@ func TestInstallAgentHooksEveryAgentAddsClaudioWithoutMutatingInput(t *testing.T
 	}
 }
 
+// Reinstalling after an upgrade must drop claudio entries from events the
+// new version no longer installs, such as Copilot's old PascalCase
+// Notification key, while keeping other tools' entries there.
+func TestInstallAgentHooksDropsClaudioFromRetiredEvents(t *testing.T) {
+	settings := SettingsMap{"hooks": map[string]any{
+		"Notification": []any{
+			map[string]any{"type": "command", "command": "/usr/local/bin/claudio --hook-agent copilot"},
+			map[string]any{"type": "command", "command": "other-tool"},
+		},
+		"Gone": []any{
+			map[string]any{"type": "command", "command": "/usr/local/bin/claudio --hook-agent copilot"},
+		},
+	}}
+	got, err := InstallAgentHooks(&settings, AgentCopilot, "/usr/local/bin/claudio")
+	if err != nil {
+		t.Fatal(err)
+	}
+	hooks := (*got)["hooks"].(map[string]any)
+	if _, ok := hooks["Gone"]; ok {
+		t.Errorf("retired event holding only claudio should be removed: %v", hooks["Gone"])
+	}
+	want := []any{map[string]any{"type": "command", "command": "other-tool"}}
+	if !reflect.DeepEqual(hooks["Notification"], want) {
+		t.Errorf("Notification = %v, want only other-tool", hooks["Notification"])
+	}
+	if _, ok := hooks["notification"]; !ok {
+		t.Error("claudio should install the camelCase notification key")
+	}
+}
+
 func TestInstallAgentHooksRejectsNonConcreteAgent(t *testing.T) {
 	for _, agent := range []Agent{AgentAuto, AgentAll, Agent("bogus")} {
 		if _, err := InstallAgentHooks(&SettingsMap{}, agent, "/usr/local/bin/claudio"); err == nil {

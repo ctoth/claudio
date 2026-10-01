@@ -42,8 +42,9 @@ func TestGenerateHookSpecsPerAgent(t *testing.T) {
 		}},
 		{AgentCopilot, func(event string) captainhook.HookSpec {
 			command := `"` + exe + `" --hook-agent copilot`
-			if event == "subagentStart" {
-				command += " --hook-event subagentStart"
+			switch event {
+			case "subagentStart", "notification", "userPromptTransformed":
+				command += " --hook-event " + event
 			}
 			return captainhook.HookSpec{
 				Event:   event,

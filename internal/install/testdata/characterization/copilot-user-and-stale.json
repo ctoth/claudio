@@ -8,13 +8,6 @@
           "type": "command"
         }
       ],
-      "Notification": [
-        {
-          "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent copilot",
-          "timeoutSec": 30,
-          "type": "command"
-        }
-      ],
       "PermissionRequest": [
         {
           "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent copilot",
@@ -45,10 +38,6 @@
       ],
       "PreToolUse": [
         {
-          "command": "echo user",
-          "type": "command"
-        },
-        {
           "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent copilot",
           "timeoutSec": 30,
           "type": "command"
@@ -62,6 +51,10 @@
         }
       ],
       "SessionStart": [
+        {
+          "command": "echo user",
+          "type": "command"
+        },
         {
           "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent copilot",
           "timeoutSec": 30,
@@ -89,9 +82,23 @@
           "type": "command"
         }
       ],
+      "notification": [
+        {
+          "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent copilot --hook-event notification",
+          "timeoutSec": 30,
+          "type": "command"
+        }
+      ],
       "subagentStart": [
         {
           "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent copilot --hook-event subagentStart",
+          "timeoutSec": 30,
+          "type": "command"
+        }
+      ],
+      "userPromptTransformed": [
+        {
+          "command": "\"C:/Program Files/claudio/claudio.exe\" --hook-agent copilot --hook-event userPromptTransformed",
           "timeoutSec": 30,
           "type": "command"
         }
@@ -101,7 +108,7 @@
   },
   "removed": {
     "hooks": {
-      "PreToolUse": [
+      "SessionStart": [
         {
           "command": "echo user",
           "type": "command"
@@ -112,7 +119,6 @@
   },
   "removedNames": [
     "ErrorOccurred",
-    "Notification",
     "PermissionRequest",
     "PostToolUse",
     "PostToolUseFailure",
@@ -123,6 +129,8 @@
     "Stop",
     "SubagentStop",
     "UserPromptSubmit",
-    "subagentStart"
+    "notification",
+    "subagentStart",
+    "userPromptTransformed"
   ]
 }

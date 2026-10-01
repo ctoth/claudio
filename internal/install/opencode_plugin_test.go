@@ -50,6 +50,51 @@ if (!active(await load(globalPath))) throw Error("foreign project file silenced 
 	}
 }
 
+// TestOpenCodePluginEventMapping drives the generated plugin's hooks with a
+// recorder in place of the claudio process and checks which Claude Code
+// events it sends.
+func TestOpenCodePluginEventMapping(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node is needed to execute the generated plugin")
+	}
+	const sendHead = "function send(payload) {"
+	source := OpenCodePluginSource("claudio")
+	if !strings.Contains(source, sendHead) {
+		t.Fatalf("plugin has no %q to stub", sendHead)
+	}
+	source = strings.Replace(source, sendHead, sendHead+"\n  globalThis.sent.push(payload); return", 1)
+	root := t.TempDir()
+	path := filepath.Join(root, "claudio.mjs")
+	if err := os.WriteFile(path, []byte(source), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	script := `import { pathToFileURL } from "node:url";
+globalThis.sent = [];
+const [path, root] = process.argv.slice(1);
+const h = await (await import(pathToFileURL(path))).ClaudioPlugin({ directory: root, worktree: root });
+const ev = (type, properties) => h.event({ event: { type, properties } });
+const todo = (status) => ({ content: "t", status, priority: "high" });
+await h["experimental.session.compacting"]({ sessionID: "s" }, { context: [] });
+await h["command.execute.before"]({ command: "init", sessionID: "s", arguments: "x" }, { parts: [] });
+await ev("todo.updated", { sessionID: "s", todos: [todo("pending")] });
+await ev("todo.updated", { sessionID: "s", todos: [todo("pending")] });
+await ev("todo.updated", { sessionID: "s", todos: [todo("completed")] });
+await ev("permission.replied", { sessionID: "s", requestID: "r", reply: "once" });
+await ev("permission.replied", { sessionID: "s", requestID: "r", reply: "reject" });
+await ev("session.deleted", { sessionID: "s", info: { id: "s" } });
+console.log(JSON.stringify(globalThis.sent.map((p) => p.hook_event_name + ":" + (p.command_name ?? ""))));
+`
+	output, err := exec.Command(node, "--input-type=module", "-e", script, path, root).CombinedOutput()
+	if err != nil {
+		t.Fatalf("generated plugin run: %v\n%s", err, output)
+	}
+	want := `["PreCompact:","UserPromptExpansion:init","TodoCreated:","TodoCompleted:","PermissionDenied:","SessionDelete:"]`
+	if got := strings.TrimSpace(string(output)); got != want {
+		t.Errorf("sent events =\n %s\nwant\n %s", got, want)
+	}
+}
+
 // TestOpenCodePluginNearestCopyWins loads the plugins through a symlinked
 // path (as macOS does with /var -> /private/var) and with nested project
 // installs: exactly one copy, the nearest to the directory, must play.
