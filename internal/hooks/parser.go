@@ -189,6 +189,10 @@ func NormalizeEventName(name string) string {
 	switch strings.TrimSpace(name) {
 	case "subagentStart":
 		return "SubagentStart"
+	case "notification":
+		return "Notification"
+	case "userPromptTransformed":
+		return "UserPromptTransformed"
 	default:
 		return name
 	}
@@ -274,10 +278,18 @@ var lifecycleEvents = map[string]lifecycleEvent{
 	"ElicitationResult":   {Interactive, "elicitation-result", "elicitation-result"},
 	"TodoCreated":         {Loading, "todo-created", "todo-created"},
 	"TodoCompleted":       {Completion, "todo-completed", "todo-completed"},
+	"DirectoryAdded":      {System, "directory-added", "directory-added"},
+	"PreModelSwitch":      {System, "model-switching", "pre-model-switch"},
+	"PostModelSwitch":     {System, "model-switched", "post-model-switch"},
+	"Interrupt":           {Interactive, "interrupt", "interrupt"},
+	"SessionDelete":       {Interactive, "session-delete", "session-delete"},
 	"MessageDisplay":      {Silent, "", "message-display"},
-	"BeforeModel":         {Silent, "", "beforemodel"},
-	"AfterModel":          {Silent, "", "aftermodel"},
-	"BeforeToolSelection": {Silent, "", "beforetoolselection"},
+	// Copilot fires UserPromptTransformed for every prompt, right after
+	// UserPromptSubmit, so a sound would double the prompt sound.
+	"UserPromptTransformed": {Silent, "", "prompt-transformed"},
+	"BeforeModel":           {Silent, "", "beforemodel"},
+	"AfterModel":            {Silent, "", "aftermodel"},
+	"BeforeToolSelection":   {Silent, "", "beforetoolselection"},
 }
 
 // unknownEvent is the context for events claudio does not recognize.

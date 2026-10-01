@@ -83,7 +83,7 @@ func mustSpec(t *testing.T, a Agent) agentSpec {
 func TestAgentSpecsCoverEveryConcreteAgent(t *testing.T) {
 	for _, a := range []Agent{AgentClaude, AgentCodex, AgentGemini, AgentQwen, AgentCopilot} {
 		s := mustSpec(t, a)
-		if len(*s.registry) == 0 || s.homeDir == "" || s.globalFile == "" || len(s.projectPaths) == 0 {
+		if len(a.Registry()) == 0 || s.homeDir == "" || s.globalFile == "" || len(s.projectPaths) == 0 {
 			t.Errorf("incomplete spec for %s: %+v", a, s)
 		}
 		if parsed, err := ParseAgent(string(a)); err != nil || parsed != a {

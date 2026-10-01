@@ -204,21 +204,9 @@ func TestInstallVerifyHonorsDefaultEnabledFalse(t *testing.T) {
 	// recognizer opts in to .test/.test.exe when this env var is set.
 	t.Setenv("CLAUDIO_TEST_RECOGNIZE_GO_TEST", "1")
 
-	// Save and restore AllHooks. We mutate the package-level registry
-	// for the duration of this test.
-	prev := install.AllHooks
-	defer func() { install.AllHooks = prev }()
-
-	// Build a registry where one hook is DefaultEnabled=false. The write
-	// step will skip it; the verify step must also skip it.
-	modified := make([]install.HookDefinition, len(prev))
-	copy(modified, prev)
-	// Flip the first hook to disabled.
-	if len(modified) == 0 {
-		t.Fatal("install.AllHooks unexpectedly empty")
-	}
-	modified[0].DefaultEnabled = false
-	install.AllHooks = modified
+	// Claude's FileChanged hook is DefaultEnabled=false. The write step
+	// skips it; the verify step must also skip it.
+	const disabledHook = "FileChanged"
 
 	// Point the install at a tempdir-scoped settings file.
 	tempDir := t.TempDir()
@@ -237,10 +225,10 @@ func TestInstallVerifyHonorsDefaultEnabledFalse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read settings: %v", err)
 	}
-	if strings.Contains(string(data), modified[0].Name) {
+	if strings.Contains(string(data), disabledHook) {
 		// The merger may still mention the disabled hook if it was
 		// previously present; we wrote {} so it should be absent.
-		t.Errorf("disabled hook %q unexpectedly written to settings: %s", modified[0].Name, string(data))
+		t.Errorf("disabled hook %q unexpectedly written to settings: %s", disabledHook, string(data))
 	}
 }
 

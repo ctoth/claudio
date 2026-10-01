@@ -78,10 +78,15 @@ func (a Agent) Matcher() string {
 
 // Registry returns the hook definitions supported for the agent.
 func (a Agent) Registry() []HookDefinition {
-	if s, ok := a.spec(); ok {
-		return *s.registry
+	s, ok := a.spec()
+	switch {
+	case !ok:
+		return nil
+	case s.catalogAgent == "":
+		return OpenCodeHooks
+	default:
+		return catalogRegistry(s.catalogAgent, s.flagCamelCaseEvents)
 	}
-	return nil
 }
 
 // EnabledHooks returns the agent's default-enabled hook definitions.

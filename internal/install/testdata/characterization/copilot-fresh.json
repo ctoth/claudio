@@ -8,13 +8,6 @@
           "type": "command"
         }
       ],
-      "Notification": [
-        {
-          "command": "/usr/local/bin/claudio --hook-agent copilot",
-          "timeoutSec": 30,
-          "type": "command"
-        }
-      ],
       "PermissionRequest": [
         {
           "command": "/usr/local/bin/claudio --hook-agent copilot",
@@ -85,9 +78,23 @@
           "type": "command"
         }
       ],
+      "notification": [
+        {
+          "command": "/usr/local/bin/claudio --hook-agent copilot --hook-event notification",
+          "timeoutSec": 30,
+          "type": "command"
+        }
+      ],
       "subagentStart": [
         {
           "command": "/usr/local/bin/claudio --hook-agent copilot --hook-event subagentStart",
+          "timeoutSec": 30,
+          "type": "command"
+        }
+      ],
+      "userPromptTransformed": [
+        {
+          "command": "/usr/local/bin/claudio --hook-agent copilot --hook-event userPromptTransformed",
           "timeoutSec": 30,
           "type": "command"
         }
@@ -100,7 +107,6 @@
   },
   "removedNames": [
     "ErrorOccurred",
-    "Notification",
     "PermissionRequest",
     "PostToolUse",
     "PostToolUseFailure",
@@ -111,6 +117,8 @@
     "Stop",
     "SubagentStop",
     "UserPromptSubmit",
-    "subagentStart"
+    "notification",
+    "subagentStart",
+    "userPromptTransformed"
   ]
 }

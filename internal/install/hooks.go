@@ -46,22 +46,24 @@ func GenerateHookSpecs(executablePath string, agent Agent) ([]captainhook.HookSp
 	if err != nil {
 		return nil, err
 	}
+	catalog, _ := captainhook.Lookup(spec.catalogAgent)
 	hooks := agent.EnabledHooks()
 	specs := make([]captainhook.HookSpec, 0, len(hooks))
 	for _, hook := range hooks {
-		specs = append(specs, spec.hookSpec(executablePath, hook.Name))
+		specs = append(specs, spec.hookSpec(executablePath, hook, catalog.Flat))
 	}
 	slog.Debug("generated claudio hook specs", "agent", agent, "hook_count", len(specs))
 	return specs, nil
 }
 
 // hookSpec returns the captain-hook spec for one of the agent's events.
-func (s agentSpec) hookSpec(executablePath, event string) captainhook.HookSpec {
+// flat selects the layout without matcher groups.
+func (s agentSpec) hookSpec(executablePath string, hook HookDefinition, flat bool) captainhook.HookSpec {
 	hs := captainhook.HookSpec{
-		Event:   event,
+		Event:   hook.Name,
 		Matcher: s.matcher,
-		Command: s.hookCommand(executablePath, event),
-		Flat:    s.shape == shapeFlatCommands,
+		Command: s.hookCommand(executablePath, hook),
+		Flat:    flat,
 	}
 	if s.powerShellCommand {
 		hs.Command, hs.CommandWindows = powerShellHookCommands(executablePath)
@@ -89,14 +91,14 @@ func powerShellHookCommands(executablePath string) (command, commandWindows stri
 		"& '" + powerShellSingleQuoteEscaper.Replace(executablePath) + "'"
 }
 
-// hookCommand returns the command string the agent runs for hookName.
-func (s agentSpec) hookCommand(executablePath, hookName string) string {
+// hookCommand returns the command string the agent runs for hook.
+func (s agentSpec) hookCommand(executablePath string, hook HookDefinition) string {
 	if !s.hookAgentFlag {
 		return executablePath
 	}
 	command := quoteCommandArg(executablePath) + " --hook-agent " + string(s.agent)
-	if s.eventFlagHooks[hookName] {
-		command += " --hook-event " + hookName
+	if hook.EventFlag {
+		command += " --hook-event " + hook.Name
 	}
 	return command
 }

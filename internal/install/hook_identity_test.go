@@ -106,13 +106,14 @@ func TestIsClaudioHookFindsClaudioInMergedHookArrays(t *testing.T) {
 }
 
 func TestHookCommandQuotingAndRecognitionBranches(t *testing.T) {
-	if got := mustSpec(t, AgentClaude).hookCommand("/usr/local/bin/claudio", "PreToolUse"); got != "/usr/local/bin/claudio" {
+	preToolUse := HookDefinition{Name: "PreToolUse"}
+	if got := mustSpec(t, AgentClaude).hookCommand("/usr/local/bin/claudio", preToolUse); got != "/usr/local/bin/claudio" {
 		t.Errorf("claude hook command = %q", got)
 	}
-	if got := mustSpec(t, AgentGemini).hookCommand(`/opt/Claudio Tools/claudio`, "PreToolUse"); got != `"/opt/Claudio Tools/claudio" --hook-agent gemini` {
+	if got := mustSpec(t, AgentGemini).hookCommand(`/opt/Claudio Tools/claudio`, preToolUse); got != `"/opt/Claudio Tools/claudio" --hook-agent gemini` {
 		t.Errorf("gemini hook command = %q", got)
 	}
-	if got := mustSpec(t, AgentQwen).hookCommand(`/opt/cla"udio`, "PreToolUse"); got != `"/opt/cla\"udio" --hook-agent qwen` {
+	if got := mustSpec(t, AgentQwen).hookCommand(`/opt/cla"udio`, preToolUse); got != `"/opt/cla\"udio" --hook-agent qwen` {
 		t.Errorf("qwen hook command = %q", got)
 	}
 	if got := quoteCommandArg("plain"); got != "plain" {
