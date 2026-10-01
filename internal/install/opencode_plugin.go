@@ -55,6 +55,9 @@ export const ClaudioPlugin = async ({ directory, worktree }) => {
     if (dir === worktree || dirname(dir) === dir) break
   }
   const subagents = new Set()
+  // todo.updated carries the whole list without ids, so new and newly
+  // completed todos are found by comparing counts per session.
+  const todoCounts = new Map()
   const hook = (event, sessionID, extra = {}) =>
     send({ hook_event_name: event, session_id: sessionID || "opencode", cwd: directory, ...extra })
 
@@ -62,6 +65,9 @@ export const ClaudioPlugin = async ({ directory, worktree }) => {
     "chat.message": async (input) => {
       if (!subagents.has(input.sessionID)) hook("UserPromptSubmit", input.sessionID)
     },
+    "command.execute.before": async (input) =>
+      hook("UserPromptExpansion", input.sessionID, { command_name: input.command, command_args: input.arguments }),
+    "experimental.session.compacting": async (input) => hook("PreCompact", input.sessionID),
     "tool.execute.before": async (input, output) =>
       hook("PreToolUse", input.sessionID, { tool_name: input.tool, tool_input: output?.args ?? {} }),
     "tool.execute.after": async (input, output) => {
@@ -96,6 +102,23 @@ export const ClaudioPlugin = async ({ directory, worktree }) => {
         case "permission.updated":
           hook("PermissionRequest", p.sessionID)
           break
+        case "permission.replied":
+          if (p.reply === "reject") hook("PermissionDenied", p.sessionID)
+          break
+        case "session.deleted":
+          subagents.delete(p.sessionID)
+          todoCounts.delete(p.sessionID)
+          hook("SessionDelete", p.sessionID)
+          break
+        case "todo.updated": {
+          const todos = Array.isArray(p.todos) ? p.todos : []
+          const now = { total: todos.length, done: todos.filter((t) => t.status === "completed").length }
+          const before = todoCounts.get(p.sessionID) ?? { total: 0, done: 0 }
+          todoCounts.set(p.sessionID, now)
+          if (now.total > before.total) hook("TodoCreated", p.sessionID)
+          if (now.done > before.done) hook("TodoCompleted", p.sessionID)
+          break
+        }
       }
     },
   }

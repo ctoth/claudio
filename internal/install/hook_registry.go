@@ -49,10 +49,18 @@ func catalogRegistry(agent captainhook.Agent, flagCamelCase bool) []HookDefiniti
 // the plugin maps its own events to these.
 var OpenCodeHooks = []HookDefinition{
 	{Name: "SessionStart", DefaultEnabled: true},
+	{Name: "SessionDelete", DefaultEnabled: true},
 	{Name: "UserPromptSubmit", DefaultEnabled: true},
+	{Name: "UserPromptExpansion", DefaultEnabled: true},
 	{Name: "PreToolUse", DefaultEnabled: true},
 	{Name: "PostToolUse", DefaultEnabled: true},
 	{Name: "PermissionRequest", DefaultEnabled: true},
+	{Name: "PermissionDenied", DefaultEnabled: true},
+	{Name: "SubagentStart", DefaultEnabled: true},
+	{Name: "SubagentStop", DefaultEnabled: true},
+	{Name: "TodoCreated", DefaultEnabled: true},
+	{Name: "TodoCompleted", DefaultEnabled: true},
+	{Name: "PreCompact", DefaultEnabled: true},
 	{Name: "PostCompact", DefaultEnabled: true},
 	{Name: "Stop", DefaultEnabled: true},
 	{Name: "StopFailure", DefaultEnabled: true},

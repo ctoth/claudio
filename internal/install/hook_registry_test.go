@@ -1,6 +1,8 @@
 package install
 
 import (
+	"maps"
+	"regexp"
 	"slices"
 	"testing"
 
@@ -77,9 +79,22 @@ func TestCopilotCamelCaseOnlyEventsPassTheirName(t *testing.T) {
 	}
 }
 
-func TestOpenCodeRegistryIsClaudiosPluginList(t *testing.T) {
-	if got, want := AgentOpenCode.HookNames(), len(OpenCodeHooks); len(got) != want {
-		t.Errorf("opencode hook names = %v, want the %d plugin events", got, want)
+// OpenCodeHooks must list exactly the events the plugin sends.
+func TestOpenCodeRegistryMatchesPluginEvents(t *testing.T) {
+	sent := map[string]bool{}
+	for _, m := range regexp.MustCompile(`hook\(\s*(?:[^,]*\?\s*)?"(\w+)"(?:\s*:\s*"(\w+)")?`).FindAllStringSubmatch(OpenCodePluginSource("claudio"), -1) {
+		for _, name := range m[1:] {
+			if name != "" {
+				sent[name] = true
+			}
+		}
+	}
+	listed := map[string]bool{}
+	for _, name := range AgentOpenCode.HookNames() {
+		listed[name] = true
+	}
+	if !maps.Equal(sent, listed) {
+		t.Errorf("OpenCodeHooks = %v, plugin sends %v", slices.Sorted(maps.Keys(listed)), slices.Sorted(maps.Keys(sent)))
 	}
 }
 
