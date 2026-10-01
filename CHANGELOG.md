@@ -37,7 +37,7 @@ release tags and current checkout history.
 - Configs and `CLAUDIO_AUDIO_BACKEND` values that still say `malgo` load as
   `oto` and log a deprecation warning instead of failing validation.
 - Hooks for every agent (Claude Code, Codex, Gemini CLI, Qwen Code, GitHub
-  Copilot CLI) are installed and removed through Captain Hook v0.2.0.
+  Copilot CLI) are installed and removed through Captain Hook v0.3.0.
   Unrelated hook commands in mixed groups are preserved, and Codex gets both
   portable and PowerShell-native commands.
 - Gemini CLI hook groups no longer carry an empty `"matcher": ""`; an absent
