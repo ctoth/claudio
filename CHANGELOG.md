@@ -15,7 +15,22 @@ release tags and current checkout history.
   events to Claudio. A global and a project plugin never play twice, and
   uninstall only deletes a plugin Claudio wrote.
 
+- New hook events: Claude Code `DirectoryAdded`, `PreModelSwitch` and
+  `PostModelSwitch`; Codex `SessionEnd` and `Interrupt`; Qwen Code
+  `PostToolBatch`, `UserPromptExpansion`, `SessionDelete`,
+  `PermissionDenied`, `InstructionsLoaded` and `MessageDisplay` (off by
+  default); GitHub Copilot CLI `userPromptTransformed` (silent, since it
+  follows every prompt submit).
+- The OpenCode plugin also forwards pre-compaction, slash commands, session
+  deletion, rejected permissions, and created or completed todos.
+
 ### Changed
+- Each agent's hook event list now comes from Captain Hook's event catalog,
+  so Claudio and other Captain Hook users share one checked list.
+- GitHub Copilot CLI notifications are installed under the documented
+  camelCase `notification` key. Reinstalling removes Claudio's old
+  `Notification` entry, and any Claudio entry under an event Claudio no
+  longer installs.
 - Replaced the malgo (miniaudio) backend with Oto. Native playback no longer
   needs cgo or a C compiler on any platform, and release binaries are built
   with `CGO_ENABLED=0`.

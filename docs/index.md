@@ -87,30 +87,35 @@ Claude Code installs these default-enabled hooks:
 - `InstructionsLoaded`
 - `ConfigChange`
 - `CwdChanged`
+- `DirectoryAdded`
 - `WorktreeCreate`
 - `WorktreeRemove`
 - `PreCompact`
 - `PostCompact`
+- `PreModelSwitch`
+- `PostModelSwitch`
 - `Elicitation`
 - `ElicitationResult`
 - `SessionEnd`
 
-Claude Code also has `MessageDisplay` and `FileChanged` in Claudio's registry,
-but they are disabled by default to avoid noisy audio from streamed text and
-broad file watchers.
+Claude Code and Qwen Code also have `MessageDisplay` (and Claude Code
+`FileChanged`) in Claudio's registry, but they are disabled by default to
+avoid noisy audio from streamed text and broad file watchers.
 
 Codex installs these default-enabled hooks:
 
 - `PreToolUse`
+- `PermissionRequest`
 - `PostToolUse`
-- `UserPromptSubmit`
-- `Stop`
-- `SubagentStop`
-- `SubagentStart`
 - `PreCompact`
 - `PostCompact`
 - `SessionStart`
-- `PermissionRequest`
+- `SessionEnd`
+- `UserPromptSubmit`
+- `SubagentStart`
+- `SubagentStop`
+- `Stop`
+- `Interrupt`
 
 Gemini installs these default-enabled hooks:
 
@@ -131,35 +136,41 @@ Qwen Code installs these default-enabled hooks:
 - `PreToolUse`
 - `PostToolUse`
 - `PostToolUseFailure`
+- `PostToolBatch`
+- `Notification`
 - `UserPromptSubmit`
+- `UserPromptExpansion`
 - `SessionStart`
-- `SessionEnd`
 - `Stop`
-- `StopFailure`
 - `SubagentStart`
 - `SubagentStop`
 - `PreCompact`
 - `PostCompact`
-- `Notification`
+- `SessionEnd`
+- `SessionDelete`
 - `PermissionRequest`
+- `PermissionDenied`
+- `StopFailure`
 - `TodoCreated`
 - `TodoCompleted`
+- `InstructionsLoaded`
 
 GitHub Copilot CLI installs these default-enabled hooks:
 
+- `SessionStart`
+- `SessionEnd`
+- `UserPromptSubmit`
+- `userPromptTransformed` (silent)
 - `PreToolUse`
 - `PostToolUse`
 - `PostToolUseFailure`
-- `UserPromptSubmit`
-- `SessionStart`
-- `SessionEnd`
 - `Stop`
 - `subagentStart`
 - `SubagentStop`
-- `PreCompact`
-- `Notification`
-- `PermissionRequest`
 - `ErrorOccurred`
+- `PreCompact`
+- `PermissionRequest`
+- `notification`
 
 Command Code installs these default-enabled hooks:
 
@@ -168,9 +179,10 @@ Command Code installs these default-enabled hooks:
 - `Stop`
 - `SessionStart`
 
-The OpenCode plugin sends `SessionStart`, `UserPromptSubmit`, `PreToolUse`,
-`PostToolUse`, `PermissionRequest`, `PostCompact`, `Stop`, `StopFailure`,
-`SubagentStart`, and `SubagentStop`.
+The OpenCode plugin sends `SessionStart`, `SessionDelete`, `UserPromptSubmit`,
+`UserPromptExpansion`, `PreToolUse`, `PostToolUse`, `PermissionRequest`,
+`PermissionDenied`, `SubagentStart`, `SubagentStop`, `TodoCreated`,
+`TodoCompleted`, `PreCompact`, `PostCompact`, `Stop`, and `StopFailure`.
 
 ## How Sound Selection Works
 
