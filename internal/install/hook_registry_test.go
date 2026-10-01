@@ -79,6 +79,12 @@ func TestCopilotCamelCaseOnlyEventsPassTheirName(t *testing.T) {
 	}
 }
 
+func TestCatalogRegistryUnknownAgentIsEmpty(t *testing.T) {
+	if got := catalogRegistry("bogus", false); got != nil {
+		t.Errorf("catalogRegistry(bogus) = %v, want nil", got)
+	}
+}
+
 // OpenCodeHooks must list exactly the events the plugin sends.
 func TestOpenCodeRegistryMatchesPluginEvents(t *testing.T) {
 	sent := map[string]bool{}
