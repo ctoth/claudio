@@ -487,6 +487,15 @@ func (e *HookEvent) analyzeToolResponse() (success bool, hasError bool, errorTyp
 		return false, true, ""
 	}
 
+	// Gemini reports a nonzero shell exit only as an "Exit Code: N" line in
+	// llmContent, without setting error.
+	if llmContent, ok := response["llmContent"].(string); ok {
+		if exitCode, ok := parseExitCode(llmContent); ok && exitCode != 0 {
+			slog.Debug("tool response llmContent has nonzero exit code", "exit_code", exitCode)
+			return false, true, ""
+		}
+	}
+
 	// Check for tool-specific error patterns
 	if e.ToolName != nil {
 		switch normalizeToolName(*e.ToolName) {
