@@ -524,6 +524,20 @@ in order. Times are in seconds and gains in dB.
 | `voices`, `detune` | Stacked copies spread over +/- `detune` cents and across the stereo field. |
 | `lowpass`, `highpass`, `q` | Filter cutoffs in Hz and resonance. `lowpass_end` and `highpass_end` sweep the cutoff over the note. |
 
+A layer can also play a recording instead of an oscillator:
+
+| Sample setting | Meaning |
+| --- | --- |
+| `sample` | Path to a WAV, MP3 or AIFF file, relative to the recipe. It must stay inside the recipe's directory. |
+| `start`, `end` | The slice to play, in seconds into the file. Without `end` it plays to the end of the file. |
+| `speed` | Plays faster or slower, which moves the pitch too: `2` is an octave up and half as long. To tune a recording to a note, use target Hz divided by its measured Hz. |
+| `reverse` | `true` plays the slice backwards. |
+| `dur` | Optional. Leave it out to play the whole slice; set it to stop a long ring early, with `release` as the fade. |
+
+A sample layer takes `gain`, `pan`, `tremolo`, the envelope and the filters,
+mixes with oscillator layers in the same sound, and goes through the sound's
+effects. It has no attack and a 10 ms release unless you set them.
+
 | Effect `type` | Settings |
 | --- | --- |
 | `reverb` | `size` (0 to 1), `damp`, `mix` |
@@ -551,6 +565,74 @@ Some things that hold across packs:
   `system/session-start.wav`.
 - A reverb or delay tail counts toward a sound's length. A loading sound has
   one second in total.
+
+### Building From Recordings
+
+Most good packs start from recordings. The process:
+
+1. **Download** raw material into `source/raw/<collection>/`. Keep the
+   collection name in the path so it stays obvious where a file came from.
+2. **Record where each file came from** in `source/sources.json` as you go,
+   not afterwards:
+
+   ```json
+   {
+     "sources": [
+       {
+         "file": "raw/kenney/impact-sounds/impactWood_medium_000.wav",
+         "title": "impactWood_medium_000",
+         "author": "Kenney",
+         "source": "https://kenney.nl/assets/impact-sounds",
+         "license": "CC0 1.0",
+         "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+       }
+     ]
+   }
+   ```
+
+   A file whose licence you cannot establish does not go in a pack you
+   publish. Credit every author in the README; CC BY requires it.
+3. **Find the sounds** by measuring: `claudio soundpack audit source/raw/<collection>`
+   prints length, hits, pitch, trend and texture for every file. Ignore the
+   warnings; raw material is not mastered yet.
+4. **Use them from the recipe** as sample layers. Every cut, repitch and
+   fade is then written down, and the pack rebuilds from `source/recipe.json`
+   and `source/raw/`.
+5. **Build and audit** as for any pack: `synth`, `master`, `audit --strict`.
+
+Where to get recordings you may redistribute:
+
+| Source | Licence | Notes |
+| --- | --- | --- |
+| [Kenney](https://kenney.nl/assets/category:Audio) | CC0 | Designed interface, impact, sci-fi and game sounds, downloadable as zip files. OGG: convert with `ffmpeg -i in.ogg out.wav`. |
+| [Wikimedia Commons](https://commons.wikimedia.org) | Per file | Real-world recordings. The API returns each file's licence and author, so a search can be filtered to public domain, CC0 and CC BY (see below). |
+| [Freesound](https://freesound.org) | Per file | The largest library. Search and download need an API key; filter on `license:"Creative Commons 0"`. |
+| [BigSoundBank](https://bigsoundbank.com) | CC0 | Real-world recordings. The site blocks automated clients, so download by hand. |
+
+Searching Commons for audio with its licence and author:
+
+```bash
+curl -s -A "my-pack-tooling/1.0 (https://example.com/contact)" --get \
+  "https://commons.wikimedia.org/w/api.php" \
+  --data-urlencode "action=query" --data-urlencode "format=json" \
+  --data-urlencode "generator=search" --data-urlencode "gsrnamespace=6" \
+  --data-urlencode "gsrsearch=filetype:audio singing bowl" \
+  --data-urlencode "prop=imageinfo" \
+  --data-urlencode "iiprop=url|size|extmetadata" \
+  --data-urlencode "iiextmetadatafilter=LicenseShortName|Artist|LicenseUrl"
+```
+
+Keep the response beside the downloads: it is your provenance record.
+Commons asks for a descriptive `User-Agent` and rate-limits bulk
+downloads: fetch one file every few seconds, and check that what you saved
+is audio, because a throttled request returns an HTML error page with the
+file's name on it. Search results are loose (a search for "ratchet" also
+returns pronunciations and songs), so choose by title and by measuring.
+
+Sounds from films, television and games are copyrighted however they reach
+you. A pack built from them is yours to use; whether to publish it is a
+decision to make knowingly, and `sources.json` should say plainly where
+each clip came from.
 
 ### Choosing What To Cut
 
