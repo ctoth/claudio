@@ -45,6 +45,14 @@ const (
 	tailSlack = 50 * time.Millisecond
 
 	maxPasses = 6
+
+	// The most a sound's peaks are held down to reach the target. Beyond
+	// this the sound is left quiet instead: it is all spike and no body,
+	// and limiting it harder would change what it is.
+	maxLimitDB = 9.0
+	// Room left under the ceiling for the true peak to exceed the sample
+	// peak the limiter works to.
+	limiterMarginDB = 0.3
 )
 
 // Options are the audit thresholds to master to, plus how a truncated sound
@@ -67,7 +75,10 @@ type Result struct {
 	Output string   `json:"output,omitempty"`
 	Keys   []string `json:"keys,omitempty"`
 
-	GainDB        float64 `json:"gain_db"`
+	GainDB float64 `json:"gain_db"`
+	// LimitedDB is how far the sound's peaks were held down so the rest of
+	// it could reach the target. Zero for a sound that only needed gain.
+	LimitedDB     float64 `json:"limited_db"`
 	TrimmedLeadMS float64 `json:"trimmed_lead_ms"`
 	TrimmedTailMS float64 `json:"trimmed_tail_ms"`
 	// Truncated is set when the sound was longer than its category allows
@@ -147,11 +158,87 @@ func Process(frames [][2]float64, sourceRate int, categories []string, o Options
 			break
 		}
 	}
+
+	// A sound that is still short of the target has peaks in the way.
+	// Recordings of impacts are like this: a few spikes far above the body
+	// of the sound. Push it up and hold only the spikes down.
+	for range 3 {
+		short := o.TargetLUFS - loudness.Measure(out, rate).LoudnessLUFS
+		if short <= o.ToleranceLU/2 || res.LimitedDB >= maxLimitDB || math.IsInf(short, 0) {
+			break
+		}
+		boost := math.Min(short, maxLimitDB-res.LimitedDB)
+		scale := math.Pow(10, boost/20)
+		for i := range out {
+			out[i][0] *= scale
+			out[i][1] *= scale
+		}
+		limit(out, math.Pow(10, (o.PeakCeilingDBTP-limiterMarginDB)/20))
+		res.LimitedDB += boost
+		res.GainDB += boost
+	}
+	if res.LimitedDB > 0 {
+		// The limiter works on samples; settle the true peak with gain.
+		if trim := loudness.GainDB(loudness.Measure(out, rate), o.TargetLUFS, o.PeakCeilingDBTP); trim < 0 {
+			scale := math.Pow(10, trim/20)
+			for i := range out {
+				out[i][0] *= scale
+				out[i][1] *= scale
+			}
+			res.GainDB += trim
+		}
+	}
 	res.GainDB = math.Round(res.GainDB*100) / 100
+	res.LimitedDB = math.Round(res.LimitedDB*100) / 100
 
 	res.After = audit.Sound{Categories: categories}
 	audit.Analyze(&res.After, out, rate, o.Options)
 	return out, res
+}
+
+// limit holds frames under ceiling (a linear sample level) by turning the
+// gain down around each peak: the reduction begins 2 ms before the peak, so
+// the peak itself is not flattened into a square edge, and recovers over
+// about 60 ms. Both channels get the same gain, so the stereo image holds.
+func limit(frames [][2]float64, ceiling float64) {
+	const lookahead = rate * 2 / 1000
+	release := 1 - math.Exp(-1/(0.06*rate))
+
+	// The gain each sample needs, then the least gain needed over the
+	// lookahead, so the reduction arrives ahead of the peak.
+	need := make([]float64, len(frames)+lookahead)
+	for i := range need {
+		need[i] = 1
+		if i < len(frames) {
+			if peak := math.Max(math.Abs(frames[i][0]), math.Abs(frames[i][1])); peak > ceiling {
+				need[i] = ceiling / peak
+			}
+		}
+	}
+	held := make([]float64, len(frames))
+	prev := 1.0
+	for i := range held {
+		least := 1.0
+		for _, g := range need[i : i+lookahead+1] {
+			least = math.Min(least, g)
+		}
+		// Recover gradually, but never above what the lookahead allows.
+		prev = math.Min(least, prev+(1-prev)*release)
+		held[i] = prev
+	}
+	// Average over the lookahead to round the corner into each reduction.
+	// Every value averaged was already low enough for this sample, so the
+	// average is too.
+	var sum float64
+	for i := range frames {
+		sum += held[i]
+		if i >= lookahead {
+			sum -= held[i-lookahead]
+		}
+		g := sum / float64(min(i+1, lookahead))
+		frames[i][0] *= g
+		frames[i][1] *= g
+	}
 }
 
 // fade applies a raised-cosine fade to frames[from:to], rising when in is

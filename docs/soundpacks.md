@@ -399,8 +399,13 @@ claudio soundpack audit ./my-pack --strict
 
 For each sound it trims silence from both ends, cuts anything over its
 category's limit (with a fade), and applies one gain so the sound sits at the
-target without its peak crossing the ceiling. Nothing is compressed or
-limited, so the sound keeps its shape. Output is 48 kHz 16-bit WAV, mono when
+target without its peak crossing the ceiling. For most sounds that is all:
+nothing is compressed, so the sound keeps its shape. A sound that gain alone
+leaves short of the target has a few peaks standing far above the rest of
+it, which is what a recorded knock or click looks like. `master` holds just
+those peaks down (by at most 9 dB, starting 2 ms ahead of each one) so the
+body of the sound can come up, and reports it as `peaks limited`. You do
+not need to add `drive` to a recipe to make a spiky recording loud enough. Output is 48 kHz 16-bit WAV, mono when
 both channels are identical: the player's own format, so nothing is resampled
 at play time and there is no encoder padding.
 

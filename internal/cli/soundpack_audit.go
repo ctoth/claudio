@@ -253,6 +253,9 @@ func printMasterReport(cmd *cobra.Command, results []master.Result, outDir strin
 			notes = append(notes, "truncated")
 			truncated++
 		}
+		if r.LimitedDB > 0 {
+			notes = append(notes, fmt.Sprintf("peaks limited %.1f dB", r.LimitedDB))
+		}
 		if r.TrimmedLeadMS >= 1 {
 			notes = append(notes, fmt.Sprintf("-%.0f ms lead", r.TrimmedLeadMS))
 		}
