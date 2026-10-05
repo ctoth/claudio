@@ -107,9 +107,20 @@ to the platform pack.
 
 ### Installing A Pack From Git
 
-There is no central soundpack index. To share a pack, put it in a git
-repository and hand out the URL. Any public or private repository that
+A pack is shared as a git repository. Any public or private repository that
 contains a directory pack or a JSON pack works.
+
+To find published packs:
+
+```bash
+claudio soundpack search          # every published pack, most starred first
+claudio soundpack search retro    # narrowed by words
+```
+
+There is no central index to register with. `search` lists GitHub
+repositories tagged with the topic `claudio-soundpack` and prints the
+command that installs each one. See [Publishing A Pack](#publishing-a-pack)
+to make yours show up.
 
 ```bash
 claudio soundpack add https://github.com/owner/repo --name my-pack --default
@@ -438,6 +449,108 @@ jobs:
       - run: claudio soundpack validate soundpack.json
       - run: claudio soundpack audit soundpack.json --strict
 ```
+
+### Publishing A Pack
+
+Three conventions make a pack findable and installable by name:
+
+1. Name the repository `claudio-soundpack-<name>`.
+2. Keep the pack at the repository root: `soundpack.json`, or a directory
+   pack's category folders.
+3. Add the GitHub topic `claudio-soundpack`:
+
+   ```bash
+   gh repo edit --add-topic claudio-soundpack
+   ```
+
+`claudio soundpack search` then lists it, and anyone can install it with
+`claudio soundpack add gh:<owner>/claudio-soundpack-<name> --name <name>`.
+Put a one-line description on the repository; it is what search shows.
+
+### Synthesizing Sounds
+
+You do not need recordings to make a pack. `synth` renders sounds from a
+JSON recipe, so a pack can be written, reviewed and changed as text, and
+everything in it is your own work.
+
+```json
+{
+  "name": "my-pack",
+  "description": "Soft wooden taps",
+  "version": "1.0.0",
+  "sounds": {
+    "tick": {
+      "about": "one short woody tap",
+      "layers": [
+        {"freq": 900, "freq_end": 500, "dur": 0.03, "decay": 0.03, "sustain": 0},
+        {"wave": "noise", "dur": 0.01, "highpass": 2000, "gain": -12}
+      ]
+    },
+    "done": {
+      "about": "two rising notes with a little room",
+      "layers": [{"wave": "triangle", "notes": ["C5", "G5"], "step": 0.09, "dur": 0.08, "release": 0.12}],
+      "effects": [{"type": "reverb", "size": 0.3, "mix": 0.15}]
+    }
+  },
+  "mappings": {
+    "default.wav": "tick",
+    "loading/loading.wav": "tick",
+    "success/success.wav": "done"
+  }
+}
+```
+
+```bash
+claudio soundpack synth source/recipe.json --out source   # source/synth/*.wav + source/soundpack.json
+claudio soundpack master source/soundpack.json --out .    # soundpack.json + sounds/
+claudio soundpack audit soundpack.json --strict
+```
+
+A sound is one or more layers mixed together, then passed through effects
+in order. Times are in seconds and gains in dB.
+
+| Layer setting | Meaning |
+| --- | --- |
+| `wave` | `sine` (default), `triangle`, `square`, `saw`, `pulse`, or `noise`. |
+| `freq`, `freq_end` | Pitch in Hz or as a note name (`"A4"`, `"C#5"`, `"Bb3"`). `freq_end` glides to a second pitch over `dur`. |
+| `notes`, `step` | A sequence instead of one pitch: each note lasts `dur` and starts `step` after the last. `0` is a rest. |
+| `at`, `dur` | When the layer starts, and how long each note is held before its release. |
+| `attack`, `decay`, `sustain`, `release` | The envelope. Defaults: 5 ms attack, no decay, sustain 1, 50 ms release. `decay` with `"sustain": 0` is a pluck. |
+| `gain`, `pan` | Level in dB; position from -1 (left) to 1 (right). |
+| `harmonics` | Overtone levels for a sine, e.g. `[1, 0.5, 0.25]`. |
+| `width` | Duty cycle of a `pulse` wave. |
+| `fm` | `{"ratio": 3.5, "index": 4, "index_end": 0}`: frequency modulation. Non-integer ratios sound like bells and metal; a falling index sounds struck. |
+| `vibrato`, `tremolo` | `{"rate": 6, "depth": 0.3}`. Vibrato depth is in semitones, tremolo depth from 0 to 1. |
+| `voices`, `detune` | Stacked copies spread over +/- `detune` cents and across the stereo field. |
+| `lowpass`, `highpass`, `q` | Filter cutoffs in Hz and resonance. `lowpass_end` and `highpass_end` sweep the cutoff over the note. |
+
+| Effect `type` | Settings |
+| --- | --- |
+| `reverb` | `size` (0 to 1), `damp`, `mix` |
+| `delay` | `time`, `feedback`, `mix` |
+| `drive` | `amount` (0 to 1) |
+| `bitcrush` | `bits`, `downsample` |
+| `lowpass`, `highpass` | `freq`, `q` |
+
+`about` is a note to yourself about what the sound should be. It is not
+rendered, but `synth` prints it beside each sound, and it is what you check
+the audit's `HIT`, `PITCH` and `TREND` columns against: a sound described as
+"three falling notes" should audit as 3 hits, falling.
+
+Rendering is deterministic, and a setting `synth` does not know is an error
+rather than something it ignores.
+
+Some things that hold across packs:
+
+- Give each category a family resemblance and each sound in it a difference.
+  Success rises or resolves, error falls or stays dissonant, loading is
+  short and neutral.
+- The sounds that fire most (`default.wav`, `loading/loading.wav`,
+  `loading/bash-start.wav`, `success/success.wav`) should be the shortest and
+  plainest. Save the flourish for `completion/agent-complete.wav` and
+  `system/session-start.wav`.
+- A reverb or delay tail counts toward a sound's length. A loading sound has
+  one second in total.
 
 ### Choosing What To Cut
 
