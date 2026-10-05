@@ -279,6 +279,10 @@ Beyond the default stdin-mode hook executor, claudio ships these subcommands
   - `init` — create a JSON template
   - `list` — list discoverable soundpacks
   - `validate` — coverage report and broken-reference check
+  - `audit` — decode every sound and report loudness (LUFS), true peak,
+    duration, silence, clipping and a numeric description of each sound
+  - `master` — write a copy of a pack that passes `audit` (trimmed,
+    loudness-normalized 48 kHz WAV)
   - `install` — copy a local pack into the XDG data dir
   - `use` — switch the active soundpack
   - `add` / `update` / `remove` / `status` — manage git-backed soundpacks

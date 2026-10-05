@@ -267,6 +267,63 @@ supported extensions. WAV, MP3, and AIFF are supported. Broken references and
 unsafe paths (absolute, or containing `..`) cause a non-zero exit. Empty
 mappings are informational.
 
+### `soundpack audit`
+
+Decodes every sound in a JSON file or directory soundpack and reports what a
+listener would notice.
+
+```bash
+claudio soundpack audit <path> [flags]
+```
+
+Flags:
+
+| Flag | Default | Meaning |
+| --- | --- | --- |
+| `--target-lufs float` | `-18` | Loudness every sound should have, in LUFS. |
+| `--tolerance float` | `1` | Allowed distance from the target, in LU. |
+| `--peak-ceiling float` | `-1` | Highest allowed true peak, in dBTP. |
+| `--max-duration cat=dur,...` | see below | Override the duration limit of one or more categories. |
+| `--strict` | false | Exit non-zero on warnings as well as errors. |
+| `--json` | false | Print the full report as JSON. |
+
+Default duration limits: `loading` 1s, `success` 1.5s, `default` 1.5s,
+`error` 2s, `interactive` 2.5s, `completion` 3s, `system` 6s.
+
+Warnings: `too-long`, `too-loud`, `too-quiet`, `peak-over-ceiling`,
+`clipping`, `leading-silence`, `trailing-silence`. Errors: `undecodable`,
+`silent`. Notes, which never fail an audit: `peak-limited`, `duplicate`,
+`sample-rate`, `unreferenced`.
+
+For a JSON pack, audit covers the files the manifest references and any
+unreferenced audio in the same directories. See
+[Auditing And Mastering](soundpacks#auditing-and-mastering) for what each
+column and rule means.
+
+### `soundpack master`
+
+Writes a mastered copy of a soundpack that passes `soundpack audit`.
+
+```bash
+claudio soundpack master <path> --out <dir> [flags]
+```
+
+Flags:
+
+| Flag | Default | Meaning |
+| --- | --- | --- |
+| `--out string` | required | Directory to write the mastered pack into. It must not be the source pack's directory. |
+| `--target-lufs float` | `-18` | Loudness to master to. |
+| `--tolerance float` | `1` | Tolerance used when reporting the result. |
+| `--peak-ceiling float` | `-1` | True-peak ceiling, in dBTP. |
+| `--max-duration cat=dur,...` | as audit | Override duration limits. |
+| `--json` | false | Print what was done to each sound as JSON. |
+
+Each sound is trimmed of silence, cut to its category's duration limit with a
+fade, and brought to the loudness target. Output is 48 kHz 16-bit WAV. A
+directory pack keeps its layout; a JSON pack becomes `<out>/soundpack.json`
+with its sounds under `<out>/sounds/`. The source is never modified.
+
 ### `soundpack install`
 
 Copies a local JSON file or directory into the XDG data directory and updates
