@@ -156,7 +156,7 @@ func printAuditReport(cmd *cobra.Command, report audit.Report) {
 			rules = append(rules, f.Rule)
 		}
 		cmd.Printf("%-*s  %6.2fs  %6s  %6s  %3d  %5.0fHz  %-7s  %-6s  %s\n", width,
-			s.Path, s.DurationMS/1000, s.LoudnessLUFS, s.PeakDBTP, s.Onsets, s.DominantHz,
+			s.Path, s.DurationMS/1000, s.LoudnessLUFS, s.PeakDBTP, s.Onsets, s.PitchHz,
 			s.PitchTrend, s.Texture, strings.Join(rules, ", "))
 	}
 

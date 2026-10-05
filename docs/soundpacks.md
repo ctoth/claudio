@@ -356,14 +356,17 @@ accepts is a file Claudio can play.
 | `LENGTH` | Duration of the file, silence included. |
 | `LUFS` | Loudness (ITU-R BS.1770, the measure streaming services normalize to). Sounds under 400 ms are too short for the standard's gating, so they are measured ungated over their whole length. Mono files are measured as they play: on both speakers. |
 | `PEAK` | True peak in dBTP, estimated by 4x oversampling. |
-| `HIT` | Number of separate bursts: 1 for a single tone, 3 for a triple beep. |
-| `PITCH` | Strongest frequency. |
-| `TREND` | Whether the second half is brighter (`rising`) or duller (`falling`) than the first. |
+| `HIT` | Number of separate bursts: 1 for a single tone, 3 for a triple beep. It counts a new hit only after the level has dropped, so notes played over a held or ringing sound, quiet echoes and tremolo are not counted. |
+| `PITCH` | The note: the lowest strong partial. `--json` also gives the strongest partial, which can be an overtone. |
+| `TREND` | Whether the sound ends on a higher pitch than it starts on (`rising`), lower (`falling`), or neither. For noise, which has no pitch, it is whether the second half is brighter or duller than the first. |
 | `TEXTURE` | `tonal`, `mixed`, or `noisy`. |
 
 The last four columns describe the sound, so you (or an agent that cannot
 hear) can tell sounds apart, spot the one file that is not like the others,
-and check that errors do not sound like successes. `--json` adds attack
+and check that errors do not sound like successes. They are instruments
+with limits, not a specification. When a sound is right and a column
+disagrees for a reason given above, keep the sound and note the reading;
+do not thin out a ringing chord so that its notes get counted. `--json` adds attack
 time, spectral centroid, silence at each end, and a hash per file.
 
 What audit warns about, and why:

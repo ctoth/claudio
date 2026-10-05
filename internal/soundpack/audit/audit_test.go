@@ -200,6 +200,66 @@ func TestTextureSeparatesPitchFromNoise(t *testing.T) {
 	}
 }
 
+// ring is a struck note: a fundamental with a bright overtone that dies
+// faster than it does.
+func ring(freq float64, d time.Duration) [][2]float64 {
+	frames := make([][2]float64, int(d.Seconds()*rate))
+	for i := range frames {
+		t := float64(i) / rate
+		pos := t / d.Seconds()
+		x := 0.12*math.Exp(-4*pos)*math.Sin(2*math.Pi*freq*t) + 0.08*math.Exp(-25*pos)*math.Sin(2*math.Pi*3*freq*t)
+		if i < 96 {
+			x *= float64(i) / 96
+		}
+		frames[i] = [2]float64{x, x}
+	}
+	return frames
+}
+
+// Trend is about melody. Brightness follows loudness and decay, so a
+// brightness measure calls every struck note "falling" and hides a rise
+// that ends on a long ringing note.
+func TestTrendFollowsPitchForPitchedSounds(t *testing.T) {
+	for name, tc := range map[string]struct {
+		frames [][2]float64
+		want   string
+	}{
+		"one struck note fading":            {ring(800, 600*time.Millisecond), "steady"},
+		"short low note, long ringing high": {join(tone(523, -18, 60*time.Millisecond), ring(1047, 600*time.Millisecond)), "rising"},
+		"long ringing fall":                 {join(tone(1047, -18, 60*time.Millisecond), ring(523, 600*time.Millisecond)), "falling"},
+		"low steady note":                   {ring(294, 300*time.Millisecond), "steady"},
+	} {
+		got := analyze(tc.frames, "success")
+		if got.PitchTrend != tc.want {
+			t.Errorf("%s: trend %s (starts %v Hz, ends %v Hz), want %s", name, got.PitchTrend, got.StartHz, got.EndHz, tc.want)
+		}
+	}
+	// Noise has no pitch to follow; its trend is still its brightness.
+	sweep := bandNoise(400 * time.Millisecond)
+	for i := range sweep {
+		g := float64(i) / float64(len(sweep))
+		sweep[i][0] *= 1 - g
+		sweep[i][1] = sweep[i][0]
+	}
+	if got := analyze(sweep, "success"); got.PitchTrend == "" {
+		t.Error("noise must still get a trend")
+	}
+}
+
+// The reported pitch is the note, not its loudest overtone.
+func TestPitchIsTheFundamental(t *testing.T) {
+	frames := make([][2]float64, rate/2)
+	for i := range frames {
+		t := float64(i) / rate
+		x := 0.05*math.Sin(2*math.Pi*185*t) + 0.08*math.Sin(2*math.Pi*370*t)
+		frames[i] = [2]float64{x, x}
+	}
+	got := analyze(frames, "success")
+	if math.Abs(got.PitchHz-185) > 6 || math.Abs(got.DominantHz-370) > 25 {
+		t.Errorf("pitch %v Hz (want 185), dominant %v Hz (want 370)", got.PitchHz, got.DominantHz)
+	}
+}
+
 func writeWAV(t *testing.T, path string, frames [][2]float64) {
 	t.Helper()
 	in := make([][]float64, len(frames))
