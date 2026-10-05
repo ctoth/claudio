@@ -21,6 +21,8 @@ func newSoundpackCommand(c *CLI) *cobra.Command {
 	soundpackCmd.AddCommand(newSoundpackValidateCommand())
 	soundpackCmd.AddCommand(newSoundpackAuditCommand())
 	soundpackCmd.AddCommand(newSoundpackMasterCommand())
+	soundpackCmd.AddCommand(newSoundpackSynthCommand())
+	soundpackCmd.AddCommand(newSoundpackSearchCommand())
 	soundpackCmd.AddCommand(newSoundpackInstallCommand(c))
 	soundpackCmd.AddCommand(newSoundpackUseCommand(c))
 	soundpackCmd.AddCommand(newSoundpackAddCommand(c))
