@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -45,6 +46,15 @@ A recipe names sounds and says which sound answers for which key:
     },
     "mappings": {"success/success.wav": "chirp", "default.wav": "chirp"}
   }
+
+A layer is an oscillator or a slice of a recording. To use a recording:
+  sample      path to a WAV, MP3 or AIFF file, relative to the recipe
+  start, end  the slice to play, in seconds into the file
+  speed       2 is an octave up and half as long; 0.5 the opposite
+  reverse     true plays the slice backwards
+  dur         optional; leave it out to play the whole slice
+A sample layer takes gain, pan, tremolo, the envelope and the filters below,
+and mixes with oscillator layers in the same sound.
 
 Layer settings (times in seconds, gain in dB):
   wave        sine (default), triangle, square, saw, pulse, noise
@@ -87,6 +97,11 @@ cannot be silently ignored.`,
 		}
 		recipe, err := synth.Parse(data)
 		if err != nil {
+			return err
+		}
+		// Sample paths are relative to the recipe, so a pack builds the
+		// same wherever it is checked out.
+		if err := recipe.LoadSamples(filepath.Dir(args[0])); err != nil {
 			return err
 		}
 		written, err := recipe.Write(outDir)

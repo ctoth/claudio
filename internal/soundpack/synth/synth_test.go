@@ -1,6 +1,7 @@
 package synth
 
 import (
+	"bytes"
 	"encoding/json"
 	"math"
 	"os"
@@ -186,6 +187,104 @@ func TestOutputIsFiniteAndBelowFullScale(t *testing.T) {
 	}
 	if peak > 0.75 || peak < 0.65 {
 		t.Errorf("peak = %.3f, want normalized to about -3 dBFS (0.708)", peak)
+	}
+}
+
+// writeSample renders a one-layer sound and saves it as dir/name, with
+// 200 ms of silence in front so slicing has something to skip.
+func writeSample(t *testing.T, dir, name, layer string) {
+	t.Helper()
+	frames := append(make([][2]float64, SampleRate/5), render(t, `{"layers":[`+layer+`]}`)...)
+	var buf bytes.Buffer
+	if err := master.EncodeWAV(&buf, frames); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, name), buf.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// renderIn renders a one-sound recipe whose samples live in dir.
+func renderIn(t *testing.T, dir, sound string) [][2]float64 {
+	t.Helper()
+	r := parse(t, `{"name":"t","sounds":{"s":`+sound+`},"mappings":{"default.wav":"s"}}`)
+	if err := r.LoadSamples(dir); err != nil {
+		t.Fatalf("load samples: %v", err)
+	}
+	frames, err := r.Render("s")
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	return frames
+}
+
+func TestSampleLayerPlaysASliceOfARecording(t *testing.T) {
+	dir := t.TempDir()
+	writeSample(t, dir, "raw/tone.wav", `{"freq":1000,"dur":0.5,"release":0.001}`)
+	writeSample(t, dir, "raw/rise.wav", `{"freq":500,"freq_end":2000,"dur":0.4,"release":0.001}`)
+
+	slice := renderIn(t, dir, `{"layers":[{"sample":"raw/tone.wav","start":0.2,"end":0.5}]}`)
+	if got := seconds(slice); math.Abs(got-0.3) > 0.01 {
+		t.Errorf("slice is %.3f s, want end - start = 0.3", got)
+	}
+	if d := describe(slice); math.Abs(d.DominantHz-1000) > 30 {
+		t.Errorf("slice dominant = %v Hz, want 1000", d.DominantHz)
+	}
+
+	fast := renderIn(t, dir, `{"layers":[{"sample":"raw/tone.wav","start":0.2,"end":0.6,"speed":2}]}`)
+	if d := describe(fast); math.Abs(d.DominantHz-2000) > 60 || math.Abs(seconds(fast)-0.2) > 0.01 {
+		t.Errorf("double speed: %v Hz over %.3f s, want 2000 Hz over 0.2 s", d.DominantHz, seconds(fast))
+	}
+
+	forward := describe(renderIn(t, dir, `{"layers":[{"sample":"raw/rise.wav","start":0.2}]}`))
+	backward := describe(renderIn(t, dir, `{"layers":[{"sample":"raw/rise.wav","start":0.2,"reverse":true}]}`))
+	if forward.PitchTrend != "rising" || backward.PitchTrend != "falling" {
+		t.Errorf("forward %s, reversed %s", forward.PitchTrend, backward.PitchTrend)
+	}
+
+	// A sample is a layer like any other: it can be held shorter than the
+	// slice, filtered, mixed with an oscillator and sent through effects.
+	mixed := renderIn(t, dir, `{"layers":[
+		{"sample":"raw/tone.wav","start":0.2,"dur":0.1,"release":0.05,"lowpass":3000},
+		{"freq":250,"dur":0.1,"release":0.05,"gain":-3}],
+		"effects":[{"type":"reverb","size":0.2,"mix":0.1}]}`)
+	if seconds(mixed) < 0.15 {
+		t.Errorf("mixed sound is %.3f s", seconds(mixed))
+	}
+}
+
+func TestSampleLayerMistakes(t *testing.T) {
+	dir := t.TempDir()
+	writeSample(t, dir, "raw/tone.wav", `{"freq":1000,"dur":0.3}`)
+	wrap := func(layer string) string {
+		return `{"name":"t","sounds":{"zap":{"layers":[` + layer + `]}},"mappings":{"default.wav":"zap"}}`
+	}
+	for name, tc := range map[string]struct{ layer, want string }{
+		"with a wave":      {`{"sample":"raw/tone.wav","wave":"saw"}`, "zap, layer 1: sample"},
+		"with a pitch":     {`{"sample":"raw/tone.wav","freq":440}`, "zap, layer 1: sample"},
+		"outside the pack": {`{"sample":"../secret.wav"}`, "zap, layer 1: sample"},
+		"absolute path":    {`{"sample":"/etc/passwd"}`, "zap, layer 1: sample"},
+		"end before start": {`{"sample":"raw/tone.wav","start":0.3,"end":0.1}`, "zap, layer 1: end"},
+		"missing file":     {`{"sample":"raw/nope.wav"}`, "zap, layer 1: sample raw/nope.wav"},
+		"start too late":   {`{"sample":"raw/tone.wav","start":30}`, "zap, layer 1: start"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			r, err := Parse([]byte(wrap(tc.layer)))
+			if err == nil {
+				err = r.LoadSamples(dir)
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("error = %v, want it to mention %q", err, tc.want)
+			}
+		})
+	}
+
+	r := parse(t, wrap(`{"sample":"raw/tone.wav"}`))
+	if _, err := r.Render("zap"); err == nil {
+		t.Error("rendering before LoadSamples must fail, not render silence")
 	}
 }
 

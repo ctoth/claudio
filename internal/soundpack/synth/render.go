@@ -41,6 +41,9 @@ func (r *Recipe) Render(name string) ([][2]float64, error) {
 	out := make([][2]float64, dry)
 	for i := range s.Layers {
 		l := &s.Layers[i]
+		if l.Sample != "" && !l.loaded {
+			return nil, fmt.Errorf("%s, layer %d: sample %s is not loaded (call LoadSamples first)", name, i+1, l.Sample)
+		}
 		rng := rand.New(rand.NewSource(int64(seed.Sum64()) + int64(i)*7919))
 		for n := range l.noteCount() {
 			freq := float64(l.Freq)
@@ -49,7 +52,13 @@ func (r *Recipe) Render(name string) ([][2]float64, error) {
 					continue // rest
 				}
 			}
-			note := l.renderNote(freq, rng)
+			var note [][2]float64
+			if l.Sample != "" {
+				note = l.sampleNote()
+			} else {
+				note = l.renderNote(freq, rng)
+			}
+			l.filter(note)
 			at := frameCount(l.At + float64(n)*l.Step)
 			gain := math.Pow(10, l.Gain/20)
 			for j, f := range note {
@@ -73,8 +82,8 @@ func (r *Recipe) Render(name string) ([][2]float64, error) {
 	return out, nil
 }
 
-// renderNote renders one note of the layer at freq: every voice, panned and
-// summed, then the layer's filters.
+// renderNote renders one note of an oscillator layer at freq: every voice,
+// panned and summed.
 func (l *Layer) renderNote(freq float64, rng *rand.Rand) [][2]float64 {
 	total := l.Dur + l.release()
 	out := make([][2]float64, frameCount(total))
@@ -134,13 +143,17 @@ func (l *Layer) renderNote(freq float64, rng *rand.Rand) [][2]float64 {
 		out[i][0] *= scale
 		out[i][1] *= scale
 	}
+	return out
+}
+
+// filter applies the layer's lowpass and highpass to one rendered note.
+func (l *Layer) filter(note [][2]float64) {
 	if l.Lowpass != 0 {
-		sweepFilter(out, lowpass, l.Lowpass, l.LowpassEnd, l.Q)
+		sweepFilter(note, lowpass, l.Lowpass, l.LowpassEnd, l.Q)
 	}
 	if l.Highpass != 0 {
-		sweepFilter(out, highpass, l.Highpass, l.HighpassEnd, l.Q)
+		sweepFilter(note, highpass, l.Highpass, l.HighpassEnd, l.Q)
 	}
-	return out
 }
 
 // envelope is the layer's level at time t into a note.

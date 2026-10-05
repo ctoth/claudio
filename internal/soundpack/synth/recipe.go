@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -48,9 +49,26 @@ type Sound struct {
 	Effects []Effect `json:"effects,omitempty"`
 }
 
-// Layer is one oscillator (or noise source) with an envelope. Times are in
-// seconds, gain in dB.
+// Layer is one oscillator, noise source or slice of a recording, with an
+// envelope. Times are in seconds, gain in dB.
 type Layer struct {
+	// Sample plays a recording instead of an oscillator: a WAV, MP3 or AIFF
+	// file, as a path relative to the recipe's directory. Start and End
+	// pick the slice to play, in seconds into the file (End 0 is the end of
+	// the file). Speed plays it faster or slower, which also moves its
+	// pitch: 2 is an octave up and half as long. Reverse plays it
+	// backwards. Dur may be left out to play the whole slice; the
+	// envelope, gain, pan, tremolo and filters apply as for any layer, with
+	// no attack and a 10 ms release unless set.
+	Sample  string  `json:"sample,omitempty"`
+	Start   float64 `json:"start,omitempty"`
+	End     float64 `json:"end,omitempty"`
+	Speed   float64 `json:"speed,omitempty"`
+	Reverse bool    `json:"reverse,omitempty"`
+	// frames is the slice, loaded by LoadSamples at the render rate.
+	frames [][2]float64
+	loaded bool
+
 	// Wave is sine (default), triangle, square, saw, pulse or noise.
 	Wave string `json:"wave,omitempty"`
 	// Freq is the pitch in Hz or as a note name ("A4", "C#5"). FreqEnd, if
@@ -281,8 +299,11 @@ func (s *Sound) drySeconds() float64 {
 }
 
 func (l *Layer) attack() float64 {
-	if l.Attack != nil {
+	switch {
+	case l.Attack != nil:
 		return *l.Attack
+	case l.Sample != "":
+		return 0 // a recording brings its own attack
 	}
 	return 0.005
 }
@@ -295,8 +316,11 @@ func (l *Layer) sustain() float64 {
 }
 
 func (l *Layer) release() float64 {
-	if l.Release != nil {
+	switch {
+	case l.Release != nil:
 		return *l.Release
+	case l.Sample != "":
+		return 0.01
 	}
 	return 0.05
 }
@@ -334,11 +358,35 @@ func (l *Layer) validate() error {
 	default:
 		return fmt.Errorf("unknown wave %q (use sine, triangle, square, saw, pulse or noise)", l.Wave)
 	}
-	if l.Dur <= 0 {
-		return errors.New("dur: must be greater than 0")
+	if l.Sample == "" {
+		if l.Dur <= 0 {
+			return errors.New("dur: must be greater than 0")
+		}
+		if l.Start != 0 || l.End != 0 || l.Speed != 0 || l.Reverse {
+			return errors.New("start, end, speed and reverse only apply to a sample layer")
+		}
 	}
 
 	switch {
+	case l.Sample != "":
+		if l.Wave != "" || l.Freq != 0 || l.FreqEnd != 0 || len(l.Notes) > 0 || l.Voices != 0 ||
+			l.FM != nil || l.Vibrato != nil || len(l.Harmonics) > 0 {
+			return errors.New("sample: cannot be combined with wave, freq, notes, voices, fm, vibrato or harmonics")
+		}
+		if !filepath.IsLocal(filepath.FromSlash(l.Sample)) {
+			return fmt.Errorf("sample: %q must be a relative path inside the recipe's directory", l.Sample)
+		}
+		if l.End != 0 && l.End <= l.Start {
+			return errors.New("end: must be after start")
+		}
+		if l.Speed != 0 {
+			if err := inRange("speed", l.Speed, 0.1, 8); err != nil {
+				return err
+			}
+		}
+		if err := errors.Join(inRange("start", l.Start, 0, 3600), inRange("dur", l.Dur, 0, maxSoundSeconds)); err != nil {
+			return err
+		}
 	case len(l.Notes) > 0:
 		if l.Freq != 0 || l.FreqEnd != 0 {
 			return errors.New("notes: cannot be combined with freq or freq_end")
