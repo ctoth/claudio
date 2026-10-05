@@ -324,6 +324,36 @@ fade, and brought to the loudness target. Output is 48 kHz 16-bit WAV. A
 directory pack keeps its layout; a JSON pack becomes `<out>/soundpack.json`
 with its sounds under `<out>/sounds/`. The source is never modified.
 
+### `soundpack synth`
+
+Renders original sounds from a JSON recipe.
+
+```bash
+claudio soundpack synth <recipe.json> --out <dir>
+```
+
+Writes `<out>/synth/<sound>.wav` for every sound in the recipe and
+`<out>/soundpack.json`, a JSON soundpack mapping the recipe's keys to those
+files. Master the result to get a pack at a consistent level. The recipe
+format is described in
+[Synthesizing Sounds](soundpacks#synthesizing-sounds). A recipe with a
+setting `synth` does not know, a mapping to a sound that is not defined, or a
+sound no mapping uses is rejected.
+
+### `soundpack search`
+
+Lists published soundpacks.
+
+```bash
+claudio soundpack search [words...] [--json]
+```
+
+Queries GitHub for repositories tagged with the topic `claudio-soundpack`,
+most starred first, and prints each with the `soundpack add` command that
+installs it. Extra words narrow the search. This is the only command that
+contacts a server on its own. Set `GITHUB_TOKEN` to raise GitHub's rate
+limit.
+
 ### `soundpack install`
 
 Copies a local JSON file or directory into the XDG data directory and updates

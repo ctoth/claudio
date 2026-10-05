@@ -3,6 +3,7 @@ package audit
 import (
 	"encoding/json"
 	"math"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
@@ -160,6 +161,117 @@ func TestDescribeFindsPitchAndTrend(t *testing.T) {
 	down := analyze(join(tone(1800, -18, 200*time.Millisecond), tone(600, -18, 200*time.Millisecond)), "error")
 	if down.PitchTrend != "falling" {
 		t.Errorf("1800 -> 600 Hz described as %s", down.PitchTrend)
+	}
+}
+
+// bandNoise is white noise through a one-pole lowpass: most of its energy is
+// in a few hundred hertz, but it has no pitch.
+func bandNoise(d time.Duration) [][2]float64 {
+	rng := rand.New(rand.NewSource(7))
+	frames := make([][2]float64, int(d.Seconds()*rate))
+	var y float64
+	for i := range frames {
+		y += 0.05 * ((rng.Float64()*2 - 1) - y)
+		frames[i] = [2]float64{y, y}
+	}
+	return frames
+}
+
+// Texture has to survive filtering: a rumble or a whoosh is noise even
+// though its spectrum is far from flat, and a chord is tonal even though it
+// is more than one frequency.
+func TestTextureSeparatesPitchFromNoise(t *testing.T) {
+	chord := tone(440, -24, 400*time.Millisecond)
+	for i, f := range join(tone(554.37, -24, 400*time.Millisecond)) {
+		chord[i][0] += f[0] + 0.06*math.Sin(2*math.Pi*659.25*float64(i)/rate)
+		chord[i][1] = chord[i][0]
+	}
+	for name, tc := range map[string]struct {
+		frames [][2]float64
+		want   string
+	}{
+		"pure tone":      {tone(1000, -18, 400*time.Millisecond), "tonal"},
+		"three-note mix": {chord, "tonal"},
+		"filtered noise": {bandNoise(400 * time.Millisecond), "noisy"},
+	} {
+		if got := analyze(tc.frames, "success"); got.Texture != tc.want {
+			t.Errorf("%s: texture %s (tonality %v), want %s", name, got.Texture, got.Tonality, tc.want)
+		}
+	}
+}
+
+// ring is a struck note: a fundamental with a bright overtone that dies
+// faster than it does.
+func ring(freq float64, d time.Duration) [][2]float64 {
+	frames := make([][2]float64, int(d.Seconds()*rate))
+	for i := range frames {
+		t := float64(i) / rate
+		pos := t / d.Seconds()
+		x := 0.12*math.Exp(-4*pos)*math.Sin(2*math.Pi*freq*t) + 0.08*math.Exp(-25*pos)*math.Sin(2*math.Pi*3*freq*t)
+		if i < 96 {
+			x *= float64(i) / 96
+		}
+		frames[i] = [2]float64{x, x}
+	}
+	return frames
+}
+
+// Trend is about melody. Brightness follows loudness and decay, so a
+// brightness measure calls every struck note "falling" and hides a rise
+// that ends on a long ringing note.
+func TestTrendFollowsPitchForPitchedSounds(t *testing.T) {
+	for name, tc := range map[string]struct {
+		frames [][2]float64
+		want   string
+	}{
+		"one struck note fading":            {ring(800, 600*time.Millisecond), "steady"},
+		"short low note, long ringing high": {join(tone(523, -18, 60*time.Millisecond), ring(1047, 600*time.Millisecond)), "rising"},
+		"long ringing fall":                 {join(tone(1047, -18, 60*time.Millisecond), ring(523, 600*time.Millisecond)), "falling"},
+		"low steady note":                   {ring(294, 300*time.Millisecond), "steady"},
+	} {
+		got := analyze(tc.frames, "success")
+		if got.PitchTrend != tc.want {
+			t.Errorf("%s: trend %s (starts %v Hz, ends %v Hz), want %s", name, got.PitchTrend, got.StartHz, got.EndHz, tc.want)
+		}
+	}
+	// Noise has no pitch to follow; its trend is still its brightness.
+	sweep := bandNoise(400 * time.Millisecond)
+	for i := range sweep {
+		g := float64(i) / float64(len(sweep))
+		sweep[i][0] *= 1 - g
+		sweep[i][1] = sweep[i][0]
+	}
+	if got := analyze(sweep, "success"); got.PitchTrend == "" {
+		t.Error("noise must still get a trend")
+	}
+}
+
+// The reported pitch is the note, not its loudest overtone.
+func TestPitchIsTheFundamental(t *testing.T) {
+	frames := make([][2]float64, rate/2)
+	for i := range frames {
+		t := float64(i) / rate
+		x := 0.05*math.Sin(2*math.Pi*185*t) + 0.08*math.Sin(2*math.Pi*370*t)
+		frames[i] = [2]float64{x, x}
+	}
+	got := analyze(frames, "success")
+	if math.Abs(got.PitchHz-185) > 6 || math.Abs(got.DominantHz-370) > 25 {
+		t.Errorf("pitch %v Hz (want 185), dominant %v Hz (want 370)", got.PitchHz, got.DominantHz)
+	}
+}
+
+// A weaker component a semitone or so below a note is part of that note's
+// skirt (leakage, a beating partner, an attack transient), not a lower
+// note. Reading it as the pitch put short beeps 8% flat.
+func TestPitchIgnoresAWeakerNeighbourOfThePeak(t *testing.T) {
+	frames := make([][2]float64, rate/8)
+	for i := range frames {
+		t := float64(i) / rate
+		x := 0.10*math.Sin(2*math.Pi*1048*t) + 0.06*math.Sin(2*math.Pi*963*t)
+		frames[i] = [2]float64{x, x}
+	}
+	if got := analyze(frames, "success"); math.Abs(got.PitchHz-1048) > 12 {
+		t.Errorf("pitch %v Hz, want 1048 (the stronger of two close components)", got.PitchHz)
 	}
 }
 

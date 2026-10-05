@@ -107,9 +107,20 @@ to the platform pack.
 
 ### Installing A Pack From Git
 
-There is no central soundpack index. To share a pack, put it in a git
-repository and hand out the URL. Any public or private repository that
+A pack is shared as a git repository. Any public or private repository that
 contains a directory pack or a JSON pack works.
+
+To find published packs:
+
+```bash
+claudio soundpack search          # every published pack, most starred first
+claudio soundpack search retro    # narrowed by words
+```
+
+There is no central index to register with. `search` lists GitHub
+repositories tagged with the topic `claudio-soundpack` and prints the
+command that installs each one. See [Publishing A Pack](#publishing-a-pack)
+to make yours show up.
 
 ```bash
 claudio soundpack add https://github.com/owner/repo --name my-pack --default
@@ -345,14 +356,17 @@ accepts is a file Claudio can play.
 | `LENGTH` | Duration of the file, silence included. |
 | `LUFS` | Loudness (ITU-R BS.1770, the measure streaming services normalize to). Sounds under 400 ms are too short for the standard's gating, so they are measured ungated over their whole length. Mono files are measured as they play: on both speakers. |
 | `PEAK` | True peak in dBTP, estimated by 4x oversampling. |
-| `HIT` | Number of separate bursts: 1 for a single tone, 3 for a triple beep. |
-| `PITCH` | Strongest frequency. |
-| `TREND` | Whether the second half is brighter (`rising`) or duller (`falling`) than the first. |
+| `HIT` | Number of separate bursts: 1 for a single tone, 3 for a triple beep. It counts a new hit only after the level has dropped, so notes played over a held or ringing sound, quiet echoes and tremolo are not counted. |
+| `PITCH` | The note: the lowest strong partial. `--json` also gives the strongest partial, which can be an overtone. |
+| `TREND` | Whether the sound ends on a higher pitch than it starts on (`rising`), lower (`falling`), or neither. For noise, which has no pitch, it is whether the second half is brighter or duller than the first. |
 | `TEXTURE` | `tonal`, `mixed`, or `noisy`. |
 
 The last four columns describe the sound, so you (or an agent that cannot
 hear) can tell sounds apart, spot the one file that is not like the others,
-and check that errors do not sound like successes. `--json` adds attack
+and check that errors do not sound like successes. They are instruments
+with limits, not a specification. When a sound is right and a column
+disagrees for a reason given above, keep the sound and note the reading;
+do not thin out a ringing chord so that its notes get counted. `--json` adds attack
 time, spectral centroid, silence at each end, and a hash per file.
 
 What audit warns about, and why:
@@ -385,8 +399,13 @@ claudio soundpack audit ./my-pack --strict
 
 For each sound it trims silence from both ends, cuts anything over its
 category's limit (with a fade), and applies one gain so the sound sits at the
-target without its peak crossing the ceiling. Nothing is compressed or
-limited, so the sound keeps its shape. Output is 48 kHz 16-bit WAV, mono when
+target without its peak crossing the ceiling. For most sounds that is all:
+nothing is compressed, so the sound keeps its shape. A sound that gain alone
+leaves short of the target has a few peaks standing far above the rest of
+it, which is what a recorded knock or click looks like. `master` holds just
+those peaks down (by at most 9 dB, starting 2 ms ahead of each one) so the
+body of the sound can come up, and reports it as `peaks limited`. You do
+not need to add `drive` to a recipe to make a spiky recording loud enough. Output is 48 kHz 16-bit WAV, mono when
 both channels are identical: the player's own format, so nothing is resampled
 at play time and there is no encoder padding.
 
@@ -438,6 +457,190 @@ jobs:
       - run: claudio soundpack validate soundpack.json
       - run: claudio soundpack audit soundpack.json --strict
 ```
+
+### Publishing A Pack
+
+Three conventions make a pack findable and installable by name:
+
+1. Name the repository `claudio-soundpack-<name>`.
+2. Keep the pack at the repository root: `soundpack.json`, or a directory
+   pack's category folders.
+3. Add the GitHub topic `claudio-soundpack`:
+
+   ```bash
+   gh repo edit --add-topic claudio-soundpack
+   ```
+
+`claudio soundpack search` then lists it, and anyone can install it with
+`claudio soundpack add gh:<owner>/claudio-soundpack-<name> --name <name>`.
+Put a one-line description on the repository; it is what search shows.
+
+### Synthesizing Sounds
+
+You do not need recordings to make a pack. `synth` renders sounds from a
+JSON recipe, so a pack can be written, reviewed and changed as text, and
+everything in it is your own work.
+
+```json
+{
+  "name": "my-pack",
+  "description": "Soft wooden taps",
+  "version": "1.0.0",
+  "sounds": {
+    "tick": {
+      "about": "one short woody tap",
+      "layers": [
+        {"freq": 900, "freq_end": 500, "dur": 0.03, "decay": 0.03, "sustain": 0},
+        {"wave": "noise", "dur": 0.01, "highpass": 2000, "gain": -12}
+      ]
+    },
+    "done": {
+      "about": "two rising notes with a little room",
+      "layers": [{"wave": "triangle", "notes": ["C5", "G5"], "step": 0.09, "dur": 0.08, "release": 0.12}],
+      "effects": [{"type": "reverb", "size": 0.3, "mix": 0.15}]
+    }
+  },
+  "mappings": {
+    "default.wav": "tick",
+    "loading/loading.wav": "tick",
+    "success/success.wav": "done"
+  }
+}
+```
+
+```bash
+claudio soundpack synth source/recipe.json --out source   # source/synth/*.wav + source/soundpack.json
+claudio soundpack master source/soundpack.json --out .    # soundpack.json + sounds/
+claudio soundpack audit soundpack.json --strict
+```
+
+A sound is one or more layers mixed together, then passed through effects
+in order. Times are in seconds and gains in dB.
+
+| Layer setting | Meaning |
+| --- | --- |
+| `wave` | `sine` (default), `triangle`, `square`, `saw`, `pulse`, or `noise`. |
+| `freq`, `freq_end` | Pitch in Hz or as a note name (`"A4"`, `"C#5"`, `"Bb3"`). `freq_end` glides to a second pitch over `dur`. |
+| `notes`, `step` | A sequence instead of one pitch: each note lasts `dur` and starts `step` after the last. `0` is a rest. |
+| `at`, `dur` | When the layer starts, and how long each note is held before its release. |
+| `attack`, `decay`, `sustain`, `release` | The envelope. Defaults: 5 ms attack, no decay, sustain 1, 50 ms release. `decay` with `"sustain": 0` is a pluck. |
+| `gain`, `pan` | Level in dB; position from -1 (left) to 1 (right). |
+| `harmonics` | Overtone levels for a sine, e.g. `[1, 0.5, 0.25]`. |
+| `width` | Duty cycle of a `pulse` wave. |
+| `fm` | `{"ratio": 3.5, "index": 4, "index_end": 0}`: frequency modulation. Non-integer ratios sound like bells and metal; a falling index sounds struck. |
+| `vibrato`, `tremolo` | `{"rate": 6, "depth": 0.3}`. Vibrato depth is in semitones, tremolo depth from 0 to 1. |
+| `voices`, `detune` | Stacked copies spread over +/- `detune` cents and across the stereo field. |
+| `lowpass`, `highpass`, `q` | Filter cutoffs in Hz and resonance. `lowpass_end` and `highpass_end` sweep the cutoff over the note. |
+
+A layer can also play a recording instead of an oscillator:
+
+| Sample setting | Meaning |
+| --- | --- |
+| `sample` | Path to a WAV, MP3 or AIFF file, relative to the recipe. It must stay inside the recipe's directory. |
+| `start`, `end` | The slice to play, in seconds into the file. Without `end` it plays to the end of the file. |
+| `speed` | Plays faster or slower, which moves the pitch too: `2` is an octave up and half as long. To tune a recording to a note, use target Hz divided by its measured Hz. |
+| `reverse` | `true` plays the slice backwards. |
+| `dur` | Optional. Leave it out to play the whole slice; set it to stop a long ring early, with `release` as the fade. |
+
+A sample layer takes `gain`, `pan`, `tremolo`, the envelope and the filters,
+mixes with oscillator layers in the same sound, and goes through the sound's
+effects. It has no attack and a 10 ms release unless you set them.
+
+| Effect `type` | Settings |
+| --- | --- |
+| `reverb` | `size` (0 to 1), `damp`, `mix` |
+| `delay` | `time`, `feedback`, `mix` |
+| `drive` | `amount` (0 to 1) |
+| `bitcrush` | `bits`, `downsample` |
+| `lowpass`, `highpass` | `freq`, `q` |
+
+`about` is a note to yourself about what the sound should be. It is not
+rendered, but `synth` prints it beside each sound, and it is what you check
+the audit's `HIT`, `PITCH` and `TREND` columns against: a sound described as
+"three falling notes" should audit as 3 hits, falling.
+
+Rendering is deterministic, and a setting `synth` does not know is an error
+rather than something it ignores.
+
+Some things that hold across packs:
+
+- Give each category a family resemblance and each sound in it a difference.
+  Success rises or resolves, error falls or stays dissonant, loading is
+  short and neutral.
+- The sounds that fire most (`default.wav`, `loading/loading.wav`,
+  `loading/bash-start.wav`, `success/success.wav`) should be the shortest and
+  plainest. Save the flourish for `completion/agent-complete.wav` and
+  `system/session-start.wav`.
+- A reverb or delay tail counts toward a sound's length. A loading sound has
+  one second in total.
+
+### Building From Recordings
+
+Most good packs start from recordings. The process:
+
+1. **Download** raw material into `source/raw/<collection>/`. Keep the
+   collection name in the path so it stays obvious where a file came from.
+2. **Record where each file came from** in `source/sources.json` as you go,
+   not afterwards:
+
+   ```json
+   {
+     "sources": [
+       {
+         "file": "raw/kenney/impact-sounds/impactWood_medium_000.wav",
+         "title": "impactWood_medium_000",
+         "author": "Kenney",
+         "source": "https://kenney.nl/assets/impact-sounds",
+         "license": "CC0 1.0",
+         "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+       }
+     ]
+   }
+   ```
+
+   A file whose licence you cannot establish does not go in a pack you
+   publish. Credit every author in the README; CC BY requires it.
+3. **Find the sounds** by measuring: `claudio soundpack audit source/raw/<collection>`
+   prints length, hits, pitch, trend and texture for every file. Ignore the
+   warnings; raw material is not mastered yet.
+4. **Use them from the recipe** as sample layers. Every cut, repitch and
+   fade is then written down, and the pack rebuilds from `source/recipe.json`
+   and `source/raw/`.
+5. **Build and audit** as for any pack: `synth`, `master`, `audit --strict`.
+
+Where to get recordings you may redistribute:
+
+| Source | Licence | Notes |
+| --- | --- | --- |
+| [Kenney](https://kenney.nl/assets/category:Audio) | CC0 | Designed interface, impact, sci-fi and game sounds, downloadable as zip files. OGG: convert with `ffmpeg -i in.ogg out.wav`. |
+| [Wikimedia Commons](https://commons.wikimedia.org) | Per file | Real-world recordings. The API returns each file's licence and author, so a search can be filtered to public domain, CC0 and CC BY (see below). |
+| [Freesound](https://freesound.org) | Per file | The largest library. Search and download need an API key; filter on `license:"Creative Commons 0"`. |
+| [BigSoundBank](https://bigsoundbank.com) | CC0 | Real-world recordings. The site blocks automated clients, so download by hand. |
+
+Searching Commons for audio with its licence and author:
+
+```bash
+curl -s -A "my-pack-tooling/1.0 (https://example.com/contact)" --get \
+  "https://commons.wikimedia.org/w/api.php" \
+  --data-urlencode "action=query" --data-urlencode "format=json" \
+  --data-urlencode "generator=search" --data-urlencode "gsrnamespace=6" \
+  --data-urlencode "gsrsearch=filetype:audio singing bowl" \
+  --data-urlencode "prop=imageinfo" \
+  --data-urlencode "iiprop=url|size|extmetadata" \
+  --data-urlencode "iiextmetadatafilter=LicenseShortName|Artist|LicenseUrl"
+```
+
+Keep the response beside the downloads: it is your provenance record.
+Commons asks for a descriptive `User-Agent` and rate-limits bulk
+downloads: fetch one file every few seconds, and check that what you saved
+is audio, because a throttled request returns an HTML error page with the
+file's name on it. Search results are loose (a search for "ratchet" also
+returns pronunciations and songs), so choose by title and by measuring.
+
+Sounds from films, television and games are copyrighted however they reach
+you. A pack built from them is yours to use; whether to publish it is a
+decision to make knowingly, and `sources.json` should say plainly where
+each clip came from.
 
 ### Choosing What To Cut
 
