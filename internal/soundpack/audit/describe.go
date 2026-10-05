@@ -3,6 +3,7 @@ package audit
 import (
 	"math"
 	"math/cmplx"
+	"sort"
 )
 
 // Description is what a sound is like, in numbers: enough for a reader who
@@ -20,10 +21,16 @@ type Description struct {
 	// PitchTrend compares the brightness of the first and second halves:
 	// "rising", "falling" or "steady".
 	PitchTrend string `json:"pitch_trend"`
-	// Flatness is spectral flatness from 0 (pure tone) to 1 (noise), and
-	// Texture names it: "tonal", "mixed" or "noisy".
-	Flatness float64 `json:"flatness"`
+	// Tonality is how much of the sound's energy, moment by moment, sits in
+	// a few spectral peaks: near 1 for tones and chords, near 0 for noise
+	// (filtered or not). Texture names it: "tonal", "mixed" or "noisy".
+	Tonality float64 `json:"tonality"`
 	Texture  string  `json:"texture"`
+	// Flatness is spectral flatness of the whole sound from 0 (pure tone)
+	// to 1 (white noise). Unlike Tonality it reads low for any band-limited
+	// noise, so it measures how full the spectrum is, not whether there is
+	// a pitch.
+	Flatness float64 `json:"flatness"`
 }
 
 const (
@@ -45,22 +52,27 @@ func Describe(frames [][2]float64, rate int) Description {
 	d := Description{}
 	d.Onsets, d.AttackMS = envelopeShape(mono, rate)
 
-	whole := spectrum(mono)
+	whole, tonality := spectrum(mono, rate)
 	d.DominantHz, d.CentroidHz, d.Flatness = spectrumStats(whole, rate)
 	d.DominantHz, d.CentroidHz = math.Round(d.DominantHz), math.Round(d.CentroidHz)
 	d.Flatness = math.Round(d.Flatness*1000) / 1000
+	d.Tonality = math.Round(tonality*1000) / 1000
+	// Measured: tones, chords and FM bells read above 0.9, noise through a
+	// narrow filter 0.5 to 0.6, white noise about 0.1.
 	switch {
-	case d.Flatness < 0.1:
+	case d.Tonality >= 0.8:
 		d.Texture = "tonal"
-	case d.Flatness < 0.4:
+	case d.Tonality >= 0.65:
 		d.Texture = "mixed"
 	default:
 		d.Texture = "noisy"
 	}
 
 	half := len(mono) / 2
-	_, first, _ := spectrumStats(spectrum(mono[:half]), rate)
-	_, second, _ := spectrumStats(spectrum(mono[half:]), rate)
+	firstHalf, _ := spectrum(mono[:half], rate)
+	secondHalf, _ := spectrum(mono[half:], rate)
+	_, first, _ := spectrumStats(firstHalf, rate)
+	_, second, _ := spectrumStats(secondHalf, rate)
 	d.PitchTrend = "steady"
 	if first > 0 && second > 0 {
 		switch ratio := second / first; {
@@ -116,12 +128,23 @@ func envelopeShape(mono []float64, rate int) (onsets int, attackMS float64) {
 // spectrum returns the power spectrum of mono averaged over half-overlapped
 // Hann windows (bins 0..fftSize/2). A sound shorter than one window is
 // zero-padded.
-func spectrum(mono []float64) []float64 {
-	power := make([]float64, fftSize/2+1)
+//
+// tonality is the energy-weighted mean, over the windows, of the share of
+// each window's power held by its strongest bins. A tone or chord puts
+// nearly all of a window's power in a few bins; noise, however it is
+// filtered, spreads it over the whole band it occupies.
+func spectrum(mono []float64, rate int) (power []float64, tonality float64) {
+	power = make([]float64, fftSize/2+1)
 	if len(mono) == 0 {
-		return power
+		return power, 0
 	}
+	lo, hi := analysisBand(rate)
+	// A Hann-windowed tone fills 4 bins, so 12 holds a three-note chord.
+	const peakBins = 12
+
 	buf := make([]complex128, fftSize)
+	frame := make([]float64, 0, fftSize/2+1)
+	var weighted, total float64
 	for start := 0; ; start += fftSize / 2 {
 		n := min(fftSize, len(mono)-start)
 		for i := range buf {
@@ -132,24 +155,51 @@ func spectrum(mono []float64) []float64 {
 			}
 		}
 		fft(buf)
+		frame = frame[:0]
+		var energy float64
 		for i := range power {
 			a := cmplx.Abs(buf[i])
 			power[i] += a * a
+			if i >= lo && i <= hi {
+				frame = append(frame, a*a)
+				energy += a * a
+			}
+		}
+		if energy > 0 {
+			// A window shorter than the transform is zero-padded, which
+			// smears each peak over proportionally more bins.
+			peaks := min(peakBins*((fftSize+n-1)/n), len(frame))
+			sort.Float64s(frame)
+			var top float64
+			for _, p := range frame[len(frame)-peaks:] {
+				top += p
+			}
+			weighted += top
+			total += energy
 		}
 		if start+fftSize >= len(mono) {
 			break
 		}
 	}
-	return power
+	if total > 0 {
+		tonality = weighted / total
+	}
+	return power, tonality
+}
+
+// analysisBand is the range of bins the description looks at, 50 Hz to
+// 12 kHz: below is rumble and DC, above carries little that identifies a UI
+// sound.
+func analysisBand(rate int) (lo, hi int) {
+	binHz := float64(rate) / fftSize
+	return max(1, int(math.Ceil(50/binHz))), min(fftSize/2, int(12000/binHz))
 }
 
 // spectrumStats reads the dominant frequency, centroid and flatness from a
-// power spectrum, over 50 Hz to 12 kHz: below is rumble and DC, above
-// carries little that identifies a UI sound.
+// power spectrum, within the analysis band.
 func spectrumStats(power []float64, rate int) (dominant, centroid, flatness float64) {
 	binHz := float64(rate) / fftSize
-	lo := max(1, int(math.Ceil(50/binHz)))
-	hi := min(len(power)-1, int(12000/binHz))
+	lo, hi := analysisBand(rate)
 	if hi <= lo {
 		return 0, 0, 0
 	}

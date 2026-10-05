@@ -3,6 +3,7 @@ package audit
 import (
 	"encoding/json"
 	"math"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
@@ -160,6 +161,42 @@ func TestDescribeFindsPitchAndTrend(t *testing.T) {
 	down := analyze(join(tone(1800, -18, 200*time.Millisecond), tone(600, -18, 200*time.Millisecond)), "error")
 	if down.PitchTrend != "falling" {
 		t.Errorf("1800 -> 600 Hz described as %s", down.PitchTrend)
+	}
+}
+
+// bandNoise is white noise through a one-pole lowpass: most of its energy is
+// in a few hundred hertz, but it has no pitch.
+func bandNoise(d time.Duration) [][2]float64 {
+	rng := rand.New(rand.NewSource(7))
+	frames := make([][2]float64, int(d.Seconds()*rate))
+	var y float64
+	for i := range frames {
+		y += 0.05 * ((rng.Float64()*2 - 1) - y)
+		frames[i] = [2]float64{y, y}
+	}
+	return frames
+}
+
+// Texture has to survive filtering: a rumble or a whoosh is noise even
+// though its spectrum is far from flat, and a chord is tonal even though it
+// is more than one frequency.
+func TestTextureSeparatesPitchFromNoise(t *testing.T) {
+	chord := tone(440, -24, 400*time.Millisecond)
+	for i, f := range join(tone(554.37, -24, 400*time.Millisecond)) {
+		chord[i][0] += f[0] + 0.06*math.Sin(2*math.Pi*659.25*float64(i)/rate)
+		chord[i][1] = chord[i][0]
+	}
+	for name, tc := range map[string]struct {
+		frames [][2]float64
+		want   string
+	}{
+		"pure tone":      {tone(1000, -18, 400*time.Millisecond), "tonal"},
+		"three-note mix": {chord, "tonal"},
+		"filtered noise": {bandNoise(400 * time.Millisecond), "noisy"},
+	} {
+		if got := analyze(tc.frames, "success"); got.Texture != tc.want {
+			t.Errorf("%s: texture %s (tonality %v), want %s", name, got.Texture, got.Tonality, tc.want)
+		}
 	}
 }
 
