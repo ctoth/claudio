@@ -138,6 +138,21 @@ func fundamental(power []float64, rate int) float64 {
 		if power[i] < best/4 || power[i] < power[i-1] || power[i] < power[i+1] {
 			continue
 		}
+		// A real partial is the strongest thing within about two semitones
+		// of itself. A lesser bump that close to a stronger peak is that
+		// peak's skirt (leakage, a beating partner, an attack transient);
+		// harmonics are an octave or more away and are not affected.
+		reach := max(2, int(float64(i)*0.12))
+		skirt := false
+		for j := max(lo, i-reach); j <= min(hi, i+reach); j++ {
+			if power[j] > power[i] {
+				skirt = true
+				break
+			}
+		}
+		if skirt {
+			continue
+		}
 		// Parabolic interpolation on log power.
 		a, b, c := math.Log(power[i-1]+1e-30), math.Log(power[i]), math.Log(power[i+1]+1e-30)
 		offset := 0.0

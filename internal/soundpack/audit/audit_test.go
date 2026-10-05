@@ -260,6 +260,21 @@ func TestPitchIsTheFundamental(t *testing.T) {
 	}
 }
 
+// A weaker component a semitone or so below a note is part of that note's
+// skirt (leakage, a beating partner, an attack transient), not a lower
+// note. Reading it as the pitch put short beeps 8% flat.
+func TestPitchIgnoresAWeakerNeighbourOfThePeak(t *testing.T) {
+	frames := make([][2]float64, rate/8)
+	for i := range frames {
+		t := float64(i) / rate
+		x := 0.10*math.Sin(2*math.Pi*1048*t) + 0.06*math.Sin(2*math.Pi*963*t)
+		frames[i] = [2]float64{x, x}
+	}
+	if got := analyze(frames, "success"); math.Abs(got.PitchHz-1048) > 12 {
+		t.Errorf("pitch %v Hz, want 1048 (the stronger of two close components)", got.PitchHz)
+	}
+}
+
 func writeWAV(t *testing.T, path string, frames [][2]float64) {
 	t.Helper()
 	in := make([][]float64, len(frames))
