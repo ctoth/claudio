@@ -279,7 +279,7 @@ var goldenChains = map[string]goldenChain{
 	"failure edit":                      {"posttool", []string{"error/edit-error.wav", "error/tool-complete.wav", "error/error.wav", "default.wav"}},
 	"pre read":                          {"enhanced", []string{"loading/read-start.wav", "loading/read.wav", "loading/tool-start.wav", "loading/loading.wav", "default.wav"}},
 	"post read ok":                      {"posttool", []string{"success/read-success.wav", "success/tool-complete.wav", "success/success.wav", "default.wav"}},
-	"post read no content":              {"posttool", []string{"error/read-error.wav", "error/tool-complete.wav", "error/error.wav", "default.wav"}},
+	"post read no content":              {"posttool", []string{"success/read-success.wav", "success/tool-complete.wav", "success/success.wav", "default.wav"}},
 	"post read interrupted":             {"posttool", []string{"error/tool-interrupted.wav", "error/read-error.wav", "error/tool-complete.wav", "error/error.wav", "default.wav"}},
 	"pre write":                         {"enhanced", []string{"loading/write-start.wav", "loading/write.wav", "loading/tool-start.wav", "loading/loading.wav", "default.wav"}},
 	"post write ok":                     {"posttool", []string{"success/write-success.wav", "success/tool-complete.wav", "success/success.wav", "default.wav"}},

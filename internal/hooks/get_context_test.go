@@ -154,6 +154,19 @@ func TestGetContext(t *testing.T) {
 			want: EventContext{Category: Loading, ToolName: "git", OriginalTool: "Bash", SoundHint: "git-status-start", Operation: "tool-start", Command: "git", Subcommand: "status", Phase: "start"}},
 		{name: "Gemini AfterTool write_file success", event: "AfterTool", tool: "write_file", response: `{"success":true}`,
 			want: EventContext{Category: Success, ToolName: "Write", SoundHint: "write-success", Operation: "tool-complete", Command: "Write", Phase: "success", IsSuccess: true}},
+		// Gemini v0.62.0 reports a nonzero shell exit only as an "Exit Code: N"
+		// line in llmContent, wrapped in <untrusted_context> tags on their own
+		// lines; its error field is set only when the shell fails to start
+		// (packages/core/src/tools/shell.ts, utils/textUtils.ts wrapUntrusted).
+		{name: "Gemini AfterTool run_shell_command exit 1", event: "AfterTool", tool: "run_shell_command", input: `{"command":"git status"}`,
+			response: `{"llmContent":"<untrusted_context>\nOutput: fatal: not a git repository\nExit Code: 128\nProcess Group PGID: 4242\n</untrusted_context>","returnDisplay":"fatal: not a git repository"}`,
+			want:     EventContext{Category: Error, ToolName: "git", OriginalTool: "Bash", SoundHint: "git-status-error", Operation: "tool-complete", Command: "git", Subcommand: "status", Phase: "error", HasError: true}},
+		{name: "Gemini AfterTool run_shell_command exit 0", event: "AfterTool", tool: "run_shell_command", input: `{"command":"git status"}`,
+			response: `{"llmContent":"<untrusted_context>\nOutput: nothing to commit\nProcess Group PGID: 4242\n</untrusted_context>","returnDisplay":"nothing to commit"}`,
+			want:     EventContext{Category: Success, ToolName: "git", OriginalTool: "Bash", SoundHint: "git-status-success", Operation: "tool-complete", Command: "git", Subcommand: "status", Phase: "success", IsSuccess: true}},
+		{name: "Gemini AfterTool shell failed to start", event: "AfterTool", tool: "run_shell_command", input: `{"command":"git status"}`,
+			response: `{"llmContent":"<untrusted_context>\nOutput: (empty)\nError: spawn ENOENT\n</untrusted_context>","returnDisplay":"","error":{"message":"spawn ENOENT","type":"shell_execute_error"}}`,
+			want:     EventContext{Category: Error, ToolName: "git", OriginalTool: "Bash", SoundHint: "git-status-error", Operation: "tool-complete", Command: "git", Subcommand: "status", Phase: "error", HasError: true}},
 		{name: "Gemini BeforeAgent", event: "BeforeAgent",
 			want: EventContext{Category: Interactive, SoundHint: "before-agent", Operation: "before-agent"}},
 		{name: "Gemini AfterAgent", event: "AfterAgent",
@@ -180,8 +193,8 @@ func TestGetContext(t *testing.T) {
 			want: EventContext{Category: Error, ToolName: "Bash", SoundHint: "tool-interrupted", Operation: "tool-complete", Command: "Bash", Phase: "error", HasError: true}},
 		{name: "Read with content succeeds", event: "PostToolUse", tool: "Read", response: `{"content":"hello"}`,
 			want: EventContext{Category: Success, ToolName: "Read", SoundHint: "read-success", Operation: "tool-complete", Command: "Read", Phase: "success", IsSuccess: true}},
-		{name: "Read without content fails", event: "PostToolUse", tool: "Read", response: "{}",
-			want: EventContext{Category: Error, ToolName: "Read", SoundHint: "read-error", Operation: "tool-complete", Command: "Read", Phase: "error", HasError: true}},
+		{name: "Read without content succeeds", event: "PostToolUse", tool: "Read", response: "{}",
+			want: EventContext{Category: Success, ToolName: "Read", SoundHint: "read-success", Operation: "tool-complete", Command: "Read", Phase: "success", IsSuccess: true}},
 		{name: "Edit success false fails", event: "PostToolUse", tool: "Edit", response: `{"success":false}`,
 			want: EventContext{Category: Error, ToolName: "Edit", SoundHint: "edit-error", Operation: "tool-complete", Command: "Edit", Phase: "error", HasError: true}},
 		{name: "Edit success true succeeds", event: "PostToolUse", tool: "Edit", response: `{"success":true}`,

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -487,6 +488,30 @@ func (e *HookEvent) analyzeToolResponse() (success bool, hasError bool, errorTyp
 		return false, true, ""
 	}
 
+	// Copilot CLI wraps every result as {result_type, text_result_for_llm}
+	// (camelCase: resultType, textResultForLlm). A shell command that exits
+	// nonzero still reports "success"; its exit code is only in the text.
+	if resultType, ok := firstString(response, "result_type", "resultType"); ok {
+		if resultType != "success" {
+			return false, true, ""
+		}
+		text, _ := firstString(response, "text_result_for_llm", "textResultForLlm")
+		if m := copilotShellExit.FindStringSubmatch(text); m != nil && m[1] != "0" {
+			slog.Debug("copilot shell result has nonzero exit code", "exit_code", m[1])
+			return false, true, ""
+		}
+		return true, false, ""
+	}
+
+	// Gemini reports a nonzero shell exit only as an "Exit Code: N" line in
+	// llmContent, without setting error.
+	if llmContent, ok := response["llmContent"].(string); ok {
+		if exitCode, ok := parseExitCode(llmContent); ok && exitCode != 0 {
+			slog.Debug("tool response llmContent has nonzero exit code", "exit_code", exitCode)
+			return false, true, ""
+		}
+	}
+
 	// Check for tool-specific error patterns
 	if e.ToolName != nil {
 		switch normalizeToolName(*e.ToolName) {
@@ -495,11 +520,12 @@ func (e *HookEvent) analyzeToolResponse() (success bool, hasError bool, errorTyp
 			return true, false, ""
 
 		case "Read", "LS", "Glob":
-			// File tools are success if they have content
-			if content, ok := response["content"]; ok && content != nil {
-				return true, false, ""
-			}
-			return false, true, ""
+			// A missing "content" key is not a failure. Claude Code, Qwen
+			// and Copilot report failed reads as PostToolUseFailure and
+			// Gemini sets error (checked above); their success shapes
+			// differ (Claude nests content under "file", Gemini and Qwen
+			// send llmContent).
+			return true, false, ""
 
 		case "Edit", "Write", "MultiEdit":
 			// Edit tools should indicate success/failure explicitly
@@ -523,6 +549,20 @@ func (e *HookEvent) analyzeToolResponse() (success bool, hasError bool, errorTyp
 
 	// Default: assume success if no clear error indicators
 	return true, false, ""
+}
+
+// copilotShellExit matches the exit line Copilot CLI appends to shell
+// results, e.g. "<shellId: 1 completed with exit code 3>".
+var copilotShellExit = regexp.MustCompile(`<shellId: \S+ completed with exit code (-?\d+)>`)
+
+// firstString returns the first of keys that holds a string in m.
+func firstString(m map[string]any, keys ...string) (string, bool) {
+	for _, key := range keys {
+		if s, ok := m[key].(string); ok {
+			return s, true
+		}
+	}
+	return "", false
 }
 
 func analyzeTextToolResponse(responseText string) (success bool, hasError bool, errorType string) {
