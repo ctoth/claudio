@@ -520,11 +520,12 @@ func (e *HookEvent) analyzeToolResponse() (success bool, hasError bool, errorTyp
 			return true, false, ""
 
 		case "Read", "LS", "Glob":
-			// File tools are success if they have content
-			if content, ok := response["content"]; ok && content != nil {
-				return true, false, ""
-			}
-			return false, true, ""
+			// A missing "content" key is not a failure. Claude Code, Qwen
+			// and Copilot report failed reads as PostToolUseFailure and
+			// Gemini sets error (checked above); their success shapes
+			// differ (Claude nests content under "file", Gemini and Qwen
+			// send llmContent).
+			return true, false, ""
 
 		case "Edit", "Write", "MultiEdit":
 			// Edit tools should indicate success/failure explicitly
