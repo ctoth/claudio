@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
-	"regexp"
 	"slices"
-	"strconv"
 	"strings"
+
+	captainhook "github.com/ctoth/captain-hook"
 )
 
 // EventCategory represents the type of hook event for sound mapping
@@ -112,6 +112,10 @@ type HookEvent struct {
 	ToolResponse *json.RawMessage `json:"tool_response,omitempty"`
 	Prompt       *string          `json:"prompt,omitempty"`
 	Message      *string          `json:"message,omitempty"`
+
+	// payload is captain-hook's reading of the event. It is nil for a
+	// HookEvent built by hand; parsed() then reads the fields above.
+	payload *captainhook.Payload
 }
 
 // EventContext provides processed context for sound mapping
@@ -133,8 +137,8 @@ type EventContext struct {
 	// its command levels from. For tool events Command is the resolved tool
 	// (the shell command for Bash, "mcp" for MCP tools, otherwise the tool
 	// name), Subcommand is the parsed shell subcommand (may contain '-', as
-	// in "port-forward"), and Phase is "start", "success" or "error".
-	// Lifecycle events leave them empty.
+	// in "port-forward"), and Phase is "start", "success", "error" or
+	// PhaseUnknown. Lifecycle events leave them empty.
 	Command    string `json:"Command,omitempty"`
 	Subcommand string `json:"Subcommand,omitempty"`
 	Phase      string `json:"Phase,omitempty"`
@@ -155,33 +159,91 @@ func ParseHookEvent(data []byte) (*HookEvent, error) {
 // ParseHookEventWithDefault parses hook JSON and uses defaultEvent when the
 // payload format does not include hook_event_name.
 func ParseHookEventWithDefault(data []byte, defaultEvent string) (*HookEvent, error) {
+	return ParseHookEventFrom("", data, defaultEvent)
+}
+
+// ParseHookEventFrom parses hook JSON sent by agent, the --hook-agent value
+// of the hook command. With agent "" the payload is read by what it shows.
+// defaultEvent names the event for payloads that do not.
+//
+// captain-hook reads the payload: each agent's field names, tool names and
+// way of reporting a failed tool are its business, not claudio's.
+func ParseHookEventFrom(agent string, data []byte, defaultEvent string) (*HookEvent, error) {
 	if len(data) == 0 {
 		return nil, errors.New("empty JSON data")
 	}
-
-	var event HookEvent
-	if err := json.Unmarshal(data, &event); err != nil {
+	if defaultEvent == "" {
+		defaultEvent = legacyEventName(data)
+	}
+	agent = strings.ToLower(strings.TrimSpace(agent))
+	payload, err := captainhook.Parse(captainhook.Agent(agent), defaultEvent, data)
+	if err != nil {
 		return nil, fmt.Errorf("failed to parse hook JSON: %w", err)
 	}
-	if err := event.applyCompatibilityAliases(data); err != nil {
-		return nil, err
-	}
-	if event.EventName == "" {
-		event.EventName = defaultEvent
-	}
-	event.EventName = NormalizeEventName(event.EventName)
 
-	// Validate required fields
+	event := &HookEvent{
+		SessionID:      payload.SessionID,
+		TranscriptPath: payload.TranscriptPath,
+		CWD:            payload.CWD,
+		EventName:      NormalizeEventName(payload.Event),
+		payload:        payload,
+	}
+	if payload.Prompt != "" {
+		event.Prompt = &payload.Prompt
+	}
+	if payload.Message != "" {
+		event.Message = &payload.Message
+	}
+	if tool := payload.Tool; tool != nil {
+		event.ToolName = &tool.RawName
+		if tool.Input != nil {
+			event.ToolInput = &tool.Input
+		}
+		if tool.Response != nil {
+			event.ToolResponse = &tool.Response
+		}
+	} else {
+		// captain-hook hands back a response only with a tool; claudio's
+		// legacy rules also read one on an event that names no tool.
+		var toolless struct {
+			ToolResponse *json.RawMessage `json:"tool_response"`
+		}
+		_ = json.Unmarshal(data, &toolless) // data parsed above; a miss leaves nil
+		event.ToolResponse = toolless.ToolResponse
+	}
+
 	if event.SessionID == "" {
 		return nil, errors.New("missing required field: session_id")
-	}
-	if event.EventName == "" {
-		return nil, errors.New("missing required field: hook_event_name")
 	}
 	if event.CWD == "" {
 		return nil, errors.New("missing required field: cwd")
 	}
-	return &event, nil
+	return event, nil
+}
+
+// legacyEventName returns the payload's "hookEventName", which claudio has
+// read since it first supported Copilot CLI. No current agent is known to
+// send it, so it is not captain-hook's to know.
+func legacyEventName(data []byte) string {
+	var legacy struct {
+		EventName string `json:"hookEventName"`
+	}
+	_ = json.Unmarshal(data, &legacy) // a payload without it has no legacy name
+	return legacy.EventName
+}
+
+// parsed returns captain-hook's reading of the event. A HookEvent built by
+// hand is serialized first: its fields are already a Claude Code payload.
+func (e *HookEvent) parsed() *captainhook.Payload {
+	if e.payload != nil {
+		return e.payload
+	}
+	if data, err := json.Marshal(e); err == nil {
+		if payload, err := captainhook.Parse("", e.EventName, data); err == nil {
+			return payload
+		}
+	}
+	return &captainhook.Payload{Event: e.EventName}
 }
 
 // NormalizeEventName converts agent-specific hook keys to Claudio's canonical
@@ -197,45 +259,6 @@ func NormalizeEventName(name string) string {
 	default:
 		return name
 	}
-}
-
-type hookEventAliases struct {
-	SessionID      string           `json:"sessionId"`
-	TranscriptPath string           `json:"transcriptPath"`
-	EventName      string           `json:"hookEventName"`
-	ToolName       string           `json:"toolName"`
-	ToolInput      *json.RawMessage `json:"toolArgs"`
-	ToolResponse   *json.RawMessage `json:"toolResult"`
-	ToolResult     *json.RawMessage `json:"tool_result"`
-}
-
-func (e *HookEvent) applyCompatibilityAliases(data []byte) error {
-	var aliases hookEventAliases
-	if err := json.Unmarshal(data, &aliases); err != nil {
-		return fmt.Errorf("failed to parse hook JSON aliases: %w", err)
-	}
-	if e.SessionID == "" {
-		e.SessionID = aliases.SessionID
-	}
-	if e.TranscriptPath == "" {
-		e.TranscriptPath = aliases.TranscriptPath
-	}
-	if e.EventName == "" {
-		e.EventName = aliases.EventName
-	}
-	if e.ToolName == nil && aliases.ToolName != "" {
-		e.ToolName = &aliases.ToolName
-	}
-	if e.ToolInput == nil {
-		e.ToolInput = aliases.ToolInput
-	}
-	if e.ToolResponse == nil {
-		e.ToolResponse = aliases.ToolResponse
-	}
-	if e.ToolResponse == nil {
-		e.ToolResponse = aliases.ToolResult
-	}
-	return nil
 }
 
 // lifecycleEvent is the fixed context a tool-less event maps to.
@@ -299,7 +322,7 @@ var unknownEvent = lifecycleEvent{Interactive, "default", "unknown"}
 // GetContext extracts actionable context from the hook event for sound mapping
 func (e *HookEvent) GetContext() *EventContext {
 	context := &EventContext{
-		ToolName: normalizeToolName(getStringPtr(e.ToolName)),
+		ToolName: e.toolName(),
 	}
 
 	switch e.EventName {
@@ -343,23 +366,110 @@ func (e *HookEvent) populatePreToolContext(context *EventContext) {
 	e.populateToolIdentity(context, "start", "")
 }
 
-func (e *HookEvent) populatePostToolContext(context *EventContext, forceError bool) {
-	success, hasError, errorType := e.analyzeToolResponse()
-	if forceError {
-		success = false
-		hasError = true
+// toolName returns claudio's name for the event's tool: captain-hook's name
+// for it, then claudio's own vocabulary for what captain-hook leaves alone
+// ("LS", "MultiEdit", and "mcp" for every MCP tool).
+func (e *HookEvent) toolName() string {
+	tool := e.parsed().Tool
+	if tool == nil {
+		return normalizeToolName(getStringPtr(e.ToolName))
 	}
-	context.IsSuccess = success
-	context.HasError = hasError
+	if tool.Name == "MCP" {
+		return "mcp"
+	}
+	return normalizeToolName(tool.Name)
+}
+
+// PhaseUnknown is the Phase of a tool call that ended without the payload
+// saying how. The mapper gives it the neutral tool-complete sound.
+const PhaseUnknown = "unknown"
+
+// populatePostToolContext scores a finished tool call from captain-hook's
+// Outcome. forceError marks the agent's failure event.
+//
+// An unknown outcome plays the neutral tool-complete sound only for a shell
+// command that did send a result: Codex sends a command's output and never
+// its exit code. Any other unknown outcome counts as a success, as it
+// always has: no agent is known to report a failed non-shell tool this way.
+func (e *HookEvent) populatePostToolContext(context *EventContext, forceError bool) {
 	context.Operation = "tool-complete"
 
-	if hasError {
-		context.Category = Error
-		e.populateToolIdentity(context, "error", errorType)
-	} else {
+	outcome, hasResponse := captainhook.OutcomeSuccess, false
+	if tool := e.parsed().Tool; tool != nil {
+		outcome, hasResponse = tool.Outcome, tool.Response != nil
+	}
+	if forceError && outcome != captainhook.OutcomeInterrupted {
+		outcome = captainhook.OutcomeFailure
+	}
+	if outcome != captainhook.OutcomeFailure && outcome != captainhook.OutcomeInterrupted {
+		if legacy := e.legacyOutcome(context.ToolName); legacy != captainhook.OutcomeNone {
+			outcome = legacy
+		}
+	}
+
+	switch {
+	case outcome == captainhook.OutcomeInterrupted:
+		context.Category, context.HasError = Error, true
+		e.populateToolIdentity(context, "error", "tool-interrupted")
+	case outcome == captainhook.OutcomeFailure:
+		context.Category, context.HasError = Error, true
+		e.populateToolIdentity(context, "error", "")
+	case outcome == captainhook.OutcomeUnknown && hasResponse && context.ToolName == "Bash":
 		context.Category = Success
+		e.populateToolIdentity(context, PhaseUnknown, "tool-complete")
+	default:
+		context.Category, context.IsSuccess = Success, true
 		e.populateToolIdentity(context, "success", "")
 	}
+}
+
+// legacyOutcome applies the failure signs claudio read from a tool response
+// before captain-hook read payloads, for the cases captain-hook does not
+// call a failure. It returns OutcomeNone when none of them applies.
+//
+// Current Claude Code sends a failed tool as PostToolUseFailure and leaves
+// "stderr" empty on a PostToolUse (checked against 2.1.290), so these do
+// not fire there. They are kept because older agent versions that relied
+// on them cannot be ruled out:
+//   - a response that is neither an object nor text
+//   - a response with non-empty "stderr"
+//   - "success": false from an edit tool
+//   - "interrupted", "isError" or "error" on an event that names no tool
+//     (captain-hook reads a response only when there is a tool)
+func (e *HookEvent) legacyOutcome(tool string) captainhook.Outcome {
+	if e.ToolResponse == nil {
+		return captainhook.OutcomeNone
+	}
+	var response map[string]any
+	if json.Unmarshal(*e.ToolResponse, &response) != nil {
+		var text string
+		if json.Unmarshal(*e.ToolResponse, &text) == nil {
+			return captainhook.OutcomeNone // text: captain-hook has read it
+		}
+		slog.Warn("tool response is neither an object nor text; treating it as an error")
+		return captainhook.OutcomeFailure
+	}
+	if tool == "" {
+		if interrupted, _ := response["interrupted"].(bool); interrupted {
+			return captainhook.OutcomeInterrupted
+		}
+		if isError, _ := response["isError"].(bool); isError {
+			return captainhook.OutcomeFailure
+		}
+		if value, ok := response["error"]; ok && value != nil && value != "" {
+			return captainhook.OutcomeFailure
+		}
+	}
+	if stderr, _ := response["stderr"].(string); stderr != "" {
+		return captainhook.OutcomeFailure
+	}
+	if success, ok := response["success"].(bool); ok && !success {
+		switch tool {
+		case "Edit", "Write", "MultiEdit":
+			return captainhook.OutcomeFailure
+		}
+	}
+	return captainhook.OutcomeNone
 }
 
 // noToolHints is the hint for a tool event that names no tool, by phase.
@@ -443,153 +553,6 @@ func normalizeToolName(toolName string) string {
 
 func isMCPToolName(toolName string) bool {
 	return toolName == "mcp" || strings.HasPrefix(toolName, "mcp__") || strings.HasPrefix(toolName, "mcp_")
-}
-
-// analyzeToolResponse examines tool response to determine success/error status and error type
-func (e *HookEvent) analyzeToolResponse() (success bool, hasError bool, errorType string) {
-	if e.ToolResponse == nil {
-		return true, false, "" // No response usually means success
-	}
-
-	var response map[string]any
-	err := json.Unmarshal(*e.ToolResponse, &response)
-	if err != nil {
-		var responseText string
-		if stringErr := json.Unmarshal(*e.ToolResponse, &responseText); stringErr == nil {
-			return analyzeTextToolResponse(responseText)
-		}
-		slog.Warn("tool response is not JSON; treating it as an error", "error", err)
-		return false, true, ""
-	}
-
-	// Check for interruption first (more specific than stderr)
-	if interrupted, ok := response["interrupted"].(bool); ok && interrupted {
-		slog.Debug("tool was interrupted")
-		return false, true, "tool-interrupted"
-	}
-
-	// Check for MCP-style isError field
-	if isError, ok := response["isError"].(bool); ok && isError {
-		slog.Debug("tool response has isError=true (MCP error)")
-		return false, true, ""
-	}
-
-	// Check for common error indicators
-	if errorValue, ok := response["error"]; ok && errorValue != nil {
-		if errorString, ok := errorValue.(string); !ok || errorString != "" {
-			slog.Debug("tool response has error field")
-			return false, true, ""
-		}
-	}
-
-	// Check stderr output after structured error fields.
-	if stderr, ok := response["stderr"].(string); ok && stderr != "" {
-		slog.Debug("tool response has stderr", "stderr_length", len(stderr))
-		return false, true, ""
-	}
-
-	// Copilot CLI wraps every result as {result_type, text_result_for_llm}
-	// (camelCase: resultType, textResultForLlm). A shell command that exits
-	// nonzero still reports "success"; its exit code is only in the text.
-	if resultType, ok := firstString(response, "result_type", "resultType"); ok {
-		if resultType != "success" {
-			return false, true, ""
-		}
-		text, _ := firstString(response, "text_result_for_llm", "textResultForLlm")
-		if m := copilotShellExit.FindStringSubmatch(text); m != nil && m[1] != "0" {
-			slog.Debug("copilot shell result has nonzero exit code", "exit_code", m[1])
-			return false, true, ""
-		}
-		return true, false, ""
-	}
-
-	// Gemini reports a nonzero shell exit only as an "Exit Code: N" line in
-	// llmContent, without setting error.
-	if llmContent, ok := response["llmContent"].(string); ok {
-		if exitCode, ok := parseExitCode(llmContent); ok && exitCode != 0 {
-			slog.Debug("tool response llmContent has nonzero exit code", "exit_code", exitCode)
-			return false, true, ""
-		}
-	}
-
-	// Check for tool-specific error patterns
-	if e.ToolName != nil {
-		switch normalizeToolName(*e.ToolName) {
-		case "Bash":
-			// Bash is success if no stderr and not interrupted
-			return true, false, ""
-
-		case "Read", "LS", "Glob":
-			// A missing "content" key is not a failure. Claude Code, Qwen
-			// and Copilot report failed reads as PostToolUseFailure and
-			// Gemini sets error (checked above); their success shapes
-			// differ (Claude nests content under "file", Gemini and Qwen
-			// send llmContent).
-			return true, false, ""
-
-		case "Edit", "Write", "MultiEdit":
-			// Edit tools should indicate success/failure explicitly
-			if success, ok := response["success"].(bool); ok {
-				return success, !success, ""
-			}
-			// If no explicit success field, assume success
-			return true, false, ""
-
-		case "Grep":
-			// Grep is success if it returns results
-			if numLines, ok := response["numLines"].(float64); ok {
-				return numLines >= 0, false, "" // Even 0 results is success
-			}
-			return true, false, ""
-
-		default:
-			slog.Debug("unknown tool type for response analysis", "tool_name", *e.ToolName)
-		}
-	}
-
-	// Default: assume success if no clear error indicators
-	return true, false, ""
-}
-
-// copilotShellExit matches the exit line Copilot CLI appends to shell
-// results, e.g. "<shellId: 1 completed with exit code 3>".
-var copilotShellExit = regexp.MustCompile(`<shellId: \S+ completed with exit code (-?\d+)>`)
-
-// firstString returns the first of keys that holds a string in m.
-func firstString(m map[string]any, keys ...string) (string, bool) {
-	for _, key := range keys {
-		if s, ok := m[key].(string); ok {
-			return s, true
-		}
-	}
-	return "", false
-}
-
-func analyzeTextToolResponse(responseText string) (success bool, hasError bool, errorType string) {
-	if exitCode, ok := parseExitCode(responseText); ok && exitCode != 0 {
-		return false, true, ""
-	}
-	return true, false, ""
-}
-
-func parseExitCode(responseText string) (int, bool) {
-	for line := range strings.SplitSeq(responseText, "\n") {
-		line = strings.TrimSpace(line)
-		rest, ok := strings.CutPrefix(strings.ToLower(line), "exit code:")
-		if !ok {
-			continue
-		}
-		fields := strings.Fields(rest)
-		if len(fields) == 0 {
-			return 0, false
-		}
-		exitCode, err := strconv.Atoi(fields[0])
-		if err != nil {
-			return 0, false
-		}
-		return exitCode, true
-	}
-	return 0, false
 }
 
 // extractFileType attempts to extract file type from tool input

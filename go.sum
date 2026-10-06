@@ -6,6 +6,8 @@ github.com/ctoth/captain-hook v0.3.0 h1:OEjxLxlSa0aFLL3JO5QhVcC2o+DQmeaxzs8Ti2W2
 github.com/ctoth/captain-hook v0.3.0/go.mod h1:596j9jxAuqJOrYHYKrFK/XHsfu+9YKAcXahwHPspElA=
 github.com/ctoth/captain-hook v0.3.1-0.20261006071707-76f4154b0e87 h1:Ka5TMJ/lwop2bhFrorJ18llOS9aJemd3T9t77PUzWiQ=
 github.com/ctoth/captain-hook v0.3.1-0.20261006071707-76f4154b0e87/go.mod h1:596j9jxAuqJOrYHYKrFK/XHsfu+9YKAcXahwHPspElA=
+github.com/ctoth/captain-hook v0.3.1-0.20261006073302-37c06fbae4fe h1:mtMhMmCiPOdqN3t9lU0P5EXjK64tiIEXmVxTlfkbSaQ=
+github.com/ctoth/captain-hook v0.3.1-0.20261006073302-37c06fbae4fe/go.mod h1:596j9jxAuqJOrYHYKrFK/XHsfu+9YKAcXahwHPspElA=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/dustin/go-humanize v1.0.1 h1:GzkhY7T5VNhEkwH0PVJgjz+fX1rhBrR7pRT3mDkpeCY=

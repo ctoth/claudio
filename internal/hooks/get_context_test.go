@@ -142,10 +142,13 @@ func TestGetContext(t *testing.T) {
 			want: EventContext{Category: Error, ToolName: "mcp", OriginalTool: "mcp__github__create_issue", SoundHint: "tool-interrupted", Operation: "tool-complete", Command: "mcp", Phase: "error", HasError: true}},
 		{name: "PreToolUse Read without input", event: "PreToolUse", tool: "Read", input: "{}",
 			want: EventContext{Category: Loading, ToolName: "Read", SoundHint: "read-start", Operation: "tool-start", Command: "Read", Phase: "start"}},
+		// Codex edits files through apply_patch, which is an Edit: Codex
+		// itself accepts "Edit" as a matcher for it, and GitHub's table for
+		// Copilot's apply_patch says the same.
 		{name: "Codex apply_patch PreToolUse", event: "PreToolUse", tool: "apply_patch",
-			want: EventContext{Category: Loading, ToolName: "apply_patch", SoundHint: "apply_patch-start", Operation: "tool-start", Command: "apply_patch", Phase: "start"}},
+			want: EventContext{Category: Loading, ToolName: "Edit", SoundHint: "edit-start", Operation: "tool-start", Command: "Edit", Phase: "start"}},
 		{name: "Codex apply_patch PostToolUse success", event: "PostToolUse", tool: "apply_patch", response: `{"output":"done"}`,
-			want: EventContext{Category: Success, ToolName: "apply_patch", SoundHint: "apply_patch-success", Operation: "tool-complete", Command: "apply_patch", Phase: "success", IsSuccess: true}},
+			want: EventContext{Category: Success, ToolName: "Edit", SoundHint: "edit-success", Operation: "tool-complete", Command: "Edit", Phase: "success", IsSuccess: true}},
 		{name: "Codex string tool_response exit 0", event: "PostToolUse", tool: "Bash", input: `{"command":"git status --short"}`, response: `"Exit code: 0\nWall time: 0.1 seconds\nOutput:\nclean"`,
 			want: EventContext{Category: Success, ToolName: "git", OriginalTool: "Bash", SoundHint: "git-status-success", Operation: "tool-complete", Command: "git", Subcommand: "status", Phase: "success", IsSuccess: true}},
 		{name: "Codex string tool_response exit 1", event: "PostToolUse", tool: "Bash", input: `{"command":"git status --short"}`, response: `"Exit code: 1\nWall time: 0.1 seconds\nOutput:\nfatal: not a git repository"`,
@@ -188,7 +191,7 @@ func TestGetContext(t *testing.T) {
 		{name: "Copilot view", event: "PreToolUse", tool: "view",
 			want: EventContext{Category: Loading, ToolName: "Read", SoundHint: "read-start", Operation: "tool-start", Command: "Read", Phase: "start"}},
 		{name: "apply_patch isError", event: "PostToolUse", tool: "apply_patch", response: `{"isError":true}`,
-			want: EventContext{Category: Error, ToolName: "apply_patch", SoundHint: "apply_patch-error", Operation: "tool-complete", Command: "apply_patch", Phase: "error", HasError: true}},
+			want: EventContext{Category: Error, ToolName: "Edit", SoundHint: "edit-error", Operation: "tool-complete", Command: "Edit", Phase: "error", HasError: true}},
 		{name: "Bash interrupted without input", event: "PostToolUse", tool: "Bash", response: `{"interrupted":true}`,
 			want: EventContext{Category: Error, ToolName: "Bash", SoundHint: "tool-interrupted", Operation: "tool-complete", Command: "Bash", Phase: "error", HasError: true}},
 		{name: "Read with content succeeds", event: "PostToolUse", tool: "Read", response: `{"content":"hello"}`,
@@ -216,7 +219,7 @@ func TestGetContext(t *testing.T) {
 		{name: "Read interrupted", event: "PostToolUse", tool: "Read", response: `{"interrupted":true}`,
 			want: EventContext{Category: Error, ToolName: "Read", SoundHint: "tool-interrupted", Operation: "tool-complete", Command: "Read", Phase: "error", HasError: true}},
 		{name: "apply_patch non-string error", event: "PostToolUse", tool: "apply_patch", response: `{"error":{"message":"boom"}}`,
-			want: EventContext{Category: Error, ToolName: "apply_patch", SoundHint: "apply_patch-error", Operation: "tool-complete", Command: "apply_patch", Phase: "error", HasError: true}},
+			want: EventContext{Category: Error, ToolName: "Edit", SoundHint: "edit-error", Operation: "tool-complete", Command: "Edit", Phase: "error", HasError: true}},
 		{name: "Write without explicit success", event: "PostToolUse", tool: "Write", response: "{}",
 			want: EventContext{Category: Success, ToolName: "Write", SoundHint: "write-success", Operation: "tool-complete", Command: "Write", Phase: "success", IsSuccess: true}},
 		{name: "Setup", event: "Setup",

@@ -339,7 +339,8 @@ func processHookInput(cmd *cobra.Command, cli *CLI, cfg *config.Config, inputDat
 	}
 
 	defaultEvent, _ := cmd.Flags().GetString("hook-event")
-	hookEvent, err := hooks.ParseHookEventWithDefault(inputData, defaultEvent)
+	hookAgent, _ := cmd.Flags().GetString("hook-agent")
+	hookEvent, err := hooks.ParseHookEventFrom(hookAgent, inputData, defaultEvent)
 	if err != nil {
 		// The payload can carry prompts and tool output: identify it by
 		// size and hash only. Run logs the error itself.
