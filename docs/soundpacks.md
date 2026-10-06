@@ -20,7 +20,10 @@ Claudio's native player decodes:
 - **WAV**: mono or stereo; 8-, 16-, 24-, or 32-bit PCM, or 32-bit float
   (float samples beyond full scale are clipped). Files with more than two
   channels are rejected.
-- **MP3**
+- **MP3**: the info header frame that most encoders write is not played, and
+  the encoder delay and padding recorded by LAME or ffmpeg are trimmed, so the
+  sound starts on time. An MP3 with no such header still starts about 23 ms
+  late at 48 kHz; that delay is part of the format.
 - **AIFF** (and uncompressed AIFC): 16-, 24-, or 32-bit. Files with more than two channels are
   downmixed to stereo.
 
