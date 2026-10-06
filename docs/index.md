@@ -215,6 +215,16 @@ success/success.wav
 default.wav
 ```
 
+Some agents do not say how a shell command ended: Codex gives hooks the
+command's output and never its exit code. Claudio then plays neither the
+success nor the error sounds, only the neutral ones:
+
+```text
+success/tool-complete.wav
+success/success.wav
+default.wav
+```
+
 Simple events such as prompts, notifications, completion, and compaction use
 event-specific chains under `interactive/`, `completion/`, or `system/`.
 
