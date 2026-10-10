@@ -94,6 +94,18 @@ func (c *CLI) runStatus(cmd *cobra.Command, _ []string) error {
 		fmt.Fprintln(out, "  tracking:       disabled")
 	}
 
+	// Forwarding — when on, the lines above describe a machine that plays
+	// nothing itself. The token is never printed.
+	if url := cfg.ForwardURL(); url != "" {
+		token := "no token"
+		if cfg.Forward.Token != "" {
+			token = "token set"
+		}
+		fmt.Fprintf(out, "  forwarding:     on, to %s (%s)\n", redactedURL(url), token)
+	} else {
+		fmt.Fprintln(out, "  forwarding:     off")
+	}
+
 	fmt.Fprintf(out, "  version:        %s\n", Version)
 
 	slog.Debug("status reported", "enabled", cfg.Enabled, "volume", cfg.Volume)

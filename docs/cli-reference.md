@@ -168,11 +168,17 @@ claudio status
   audio backend:  auto -> oto (available; playback not tested)
   file logging:   enabled (/home/me/.cache/claudio/logs/claudio.log)
   tracking:       enabled (/home/me/.cache/claudio/sounds.db)
+  forwarding:     off
   version:        1.15.0
 ```
 
 The `audio backend` line shows what `auto` resolves to and whether that backend
 is available. It does not play a sound.
+
+When [forwarding](configuration#forwarding) is set, the `forwarding` line reads
+`on, to <address> (token set)` or `(no token)`. The token is never printed.
+That machine plays nothing itself, so its backend and tracking lines describe
+settings it does not use.
 
 When audio is disabled, the `enabled` line includes the literal word `MUTED`.
 
@@ -234,6 +240,9 @@ It prints `listening on http://<address>` and runs until interrupted. The
 sound is chosen on the listening machine, from its soundpack, volume and mute
 setting, and is recorded in its tracking database when tracking is on. The
 global `--volume`, `--soundpack`, `--silent` and `--config` flags apply.
+
+A Claudio hook on another machine sends its events here when that machine has
+`forward.url` set; see [Forwarding](configuration#forwarding).
 
 Without a token only a loopback address is accepted, because anyone who can
 reach the port can play sounds. Prefer `--token-file` to `--token`: other

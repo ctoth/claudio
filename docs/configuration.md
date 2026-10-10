@@ -110,6 +110,7 @@ Files that Claudio writes use the `embedded:` form.
 | `audio_backend` | `auto` | `auto`, `oto`, or `system_command`. |
 | `file_logging` | enabled | Rotated file logging. See [Logging](#logging). |
 | `sound_tracking` | enabled | SQLite tracking for usage and missing-sound analysis. See [Tracking](#tracking). |
+| `forward` | off | Send events to a `claudio listen` on another machine instead of playing them here. See [Forwarding](#forwarding). |
 
 The platform default for `default_soundpack` is a platform JSON file
 (`windows.json`, `wsl.json`, `darwin.json`, or `linux.json`) placed next to the
@@ -136,6 +137,8 @@ backend is treated as `oto` and a deprecation warning is logged. Change it to
 | `CLAUDIO_FILE_LOGGING` | Overrides `file_logging.enabled`. Accepts Go boolean forms. |
 | `CLAUDIO_SOUND_TRACKING` | Overrides `sound_tracking.enabled`. Accepts Go boolean forms. |
 | `CLAUDIO_SOUND_TRACKING_DB` | Overrides `sound_tracking.database_path`. |
+| `CLAUDIO_FORWARD_URL` | Overrides `forward.url`. A value that is not an `http://` or `https://` address is logged and ignored. |
+| `CLAUDIO_FORWARD_TOKEN` | Overrides `forward.token`. Its value is never logged. |
 | `XDG_CONFIG_HOME` | Changes the user config path and the managed soundpack registry location. |
 | `XDG_CONFIG_DIRS` | Changes the system config paths searched after the user path. |
 | `XDG_DATA_HOME` | Changes where installed and managed soundpacks are stored. |
@@ -267,6 +270,59 @@ or:
 ```bash
 CLAUDIO_SOUND_TRACKING=false claudio status
 ```
+
+## Forwarding
+
+By default Claudio plays a sound on the machine where the hook runs. With
+`forward.url` set, the hook sends the event to a
+[`claudio listen`](cli-reference#claudio-listen) on another machine, and that
+machine picks and plays the sound.
+
+```json
+{
+  "forward": {
+    "url": "http://127.0.0.1:19190",
+    "token": ""
+  }
+}
+```
+
+or `CLAUDIO_FORWARD_URL` and `CLAUDIO_FORWARD_TOKEN`. The URL is the
+listener's address, without `/events`. `token` is whatever the listener was
+started with; leave it out if the listener has none.
+
+A forwarding machine plays nothing itself. It needs no audio device and no
+soundpack, and it records nothing in its own tracking database: the listening
+machine does that. Muting it (`claudio mute`, `--silent`, `CLAUDIO_ENABLED`)
+stops it sending.
+
+What is sent is the set of names a sound is chosen from: the category, the
+sound hint, the command and subcommand (for a shell command, its first words,
+such as `git` and `commit`), the phase, the tool name and the operation, plus
+the agent's name, the session id and the time. The prompt, the rest of the
+command line, tool input and output, the working directory and the transcript
+path are not sent.
+
+If the listener cannot be reached within five seconds, or refuses the event,
+the hook logs a warning and still succeeds. No sound plays anywhere.
+
+Over SSH, forward the listener's port back to the laptop and point the remote
+box at its own end of the tunnel:
+
+```bash
+# on the laptop
+claudio listen
+
+# connect with the port forwarded
+ssh -R 19190:127.0.0.1:19190 mybox
+
+# on mybox, in the shell rc file
+export CLAUDIO_FORWARD_URL=http://127.0.0.1:19190
+```
+
+Across a network without a tunnel, the token and the events travel in the
+clear over `http://`. Use a tunnel, or put the listener behind an `https://`
+address.
 
 ## Test-Only Environment Variables
 

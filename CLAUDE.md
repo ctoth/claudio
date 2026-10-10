@@ -190,7 +190,10 @@ rm -f claudio
    - Production env vars (full reference in `docs/configuration.md`): `CLAUDIO_VOLUME`,
      `CLAUDIO_ENABLED`, `CLAUDIO_SOUNDPACK`, `CLAUDIO_LOG_LEVEL`,
      `CLAUDIO_AUDIO_BACKEND`, `CLAUDIO_FILE_LOGGING`, `CLAUDIO_SOUND_TRACKING`,
-     `CLAUDIO_SOUND_TRACKING_DB`.
+     `CLAUDIO_SOUND_TRACKING_DB`, `CLAUDIO_FORWARD_URL`, `CLAUDIO_FORWARD_TOKEN`.
+   - `forward.url` makes the hook send each event to a `claudio listen`
+     elsewhere (`internal/cli/forward.go`) instead of playing it; that machine
+     then opens no audio device and no tracking database.
    - Test-only env vars (NEVER set in production): `CLAUDIO_DETACH_DISABLE`,
      `CLAUDIO_TEST_RECOGNIZE_GO_TEST`. Both weaken protections that exist for a
      reason; the CLI test suite is the only legitimate consumer.
