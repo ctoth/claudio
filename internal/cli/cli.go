@@ -68,6 +68,7 @@ func NewCLI() *CLI {
 		newMuteCommand(c),
 		newUnmuteCommand(c),
 		newStatusCommand(c),
+		newListenCommand(c),
 		// install-commands writes the /claudio slash command markdown;
 		// uninstall-commands removes it.
 		newInstallCommandsCommand(),
@@ -473,9 +474,13 @@ func setupDefaultCommandLogging(stderr io.Writer) {
 
 // processHookEvent processes the parsed hook event
 func (c *CLI) processHookEvent(hookEvent *hooks.HookEvent, cfg *config.Config) {
-	// Extract hook context directly from event
-	eventCtx := hookEvent.GetContext()
+	c.playEventContext(hookEvent.GetContext(), hookEvent.SessionID, cfg)
+}
 
+// playEventContext maps eventCtx to a sound, records the lookup under
+// sessionID when tracking is on, and plays the sound. It is safe to call
+// from several goroutines once the audio system is initialized.
+func (c *CLI) playEventContext(eventCtx *hooks.EventContext, sessionID string, cfg *config.Config) {
 	slog.Debug("hook context parsed",
 		"category", eventCtx.Category.String(),
 		"operation", eventCtx.Operation,
@@ -497,7 +502,7 @@ func (c *CLI) processHookEvent(hookEvent *hooks.HookEvent, cfg *config.Config) {
 	var observer soundpack.PathObserver
 	if c.trackingDB != nil {
 		buf = tracking.NewLookupBuffer()
-		dbHook = tracking.NewDBHook(c.trackingDB, hookEvent.SessionID)
+		dbHook = tracking.NewDBHook(c.trackingDB, sessionID)
 		observer = buf.Observer()
 	}
 
