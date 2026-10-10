@@ -65,8 +65,9 @@ func runHook(t *testing.T, payload string, args ...string) (int, string) {
 func TestHookForwardsTheEventInsteadOfPlayingIt(t *testing.T) {
 	testenv.IsolateXDG(t)
 	audiotest.ResetLastFakeBackend()
-	url, requests := captureServer(t, http.StatusAccepted)
-	t.Setenv("CLAUDIO_FORWARD_URL", url)
+	url, requests := captureServer(t, http.StatusOK)
+	// Any address that takes a POST will do; the hook does not rewrite it.
+	t.Setenv("CLAUDIO_FORWARD_URL", url+"/topics/my-sounds?priority=low")
 	t.Setenv("CLAUDIO_FORWARD_TOKEN", "s3cret")
 	trackingDB := filepath.Join(t.TempDir(), "sounds.db")
 	t.Setenv("CLAUDIO_SOUND_TRACKING", "true")
@@ -81,7 +82,7 @@ func TestHookForwardsTheEventInsteadOfPlayingIt(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("listener got %d requests, want 1", len(got))
 	}
-	if got[0].path != "/events" || got[0].auth != "Bearer s3cret" {
+	if got[0].path != "/topics/my-sounds" || got[0].auth != "Bearer s3cret" {
 		t.Errorf("request to %q with Authorization %q", got[0].path, got[0].auth)
 	}
 	if bytes.Contains(got[0].body, []byte(forwardSecret)) {
@@ -175,7 +176,7 @@ func TestForwardedHookPlaysOnTheListener(t *testing.T) {
 	testenv.IsolateXDG(t)
 	audiotest.ResetLastFakeBackend()
 	l := startListener(t, "--token", "s3cret")
-	t.Setenv("CLAUDIO_FORWARD_URL", l.url)
+	t.Setenv("CLAUDIO_FORWARD_URL", l.url+"/events")
 	t.Setenv("CLAUDIO_FORWARD_TOKEN", "s3cret")
 
 	if code, stderr := runHook(t, forwardedHook); code != 0 {

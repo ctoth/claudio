@@ -44,7 +44,7 @@ func TestForwardIsOffByDefault(t *testing.T) {
 }
 
 func TestForwardURLMustBeAnHTTPAddress(t *testing.T) {
-	for _, url := range []string{"laptop.lan:19190", "ftp://laptop.lan", "http://", "http://laptop.lan/events?x=1", "://"} {
+	for _, url := range []string{"laptop.lan:19190", "ftp://laptop.lan", "http://", "://"} {
 		path := writeConfig(t, `{"forward":{"url":"`+url+`"}}`)
 		_, err := NewConfigManager().LoadFromFile(path)
 		if err == nil {
@@ -53,7 +53,7 @@ func TestForwardURLMustBeAnHTTPAddress(t *testing.T) {
 			t.Errorf("url %q: error %q does not name the forward url", url, err)
 		}
 	}
-	for _, url := range []string{"http://127.0.0.1:19190", "https://sounds.example.com", "http://laptop.lan:19190/"} {
+	for _, url := range []string{"http://127.0.0.1:19190/events", "https://relay.example.com/topics/my-sounds?priority=low"} {
 		path := writeConfig(t, `{"forward":{"url":"`+url+`"}}`)
 		if _, err := NewConfigManager().LoadFromFile(path); err != nil {
 			t.Errorf("url %q: %v", url, err)

@@ -12,15 +12,16 @@ import (
 	"claudio.click/internal/sounds"
 )
 
-// Post sends event to the listener at baseURL (its address without
-// "/events"), with token when the listener requires one. Anything but an
-// accepted event is an error.
-func Post(ctx context.Context, client *http.Client, baseURL, token string, event sounds.Event) error {
+// Post sends event as the body of one POST to url, used exactly as given,
+// with token as a bearer token when there is one. url is whatever takes the
+// event onward: a Server's /events, or a relay that something else reads
+// from. Any answer outside 2xx is an error.
+func Post(ctx context.Context, client *http.Client, url, token string, event sounds.Event) error {
 	body, err := json.Marshal(event)
 	if err != nil {
 		return fmt.Errorf("encode event: %w", err)
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(baseURL, "/")+"/events", bytes.NewReader(body))
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("build request: %w", err)
 	}
@@ -34,10 +35,10 @@ func Post(ctx context.Context, client *http.Client, baseURL, token string, event
 		return fmt.Errorf("send event: %w", err)
 	}
 	defer response.Body.Close()
-	// The listener's answers are one short line; cap what a stranger at
+	// A refusal is worth one short line in the log; cap what a stranger at
 	// that address could make this process read.
 	answer, _ := io.ReadAll(io.LimitReader(response.Body, 256))
-	if response.StatusCode != http.StatusAccepted {
+	if response.StatusCode < 200 || response.StatusCode > 299 {
 		return fmt.Errorf("listener answered %d: %s", response.StatusCode, strings.TrimSpace(string(answer)))
 	}
 	return nil

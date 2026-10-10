@@ -36,26 +36,43 @@ func TestPostDeliversTheEventToAListener(t *testing.T) {
 		OriginalTool: "Bash",
 		Operation:    "tool-complete",
 	}
-	for _, suffix := range []string{"", "/"} {
-		url, rec, server := startServer(t, Options{Token: "s3cret", MaxAge: time.Minute})
-		if err := Post(context.Background(), http.DefaultClient, url+suffix, "s3cret", event); err != nil {
-			t.Fatalf("url suffix %q: %v", suffix, err)
-		}
-		server.Wait()
-		played := rec.played()
-		if len(played) != 1 {
-			t.Fatalf("url suffix %q: played %d events, want 1", suffix, len(played))
-		}
-		got := played[0]
-		if !got.Time.Equal(event.Time) {
-			t.Errorf("time = %v, want %v", got.Time, event.Time)
-		}
-		got.Time = event.Time
-		if got.Source != event.Source || got.Session != event.Session || got.Hint != event.Hint ||
-			got.Command != event.Command || got.Subcommand != event.Subcommand || got.Phase != event.Phase ||
-			got.OriginalTool != event.OriginalTool || got.Operation != event.Operation || got.Category != event.Category {
-			t.Errorf("received %+v, sent %+v", got, event)
-		}
+	url, rec, server := startServer(t, Options{Token: "s3cret", MaxAge: time.Minute})
+	if err := Post(context.Background(), http.DefaultClient, url+"/events", "s3cret", event); err != nil {
+		t.Fatal(err)
+	}
+	server.Wait()
+	played := rec.played()
+	if len(played) != 1 {
+		t.Fatalf("played %d events, want 1", len(played))
+	}
+	got := played[0]
+	if !got.Time.Equal(event.Time) {
+		t.Errorf("time = %v, want %v", got.Time, event.Time)
+	}
+	got.Time = event.Time
+	if got.Source != event.Source || got.Session != event.Session || got.Hint != event.Hint ||
+		got.Command != event.Command || got.Subcommand != event.Subcommand || got.Phase != event.Phase ||
+		got.OriginalTool != event.OriginalTool || got.Operation != event.Operation || got.Category != event.Category {
+		t.Errorf("received %+v, sent %+v", got, event)
+	}
+}
+
+// The URL is whatever takes a POST: claudio's own listener, or a relay with
+// its own path, query and success status. Post does not rewrite it.
+func TestPostUsesTheURLAsGiven(t *testing.T) {
+	t.Parallel()
+	var gotPath, gotQuery string
+	relay := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath, gotQuery = r.URL.Path, r.URL.RawQuery
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(relay.Close)
+
+	if err := Post(context.Background(), http.DefaultClient, relay.URL+"/topics/my-sounds?priority=low", "", sounds.Event{Category: "success"}); err != nil {
+		t.Fatal(err)
+	}
+	if gotPath != "/topics/my-sounds" || gotQuery != "priority=low" {
+		t.Errorf("posted to %q?%q", gotPath, gotQuery)
 	}
 }
 
@@ -64,7 +81,7 @@ func TestPostDeliversTheEventToAListener(t *testing.T) {
 func TestPostReportsARefusal(t *testing.T) {
 	t.Parallel()
 	url, rec, server := startServer(t, Options{Token: "s3cret"})
-	err := Post(context.Background(), http.DefaultClient, url, "hunter2", sounds.Event{Category: "success"})
+	err := Post(context.Background(), http.DefaultClient, url+"/events", "hunter2", sounds.Event{Category: "success"})
 	server.Wait()
 	if err == nil {
 		t.Fatal("no error for a wrong token")

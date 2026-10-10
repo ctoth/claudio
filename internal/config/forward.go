@@ -6,14 +6,14 @@ import (
 	"net/url"
 )
 
-// ForwardConfig sends each hook event to a `claudio listen` on another
-// machine instead of playing it on this one.
+// ForwardConfig sends each hook event somewhere else instead of playing it
+// on this machine: to a `claudio listen`, or to a relay one reads from.
 type ForwardConfig struct {
-	URL   string `json:"url"`             // Listener base URL (http://host:port); empty = play here
-	Token string `json:"token,omitempty"` // Token the listener requires
+	URL   string `json:"url"`             // Address each event is POSTed to, used as given; empty = play here
+	Token string `json:"token,omitempty"` // Bearer token sent with each event
 }
 
-// ForwardURL is the listener events are sent to, or "" to play them here.
+// ForwardURL is the address events are sent to, or "" to play them here.
 func (c *Config) ForwardURL() string {
 	if c.Forward == nil {
 		return ""
@@ -21,8 +21,8 @@ func (c *Config) ForwardURL() string {
 	return c.Forward.URL
 }
 
-// validateForwardURL checks that raw is a listener base URL: http or https,
-// a host, no query or fragment.
+// validateForwardURL checks that raw is an http or https address with a
+// host. Its path and query are the receiver's business.
 func validateForwardURL(raw string) error {
 	parsed, err := url.Parse(raw)
 	if err != nil {
@@ -33,9 +33,6 @@ func validateForwardURL(raw string) error {
 	}
 	if parsed.Host == "" {
 		return fmt.Errorf("forward url %q has no host", raw)
-	}
-	if parsed.RawQuery != "" || parsed.Fragment != "" {
-		return fmt.Errorf("forward url %q must not have a query or fragment", raw)
 	}
 	return nil
 }
