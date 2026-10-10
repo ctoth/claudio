@@ -99,39 +99,63 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var event sounds.Event
-	if err := json.Unmarshal(body, &event); err != nil {
-		slog.Warn("event refused: not an event", "remote", r.RemoteAddr, "body_bytes", len(body))
+	switch s.submit(body, r.RemoteAddr) {
+	case notAnEvent:
 		http.Error(w, "body is not a JSON event", http.StatusBadRequest)
-		return
+	case badCategory:
+		http.Error(w, "event has no known category", http.StatusBadRequest)
+	case busy:
+		http.Error(w, "too many sounds playing", http.StatusServiceUnavailable)
+	case stale:
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = io.WriteString(w, "dropped: stale\n")
+	case accepted:
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = io.WriteString(w, "accepted\n")
+	}
+}
+
+// outcome is what became of one submitted event.
+type outcome int
+
+const (
+	accepted outcome = iota
+	stale
+	notAnEvent
+	badCategory
+	busy
+)
+
+// submit decodes one event and, unless it is refused or stale, starts its
+// sound. from names where it came from, for the log. The data itself is
+// never logged: whatever sent it may have sent the wrong thing.
+func (s *Server) submit(data []byte, from string) outcome {
+	var event sounds.Event
+	if err := json.Unmarshal(data, &event); err != nil {
+		slog.Warn("event refused: not an event", "from", from, "bytes", len(data))
+		return notAnEvent
 	}
 	if _, err := event.Context(); err != nil {
-		slog.Warn("event refused: bad category", "remote", r.RemoteAddr, "source", event.Source, "body_bytes", len(body))
-		http.Error(w, "event has no known category", http.StatusBadRequest)
-		return
+		slog.Warn("event refused: bad category", "from", from, "source", event.Source, "bytes", len(data))
+		return badCategory
 	}
 
 	if age := s.opts.Now().Sub(event.Time); s.opts.MaxAge > 0 && !event.Time.IsZero() && age > s.opts.MaxAge {
 		slog.Info("event dropped: stale", "source", event.Source, "id", event.ID, "age", age, "max_age", s.opts.MaxAge)
-		w.WriteHeader(http.StatusAccepted)
-		_, _ = io.WriteString(w, "dropped: stale\n")
-		return
+		return stale
 	}
 
 	select {
 	case s.slots <- struct{}{}:
 	default:
 		slog.Warn("event refused: too many sounds playing", "source", event.Source, "id", event.ID, "limit", maxConcurrentPlays)
-		http.Error(w, "too many sounds playing", http.StatusServiceUnavailable)
-		return
+		return busy
 	}
 	slog.Info("event accepted", "source", event.Source, "id", event.ID,
-		"category", event.Category, "hint", event.Hint, "remote", r.RemoteAddr)
+		"category", event.Category, "hint", event.Hint, "from", from)
 	s.plays.Go(func() {
 		defer func() { <-s.slots }()
 		s.play(event)
 	})
-
-	w.WriteHeader(http.StatusAccepted)
-	_, _ = io.WriteString(w, "accepted\n")
+	return accepted
 }
