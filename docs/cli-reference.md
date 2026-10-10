@@ -220,13 +220,14 @@ runtime.
 
 ## `claudio listen`
 
-Listens for sound events over HTTP and plays them on this machine. Run it
-where the speakers are; whatever sees the event can be another machine, a
-container or a cloud session.
+Plays sound events that arrive from somewhere else. Run it where the speakers
+are; whatever sees the event can be another machine, a container or a cloud
+session. Events arrive over HTTP, or with `--stdin` on a pipe.
 
 ```bash
 claudio listen
 claudio listen --addr 0.0.0.0:19190 --max-age 10s
+<command that prints events> | claudio listen --stdin
 ```
 
 | Flag | Meaning |
@@ -235,14 +236,19 @@ claudio listen --addr 0.0.0.0:19190 --max-age 10s
 | `--token string` | Token every request must carry. |
 | `--token-file string` | File holding that token. Surrounding whitespace is ignored. |
 | `--max-age duration` | Drop events older than this. Default `30s`; `0` plays every event. |
+| `--stdin` | Read events from stdin instead of serving HTTP. Cannot be combined with `--addr`, `--token` or `--token-file`. |
 
-It prints `listening on http://<address>` and runs until interrupted. The
-sound is chosen on the listening machine, from its soundpack, volume and mute
-setting, and is recorded in its tracking database when tracking is on. The
-global `--volume`, `--soundpack`, `--silent` and `--config` flags apply.
+The sound is chosen on the listening machine, from its soundpack, volume and
+mute setting, and is recorded in its tracking database when tracking is on.
+The global `--volume`, `--soundpack`, `--silent` and `--config` flags apply.
 
-A Claudio hook on another machine sends its events here when that machine has
+A Claudio hook on another machine sends its events when that machine has
 `forward.url` set; see [Forwarding](configuration#forwarding).
+
+### Over HTTP
+
+Without `--stdin` it prints `listening on http://<address>` and runs until
+interrupted.
 
 Without a token only a loopback address is accepted, because anyone who can
 reach the port can play sounds. Prefer `--token-file` to `--token`: other
@@ -283,6 +289,26 @@ event picks the same sound a local hook with the same values would.
 | `503` | Eight sounds are already playing. |
 
 Request bodies are never logged or echoed.
+
+### On A Pipe
+
+With `--stdin` no web server is started. Claudio reads stdin, one JSON event
+per line in the same format as above, and plays each until stdin ends. What
+carries the events to the pipe is up to you: an SSH session, a relay's
+client, a file being followed.
+
+- Blank lines are skipped, so keep-alive lines from a streaming client are
+  harmless.
+- A line that is not an event, has no known `category`, or is longer than
+  64 KiB is logged and skipped. The stream continues.
+- `--max-age` and the limit of eight sounds at once apply as they do over
+  HTTP.
+- When stdin ends, the command exits `0`. When reading it fails, the command
+  exits `1`. Claudio does not reconnect: run it under a loop or a service if
+  the source can drop.
+
+There is no token on this path. Whoever can write to the source can play
+sounds, so protect the source.
 
 ## `claudio soundpack`
 
