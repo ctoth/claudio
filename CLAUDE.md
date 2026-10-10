@@ -149,8 +149,12 @@ rm -f claudio
 ### Core Components
 
 1. **Hook System** (`internal/hooks/`)
-   - Parses Claude Code hook JSON from stdin
-   - Extracts context including tool names, success/error states, and file types
+   - Reads each agent's hook JSON from stdin through `captainhook.Parse`
+     (github.com/ctoth/captain-hook), which owns every agent's field names,
+     tool names and way of reporting a failed tool
+   - Extracts context including tool names, success/error states, and file types.
+     A shell command whose outcome the agent does not report (Codex) gets
+     `Phase: "unknown"` and the neutral `tool-complete` sound
    - Maps events to sound categories: loading, success, error, interactive
 
 2. **Sound Mapping** (`internal/sounds/`)

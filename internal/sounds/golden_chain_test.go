@@ -95,6 +95,10 @@ var goldenEvents = []goldenEvent{
 	{name: "post gemini shell ok", event: "AfterTool", tool: "run_shell_command", input: bashCmd("npm test"), response: okResp},
 	{name: "post bash text exit 0", event: "PostToolUse", tool: "Bash", input: bashCmd("make"), response: `"Exit code: 0\nok"`},
 
+	// Bash PostToolUse with output and no exit code (Codex): the outcome is
+	// unknown, so neither the success nor the error sounds apply.
+	{name: "post bash text no exit code", event: "PostToolUse", tool: "Bash", input: bashCmd("git push"), response: `"Everything up-to-date\n"`},
+
 	// Bash PostToolUse error
 	{name: "post bash git push stderr", event: "PostToolUse", tool: "Bash", input: bashCmd("git push"), response: errResp},
 	{name: "post bash ls stderr", event: "PostToolUse", tool: "Bash", input: bashCmd("ls /nope"), response: errResp},
@@ -279,6 +283,7 @@ var goldenChains = map[string]goldenChain{
 	"failure edit":                      {"posttool", []string{"error/edit-error.wav", "error/tool-complete.wav", "error/error.wav", "default.wav"}},
 	"pre read":                          {"enhanced", []string{"loading/read-start.wav", "loading/read.wav", "loading/tool-start.wav", "loading/loading.wav", "default.wav"}},
 	"post read ok":                      {"posttool", []string{"success/read-success.wav", "success/tool-complete.wav", "success/success.wav", "default.wav"}},
+	"post bash text no exit code":       {"simple", []string{"success/tool-complete.wav", "success/success.wav", "default.wav"}},
 	"post read no content":              {"posttool", []string{"success/read-success.wav", "success/tool-complete.wav", "success/success.wav", "default.wav"}},
 	"post read interrupted":             {"posttool", []string{"error/tool-interrupted.wav", "error/read-error.wav", "error/tool-complete.wav", "error/error.wav", "default.wav"}},
 	"pre write":                         {"enhanced", []string{"loading/write-start.wav", "loading/write.wav", "loading/tool-start.wav", "loading/loading.wav", "default.wav"}},

@@ -284,7 +284,9 @@ events it no longer installs are removed, so reinstalling is safe.
 
 Each agent's event list comes from the event catalog in
 [Captain Hook](https://github.com/ctoth/captain-hook), which records the docs
-or source version it was checked against.
+or source version it was checked against. The catalog also supplies where
+each agent keeps its hooks, and Captain Hook reads what each agent sends a
+hook: its field names, its tool names and how it reports a failed tool.
 
 Claude Code defaults:
 
