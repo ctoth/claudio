@@ -46,7 +46,12 @@ Only "category" is required. The sound is chosen here, from this machine's
 soundpack, volume and mute setting.
 
 Without a token only a loopback address is allowed. Other users of this
-machine can read a command line, so prefer --token-file to --token.`,
+machine can read a command line, so prefer --token-file to --token.
+
+With --stdin no web server is started. Events are read from stdin, one JSON
+event per line, until it ends, so anything that can be piped can carry them:
+
+  curl -sN https://relay.example/my-stream | claudio listen --stdin`,
 		Args: cobra.NoArgs,
 		RunE: c.runListen,
 	}
@@ -54,7 +59,12 @@ machine can read a command line, so prefer --token-file to --token.`,
 	cmd.Flags().String("token", "", "Token every request must carry")
 	cmd.Flags().String("token-file", "", "File holding the token every request must carry")
 	cmd.Flags().Duration("max-age", defaultListenMaxAge, "Drop events older than this; 0 plays every event")
+	cmd.Flags().Bool("stdin", false, "Read events from stdin, one JSON event per line, instead of serving HTTP")
 	cmd.MarkFlagsMutuallyExclusive("token", "token-file")
+	// An address and a token belong to the web server that --stdin replaces.
+	cmd.MarkFlagsMutuallyExclusive("stdin", "addr")
+	cmd.MarkFlagsMutuallyExclusive("stdin", "token")
+	cmd.MarkFlagsMutuallyExclusive("stdin", "token-file")
 	return cmd
 }
 
@@ -95,11 +105,12 @@ func isLoopbackAddr(addr string) bool {
 func (c *CLI) runListen(cmd *cobra.Command, _ []string) error {
 	addr, _ := cmd.Flags().GetString("addr")
 	maxAge, _ := cmd.Flags().GetDuration("max-age")
+	fromStdin, _ := cmd.Flags().GetBool("stdin")
 	token, err := listenToken(cmd)
 	if err != nil {
 		return err
 	}
-	if token == "" && !isLoopbackAddr(addr) {
+	if !fromStdin && token == "" && !isLoopbackAddr(addr) {
 		return fmt.Errorf("listening on %s needs a token: pass --token-file or --token", addr)
 	}
 	if maxAge < 0 {
@@ -116,13 +127,23 @@ func (c *CLI) runListen(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
+	server := listen.New(listen.Options{Token: token, MaxAge: maxAge}, func(event sounds.Event) {
+		c.playEvent(event, cfg)
+	})
+
+	if fromStdin {
+		// The pipe is the whole transport: play until it ends. A read error
+		// fails the command so whatever supervises it can reconnect.
+		slog.Info("playing sound events from stdin", "max_age", maxAge)
+		err := server.ReadEvents(cmd.InOrStdin())
+		server.Wait()
+		return err
+	}
+
 	netListener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("cannot listen on %s: %w", addr, err)
 	}
-	server := listen.New(listen.Options{Token: token, MaxAge: maxAge}, func(event sounds.Event) {
-		c.playEvent(event, cfg)
-	})
 	httpServer := &http.Server{Handler: server, ReadHeaderTimeout: 10 * time.Second}
 
 	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt)
