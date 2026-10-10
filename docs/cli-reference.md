@@ -212,6 +212,69 @@ claudio unmute
 Environment variable `CLAUDIO_ENABLED` still overrides the persisted value at
 runtime.
 
+## `claudio listen`
+
+Listens for sound events over HTTP and plays them on this machine. Run it
+where the speakers are; whatever sees the event can be another machine, a
+container or a cloud session.
+
+```bash
+claudio listen
+claudio listen --addr 0.0.0.0:19190 --max-age 10s
+```
+
+| Flag | Meaning |
+| --- | --- |
+| `--addr string` | Address to listen on. Default `127.0.0.1:19190`. |
+| `--token string` | Token every request must carry. |
+| `--token-file string` | File holding that token. Surrounding whitespace is ignored. |
+| `--max-age duration` | Drop events older than this. Default `30s`; `0` plays every event. |
+
+It prints `listening on http://<address>` and runs until interrupted. The
+sound is chosen on the listening machine, from its soundpack, volume and mute
+setting, and is recorded in its tracking database when tracking is on. The
+global `--volume`, `--soundpack`, `--silent` and `--config` flags apply.
+
+Without a token only a loopback address is accepted, because anyone who can
+reach the port can play sounds. Prefer `--token-file` to `--token`: other
+users of the machine can read a command line. The two cannot be combined, and
+a token file that is missing or empty is an error.
+
+Send one JSON event per `POST /events`:
+
+```bash
+curl -X POST http://127.0.0.1:19190/events \
+  -H "Authorization: Bearer <token>" \
+  -d '{"source":"claude","category":"completion","hint":"agent-complete","operation":"stop"}'
+```
+
+| Field | Meaning |
+| --- | --- |
+| `category` | Required. One of `loading`, `success`, `error`, `interactive`, `completion`, `system`, `silent`. |
+| `hint` | Most specific sound name, tried first (`git-commit-success`). |
+| `command`, `subcommand` | The command the event is about (`git`, `commit`). Leave both out for an event that is not about a command. |
+| `phase` | `start`, `success`, `error` or `unknown`, for an event about a command. |
+| `original_tool` | The tool that ran the command (`Bash`). |
+| `operation` | Generic name tried after the specific ones (`tool-complete`, `stop`). |
+| `source` | What produced the event (`claude`, `github`). Logged; not used to pick the sound. |
+| `id` | The event's id at its source. Logged. |
+| `time` | RFC 3339 time of the event, used by `--max-age`. An event without one is always played. |
+| `session` | Groups events in the tracking database. |
+| `attributes` | Free-form object for source-specific values. Not used to pick the sound. |
+
+These are the names the [fallback chains](soundpacks#fallback-chains) are built from, so an
+event picks the same sound a local hook with the same values would.
+
+| Status | Meaning |
+| --- | --- |
+| `202` | Accepted, or dropped as stale (the body says which). The sound plays after the response. |
+| `400` | Not a JSON event, or no known `category`. |
+| `401` | Missing or wrong token. |
+| `413` | Body over 64 KiB. |
+| `503` | Eight sounds are already playing. |
+
+Request bodies are never logged or echoed.
+
 ## `claudio soundpack`
 
 Manages soundpacks.

@@ -286,6 +286,10 @@ Beyond the default stdin-mode hook executor, claudio ships these subcommands
   - `install` — copy a local pack into the XDG data dir
   - `use` — switch the active soundpack
   - `add` / `update` / `remove` / `status` — manage git-backed soundpacks
+- `claudio listen` — long-running HTTP listener (`internal/listen/`) that plays
+  the sound for each `sounds.Event` posted to `/events`, so the machine that
+  sees an event and the one that plays it can differ. Token from `--token-file`
+  or `--token`; neither the token nor the address is in `config.json`
 
 ## Development Practices - CRITICAL
 
