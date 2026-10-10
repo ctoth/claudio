@@ -6,6 +6,8 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -115,18 +117,22 @@ func TestListenPlaysAPostedEvent(t *testing.T) {
 	}
 }
 
-func TestListenTokenComesFromTheFlagOrTheEnvironment(t *testing.T) {
+// A token on the command line is visible to other users of the machine; a
+// token file is not.
+func TestListenTokenComesFromTheFlagOrAFile(t *testing.T) {
+	tokenFile := filepath.Join(t.TempDir(), "token")
+	if err := os.WriteFile(tokenFile, []byte("s3cret\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	for _, tc := range []struct {
 		name string
-		env  string
 		args []string
 	}{
-		{"flag", "", []string{"--token", "s3cret"}},
-		{"environment", "s3cret", nil},
+		{"flag", []string{"--token", "s3cret"}},
+		{"file", []string{"--token-file", tokenFile}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			testenv.IsolateXDG(t)
-			t.Setenv("CLAUDIO_LISTEN_TOKEN", tc.env)
 			l := startListener(t, tc.args...)
 			without := postEvent(t, l.url, "", `{"category":"success"}`)
 			with := postEvent(t, l.url, "s3cret", `{"category":"success"}`)
@@ -146,7 +152,6 @@ func TestListenRefusesAnOpenAddressWithoutAToken(t *testing.T) {
 	for _, addr := range []string{"0.0.0.0:0", ":0", "192.0.2.1:0"} {
 		t.Run(addr, func(t *testing.T) {
 			testenv.IsolateXDG(t)
-			t.Setenv("CLAUDIO_LISTEN_TOKEN", "")
 			var stdout, stderr bytes.Buffer
 			code := NewCLI().Run([]string{"claudio", "listen", "--addr", addr}, strings.NewReader(""), &stdout, &stderr)
 			if code == 0 {
@@ -154,6 +159,32 @@ func TestListenRefusesAnOpenAddressWithoutAToken(t *testing.T) {
 			}
 			if !strings.Contains(stderr.String(), "token") {
 				t.Errorf("stderr %q does not say a token is needed", stderr.String())
+			}
+		})
+	}
+}
+
+// A token file that is missing or empty must not quietly mean "no token".
+func TestListenRefusesAnUnusableTokenFile(t *testing.T) {
+	dir := t.TempDir()
+	empty := filepath.Join(dir, "empty")
+	if err := os.WriteFile(empty, []byte(" \n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for name, args := range map[string][]string{
+		"missing":       {"--token-file", filepath.Join(dir, "absent")},
+		"empty":         {"--token-file", empty},
+		"flag and file": {"--token", "a", "--token-file", empty},
+	} {
+		t.Run(name, func(t *testing.T) {
+			testenv.IsolateXDG(t)
+			var stdout, stderr bytes.Buffer
+			code := NewCLI().Run(append([]string{"claudio", "listen", "--addr", "127.0.0.1:0"}, args...), strings.NewReader(""), &stdout, &stderr)
+			if code == 0 {
+				t.Fatalf("exit 0; stdout %q", stdout.String())
+			}
+			if !strings.Contains(stderr.String(), "token") {
+				t.Errorf("stderr %q does not name the token", stderr.String())
 			}
 		})
 	}

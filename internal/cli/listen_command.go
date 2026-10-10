@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -21,9 +22,6 @@ import (
 const (
 	defaultListenAddr   = "127.0.0.1:19190"
 	defaultListenMaxAge = 30 * time.Second
-	// listenTokenEnv keeps the token off the command line, where other
-	// users of the machine could read it.
-	listenTokenEnv = "CLAUDIO_LISTEN_TOKEN"
 	// listenShutdownGrace bounds how long stopping waits for open requests.
 	listenShutdownGrace = 5 * time.Second
 )
@@ -41,21 +39,43 @@ another machine, in a container or in the cloud) sends one JSON event per
 request:
 
   curl -X POST http://127.0.0.1:19190/events \
-    -H "Authorization: Bearer $CLAUDIO_LISTEN_TOKEN" \
+    -H "Authorization: Bearer <token>" \
     -d '{"source":"claude","category":"completion","hint":"agent-complete","operation":"stop"}'
 
 Only "category" is required. The sound is chosen here, from this machine's
 soundpack, volume and mute setting.
 
-Without a token only a loopback address is allowed. Set the token with
---token or, better, the CLAUDIO_LISTEN_TOKEN environment variable.`,
+Without a token only a loopback address is allowed. Other users of this
+machine can read a command line, so prefer --token-file to --token.`,
 		Args: cobra.NoArgs,
 		RunE: c.runListen,
 	}
 	cmd.Flags().String("addr", defaultListenAddr, "Address to listen on")
-	cmd.Flags().String("token", "", "Token every request must carry (default $"+listenTokenEnv+")")
+	cmd.Flags().String("token", "", "Token every request must carry")
+	cmd.Flags().String("token-file", "", "File holding the token every request must carry")
 	cmd.Flags().Duration("max-age", defaultListenMaxAge, "Drop events older than this; 0 plays every event")
+	cmd.MarkFlagsMutuallyExclusive("token", "token-file")
 	return cmd
+}
+
+// listenToken returns the token from --token or --token-file, or "" when
+// neither is given. A token file that cannot be read or holds no token is
+// an error, never "no token".
+func listenToken(cmd *cobra.Command) (string, error) {
+	token, _ := cmd.Flags().GetString("token")
+	path, _ := cmd.Flags().GetString("token-file")
+	if path == "" {
+		return token, nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("cannot read token file: %w", err)
+	}
+	token = strings.TrimSpace(string(data))
+	if token == "" {
+		return "", fmt.Errorf("token file %s is empty", path)
+	}
+	return token, nil
 }
 
 // isLoopbackAddr reports whether a host:port address is reachable only from
@@ -74,13 +94,13 @@ func isLoopbackAddr(addr string) bool {
 
 func (c *CLI) runListen(cmd *cobra.Command, _ []string) error {
 	addr, _ := cmd.Flags().GetString("addr")
-	token, _ := cmd.Flags().GetString("token")
 	maxAge, _ := cmd.Flags().GetDuration("max-age")
-	if token == "" {
-		token = os.Getenv(listenTokenEnv)
+	token, err := listenToken(cmd)
+	if err != nil {
+		return err
 	}
 	if token == "" && !isLoopbackAddr(addr) {
-		return fmt.Errorf("listening on %s needs a token: set %s or pass --token", addr, listenTokenEnv)
+		return fmt.Errorf("listening on %s needs a token: pass --token-file or --token", addr)
 	}
 	if maxAge < 0 {
 		return fmt.Errorf("invalid --max-age %s: must not be negative", maxAge)
