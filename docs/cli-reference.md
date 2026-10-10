@@ -222,7 +222,8 @@ runtime.
 
 Plays sound events that arrive from somewhere else. Run it where the speakers
 are; whatever sees the event can be another machine, a container or a cloud
-session. Events arrive over HTTP, or with `--stdin` on a pipe.
+session. Events arrive over HTTP, as OpenTelemetry logs, or with `--stdin` on
+a pipe.
 
 ```bash
 claudio listen
@@ -289,6 +290,70 @@ event picks the same sound a local hook with the same values would.
 | `503` | Eight sounds are already playing. |
 
 Request bodies are never logged or echoed.
+
+### As OpenTelemetry Logs
+
+The same web server is an OpenTelemetry (OTLP) logs receiver at
+`POST /v1/logs`, so anything that already exports telemetry can be heard
+without installing Claudio where it runs. Only the JSON encoding over HTTP is
+accepted; gzip is fine. The token, `--max-age` and the limit of eight sounds
+apply as they do to `/events`.
+
+To hear Claude Code through its own telemetry, start it with:
+
+```bash
+export CLAUDE_CODE_ENABLE_TELEMETRY=1
+export OTEL_LOGS_EXPORTER=otlp
+export OTEL_EXPORTER_OTLP_PROTOCOL=http/json
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:19190
+export OTEL_LOGS_EXPORT_INTERVAL=1000
+# only if the listener has a token:
+export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer <token>"
+```
+
+Claude Code sends records in batches, every five seconds unless
+`OTEL_LOGS_EXPORT_INTERVAL` says otherwise, so these sounds trail the action
+by up to that long. Its records map onto the events its hooks produce, so one
+soundpack serves both:
+
+| Claude Code record | Plays as |
+| --- | --- |
+| `user_prompt` | The prompt sound (`interactive/message-sent`). |
+| `tool_decision`, accepted | The tool's start sound (`loading/bash-start`). |
+| `tool_decision`, rejected | `error/permission-denied`. |
+| `tool_result` | The tool's success or error sound (`success/bash-success`). |
+| `compaction` | `system/post-compact`. |
+| `subagent_completed` | `completion/subagent-complete`. |
+| `api_retries_exhausted` | `error/stop-failure`. |
+| Anything else | Nothing. One session start sends dozens of `hook_registered` and `plugin_loaded` records. |
+
+Telemetry says less than a hook does. A shell command is only "Bash" unless
+Claude Code is told to log tool details, and nothing reports a turn ending or
+Claude waiting for permission. Where Claudio's hooks can be installed they
+are the better source; do not enable both for one session or every sound
+plays twice.
+
+Records from any other service map by name and outcome:
+
+- The sound hint is the record's `eventName`, else its `event.name`
+  attribute, else a body that is a single identifier such as
+  `deploy.finished`. A record with none of those is a log line and is
+  skipped.
+- The category is `error` when a `success` attribute is false or the severity
+  is ERROR or higher, `success` when `success` is true, and `system`
+  otherwise.
+- The source is the resource's `service.name`.
+
+So a record named `deploy.finished` with `success` true looks for
+`success/deploy-finished.wav` and falls back to the category sound.
+
+| Status | Meaning |
+| --- | --- |
+| `200` | The export was received. Stale records and records past the sound limit are dropped, not reported. |
+| `400` | Not an OTLP/JSON logs export. |
+| `401` | Missing or wrong token. |
+| `413` | Export over 4 MiB, before or after decompression. |
+| `415` | Not JSON. Set the exporter's protocol to `http/json`. |
 
 ### On A Pipe
 
