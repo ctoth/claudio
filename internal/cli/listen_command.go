@@ -137,7 +137,6 @@ func (c *CLI) runListen(cmd *cobra.Command, _ []string) error {
 		slog.Info("playing sound events from stdin", "max_age", maxAge)
 		err := server.ReadEvents(cmd.InOrStdin())
 		server.Wait()
-		slog.Info("stdin ended", "error", err)
 		return err
 	}
 
