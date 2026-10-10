@@ -380,9 +380,13 @@ func (c *CLI) runStdinMode(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
+	// A forwarding machine sends its events to a listener: it opens no audio
+	// device and keeps no tracking database of its own.
+	forwarding := cfg.ForwardURL() != ""
+
 	// Structural failures must reach the caller before detachment redirects the
 	// worker's stderr. This does not open a device or test playback.
-	if cfg.Enabled && len(inputData) > 0 {
+	if !forwarding && cfg.Enabled && len(inputData) > 0 {
 		if _, err := audio.ResolveBackend(cfg.AudioBackend); err != nil {
 			return err
 		}
@@ -396,16 +400,18 @@ func (c *CLI) runStdinMode(cmd *cobra.Command, _ []string) error {
 		return writeJSONHookSuccessResponse(cmd, inputData)
 	}
 
-	// Initialize tracking (before audio system initialization). Pass the
-	// already-loaded cfg so a user-supplied --config is honored
-	// (initializeTracking previously called LoadConfig itself, dropping
-	// the override).
-	c.initializeTracking(cfg)
+	if !forwarding {
+		// Initialize tracking (before audio system initialization). Pass the
+		// already-loaded cfg so a user-supplied --config is honored
+		// (initializeTracking previously called LoadConfig itself, dropping
+		// the override).
+		c.initializeTracking(cfg)
 
-	// Initialize audio and soundpack systems
-	err = c.initializeAudioSystem(cfg)
-	if err != nil {
-		return err
+		// Initialize audio and soundpack systems
+		err = c.initializeAudioSystem(cfg)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Process hook input payload.
@@ -474,6 +480,10 @@ func setupDefaultCommandLogging(stderr io.Writer) {
 
 // processHookEvent processes the parsed hook event
 func (c *CLI) processHookEvent(hookEvent *hooks.HookEvent, cfg *config.Config) {
+	if cfg.ForwardURL() != "" {
+		forwardHookEvent(hookEvent, cfg)
+		return
+	}
 	c.playEventContext(hookEvent.GetContext(), hookEvent.SessionID, cfg)
 }
 

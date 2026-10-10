@@ -246,6 +246,12 @@ func (e *HookEvent) parsed() *captainhook.Payload {
 	return &captainhook.Payload{Event: e.EventName}
 }
 
+// Agent names the agent that sent the event ("claude", "codex"), or "" when
+// neither the hook command nor the payload says.
+func (e *HookEvent) Agent() string {
+	return string(e.parsed().Agent)
+}
+
 // NormalizeEventName converts agent-specific hook keys to Claudio's canonical
 // event names for sound mapping.
 func NormalizeEventName(name string) string {
