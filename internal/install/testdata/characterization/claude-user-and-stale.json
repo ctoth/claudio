@@ -328,28 +328,6 @@
           ],
           "matcher": ".*"
         }
-      ],
-      "WorktreeCreate": [
-        {
-          "hooks": [
-            {
-              "command": "C:/Program Files/claudio/claudio.exe",
-              "type": "command"
-            }
-          ],
-          "matcher": ".*"
-        }
-      ],
-      "WorktreeRemove": [
-        {
-          "hooks": [
-            {
-              "command": "C:/Program Files/claudio/claudio.exe",
-              "type": "command"
-            }
-          ],
-          "matcher": ".*"
-        }
       ]
     },
     "theme": "dark"
@@ -399,8 +377,6 @@
     "TaskCreated",
     "TeammateIdle",
     "UserPromptExpansion",
-    "UserPromptSubmit",
-    "WorktreeCreate",
-    "WorktreeRemove"
+    "UserPromptSubmit"
   ]
 }

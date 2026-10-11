@@ -22,6 +22,20 @@ var defaultDisabledHooks = map[string]bool{
 	"MessageDisplay": true,
 }
 
+// delegatingHooks are events the agent does not just report: once a hook is
+// configured for one, the agent stops doing the work itself and expects the
+// hook to do it. claudio only plays a sound, so install never writes them.
+//
+// Claude Code replaces `git worktree add` with a configured WorktreeCreate
+// hook and reads the new worktree's path from its stdout; with claudio
+// there, every worktree fails with "hook succeeded but returned no worktree
+// path". A WorktreeRemove hook that exits 0 counts as having removed the
+// worktree, so claudio there would leave it on disk.
+var delegatingHooks = map[string]bool{
+	"WorktreeCreate": true,
+	"WorktreeRemove": true,
+}
+
 // catalogRegistry returns an agent's hook definitions from captain-hook's
 // event catalog, in catalog order. With flagCamelCase, events that have no
 // PascalCase key pass their name on the command line (Copilot sends those
@@ -37,7 +51,7 @@ func catalogRegistry(agent captainhook.Agent, flagCamelCase bool) []HookDefiniti
 		key := event.Key()
 		definitions[i] = HookDefinition{
 			Name:           key,
-			DefaultEnabled: !defaultDisabledHooks[key],
+			DefaultEnabled: !defaultDisabledHooks[key] && !delegatingHooks[key],
 			EventFlag:      flagCamelCase && event.PascalName == "",
 		}
 	}
