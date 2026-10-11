@@ -72,6 +72,13 @@ release tags and current checkout history.
   logged as warnings.
 
 ### Fixed
+- `claudio install` no longer installs Claude Code's `WorktreeCreate` and
+  `WorktreeRemove` hooks. Claude Code hands worktree creation to a
+  configured `WorktreeCreate` hook and reads the new path from its output,
+  so with Claudio there every `claude --worktree`, `EnterWorktree` and
+  `isolation: "worktree"` subagent failed with "hook succeeded but returned
+  no worktree path". Run `claudio install` again to remove the two entries
+  an earlier version wrote. Worktree events no longer play a sound.
 - A selected soundpack whose directory cannot be loaded as a pack (for
   example, one with a broken `soundpack.json`) falls back to looking up
   sounds only in its own directories. Before, the fallback also searched
