@@ -292,8 +292,11 @@ Beyond the default stdin-mode hook executor, claudio ships these subcommands
   - `add` / `update` / `remove` / `status` — manage git-backed soundpacks
 - `claudio listen` — plays the sound for each `sounds.Event` it receives
   (`internal/listen/`), so the machine that sees an event and the one that
-  plays it can differ. Events arrive as `POST /events` on its HTTP listener, or
-  one JSON event per line on stdin with `--stdin`. Token from `--token-file`
+  plays it can differ. Events arrive as `POST /events` on its HTTP listener, as
+  OpenTelemetry logs on `POST /v1/logs` (OTLP/HTTP JSON; `internal/listen/otlp.go`
+  maps Claude Code's records onto hook-shaped events and any other service's by
+  name and outcome), or one JSON event per line on stdin with `--stdin`. Token
+  from `--token-file`
   or `--token`; neither the token nor the address is in `config.json`
 
 ## Development Practices - CRITICAL
