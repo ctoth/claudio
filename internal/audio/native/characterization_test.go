@@ -217,19 +217,5 @@ func decodeAll(t *testing.T, name string, data []byte) ([][2]float64, int, error
 // tests that knows the decoder API.
 func decodeAllReader(t *testing.T, name string, r io.Reader) ([][2]float64, int, error) {
 	t.Helper()
-	ctx := context.Background()
-	s, err := decodeSound(ctx, name, r)
-	if err != nil {
-		return nil, 0, err
-	}
-	var frames [][2]float64
-	buf := make([][2]float64, 512)
-	for {
-		n, ok := s.Stream(buf)
-		frames = append(frames, buf[:n]...)
-		if !ok || n == 0 {
-			break
-		}
-	}
-	return frames, int(s.rate), s.Err()
+	return DecodeFrames(context.Background(), name, r)
 }

@@ -316,6 +316,153 @@ The report shows:
 Broken references fail validation. Empty mappings are reported as unmapped
 but do not fail it.
 
+`validate` checks that a pack is complete. It does not open the audio. For
+that, use `audit`.
+
+### Auditing And Mastering
+
+A pack assembled from many sources has sounds at many levels and lengths. In
+one real pack the loudest sound was 37 LU louder than the quietest, two
+"sounds" were three-minute ambience loops, and every MP3 began with 20 to 200
+ms of silence. `audit` finds these problems and `master` fixes them.
+
+```bash
+claudio soundpack audit ./my-pack
+```
+
+```text
+SOUND                       LENGTH    LUFS    PEAK  HIT    PITCH  TREND    TEXTURE  FINDINGS
+error/error.mp3              0.94s   -29.4   -20.1    3   5663Hz  steady   tonal   too-quiet, leading-silence
+loading/git-pull-start.mp3   0.34s    -8.4    -0.4    3   1242Hz  steady   tonal   too-loud, peak-over-ceiling, leading-silence
+system/session-start.mp3   227.69s   -24.4    -7.6 2405     70Hz  steady   tonal   too-long, too-quiet
+```
+
+Audit decodes each file with the decoders playback uses, so a file it
+accepts is a file Claudio can play.
+
+| Column | Meaning |
+| --- | --- |
+| `LENGTH` | Duration of the file, silence included. |
+| `LUFS` | Loudness (ITU-R BS.1770, the measure streaming services normalize to). Sounds under 400 ms are too short for the standard's gating, so they are measured ungated over their whole length. Mono files are measured as they play: on both speakers. |
+| `PEAK` | True peak in dBTP, estimated by 4x oversampling. |
+| `HIT` | Number of separate bursts: 1 for a single tone, 3 for a triple beep. |
+| `PITCH` | Strongest frequency. |
+| `TREND` | Whether the second half is brighter (`rising`) or duller (`falling`) than the first. |
+| `TEXTURE` | `tonal`, `mixed`, or `noisy`. |
+
+The last four columns describe the sound, so you (or an agent that cannot
+hear) can tell sounds apart, spot the one file that is not like the others,
+and check that errors do not sound like successes. `--json` adds attack
+time, spectral centroid, silence at each end, and a hash per file.
+
+What audit warns about, and why:
+
+| Rule | Why it matters |
+| --- | --- |
+| `too-long` | A loading sound plays before every tool call. Past about a second it is still playing when the result sound starts. Limits are per category: `loading` 1s, `success` 1.5s, `default` 1.5s, `error` 2s, `interactive` 2.5s, `completion` 3s, `system` 6s. A file that answers for several categories gets the strictest. |
+| `too-loud`, `too-quiet` | More than 1 LU from the -18 LUFS target. One volume setting should suit every sound. |
+| `peak-over-ceiling` | True peak above -1 dBTP distorts on some outputs. |
+| `clipping` | Runs of full-scale samples: the source was recorded or exported too hot. Mastering cannot undo this. |
+| `leading-silence` | More than 15 ms of silence before the sound. The sound feels late. MP3 files nearly always have this, because encoders pad the start. |
+| `trailing-silence` | More than 150 ms of silence after the sound. It keeps the player busy for nothing. |
+
+Notes do not fail an audit. `peak-limited` marks a sound (usually a click)
+that cannot reach the target without exceeding the peak ceiling.
+`duplicate` marks files with identical bytes: in a directory pack that is
+the only way to reuse a sound, in a JSON pack map both keys to one file
+instead. `unreferenced` marks audio a JSON pack ships but never maps.
+
+`--strict` makes warnings fail the command, which is what you want in CI.
+`--target-lufs`, `--tolerance`, `--peak-ceiling`, and `--max-duration
+loading=800ms,system=4s` change the standard.
+
+`master` writes a copy of the pack that passes:
+
+```bash
+claudio soundpack master ./raw-pack --out ./my-pack
+claudio soundpack audit ./my-pack --strict
+```
+
+For each sound it trims silence from both ends, cuts anything over its
+category's limit (with a fade), and applies one gain so the sound sits at the
+target without its peak crossing the ceiling. Nothing is compressed or
+limited, so the sound keeps its shape. Output is 48 kHz 16-bit WAV, mono when
+both channels are identical: the player's own format, so nothing is resampled
+at play time and there is no encoder padding.
+
+Sounds reported as `truncated` lost their end. `master` keeps the first part
+of the sound, which is not always the part worth keeping. For those, cut the
+source file yourself and master again.
+
+### A Pack Repository
+
+This layout keeps the raw material, records which sound answers for which
+key, and makes the published pack a build product:
+
+```text
+my-pack/
+  source/
+    soundpack.json     # manifest over the raw files: key -> raw file
+    raw/*.mp3|wav|aiff # anything Claudio can decode, any length or level
+  soundpack.json       # built: key -> sounds/...wav
+  sounds/              # built: mastered WAVs
+  README.md
+```
+
+```bash
+claudio soundpack master source/soundpack.json --out .
+claudio soundpack audit soundpack.json --strict
+claudio soundpack validate soundpack.json
+```
+
+The source manifest is an ordinary JSON pack, so it can map many keys to one
+raw file. `master` writes each raw file once however many keys use it, and
+`soundpack add` picks up the `soundpack.json` at the repository root. Audio
+under `source/` is not part of the built pack and is not audited with it.
+
+To hold the pack to the standard, run the audit in CI:
+
+```yaml
+# .github/workflows/audit.yml
+name: audit
+on: [push, pull_request]
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - run: go install claudio.click/cmd/claudio@latest
+      - run: claudio soundpack validate soundpack.json
+      - run: claudio soundpack audit soundpack.json --strict
+```
+
+### Choosing What To Cut
+
+`master` handles level and silence. Deciding which two seconds of a long
+recording to keep needs a look at the sound. If you cannot listen (or you
+are an agent), render a spectrogram and read it as a picture:
+
+```bash
+ffmpeg -i source/raw/ambience.mp3 \
+  -lavfi "showspectrumpic=s=1200x300:scale=log:fscale=log" ambience.png
+```
+
+Time runs left to right and pitch bottom to top. Beeps show as short bright
+bars, hum as a band along the bottom, silence as black. Pick the window that
+holds the event you want, then cut it into `source/` and point the source
+manifest at the cut:
+
+```bash
+ffmpeg -ss 21.7 -t 5.8 -i ambience.mp3 \
+  -af "afade=t=in:d=0.15,afade=t=out:st=5.2:d=0.6" source/raw/session-start.wav
+```
+
+After mastering, run `audit` again and read the `HIT`, `PITCH` and `TREND`
+columns to confirm the cut contains what you meant it to.
+
 ### Using Tracking To Improve A Pack
 
 Sound tracking is on by default. Use Claudio for a while, then list the keys

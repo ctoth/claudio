@@ -35,7 +35,7 @@ func TestLintVersionIsConsistentAcrossDeveloperAndCIConfig(t *testing.T) {
 
 	precommit := readRepoFile(t, root, ".pre-commit-config.yaml")
 	workflow := readRepoFile(t, root, ".github/workflows/ci.yml")
-	const lintVersion = "v2.12.2"
+	const lintVersion = "v2.14.0"
 
 	if !strings.Contains(precommit, "golangci-lint@"+lintVersion) {
 		t.Fatalf("pre-commit does not run golangci-lint %s", lintVersion)
