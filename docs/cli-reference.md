@@ -393,8 +393,10 @@ Warnings: `too-long`, `too-loud`, `too-quiet`, `peak-over-ceiling`,
 `silent`. Notes, which never fail an audit: `peak-limited`, `duplicate`,
 `sample-rate`, `unreferenced`.
 
-For a JSON pack, audit covers the files the manifest references and any
-unreferenced audio in the same directories. See
+For a JSON pack, audit covers every file the manifest references, regardless
+of extension, and any unreferenced supported audio in the same directories.
+Mapped content the playback decoders cannot read, such as Ogg Vorbis, is an
+`undecodable` error and fails the audit even without `--strict`. See
 [Auditing And Mastering](soundpacks#auditing-and-mastering) for what each
 column and rule means.
 

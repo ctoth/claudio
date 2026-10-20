@@ -340,6 +340,11 @@ system/session-start.mp3   227.69s   -24.4    -7.6 2405     70Hz  steady   tonal
 Audit decodes each file with the decoders playback uses, so a file it
 accepts is a file Claudio can play.
 
+Every mapped file in a JSON pack is checked regardless of its extension.
+Content the playback decoders do not support, such as Ogg Vorbis, produces an
+`undecodable` error instead of being skipped. These errors fail the audit
+with or without `--strict`.
+
 | Column | Meaning |
 | --- | --- |
 | `LENGTH` | Duration of the file, silence included. |
