@@ -88,8 +88,6 @@ Claude Code installs these default-enabled hooks:
 - `ConfigChange`
 - `CwdChanged`
 - `DirectoryAdded`
-- `WorktreeCreate`
-- `WorktreeRemove`
 - `PreCompact`
 - `PostCompact`
 - `PreModelSwitch`
@@ -101,6 +99,9 @@ Claude Code installs these default-enabled hooks:
 Claude Code and Qwen Code also have `MessageDisplay` (and Claude Code
 `FileChanged`) in Claudio's registry, but they are disabled by default to
 avoid noisy audio from streamed text and broad file watchers.
+`WorktreeCreate` and `WorktreeRemove` are never installed: Claude Code hands
+worktree creation and removal to a hook configured for them, so a hook that
+only plays a sound breaks worktrees.
 
 Codex installs these default-enabled hooks:
 

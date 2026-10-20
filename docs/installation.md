@@ -314,8 +314,6 @@ Claude Code defaults:
 | `ConfigChange` | system |
 | `CwdChanged` | system |
 | `DirectoryAdded` | system |
-| `WorktreeCreate` | system |
-| `WorktreeRemove` | system |
 | `PreCompact` | system |
 | `PostCompact` | system |
 | `PreModelSwitch` | system |
@@ -327,6 +325,17 @@ Claude Code defaults:
 `MessageDisplay` and `FileChanged` are known to Claudio but not installed, for
 Claude Code or for Qwen Code. Add them to your settings by hand only if you
 want audio for streamed text or broad file change events.
+
+`WorktreeCreate` and `WorktreeRemove` are never installed, and must not be
+added by hand. Claude Code does not just report these two events: when a
+`WorktreeCreate` hook is configured it stops running `git worktree add` and
+expects the hook to create the worktree and print its path, and a
+`WorktreeRemove` hook that exits 0 counts as having removed the worktree.
+Claudio only plays a sound, so with it there every `claude --worktree`,
+`EnterWorktree` and `isolation: "worktree"` subagent fails with
+`WorktreeCreate hook failed: hook succeeded but returned no worktree path`.
+Claudio 1.15.0 and earlier installed both. Run `claudio install` again to
+remove them; hooks from other tools under those events are kept.
 
 Codex defaults:
 
