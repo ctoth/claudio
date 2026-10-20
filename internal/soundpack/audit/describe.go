@@ -135,7 +135,7 @@ func fundamental(power []float64, rate int) float64 {
 		return 0
 	}
 	for i := lo; i <= hi; i++ {
-		if power[i] < best/4 || power[i] < power[i-1] || power[i] < power[i+1] {
+		if power[i] < best/4 || power[i] < power[i-1] || (i+1 < len(power) && power[i] < power[i+1]) {
 			continue
 		}
 		// A real partial is the strongest thing within about two semitones
@@ -152,6 +152,10 @@ func fundamental(power []float64, rate int) float64 {
 		}
 		if skirt {
 			continue
+		}
+		// Nyquist has no upper neighbour for parabolic interpolation.
+		if i == len(power)-1 {
+			return float64(i) * float64(rate) / fftSize
 		}
 		// Parabolic interpolation on log power.
 		a, b, c := math.Log(power[i-1]+1e-30), math.Log(power[i]), math.Log(power[i+1]+1e-30)

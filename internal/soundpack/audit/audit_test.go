@@ -275,6 +275,39 @@ func TestPitchIgnoresAWeakerNeighbourOfThePeak(t *testing.T) {
 	}
 }
 
+func TestAuditNyquistWAV(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		rate int
+	}{{"22050 Hz", 22050}, {"24000 Hz", 24000}} {
+		t.Run(tc.name, func(t *testing.T) {
+			frames := make([][]float64, tc.rate/10)
+			for i := range frames {
+				x := 0.1
+				if i%2 != 0 {
+					x = -x
+				}
+				frames[i] = []float64{x, x}
+			}
+			dir := t.TempDir()
+			file := filepath.Join(dir, "default.wav")
+			if err := os.WriteFile(file, wavfixture.WAV(wavfixture.TagPCM, 16, tc.rate, frames), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			report, err := Pack(dir, DefaultOptions())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(report.Sounds) != 1 {
+				t.Fatalf("audited %d sounds, want 1", len(report.Sounds))
+			}
+			if got := report.Sounds[0].PitchHz; got != float64(tc.rate)/2 {
+				t.Errorf("pitch = %v Hz, want Nyquist at %v Hz", got, float64(tc.rate)/2)
+			}
+		})
+	}
+}
+
 func writeWAV(t *testing.T, path string, frames [][2]float64) {
 	t.Helper()
 	in := make([][]float64, len(frames))
