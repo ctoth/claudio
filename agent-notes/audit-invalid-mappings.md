@@ -10,7 +10,9 @@ Draft #112 is stacked on #111, branch `integrate/soundpack-synth-audit-fix`, sta
 
 A further focused probe reproduced an audit panic on a valid 22050 Hz PCM WAV carrying its Nyquist frequency: `index out of range [1025] with length 1025` at `fundamental`, through Pack -> DecodeFrames -> Analyze -> Describe. The #99 review ledger was updated and passed the original gate. #112 now has a small fix that checks the final spectral bin and reports its frequency without interpolation, plus WAV-through-audit regressions at 22050 and 24000 Hz. Both regressions pass (0.03 s), and the working diff passes `git diff --check`.
 
-Parent merged #108 as `b05f56f9efcb4dfef0a05ed0b06bb3d2457bf049`; include that and later parent-reported master changes before final CI. Parent is separately handling #109/#110. Original #98/#99 branches and prose are unchanged, as is the user checkout.
+Actual master `68d9090b3e9ab8e09361089110ef9f106e496a4d` includes parent's merged #108 and #110. It is merged into #111 as `1f7403473db1ad91f502d32d09622694897eb73d`, and into this synth branch through #111. Original #98/#99 branches and prose are unchanged, as is the user checkout.
+
+Parent additionally authorized integrating #109. Its branch belongs to `serrebidev/claudio` with maintainer edits enabled. Isolated worktree `../claudio-warn-integration`, branch `maintenance/warn-pack-integration`, contains normal merge `9dc5f253cad3e7ab12276124ebe7ab66341f2dd3` (parents #109's `85c8495` and master `68d9090`). Only changelog conflict required resolution; both entries retained. Soundpack factory/resolution-warning and startup-warning-to-file focused tests pass. Push is in progress from this owned parent repository after the elevated shell correctly refused the sandbox-owned linked worktree; no trust or permission settings changed.
 
 # Decisions and why
 
