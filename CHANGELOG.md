@@ -72,6 +72,10 @@ release tags and current checkout history.
   logged as warnings.
 
 ### Fixed
+- A configured soundpack that exists but cannot be loaded (for example a
+  JSON pack whose mapping uses an absolute path) now logs a warning with
+  the reason. It was logged only at debug level, so the pack fell silent
+  with no visible cause (#7).
 - Windows: hooks no longer fail with "failed to start detached worker:
   fork/exec ...claudio.exe: Access is denied." Claude Code runs hooks in a
   job object that forbids breakaway, so the worker now starts inside that

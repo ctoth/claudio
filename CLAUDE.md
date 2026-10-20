@@ -175,6 +175,7 @@ rm -f claudio
    - Each play reads the whole file into memory once (size-capped), sniffs its magic bytes, and streams it through Beep's WAV/MP3 decoders or a small AIFF adapter to the shared output
    - Supports WAV, MP3, and AIFF decoding with comprehensive format detection
    - AIFF support includes 16/24/32-bit depths and magic byte detection; more than two channels are downmixed to stereo
+   - MP3 info (Xing/Info) header frames are not played, and the encoder delay and end padding a LAME or libav header declares are trimmed, so an MP3 starts and ends where its source did
    - Volume is applied per player through Oto
    - Playback has a stall deadline (sound length + drain + grace) so a device that stops pulling data cannot hang a detached worker
    - `system_command` backend shells out to platform players (`paplay`, `ffplay`, `afplay`, `aplay`, ...) as an alternative
@@ -296,8 +297,11 @@ Beyond the default stdin-mode hook executor, claudio ships these subcommands
   - `add` / `update` / `remove` / `status` — manage git-backed soundpacks
 - `claudio listen` — plays the sound for each `sounds.Event` it receives
   (`internal/listen/`), so the machine that sees an event and the one that
-  plays it can differ. Events arrive as `POST /events` on its HTTP listener, or
-  one JSON event per line on stdin with `--stdin`. Token from `--token-file`
+  plays it can differ. Events arrive as `POST /events` on its HTTP listener, as
+  OpenTelemetry logs on `POST /v1/logs` (OTLP/HTTP JSON; `internal/listen/otlp.go`
+  maps Claude Code's records onto hook-shaped events and any other service's by
+  name and outcome), or one JSON event per line on stdin with `--stdin`. Token
+  from `--token-file`
   or `--token`; neither the token nor the address is in `config.json`
 
 ## Development Practices - CRITICAL

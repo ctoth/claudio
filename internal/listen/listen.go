@@ -57,6 +57,7 @@ func New(opts Options, play func(sounds.Event)) *Server {
 		slots: make(chan struct{}, maxConcurrentPlays),
 	}
 	s.mux.HandleFunc("POST /events", s.handleEvent)
+	s.mux.HandleFunc("POST /v1/logs", s.handleOTLPLogs)
 	return s
 }
 
@@ -135,8 +136,14 @@ func (s *Server) submit(data []byte, from string) outcome {
 		slog.Warn("event refused: not an event", "from", from, "bytes", len(data))
 		return notAnEvent
 	}
+	return s.submitEvent(event, from)
+}
+
+// submitEvent starts the sound of an event already decoded, unless the
+// event is refused or stale.
+func (s *Server) submitEvent(event sounds.Event, from string) outcome {
 	if _, err := event.Context(); err != nil {
-		slog.Warn("event refused: bad category", "from", from, "source", event.Source, "bytes", len(data))
+		slog.Warn("event refused: bad category", "from", from, "source", event.Source)
 		return badCategory
 	}
 
