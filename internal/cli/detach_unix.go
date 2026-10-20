@@ -7,8 +7,10 @@ import (
 	"syscall"
 )
 
-func configureDetachedProcess(cmd *exec.Cmd) {
+func startDetachedProcess(newCmd func() *exec.Cmd) (*exec.Cmd, error) {
+	cmd := newCmd()
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setpgid: true,
 	}
+	return cmd, cmd.Start()
 }

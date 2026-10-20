@@ -76,6 +76,10 @@ release tags and current checkout history.
   JSON pack whose mapping uses an absolute path) now logs a warning with
   the reason. It was logged only at debug level, so the pack fell silent
   with no visible cause (#7).
+- Windows: hooks no longer fail with "failed to start detached worker:
+  fork/exec ...claudio.exe: Access is denied." Claude Code runs hooks in a
+  job object that forbids breakaway, so the worker now starts inside that
+  job when it cannot leave it (#18).
 - `claudio install` no longer installs Claude Code's `WorktreeCreate` and
   `WorktreeRemove` hooks. Claude Code hands worktree creation to a
   configured `WorktreeCreate` hook and reads the new path from its output,
