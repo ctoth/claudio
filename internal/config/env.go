@@ -13,6 +13,8 @@ import (
 type envVar[T any] struct {
 	name  string
 	apply func(target *T, raw string) error
+	// secret keeps the value out of the log.
+	secret bool
 }
 
 // applyEnvVars applies every set, non-empty variable in table to target.
@@ -23,11 +25,15 @@ func applyEnvVars[T any](target *T, table []envVar[T]) {
 		if raw == "" {
 			continue
 		}
+		logged := raw
+		if v.secret {
+			logged = "[redacted]"
+		}
 		if err := v.apply(target, raw); err != nil {
-			slog.Warn("invalid environment variable; ignoring it", "name", v.name, "value", raw, "error", err)
+			slog.Warn("invalid environment variable; ignoring it", "name", v.name, "value", logged, "error", err)
 			continue
 		}
-		slog.Debug("applied environment override", "name", v.name, "value", raw)
+		slog.Debug("applied environment override", "name", v.name, "value", logged)
 	}
 }
 
@@ -82,6 +88,17 @@ var configEnvVars = []envVar[Config]{
 		}
 		return &c.FileLogging.Enabled
 	}),
+	{name: "CLAUDIO_FORWARD_URL", apply: func(c *Config, raw string) error {
+		if err := validateForwardURL(raw); err != nil {
+			return err
+		}
+		forwardOf(c).URL = raw
+		return nil
+	}},
+	{name: "CLAUDIO_FORWARD_TOKEN", secret: true, apply: func(c *Config, raw string) error {
+		forwardOf(c).Token = raw
+		return nil
+	}},
 }
 
 // soundTrackingEnvVars are the SoundTrackingConfig overrides.

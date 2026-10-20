@@ -149,8 +149,12 @@ rm -f claudio
 ### Core Components
 
 1. **Hook System** (`internal/hooks/`)
-   - Parses Claude Code hook JSON from stdin
-   - Extracts context including tool names, success/error states, and file types
+   - Reads each agent's hook JSON from stdin through `captainhook.Parse`
+     (github.com/ctoth/captain-hook), which owns every agent's field names,
+     tool names and way of reporting a failed tool
+   - Extracts context including tool names, success/error states, and file types.
+     A shell command whose outcome the agent does not report (Codex) gets
+     `Phase: "unknown"` and the neutral `tool-complete` sound
    - Maps events to sound categories: loading, success, error, interactive
 
 2. **Sound Mapping** (`internal/sounds/`)
@@ -187,7 +191,11 @@ rm -f claudio
    - Production env vars (full reference in `docs/configuration.md`): `CLAUDIO_VOLUME`,
      `CLAUDIO_ENABLED`, `CLAUDIO_SOUNDPACK`, `CLAUDIO_LOG_LEVEL`,
      `CLAUDIO_AUDIO_BACKEND`, `CLAUDIO_FILE_LOGGING`, `CLAUDIO_SOUND_TRACKING`,
-     `CLAUDIO_SOUND_TRACKING_DB`.
+     `CLAUDIO_SOUND_TRACKING_DB`, `CLAUDIO_FORWARD_URL`, `CLAUDIO_FORWARD_TOKEN`.
+   - `forward.url` makes the hook POST each event to that address, used as
+     given (`internal/cli/forward.go`), instead of playing it; that machine
+     then opens no audio device and no tracking database. What is at the
+     address (a `claudio listen`, a relay) is not claudio's business.
    - Test-only env vars (NEVER set in production): `CLAUDIO_DETACH_DISABLE`,
      `CLAUDIO_TEST_RECOGNIZE_GO_TEST`. Both weaken protections that exist for a
      reason; the CLI test suite is the only legitimate consumer.
@@ -283,6 +291,11 @@ Beyond the default stdin-mode hook executor, claudio ships these subcommands
   - `install` — copy a local pack into the XDG data dir
   - `use` — switch the active soundpack
   - `add` / `update` / `remove` / `status` — manage git-backed soundpacks
+- `claudio listen` — plays the sound for each `sounds.Event` it receives
+  (`internal/listen/`), so the machine that sees an event and the one that
+  plays it can differ. Events arrive as `POST /events` on its HTTP listener, or
+  one JSON event per line on stdin with `--stdin`. Token from `--token-file`
+  or `--token`; neither the token nor the address is in `config.json`
 
 ## Development Practices - CRITICAL
 

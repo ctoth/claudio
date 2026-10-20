@@ -60,6 +60,36 @@ func TestInstallAgentHooksDropsClaudioFromRetiredEvents(t *testing.T) {
 	}
 }
 
+// Versions up to 1.15.0 installed claudio under WorktreeCreate and
+// WorktreeRemove, which broke Claude Code worktrees. Reinstalling must
+// remove those entries and keep another tool's worktree hook.
+func TestInstallAgentHooksDropsClaudioFromWorktreeEvents(t *testing.T) {
+	claudioGroup := map[string]any{"matcher": ".*", "hooks": []any{
+		map[string]any{"type": "command", "command": "C:/Users/me/go/bin/claudio.exe"},
+	}}
+	userGroup := map[string]any{"hooks": []any{
+		map[string]any{"type": "command", "command": "make-svn-worktree"},
+	}}
+	settings := SettingsMap{"hooks": map[string]any{
+		"WorktreeCreate": []any{claudioGroup, userGroup},
+		"WorktreeRemove": []any{claudioGroup},
+	}}
+	got, err := InstallAgentHooks(&settings, AgentClaude, "C:/Users/me/go/bin/claudio.exe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	hooks := (*got)["hooks"].(map[string]any)
+	if want := []any{userGroup}; !reflect.DeepEqual(hooks["WorktreeCreate"], want) {
+		t.Errorf("WorktreeCreate = %v, want only the user's hook", hooks["WorktreeCreate"])
+	}
+	if _, ok := hooks["WorktreeRemove"]; ok {
+		t.Errorf("WorktreeRemove holding only claudio should be removed: %v", hooks["WorktreeRemove"])
+	}
+	if !IsClaudioHook(hooks["Stop"]) {
+		t.Error("reinstall should still install the other events")
+	}
+}
+
 func TestInstallAgentHooksRejectsNonConcreteAgent(t *testing.T) {
 	for _, agent := range []Agent{AgentAuto, AgentAll, Agent("bogus")} {
 		if _, err := InstallAgentHooks(&SettingsMap{}, agent, "/usr/local/bin/claudio"); err == nil {

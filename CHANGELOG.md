@@ -72,6 +72,21 @@ release tags and current checkout history.
   logged as warnings.
 
 ### Fixed
+- A configured soundpack that exists but cannot be loaded (for example a
+  JSON pack whose mapping uses an absolute path) now logs a warning with
+  the reason. It was logged only at debug level, so the pack fell silent
+  with no visible cause (#7).
+- Windows: hooks no longer fail with "failed to start detached worker:
+  fork/exec ...claudio.exe: Access is denied." Claude Code runs hooks in a
+  job object that forbids breakaway, so the worker now starts inside that
+  job when it cannot leave it (#18).
+- `claudio install` no longer installs Claude Code's `WorktreeCreate` and
+  `WorktreeRemove` hooks. Claude Code hands worktree creation to a
+  configured `WorktreeCreate` hook and reads the new path from its output,
+  so with Claudio there every `claude --worktree`, `EnterWorktree` and
+  `isolation: "worktree"` subagent failed with "hook succeeded but returned
+  no worktree path". Run `claudio install` again to remove the two entries
+  an earlier version wrote. Worktree events no longer play a sound.
 - A selected soundpack whose directory cannot be loaded as a pack (for
   example, one with a broken `soundpack.json`) falls back to looking up
   sounds only in its own directories. Before, the fallback also searched

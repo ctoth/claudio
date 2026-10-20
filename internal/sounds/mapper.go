@@ -100,9 +100,11 @@ func (m *SoundMapper) MapSound(ctx context.Context, eventCtx *hooks.EventContext
 }
 
 // chainTypeFor picks the chain: tool events use the enhanced (start) or
-// posttool (success/error) chain, everything else the simple chain.
+// posttool (success/error) chain, everything else the simple chain. A tool
+// call whose outcome is unknown also takes the simple chain: the posttool
+// levels are named for a success or an error, and it is neither.
 func chainTypeFor(eventCtx *hooks.EventContext) ChainType {
-	if eventCtx.ToolName == "" {
+	if eventCtx.ToolName == "" || eventCtx.Phase == hooks.PhaseUnknown {
 		return ChainTypeSimple
 	}
 	switch eventCtx.Category {

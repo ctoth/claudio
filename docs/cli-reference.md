@@ -168,11 +168,17 @@ claudio status
   audio backend:  auto -> oto (available; playback not tested)
   file logging:   enabled (/home/me/.cache/claudio/logs/claudio.log)
   tracking:       enabled (/home/me/.cache/claudio/sounds.db)
+  forwarding:     off
   version:        1.15.0
 ```
 
 The `audio backend` line shows what `auto` resolves to and whether that backend
 is available. It does not play a sound.
+
+When [forwarding](configuration#forwarding) is set, the `forwarding` line reads
+`on, to <address> (token set)` or `(no token)`. The token is never printed.
+That machine plays nothing itself, so its backend and tracking lines describe
+settings it does not use.
 
 When audio is disabled, the `enabled` line includes the literal word `MUTED`.
 
@@ -211,6 +217,98 @@ claudio unmute
 
 Environment variable `CLAUDIO_ENABLED` still overrides the persisted value at
 runtime.
+
+## `claudio listen`
+
+Plays sound events that arrive from somewhere else. Run it where the speakers
+are; whatever sees the event can be another machine, a container or a cloud
+session. Events arrive over HTTP, or with `--stdin` on a pipe.
+
+```bash
+claudio listen
+claudio listen --addr 0.0.0.0:19190 --max-age 10s
+<command that prints events> | claudio listen --stdin
+```
+
+| Flag | Meaning |
+| --- | --- |
+| `--addr string` | Address to listen on. Default `127.0.0.1:19190`. |
+| `--token string` | Token every request must carry. |
+| `--token-file string` | File holding that token. Surrounding whitespace is ignored. |
+| `--max-age duration` | Drop events older than this. Default `30s`; `0` plays every event. |
+| `--stdin` | Read events from stdin instead of serving HTTP. Cannot be combined with `--addr`, `--token` or `--token-file`. |
+
+The sound is chosen on the listening machine, from its soundpack, volume and
+mute setting, and is recorded in its tracking database when tracking is on.
+The global `--volume`, `--soundpack`, `--silent` and `--config` flags apply.
+
+A Claudio hook on another machine sends its events when that machine has
+`forward.url` set; see [Forwarding](configuration#forwarding).
+
+### Over HTTP
+
+Without `--stdin` it prints `listening on http://<address>` and runs until
+interrupted.
+
+Without a token only a loopback address is accepted, because anyone who can
+reach the port can play sounds. Prefer `--token-file` to `--token`: other
+users of the machine can read a command line. The two cannot be combined, and
+a token file that is missing or empty is an error.
+
+Send one JSON event per `POST /events`:
+
+```bash
+curl -X POST http://127.0.0.1:19190/events \
+  -H "Authorization: Bearer <token>" \
+  -d '{"source":"claude","category":"completion","hint":"agent-complete","operation":"stop"}'
+```
+
+| Field | Meaning |
+| --- | --- |
+| `category` | Required. One of `loading`, `success`, `error`, `interactive`, `completion`, `system`, `silent`. |
+| `hint` | Most specific sound name, tried first (`git-commit-success`). |
+| `command`, `subcommand` | The command the event is about (`git`, `commit`). Leave both out for an event that is not about a command. |
+| `phase` | `start`, `success`, `error` or `unknown`, for an event about a command. |
+| `original_tool` | The tool that ran the command (`Bash`). |
+| `operation` | Generic name tried after the specific ones (`tool-complete`, `stop`). |
+| `source` | What produced the event (`claude`, `github`). Logged; not used to pick the sound. |
+| `id` | The event's id at its source. Logged. |
+| `time` | RFC 3339 time of the event, used by `--max-age`. An event without one is always played. |
+| `session` | Groups events in the tracking database. |
+| `attributes` | Free-form object for source-specific values. Not used to pick the sound. |
+
+These are the names the [fallback chains](soundpacks#fallback-chains) are built from, so an
+event picks the same sound a local hook with the same values would.
+
+| Status | Meaning |
+| --- | --- |
+| `202` | Accepted, or dropped as stale (the body says which). The sound plays after the response. |
+| `400` | Not a JSON event, or no known `category`. |
+| `401` | Missing or wrong token. |
+| `413` | Body over 64 KiB. |
+| `503` | Eight sounds are already playing. |
+
+Request bodies are never logged or echoed.
+
+### On A Pipe
+
+With `--stdin` no web server is started. Claudio reads stdin, one JSON event
+per line in the same format as above, and plays each until stdin ends. What
+carries the events to the pipe is up to you: an SSH session, a relay's
+client, a file being followed.
+
+- Blank lines are skipped, so keep-alive lines from a streaming client are
+  harmless.
+- A line that is not an event, has no known `category`, or is longer than
+  64 KiB is logged and skipped. The stream continues.
+- `--max-age` and the limit of eight sounds at once apply as they do over
+  HTTP.
+- When stdin ends, the command exits `0`. When reading it fails, the command
+  exits `1`. Claudio does not reconnect: run it under a loop or a service if
+  the source can drop.
+
+There is no token on this path. Whoever can write to the source can play
+sounds, so protect the source.
 
 ## `claudio soundpack`
 
