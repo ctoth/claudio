@@ -1,27 +1,27 @@
 # Goal
 
-Fix PR #98's reproduced successful audit of a manifest with missing assets; preserve #99's stacked functionality. Parent coordinates merge and closure. No installed hook, authentication, or security changes.
+Correct false-success audits in replacement drafts #111/#112 while preserving original #98/#99 features and reviewed history. Parent owns merging, closure and readiness. Keep the user checkout and installed hooks/settings unchanged.
 
 # State
 
-Audit/master is published as draft #111, head `94fbe02e65faa75207e37db11c743af497de9dbe`, branch `fix/audit-invalid-mappings`. Fix commit `b0efa05` adds the regression and three-line production change. The regression failed for all three cases before the fix and passed afterward (0.49 s). Current master `733b16feabdbffa8ce3bac77b89aa3a2fe233e5a` merged cleanly. CI is running.
+#111 is published at `199f3a581d23a56fecd6df1093fd073a02bdecd5`, retaining reviewed head `1f740347`, original invalid-mapping fix `b0efa05`, mapped-content fix `48b8831`, and normal merge `b2d2138` of latest master `7e96e43c94fc7de323928dd5adb6ed3450ec0533`.
 
-Draft #112 is stacked on #111, branch `integrate/soundpack-synth-audit-fix`, starting from original #99 head `cfef149659ef3d1021d23c9c7fa174496359204b`. Its initial integration head `244487aedc6c0967d84636368eef5a31a74f58ba` passed all nine checks.
+#112 is merging #111 normally onto its reviewed head `4de070cf`, preserving original #99's synthesis/search/sample/limiter implementation and Nyquist fix `7df9116`. The only conflict was this historical task note; production and feature docs merged automatically. No original PR branch or prose has changed.
 
-A further focused probe reproduced an audit panic on a valid 22050 Hz PCM WAV carrying its Nyquist frequency: `index out of range [1025] with length 1025` at `fundamental`, through Pack -> DecodeFrames -> Analyze -> Describe. The #99 review ledger was updated and passed the original gate. #112 now has a small fix that checks the final spectral bin and reports its frequency without interpolation, plus WAV-through-audit regressions at 22050 and 24000 Hz. Both regressions pass (0.03 s), and the working diff passes `git diff --check`.
-
-Actual master `68d9090b3e9ab8e09361089110ef9f106e496a4d` includes parent's merged #108 and #110. It is merged into #111 as `1f7403473db1ad91f502d32d09622694897eb73d`, and into this synth branch through #111. Original #98/#99 branches and prose are unchanged, as is the user checkout.
-
-Parent additionally authorized integrating #109. Its branch belongs to `serrebidev/claudio` with maintainer edits enabled. Isolated worktree `../claudio-warn-integration`, branch `maintenance/warn-pack-integration`, contains normal merge `9dc5f253cad3e7ab12276124ebe7ab66341f2dd3` (parents #109's `85c8495` and master `68d9090`). Only changelog conflict required resolution; both entries retained. Soundpack factory/resolution-warning and startup-warning-to-file focused tests pass. Push is in progress from this owned parent repository after the elevated shell correctly refused the sandbox-owned linked worktree; no trust or permission settings changed.
+Actual CLI reproduction with a valid 100 ms Vorbis tone: before the fix, Ogg-only returned success with zero audited files, and a mixed clean WAV/Ogg pack returned success with just the WAV, even under strict. After the fix, Ogg-only reports one file/one undecodable error and mixed reports two files/one undecodable error, in normal and strict modes and JSON/text output. Two keys sharing the Ogg produce one file/error. A WAV named `.bin` is now decoded by magic and measured at 48 kHz/400 ms. Original invalid-mapping and master-to-strict-audit regressions also passed (5.648 s CLI package).
 
 # Decisions and why
 
-Smallest fix: use `JSONValidation.Err()` immediately after `ValidateJSONSoundpack`, about three production lines, before a zero-file or partial audit can report success. The regression covers missing-only, mixed valid/missing, and unsafe mappings, with and without `--strict`. No new validation mechanism.
+Seed the existing file list with every resolved mapping before sorting/compacting (about seven production lines), then use the existing playback decoder and undecodable finding. Native playback supports WAV/MP3/AIFF and rejects Ogg; do not invent measurements or add a separate audit decoder. Retain existing unreferenced-audio scope and directory discovery. The valid Vorbis fixture was generated and independently decoded by ffmpeg, stored as base64; tests require no external encoder/decoder.
+
+The original missing/unsafe mapping fix remains: check `JSONValidation.Err()` before iterating resolved mappings. The Nyquist endpoint guard and WAV-through-audit regressions at 22050/24000 Hz remain unchanged.
+
+Confirmed documentation drift on #112: `master.Process` uses `ToleranceLU/2` to stop peak limiting, so `--tolerance` can alter output. Correct its CLI reference wording while preserving behavior.
 
 # Surprises
 
-The original audit discarded `Broken` and `Unsafe` and iterated only `Resolved`; a copied real pack manifest with 132 absent references yielded no audit errors. `master` already checks `Err()`.
+The audit's directory extension filter silently discarded valid mapped content before decoding, including unsupported Ogg and supported WAV bytes under an unusual extension. Explicit mapped inputs must be included independently of directory discovery.
 
 # Next step
 
-Publish the stacked synth/search draft against `fix/audit-invalid-mappings` and await exact-head CI on both drafts. #1's portable log suffix and config-discovery behavior already exist on current master; no unique fix found to preserve. Parent decides final merge/closure; no original PR metadata or branch has been changed.
+Finish the normal #112 merge and tolerance prose correction, run focused consumer/feature regressions and full exact-head CI on both, then return exact heads for parent re-review. Keep both PRs draft; do not merge or close them.

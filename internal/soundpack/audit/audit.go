@@ -19,6 +19,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -274,9 +275,9 @@ func KeyCategory(key string) string {
 }
 
 // Pack audits the soundpack at packPath: a directory pack, or the JSON
-// manifest of a JSON pack. Every audio file under the pack root is
-// measured. Pack-level read or manifest-validation failures return an error;
-// problems with individual sounds are findings.
+// manifest of a JSON pack. Every mapped file is decoded, even when its
+// extension is not recognised. Pack-level read or manifest-validation
+// failures return an error; problems with individual sounds are findings.
 func Pack(packPath string, o Options) (Report, error) {
 	info, err := os.Stat(packPath)
 	if err != nil {
@@ -331,10 +332,11 @@ func Pack(packPath string, o Options) (Report, error) {
 	if err != nil {
 		return Report{}, fmt.Errorf("failed to scan soundpack: %w", err)
 	}
-	sort.Strings(files)
 	if keys != nil {
 		files = manifestFiles(root, files, keys)
 	}
+	sort.Strings(files)
+	files = slices.Compact(files)
 
 	firstByHash := make(map[string]string)
 	for _, file := range files {
@@ -376,16 +378,17 @@ func Pack(packPath string, o Options) (Report, error) {
 	return report, nil
 }
 
-// manifestFiles narrows the audio files under a JSON pack's root to the ones
-// the manifest references, plus unreferenced files sitting in the same
-// directories (dead weight the pack ships). Audio elsewhere, such as the
-// raw material a pack was mastered from, is not part of the pack.
+// manifestFiles includes every mapped file, regardless of its extension or
+// whether the directory scan found it, plus unreferenced audio sitting in the
+// same directories (dead weight the pack ships). Audio elsewhere, such as
+// the raw material a pack was mastered from, is not part of the pack.
 func manifestFiles(root string, files []string, keys map[string][]string) []string {
 	shipped := make(map[string]struct{})
+	var out []string
 	for rel := range keys {
 		shipped[path.Dir(rel)] = struct{}{}
+		out = append(out, filepath.Join(root, filepath.FromSlash(rel)))
 	}
-	var out []string
 	for _, file := range files {
 		rel, err := filepath.Rel(root, file)
 		if err != nil {

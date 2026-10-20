@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -119,6 +120,104 @@ func TestSoundpackAuditRejectsInvalidManifestMappings(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestSoundpackAuditRejectsMappedOgg(t *testing.T) {
+	// A valid 100 ms, 48 kHz mono Vorbis tone, independently decoded by ffmpeg.
+	// Generated with: ffmpeg -f lavfi -i sine=frequency=440:sample_rate=48000:duration=0.1
+	// -c:a libvorbis -f ogg pipe:1, then base64-encoded for the fixture.
+	encoded, err := os.ReadFile("testdata/tone.ogg.base64")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ogg, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(encoded)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name  string
+		mixed bool
+	}{{"Ogg only", false}, {"Ogg and WAV", true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.Mkdir(filepath.Join(dir, "sounds"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "sounds", "tone.ogg"), ogg, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			mappings := map[string]string{"default.wav": "sounds/tone.ogg", "error/error.wav": "sounds/tone.ogg"}
+			wantFiles := 1
+			if tc.mixed {
+				writeTone(t, filepath.Join(dir, "sounds", "good.wav"), 400, 0, 0.126)
+				mappings["success/success.wav"] = "sounds/good.wav"
+				wantFiles++
+			}
+			manifest := filepath.Join(dir, "soundpack.json")
+			data, err := json.Marshal(map[string]any{"name": "mixed formats", "mappings": mappings})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(manifest, data, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			for _, flags := range [][]string{{"--json"}, {"--json", "--strict"}} {
+				out, err := runCommand(newSoundpackAuditCommand(), append([]string{manifest}, flags...)...)
+				var report audit.Report
+				if jsonErr := json.Unmarshal([]byte(out), &report); jsonErr != nil {
+					t.Fatalf("invalid audit report: %v\n%s", jsonErr, out)
+				}
+				if err == nil || report.Summary.Errors != 1 || report.Summary.Files != wantFiles {
+					t.Errorf("flags %v: error = %v, summary = %+v; want %d files and one decode error", flags, err, report.Summary, wantFiles)
+				}
+				found := false
+				for _, sound := range report.Sounds {
+					if sound.Path != "sounds/tone.ogg" {
+						continue
+					}
+					found = true
+					if len(sound.Keys) != 2 || sound.SampleRate != 0 || sound.DurationMS != 0 {
+						t.Errorf("unsupported sound must retain both keys without invented measurements: %+v", sound)
+					}
+					if len(sound.Findings) != 1 || sound.Findings[0].Rule != audit.RuleUndecodable ||
+						sound.Findings[0].Severity != audit.SeverityError ||
+						!strings.Contains(sound.Findings[0].Message, "unsupported audio format") {
+						t.Errorf("want precise unsupported-format finding: %+v", sound.Findings)
+					}
+				}
+				if !found {
+					t.Error("mapped Ogg is absent from the report")
+				}
+			}
+			out, err := runCommand(newSoundpackAuditCommand(), manifest, "--strict")
+			if err == nil || !strings.Contains(out, "sounds/tone.ogg: undecodable:") || !strings.Contains(out, "unsupported audio format") {
+				t.Errorf("text report must explain why the mapped Ogg fails: %v\n%s", err, out)
+			}
+		})
+	}
+}
+
+func TestSoundpackAuditDecodesMappedContentByMagic(t *testing.T) {
+	dir := t.TempDir()
+	writeTone(t, filepath.Join(dir, "tone.bin"), 400, 0, 0.126)
+	manifest := filepath.Join(dir, "soundpack.json")
+	if err := os.WriteFile(manifest, []byte(`{"name":"mislabelled WAV","mappings":{"default.wav":"tone.bin"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runCommand(newSoundpackAuditCommand(), manifest, "--strict", "--json")
+	if err != nil {
+		t.Fatalf("playable content must be decoded regardless of extension: %v\n%s", err, out)
+	}
+	var report audit.Report
+	if err := json.Unmarshal([]byte(out), &report); err != nil {
+		t.Fatal(err)
+	}
+	if report.Summary.Files != 1 || len(report.Sounds) != 1 {
+		t.Fatalf("mapped WAV was skipped: %+v", report)
+	}
+	if sound := report.Sounds[0]; sound.SampleRate != 48000 || sound.DurationMS != 400 {
+		t.Errorf("mapped WAV was not measured: %+v", sound)
 	}
 }
 

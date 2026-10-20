@@ -20,7 +20,10 @@ Claudio's native player decodes:
 - **WAV**: mono or stereo; 8-, 16-, 24-, or 32-bit PCM, or 32-bit float
   (float samples beyond full scale are clipped). Files with more than two
   channels are rejected.
-- **MP3**
+- **MP3**: the info header frame that most encoders write is not played, and
+  the encoder delay and padding recorded by LAME or ffmpeg are trimmed, so the
+  sound starts on time. An MP3 with no such header still starts about 23 ms
+  late at 48 kHz; that delay is part of the format.
 - **AIFF** (and uncompressed AIFC): 16-, 24-, or 32-bit. Files with more than two channels are
   downmixed to stereo.
 
@@ -350,6 +353,11 @@ system/session-start.mp3   227.69s   -24.4    -7.6 2405     70Hz  steady   tonal
 
 Audit decodes each file with the decoders playback uses, so a file it
 accepts is a file Claudio can play.
+
+Every mapped file in a JSON pack is checked regardless of its extension.
+Content the playback decoders do not support, such as Ogg Vorbis, produces an
+`undecodable` error instead of being skipped. These errors fail the audit
+with or without `--strict`.
 
 | Column | Meaning |
 | --- | --- |
