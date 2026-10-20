@@ -16,6 +16,11 @@ is rendered on your local machine. This page uses the PulseAudio server that
 WSLg already runs on Windows, which is the common case for this project. The
 same forwarding works from any host that exposes a Pulse socket.
 
+There is a second way that needs no PulseAudio at all: run `claudio listen` on
+your local machine and have the remote box send it events instead of audio.
+The sound is then chosen and played locally, from the local soundpack. See
+[Forwarding](configuration#forwarding).
+
 The remote box can play through the socket in two ways:
 
 - **Oto, the default backend.** Oto has its own PulseAudio client written in

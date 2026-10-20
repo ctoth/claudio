@@ -584,14 +584,19 @@ func TestIsValidSubcommand(t *testing.T) {
 
 func TestParseCompatibilityAliasBranches(t *testing.T) {
 	t.Parallel()
-	_, err := ParseHookEvent([]byte(`{
+	// A field of the wrong type is ignored, not fatal: the payload is still
+	// read by the fields that are usable.
+	stray, err := ParseHookEvent([]byte(`{
 		"session_id": "snake-session",
 		"cwd": "/tmp",
 		"hook_event_name": "Stop",
 		"sessionId": 42
 	}`))
-	if err == nil {
-		t.Fatal("expected alias parse error for non-string sessionId")
+	if err != nil {
+		t.Fatalf("Parse returned error for a stray non-string sessionId: %v", err)
+	}
+	if stray.SessionID != "snake-session" {
+		t.Errorf("SessionID = %q, want snake-session", stray.SessionID)
 	}
 
 	event, err := ParseHookEvent([]byte(`{
@@ -658,27 +663,6 @@ func TestNormalizeToolNameAliases(t *testing.T) {
 	for input, want := range cases {
 		if got := normalizeToolName(input); got != want {
 			t.Errorf("normalizeToolName(%q) = %q, want %q", input, got, want)
-		}
-	}
-}
-
-func TestParseExitCodeBranches(t *testing.T) {
-	t.Parallel()
-	cases := []struct {
-		text string
-		code int
-		ok   bool
-	}{
-		{text: "no exit line", ok: false},
-		{text: "Exit code:", ok: false},
-		{text: "Exit code: nope", ok: false},
-		{text: "Exit code: 0", code: 0, ok: true},
-		{text: "  Exit Code: 7  ", code: 7, ok: true},
-	}
-	for _, tc := range cases {
-		code, ok := parseExitCode(tc.text)
-		if code != tc.code || ok != tc.ok {
-			t.Errorf("parseExitCode(%q) = (%d, %v), want (%d, %v)", tc.text, code, ok, tc.code, tc.ok)
 		}
 	}
 }

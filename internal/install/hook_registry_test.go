@@ -37,12 +37,38 @@ func TestRegistryFollowsCatalog(t *testing.T) {
 }
 
 func TestDefaultEnabledStatus(t *testing.T) {
-	disabled := map[string]bool{"FileChanged": true, "MessageDisplay": true}
+	disabled := map[string]bool{
+		"FileChanged": true, "MessageDisplay": true,
+		"WorktreeCreate": true, "WorktreeRemove": true,
+	}
 	for _, agent := range ConcreteAgents() {
 		for _, hook := range agent.Registry() {
 			if hook.DefaultEnabled == disabled[hook.Name] {
 				t.Errorf("%s %s: DefaultEnabled = %v", agent, hook.Name, hook.DefaultEnabled)
 			}
+		}
+	}
+}
+
+// Claude Code hands worktree creation and removal to a WorktreeCreate or
+// WorktreeRemove hook when one is configured. claudio only plays a sound,
+// so installing either one breaks worktrees.
+func TestInstallNeverWritesWorktreeHooks(t *testing.T) {
+	for _, agent := range ConcreteAgents() {
+		for _, name := range enabledHookNames(agent) {
+			if name == "WorktreeCreate" || name == "WorktreeRemove" {
+				t.Errorf("%s installs %s", agent, name)
+			}
+		}
+	}
+	installed, err := InstallAgentHooks(&SettingsMap{}, AgentClaude, "/usr/local/bin/claudio")
+	if err != nil {
+		t.Fatal(err)
+	}
+	hooks := (*installed)["hooks"].(map[string]any)
+	for _, name := range []string{"WorktreeCreate", "WorktreeRemove"} {
+		if _, ok := hooks[name]; ok {
+			t.Errorf("install wrote %s: %v", name, hooks[name])
 		}
 	}
 }

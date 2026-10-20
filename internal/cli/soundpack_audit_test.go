@@ -87,6 +87,41 @@ func TestSoundpackAuditJSON(t *testing.T) {
 	}
 }
 
+func TestSoundpackAuditRejectsInvalidManifestMappings(t *testing.T) {
+	for _, tc := range []struct {
+		name, value, want string
+		withPlayable      bool
+	}{
+		{"only missing", "missing.wav", "broken reference", false},
+		{"missing beside playable", "missing.wav", "broken reference", true},
+		{"unsafe path", "../outside.wav", "unsafe path", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			mappings := map[string]string{"default.wav": tc.value}
+			if tc.withPlayable {
+				writeTone(t, filepath.Join(dir, "good.wav"), 400, 0, 0.126)
+				mappings["success/success.wav"] = "good.wav"
+			}
+			data, err := json.Marshal(map[string]any{"name": "incomplete", "mappings": mappings})
+			if err != nil {
+				t.Fatal(err)
+			}
+			manifest := filepath.Join(dir, "soundpack.json")
+			if err := os.WriteFile(manifest, data, 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			for _, flags := range [][]string{nil, {"--strict"}} {
+				out, err := runCommand(newSoundpackAuditCommand(), append([]string{manifest}, flags...)...)
+				if err == nil || !strings.Contains(err.Error(), tc.want) {
+					t.Errorf("flags %v: error = %v, want %q; output:\n%s", flags, err, tc.want, out)
+				}
+			}
+		})
+	}
+}
+
 func TestSoundpackAuditThresholdFlags(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "p")
 	writeTone(t, filepath.Join(dir, "loading", "loading.wav"), 3000, 0, 0.126) // about -18 dBFS

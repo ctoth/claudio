@@ -275,8 +275,8 @@ func KeyCategory(key string) string {
 
 // Pack audits the soundpack at packPath: a directory pack, or the JSON
 // manifest of a JSON pack. Every audio file under the pack root is
-// measured. The returned error covers only a pack that cannot be read at
-// all; problems with individual sounds are findings.
+// measured. Pack-level read or manifest-validation failures return an error;
+// problems with individual sounds are findings.
 func Pack(packPath string, o Options) (Report, error) {
 	info, err := os.Stat(packPath)
 	if err != nil {
@@ -292,6 +292,9 @@ func Pack(packPath string, o Options) (Report, error) {
 		v, err := soundpack.ValidateJSONSoundpack(packPath)
 		if err != nil {
 			return Report{}, fmt.Errorf("failed to load JSON soundpack: %w", err)
+		}
+		if err := v.Err(); err != nil {
+			return Report{}, err
 		}
 		root = filepath.Dir(packPath)
 		report.Pack, report.Type = v.File.Name, "json"

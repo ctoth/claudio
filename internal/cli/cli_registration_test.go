@@ -25,6 +25,7 @@ func TestNewCLI_RegistersAllExpectedSubcommands(t *testing.T) {
 		"mute",
 		"unmute",
 		"status",
+		"listen",
 	}
 
 	cli := NewCLI()

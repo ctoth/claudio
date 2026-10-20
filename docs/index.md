@@ -88,8 +88,6 @@ Claude Code installs these default-enabled hooks:
 - `ConfigChange`
 - `CwdChanged`
 - `DirectoryAdded`
-- `WorktreeCreate`
-- `WorktreeRemove`
 - `PreCompact`
 - `PostCompact`
 - `PreModelSwitch`
@@ -101,6 +99,9 @@ Claude Code installs these default-enabled hooks:
 Claude Code and Qwen Code also have `MessageDisplay` (and Claude Code
 `FileChanged`) in Claudio's registry, but they are disabled by default to
 avoid noisy audio from streamed text and broad file watchers.
+`WorktreeCreate` and `WorktreeRemove` are never installed: Claude Code hands
+worktree creation and removal to a hook configured for them, so a hook that
+only plays a sound breaks worktrees.
 
 Codex installs these default-enabled hooks:
 
@@ -210,6 +211,16 @@ Post-tool success or failure chain:
 success/git-commit-success.wav
 success/git-success.wav
 success/bash-success.wav
+success/tool-complete.wav
+success/success.wav
+default.wav
+```
+
+Some agents do not say how a shell command ended: Codex gives hooks the
+command's output and never its exit code. Claudio then plays neither the
+success nor the error sounds, only the neutral ones:
+
+```text
 success/tool-complete.wav
 success/success.wav
 default.wav
