@@ -128,6 +128,52 @@ func TestMasteredSoundsPassTheAudit(t *testing.T) {
 	}
 }
 
+// A recorded knock or click is mostly quiet with a few very tall spikes.
+// Gain alone stops at the first spike and leaves the sound far under the
+// target, which pushes pack authors to distort it into shape. Mastering
+// should bring it up by limiting just the spikes.
+func TestSpikyRecordingIsLimitedUpToTheTarget(t *testing.T) {
+	const r = 48000
+	frames := tone(r, 800, -23, 600*time.Millisecond)
+	for start := 2400; start+24 < len(frames); start += 4800 {
+		for i := range 24 {
+			x := math.Sin(math.Pi * float64(i) / 24)
+			frames[start+i] = [2]float64{x, x}
+		}
+	}
+	opts := DefaultOptions()
+	out, res := Process(frames, r, []string{"success"}, opts)
+
+	if res.LimitedDB < 3 {
+		t.Errorf("limited by %.1f dB, want the spikes brought down by several dB", res.LimitedDB)
+	}
+	if got := float64(res.After.LoudnessLUFS); math.Abs(got-opts.TargetLUFS) > opts.ToleranceLU {
+		t.Errorf("loudness = %.1f LUFS, want within %.0f LU of %.0f", got, opts.ToleranceLU, opts.TargetLUFS)
+	}
+	if peak := float64(res.After.PeakDBTP); peak > opts.PeakCeilingDBTP+0.1 {
+		t.Errorf("true peak = %.2f dBTP, above the %.1f ceiling", peak, opts.PeakCeilingDBTP)
+	}
+	for _, f := range res.After.Findings {
+		t.Errorf("finding after limiting: %s: %s", f.Rule, f.Message)
+	}
+	// The body of the sound between spikes must be untouched in shape: a
+	// limiter that pumps would pull the tone down for long stretches.
+	quiet := 0
+	for _, f := range out[len(out)/2 : len(out)/2+2000] {
+		if math.Abs(f[0]) < 1e-4 {
+			quiet++
+		}
+	}
+	if quiet > 200 {
+		t.Errorf("%d of 2000 mid-sound samples are near zero: the limiter is gating the body", quiet)
+	}
+
+	_, plain := Process(tone(r, 800, -30, 400*time.Millisecond), r, []string{"success"}, opts)
+	if plain.LimitedDB != 0 {
+		t.Errorf("a plain tone was limited by %.1f dB; it only needed gain", plain.LimitedDB)
+	}
+}
+
 func TestProcessReportsWhatItDid(t *testing.T) {
 	const r = 48000
 	in := join(gap(r, 200*time.Millisecond), tone(r, 1000, -40, 5*time.Second), gap(r, 500*time.Millisecond))
