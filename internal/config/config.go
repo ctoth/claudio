@@ -56,6 +56,7 @@ type Config struct {
 	AudioBackend     string               `json:"audio_backend"`            // Audio backend (auto, system_command, oto)
 	FileLogging      *FileLoggingConfig   `json:"file_logging,omitempty"`   // File logging configuration
 	SoundTracking    *SoundTrackingConfig `json:"sound_tracking,omitempty"` // Sound tracking configuration
+	Forward          *ForwardConfig       `json:"forward,omitempty"`        // Send events to a listener instead of playing them
 }
 
 // DefaultVolume is the playback volume when none is configured.
@@ -88,6 +89,10 @@ func (c *Config) Clone() *Config {
 	if c.SoundTracking != nil {
 		st := *c.SoundTracking
 		clone.SoundTracking = &st
+	}
+	if c.Forward != nil {
+		fw := *c.Forward
+		clone.Forward = &fw
 	}
 	return &clone
 }
@@ -254,6 +259,12 @@ func (cm *ConfigManager) ValidateConfig(config *Config) error {
 
 		if fileLogging.MaxAgeDays < 0 {
 			errors = append(errors, fmt.Sprintf("file logging max_age_days must be >= 0, got %d", fileLogging.MaxAgeDays))
+		}
+	}
+
+	if url := config.ForwardURL(); url != "" {
+		if err := validateForwardURL(url); err != nil {
+			errors = append(errors, err.Error())
 		}
 	}
 

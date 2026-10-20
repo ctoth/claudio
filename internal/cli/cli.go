@@ -68,6 +68,7 @@ func NewCLI() *CLI {
 		newMuteCommand(c),
 		newUnmuteCommand(c),
 		newStatusCommand(c),
+		newListenCommand(c),
 		// install-commands writes the /claudio slash command markdown;
 		// uninstall-commands removes it.
 		newInstallCommandsCommand(),
@@ -339,7 +340,8 @@ func processHookInput(cmd *cobra.Command, cli *CLI, cfg *config.Config, inputDat
 	}
 
 	defaultEvent, _ := cmd.Flags().GetString("hook-event")
-	hookEvent, err := hooks.ParseHookEventWithDefault(inputData, defaultEvent)
+	hookAgent, _ := cmd.Flags().GetString("hook-agent")
+	hookEvent, err := hooks.ParseHookEventFrom(hookAgent, inputData, defaultEvent)
 	if err != nil {
 		// The payload can carry prompts and tool output: identify it by
 		// size and hash only. Run logs the error itself.
@@ -378,9 +380,13 @@ func (c *CLI) runStdinMode(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
+	// A forwarding machine sends its events to a listener: it opens no audio
+	// device and keeps no tracking database of its own.
+	forwarding := cfg.ForwardURL() != ""
+
 	// Structural failures must reach the caller before detachment redirects the
 	// worker's stderr. This does not open a device or test playback.
-	if cfg.Enabled && len(inputData) > 0 {
+	if !forwarding && cfg.Enabled && len(inputData) > 0 {
 		if _, err := audio.ResolveBackend(cfg.AudioBackend); err != nil {
 			return err
 		}
@@ -394,16 +400,18 @@ func (c *CLI) runStdinMode(cmd *cobra.Command, _ []string) error {
 		return writeJSONHookSuccessResponse(cmd, inputData)
 	}
 
-	// Initialize tracking (before audio system initialization). Pass the
-	// already-loaded cfg so a user-supplied --config is honored
-	// (initializeTracking previously called LoadConfig itself, dropping
-	// the override).
-	c.initializeTracking(cfg)
+	if !forwarding {
+		// Initialize tracking (before audio system initialization). Pass the
+		// already-loaded cfg so a user-supplied --config is honored
+		// (initializeTracking previously called LoadConfig itself, dropping
+		// the override).
+		c.initializeTracking(cfg)
 
-	// Initialize audio and soundpack systems
-	err = c.initializeAudioSystem(cfg)
-	if err != nil {
-		return err
+		// Initialize audio and soundpack systems
+		err = c.initializeAudioSystem(cfg)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Process hook input payload.
@@ -472,9 +480,17 @@ func setupDefaultCommandLogging(stderr io.Writer) {
 
 // processHookEvent processes the parsed hook event
 func (c *CLI) processHookEvent(hookEvent *hooks.HookEvent, cfg *config.Config) {
-	// Extract hook context directly from event
-	eventCtx := hookEvent.GetContext()
+	if cfg.ForwardURL() != "" {
+		forwardHookEvent(hookEvent, cfg)
+		return
+	}
+	c.playEventContext(hookEvent.GetContext(), hookEvent.SessionID, cfg)
+}
 
+// playEventContext maps eventCtx to a sound, records the lookup under
+// sessionID when tracking is on, and plays the sound. It is safe to call
+// from several goroutines once the audio system is initialized.
+func (c *CLI) playEventContext(eventCtx *hooks.EventContext, sessionID string, cfg *config.Config) {
 	slog.Debug("hook context parsed",
 		"category", eventCtx.Category.String(),
 		"operation", eventCtx.Operation,
@@ -496,7 +512,7 @@ func (c *CLI) processHookEvent(hookEvent *hooks.HookEvent, cfg *config.Config) {
 	var observer soundpack.PathObserver
 	if c.trackingDB != nil {
 		buf = tracking.NewLookupBuffer()
-		dbHook = tracking.NewDBHook(c.trackingDB, hookEvent.SessionID)
+		dbHook = tracking.NewDBHook(c.trackingDB, sessionID)
 		observer = buf.Observer()
 	}
 

@@ -51,72 +51,42 @@ type agentSpec struct {
 	pluginFile bool
 }
 
-// agentSpecs lists every concrete agent in install/detection order.
-var agentSpecs = []agentSpec{
+// agentSpecs lists every concrete agent in install/detection order. An
+// agent in captain-hook's catalog takes its matcher, settings locations and
+// PowerShell command form from there; its entry here holds only what is
+// claudio's own choice.
+var agentSpecs = withCatalogFacts([]agentSpec{
 	{
 		agent:        AgentClaude,
 		catalogAgent: captainhook.AgentClaude,
-		matcher:      ".*",
-		homeEnv:      "CLAUDE_CONFIG_DIR",
-		homeDir:      ".claude",
-		globalFile:   "settings.json",
-		projectPaths: []string{filepath.Join(".claude", "settings.json")},
 	},
 	{
-		agent:             AgentCodex,
-		catalogAgent:      captainhook.AgentCodex,
-		matcher:           "*",
-		homeEnv:           "CODEX_HOME",
-		homeDir:           ".codex",
-		globalFile:        "hooks.json",
-		projectPaths:      []string{filepath.Join(".codex", "hooks.json")},
-		powerShellCommand: true,
-		trustHint:         "Run /hooks in Codex to trust the claudio hook.",
+		agent:        AgentCodex,
+		catalogAgent: captainhook.AgentCodex,
+		trustHint:    "Run /hooks in Codex to trust the claudio hook.",
 	},
 	{
 		agent:         AgentGemini,
 		catalogAgent:  captainhook.AgentGemini,
-		matcher:       "",
-		homeDir:       ".gemini",
-		globalFile:    "settings.json",
-		projectPaths:  []string{filepath.Join(".gemini", "settings.json")},
 		hookAgentFlag: true,
 		commandName:   "claudio",
 	},
 	{
 		agent:         AgentQwen,
 		catalogAgent:  captainhook.AgentQwen,
-		matcher:       ".*",
-		homeDir:       ".qwen",
-		globalFile:    "settings.json",
-		projectPaths:  []string{filepath.Join(".qwen", "settings.json")},
 		hookAgentFlag: true,
 		commandName:   "claudio",
 	},
 	{
-		agent:        AgentCopilot,
-		catalogAgent: captainhook.AgentCopilot,
-		matcher:      "",
-		homeEnv:      "COPILOT_HOME",
-		homeDir:      ".copilot",
-		globalFile:   "settings.json",
-		projectPaths: []string{
-			filepath.Join(".github", "copilot", "settings.local.json"),
-			filepath.Join(".github", "copilot", "settings.json"),
-		},
+		agent:               AgentCopilot,
+		catalogAgent:        captainhook.AgentCopilot,
 		hookAgentFlag:       true,
 		flagCamelCaseEvents: true,
 		timeoutSec:          30,
 	},
 	{
-		// Command Code tests matchers against SHELL/READ/WRITE/EDIT and never
-		// fires a Stop or SessionStart group that has one, so none is written.
 		agent:        AgentCommandCode,
 		catalogAgent: captainhook.AgentCommandCode,
-		matcher:      "",
-		homeDir:      ".commandcode",
-		globalFile:   "settings.json",
-		projectPaths: []string{filepath.Join(".commandcode", "settings.json")},
 		trustHint:    "Restart Command Code to load the claudio hooks.",
 	},
 	{
@@ -128,6 +98,32 @@ var agentSpecs = []agentSpec{
 		pluginFile:   true,
 		trustHint:    "Restart OpenCode to load the claudio plugin.",
 	},
+})
+
+// withCatalogFacts fills each catalog agent's matcher, settings locations
+// and PowerShell command form from captain-hook's catalog. An agent missing
+// from the catalog is a build mistake, so it panics at startup.
+func withCatalogFacts(specs []agentSpec) []agentSpec {
+	for i := range specs {
+		s := &specs[i]
+		if s.catalogAgent == "" {
+			continue
+		}
+		hooks, ok := captainhook.Lookup(s.catalogAgent)
+		if !ok {
+			panic(fmt.Sprintf("agent %q is not in captain-hook's catalog", s.catalogAgent))
+		}
+		s.matcher = hooks.Matcher
+		s.homeEnv = hooks.HomeEnv
+		s.homeDir = hooks.ConfigDir
+		s.globalFile = hooks.SettingsFile
+		s.powerShellCommand = hooks.PowerShell
+		s.projectPaths = make([]string, len(hooks.ProjectFiles))
+		for j, file := range hooks.ProjectFiles {
+			s.projectPaths[j] = filepath.FromSlash(file)
+		}
+	}
+	return specs
 }
 
 // spec returns the agent's descriptor; ok is false for auto, all and
