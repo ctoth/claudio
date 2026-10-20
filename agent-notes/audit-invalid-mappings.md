@@ -6,7 +6,9 @@ Follow-up goal: audit every valid mapped file, including formats or names exclud
 
 # State
 
-Isolated checkout, branch `fix/audit-invalid-mappings`, based on #98 head `762b28c222aab0ae0b5144e7786290f2e77652c2`. User checkout is unchanged. Fix commit `b0efa05` adds the regression and three-line production change. The regression failed for all three cases before the fix and passed afterward (0.49 s). Current master `733b16feabdbffa8ce3bac77b89aa3a2fe233e5a` merged cleanly into this branch. Publishing this as a replacement draft leaves original #98 unchanged and gives its full feature set current-master CI.
+Replacement draft #111 uses isolated branch `fix/audit-invalid-mappings`, preserving original #98 head `762b28c222aab0ae0b5144e7786290f2e77652c2`. Original invalid-mapping fix `b0efa05` remains in history. Reviewed published head `1f740347` is preserved as an ancestor; mapped-file correction is commit `48b8831`. Latest master `7e96e43c94fc7de323928dd5adb6ed3450ec0533` merged cleanly in `b2d2138`.
+
+Before the mapped-file correction, CLI regressions observed nil error with zero files for Ogg-only and one file for mixed Ogg/WAV, both with and without strict. Afterward Ogg-only reports one file/one error, mixed reports two files/one error, and a WAV named `.bin` reports 48 kHz/400 ms. All focused audit CLI tests, original invalid-mapping regressions, and master-to-strict-audit round trip passed (5.648 s package). Directory discovery and JSON category/unreferenced behavior remain under existing tests. Full exact-head PR CI is the next check after publication. The user's checkout and installed hooks/settings are unchanged.
 
 # Decisions and why
 
@@ -20,4 +22,4 @@ The original audit discarded `Broken` and `Unsafe` and iterated only `Resolved`;
 
 # Next step
 
-Publish the audit/master replacement draft, integrate it into original #99's head on an isolated branch, and publish a stacked synth/search draft. Await exact-head CI on both. #1's portable log suffix and config-discovery behavior already exist on current master; no unique fix found to preserve. Parent decides final merge/closure; no original PR metadata or branch has been changed.
+Publish the updated draft #111, merge its branch normally into draft #112 to preserve the reviewed synth/search/sample/limiter and Nyquist-fix history, and correct the confirmed tolerance documentation drift on #112. Run focused consumer/feature regressions and full exact-head CI on both. Parent requested exact heads for re-review and owns merge, closure and readiness. Do not merge, close, or mark either draft ready.
