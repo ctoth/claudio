@@ -64,17 +64,17 @@ func spawnDetachedHookWorker(cmd *cobra.Command, inputData []byte) error {
 		return fmt.Errorf("failed to resolve executable path: %w", err)
 	}
 
-	childCmd := exec.Command(executablePath, childArgs...)
-	configureDetachedProcess(childCmd)
-
-	// Keep detached worker independent from the caller's stdio. If the
-	// platform refuses to open os.DevNull (e.g. sandboxed Windows
-	// AppContainer), fall back to closed pipes / nil so the child still
-	// cannot chatter on the user's terminal — previously fell through to
-	// exec.Cmd's parent-stdio defaults, defeating detach.
-	detachStdio(childCmd)
-
-	if err := childCmd.Start(); err != nil {
+	childCmd, err := startDetachedProcess(func() *exec.Cmd {
+		childCmd := exec.Command(executablePath, childArgs...)
+		// Keep detached worker independent from the caller's stdio. If the
+		// platform refuses to open os.DevNull (e.g. sandboxed Windows
+		// AppContainer), fall back to closed pipes / nil so the child still
+		// cannot chatter on the user's terminal — previously fell through to
+		// exec.Cmd's parent-stdio defaults, defeating detach.
+		detachStdio(childCmd)
+		return childCmd
+	})
+	if err != nil {
 		_ = os.Remove(hookPath)
 		return fmt.Errorf("failed to start detached worker: %w", err)
 	}
