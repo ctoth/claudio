@@ -479,7 +479,7 @@ Flags:
 | --- | --- | --- |
 | `--out string` | required | Directory to write the mastered pack into. It must not be the source pack's directory. |
 | `--target-lufs float` | `-18` | Loudness to master to. |
-| `--tolerance float` | `1` | Tolerance used when reporting the result. |
+| `--tolerance float` | `1` | Loudness tolerance in LU; also controls how close peak limiting brings a sound to the target. |
 | `--peak-ceiling float` | `-1` | True-peak ceiling, in dBTP. |
 | `--max-duration cat=dur,...` | as audit | Override duration limits. |
 | `--json` | false | Print what was done to each sound as JSON. |
