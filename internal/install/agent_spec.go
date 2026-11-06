@@ -49,6 +49,10 @@ type agentSpec struct {
 	// pluginFile means the config path is a claudio-owned OpenCode plugin
 	// file written whole, not a settings file claudio merges hooks into.
 	pluginFile bool
+	// pluginBundle means the config path is a claudio-owned Muse
+	// plugin bundle directory written whole (see muse_plugin.go). Project
+	// scope stages the bundle in the project for a project-scoped install.
+	pluginBundle bool
 }
 
 // agentSpecs lists every concrete agent in install/detection order. An
@@ -97,6 +101,17 @@ var agentSpecs = withCatalogFacts([]agentSpec{
 		projectPaths: []string{filepath.Join(".opencode", "plugins", "claudio.js")},
 		pluginFile:   true,
 		trustHint:    "Restart OpenCode to load the claudio plugin.",
+	},
+	{
+		// Muse Code reads ${XDG_CONFIG_HOME:-~/.config}/muse, so the
+		// bundle lands in <config>/muse/plugins/claudio either way.
+		agent:        AgentMuse,
+		homeEnv:      "XDG_CONFIG_HOME",
+		homeDir:      ".config",
+		globalFile:   filepath.Join("muse", "plugins", "claudio"),
+		projectPaths: []string{filepath.Join(".muse-plugin", "claudio")},
+		pluginBundle: true,
+		trustHint:    "Run `muse plugins install <plugin path above>`, then `muse plugins approve claudio`, then restart Muse.",
 	},
 })
 
@@ -221,6 +236,13 @@ func (a Agent) BestConfigPath(scope string) (string, error) {
 func (a Agent) UsesPluginFile() bool {
 	s, _ := a.spec()
 	return s.pluginFile
+}
+
+// UsesPluginBundle reports whether the agent's config path is a
+// claudio-owned Muse plugin bundle directory written whole.
+func (a Agent) UsesPluginBundle() bool {
+	s, _ := a.spec()
+	return s.pluginBundle
 }
 
 // TrustHint returns the message to print after installing hooks for the

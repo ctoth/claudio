@@ -64,6 +64,12 @@ func claudioHooksIn(target install.AgentTarget) ([]string, error) {
 		}
 		return nil, nil
 	}
+	if target.Agent.UsesPluginBundle() {
+		if install.HasMusePlugin(target.ConfigPath) {
+			return target.Agent.HookNames(), nil
+		}
+		return nil, nil
+	}
 	settings, err := install.ReadSettingsFile(afero.NewOsFs(), target.ConfigPath)
 	if err != nil {
 		return nil, err
@@ -74,7 +80,8 @@ func claudioHooksIn(target install.AgentTarget) ([]string, error) {
 func runUninstallTargets(cmd *cobra.Command, flags *hookTargetFlags, scope string, targets []install.AgentTarget) error {
 	removed := false
 	err := flags.applyToTargets(cmd, "Uninstalling", scope, targets, func(target install.AgentTarget) error {
-		if !target.Agent.UsesPluginFile() || install.HasOpenCodePlugin(target.ConfigPath) {
+		if (!target.Agent.UsesPluginFile() && !target.Agent.UsesPluginBundle()) ||
+			install.HasOpenCodePlugin(target.ConfigPath) || install.HasMusePlugin(target.ConfigPath) {
 			removed = true
 		}
 		if err := install.RunUninstallWorkflow(afero.NewOsFs(), target); err != nil {

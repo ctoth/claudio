@@ -19,6 +19,9 @@ const (
 	// AgentCommandCode is named after Command Code's "commandcode" binary.
 	AgentCommandCode Agent = "commandcode"
 	AgentOpenCode    Agent = "opencode"
+	// AgentMuse is Meta Muse Code, whose hooks live in a native
+	// plugin bundle rather than a settings file.
+	AgentMuse Agent = "muse"
 )
 
 const (
@@ -33,7 +36,7 @@ func ParseAgent(s string) (Agent, error) {
 	if agent == AgentAuto || agent == AgentAll || agent.IsConcrete() {
 		return agent, nil
 	}
-	return "", fmt.Errorf("invalid agent '%s': must be 'auto', 'claude', 'codex', 'gemini', 'qwen', 'copilot', 'commandcode', 'opencode', or 'all'", s)
+	return "", fmt.Errorf("invalid agent '%s': must be 'auto', 'claude', 'codex', 'gemini', 'qwen', 'copilot', 'commandcode', 'opencode', 'muse', or 'all'", s)
 }
 
 // String returns the agent's string form.
@@ -82,6 +85,8 @@ func (a Agent) Registry() []HookDefinition {
 	switch {
 	case !ok:
 		return nil
+	case s.pluginBundle:
+		return MuseHooks
 	case s.catalogAgent == "":
 		return OpenCodeHooks
 	default:

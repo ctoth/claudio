@@ -83,6 +83,9 @@ func TestAgentHooksCharacterization(t *testing.T) {
 		if agent.UsesPluginFile() {
 			continue // covered by TestOpenCodePlugin
 		}
+		if agent.UsesPluginBundle() {
+			continue // covered by TestMusePluginManifestHooks
+		}
 		for _, tc := range characterizationCases {
 			t.Run(string(agent)+"/"+tc.name, func(t *testing.T) {
 				start := tc.settings(agent)

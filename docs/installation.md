@@ -80,7 +80,7 @@ claudio install
 
 This is the default: `--agent auto --scope global`. An agent counts as
 detected when its command (`claude`, `codex`, `gemini`, `qwen`, `copilot`,
-`commandcode`, or `opencode`)
+`commandcode`, `opencode`, or `muse`)
 is on `PATH`, its settings directory exists, or its settings file already
 contains Claudio hooks. Every detected agent gets its hook set. If nothing is
 detected, the command fails and asks you to pick an agent with `--agent`.
@@ -247,6 +247,39 @@ in `todo.updated` as `TodoCreated` and `TodoCompleted`. When both a global
 and a project plugin are installed, only one plays. Uninstall deletes the file
 only if Claudio wrote it. Restart OpenCode after installing.
 
+## Muse Code Plugin
+
+Muse Code hooks live in native plugins, not a settings file, so Claudio
+writes a small plugin bundle instead:
+
+```bash
+claudio install --agent muse --scope global
+claudio install --agent muse --scope project
+```
+
+Global scope writes `~/.config/muse/plugins/claudio`, or
+`$XDG_CONFIG_HOME/muse/plugins/claudio` when `XDG_CONFIG_HOME` is set.
+Project scope stages the bundle at `./.muse-plugin/claudio`. Muse
+sends Claude Code shaped hook payloads (`hook_event_name`, `tool_name`,
+`session_id`, `cwd`), so each manifest hook runs Claudio directly with no
+translation layer. Claudio registers the events Muse accepts:
+`SessionStart`, `SessionEnd`, `UserPromptSubmit`, `PreToolUse`,
+`PostToolUse`, `PostToolUseFailure`, `PostToolBatch`, `Stop`,
+`StopFailure`, `Interrupt`, `Notification`, `PermissionRequest`,
+`SubagentStart`, `SubagentStop`, `PreCompact`, and `PostCompact`.
+
+The bundle is inert until Muse installs it. Finish with:
+
+```bash
+muse plugins install ~/.config/muse/plugins/claudio
+muse plugins approve claudio
+```
+
+Use `muse plugins install --scope project ./.muse-plugin/claudio` for a
+project install. Uninstall deletes the bundle only if Claudio wrote it;
+also run `muse plugins remove claudio` to drop Muse's installed copy.
+Restart Muse after installing.
+
 ## Inspect Before Writing
 
 Dry run, which prints the target settings path and the hooks that would be
@@ -261,6 +294,7 @@ claudio install --agent qwen --scope global --dry-run
 claudio install --agent copilot --scope global --dry-run
 claudio install --agent commandcode --scope global --dry-run
 claudio install --agent opencode --scope global --dry-run
+claudio install --agent muse --scope global --dry-run
 ```
 
 Print only the target agent and settings path:

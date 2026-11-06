@@ -17,6 +17,7 @@ func TestParseAgentValid(t *testing.T) {
 		"gemini":  AgentGemini,
 		"qwen":    AgentQwen,
 		"copilot": AgentCopilot,
+		"muse":    AgentMuse,
 	}
 	for in, want := range cases {
 		got, err := ParseAgent(in)
@@ -37,7 +38,7 @@ func TestParseAgentInvalid(t *testing.T) {
 
 func TestConcreteAgents(t *testing.T) {
 	got := ConcreteAgents()
-	want := []Agent{AgentClaude, AgentCodex, AgentGemini, AgentQwen, AgentCopilot, AgentCommandCode, AgentOpenCode}
+	want := []Agent{AgentClaude, AgentCodex, AgentGemini, AgentQwen, AgentCopilot, AgentCommandCode, AgentOpenCode, AgentMuse}
 	if len(got) != len(want) {
 		t.Fatalf("ConcreteAgents() length = %d, want %d", len(got), len(want))
 	}
