@@ -79,3 +79,27 @@ var OpenCodeHooks = []HookDefinition{
 	{Name: "Stop", DefaultEnabled: true},
 	{Name: "StopFailure", DefaultEnabled: true},
 }
+
+// MuseHooks are the hook events Muse Code accepts in a native
+// plugin manifest (verified against Muse 1.4.14's plugin validator).
+// Muse sends Claude Code shaped payloads (hook_event_name, tool_name,
+// session_id, cwd), so no translation layer is needed. Events Muse
+// rejects there (Setup, PermissionDenied, TaskCreated, ...) are omitted.
+var MuseHooks = []HookDefinition{
+	{Name: "SessionStart", DefaultEnabled: true},
+	{Name: "SessionEnd", DefaultEnabled: true},
+	{Name: "UserPromptSubmit", DefaultEnabled: true},
+	{Name: "PreToolUse", DefaultEnabled: true},
+	{Name: "PostToolUse", DefaultEnabled: true},
+	{Name: "PostToolUseFailure", DefaultEnabled: true},
+	{Name: "PostToolBatch", DefaultEnabled: true},
+	{Name: "Stop", DefaultEnabled: true},
+	{Name: "StopFailure", DefaultEnabled: true},
+	{Name: "Interrupt", DefaultEnabled: true},
+	{Name: "Notification", DefaultEnabled: true},
+	{Name: "PermissionRequest", DefaultEnabled: true},
+	{Name: "SubagentStart", DefaultEnabled: true},
+	{Name: "SubagentStop", DefaultEnabled: true},
+	{Name: "PreCompact", DefaultEnabled: true},
+	{Name: "PostCompact", DefaultEnabled: true},
+}

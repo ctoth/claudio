@@ -144,6 +144,14 @@ func runInstallWorkflow(agent install.Agent, scope string, settingsPath string) 
 		return nil
 	}
 
+	if agent.UsesPluginBundle() {
+		if err := install.WriteMusePlugin(settingsPath, execPath); err != nil {
+			return fmt.Errorf("install: %w", err)
+		}
+		slog.Info("Claudio plugin bundle written", "agent", agent, "plugin_path", settingsPath)
+		return nil
+	}
+
 	err = install.ModifySettings(afero.NewOsFs(), settingsPath, func(settings *install.SettingsMap) (*install.SettingsMap, error) {
 		return install.InstallAgentHooks(settings, agent, execPath)
 	})

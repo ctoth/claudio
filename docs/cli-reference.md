@@ -47,7 +47,7 @@ A payload that is not valid JSON or lacks a required field exits with code `1`.
 ## `claudio install`
 
 Installs hooks for Claude Code, Codex CLI, Gemini CLI, Qwen Code, GitHub
-Copilot CLI, or Command Code, or the OpenCode plugin.
+Copilot CLI, or Command Code, or the OpenCode or Muse Code plugin.
 
 ```bash
 claudio install [flags]
@@ -57,7 +57,7 @@ Flags:
 
 | Flag | Default | Meaning |
 | --- | --- | --- |
-| `--agent`, `-a` | `auto` | `auto`, `all`, `claude`, `codex`, `gemini`, `qwen`, `copilot`, `commandcode`, or `opencode`. |
+| `--agent`, `-a` | `auto` | `auto`, `all`, `claude`, `codex`, `gemini`, `qwen`, `copilot`, `commandcode`, `opencode`, or `muse`. |
 | `--scope`, `-s` | `global` | `global` or `project`. |
 | `--dry-run`, `-d` | false | Show what would happen without writing. |
 | `--print`, `-p` | false | Print the mode, scope, target agent, and settings path. |
@@ -70,7 +70,7 @@ Claudio hooks are already installed there. It fails if no agent is found.
 
 Settings file locations for each agent and scope are listed on the
 [home page](./#what-claudio-installs). Claude Code honors `CLAUDE_CONFIG_DIR`,
-Codex honors `CODEX_HOME`, and GitHub Copilot CLI honors `COPILOT_HOME`.
+Codex honors `CODEX_HOME`, GitHub Copilot CLI honors `COPILOT_HOME`, and Muse Code honors `XDG_CONFIG_HOME`.
 
 Examples:
 

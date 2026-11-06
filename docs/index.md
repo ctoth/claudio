@@ -1,8 +1,8 @@
 ---
 layout: default
 title: "Claudio"
-description: "Hook-based audio feedback for Claude Code, OpenAI Codex CLI, Gemini CLI, Qwen Code, GitHub Copilot CLI, Command Code, and OpenCode."
-keywords: "Claude Code, Codex CLI, Gemini CLI, Qwen Code, GitHub Copilot CLI, Command Code, OpenCode, hooks, audio feedback, soundpacks, developer tools"
+description: "Hook-based audio feedback for Claude Code, OpenAI Codex CLI, Gemini CLI, Qwen Code, GitHub Copilot CLI, Command Code, OpenCode, and Meta Muse Code."
+keywords: "Claude Code, Codex CLI, Gemini CLI, Qwen Code, GitHub Copilot CLI, Command Code, OpenCode, hooks, audio feedback, soundpacks, developer tools, Muse Code"
 canonical_url: "https://claudio.click"
 ---
 
@@ -32,7 +32,7 @@ claudio status
 
 `claudio install` uses `--agent auto --scope global` by default. It detects
 Claude Code, Codex CLI, Gemini CLI, Qwen Code, GitHub Copilot CLI, Command
-Code, and OpenCode, then
+Code, OpenCode, and Muse Code, then
 installs hooks for the agents it finds.
 
 For Codex, trust the hook after installation:
@@ -55,6 +55,7 @@ and preserves non-Claudio hooks.
 | GitHub Copilot CLI | `claudio install --agent copilot` | `~/.copilot/settings.json` | `./.github/copilot/settings.local.json` |
 | Command Code | `claudio install --agent commandcode` | `~/.commandcode/settings.json` | `./.commandcode/settings.json` |
 | OpenCode (plugin file) | `claudio install --agent opencode` | `$OPENCODE_CONFIG_DIR/plugins/claudio.js` or `~/.config/opencode/plugins/claudio.js` | `./.opencode/plugins/claudio.js` |
+| Muse Code (plugin bundle) | `claudio install --agent muse` | `$XDG_CONFIG_HOME/muse/plugins/claudio` or `~/.config/muse/plugins/claudio` | `./.muse-plugin/claudio` (staged bundle) |
 
 Antigravity support is command-artifact only:
 

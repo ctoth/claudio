@@ -16,6 +16,9 @@ func RunUninstallWorkflow(filesystem afero.Fs, target AgentTarget) error {
 	if target.Agent.UsesPluginFile() {
 		return RemoveOpenCodePlugin(settingsPath)
 	}
+	if target.Agent.UsesPluginBundle() {
+		return RemoveMusePlugin(settingsPath)
+	}
 
 	exists, err := afero.Exists(filesystem, settingsPath)
 	if err != nil {

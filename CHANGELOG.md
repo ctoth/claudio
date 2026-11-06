@@ -14,6 +14,12 @@ release tags and current checkout history.
   session, prompt, tool, permission, compaction, idle, error and subagent
   events to Claudio. A global and a project plugin never play twice, and
   uninstall only deletes a plugin Claudio wrote.
+- `claudio install --agent muse` writes a Muse Code native plugin
+  bundle (`<config>/muse/plugins/claudio`, honoring `XDG_CONFIG_HOME`)
+  whose hooks run Claudio directly: Muse sends Claude Code shaped
+  payloads, so no translation layer is needed. Finish with
+  `muse plugins install <plugin path>` and `muse plugins approve claudio`.
+  Uninstall only deletes a bundle Claudio wrote.
 
 - New hook events: Claude Code `DirectoryAdded`, `PreModelSwitch` and
   `PostModelSwitch`; Codex `SessionEnd` and `Interrupt`; Qwen Code
